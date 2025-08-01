@@ -11,7 +11,7 @@ export function KittingTab({ data }: KittingTabProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {data.kitAnalysis.map(kit => (
-        <Card key={kit.kitId}>
+        <Card key={kit.id}>
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <div>
