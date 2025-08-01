@@ -12,7 +12,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val
       console.warn(`Error reading localStorage key “${key}”:`, error);
       return initialValue;
     }
-  }, [initialValue, key]);
+  }, [key]);
 
   const [storedValue, setStoredValue] = useState<T>(initialValue);
 
@@ -23,6 +23,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val
       );
     }
     try {
+      // Allows value to be a function so we have the same API as useState
       const newValue = value instanceof Function ? value(readValue()) : value;
       window.localStorage.setItem(key, JSON.stringify(newValue));
       setStoredValue(newValue);
@@ -31,7 +32,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val
       console.warn(`Error setting localStorage key “${key}”:`, error);
     }
   }, [key, readValue]);
-  
+
   useEffect(() => {
     setStoredValue(readValue());
   }, [readValue]);
