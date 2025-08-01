@@ -171,7 +171,7 @@ export default function InventoryClient() {
     return (
         <>
             <Tabs defaultValue="stock" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+                <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 lg:grid-cols-7 mb-4">
                     {TABS.map(tab => (
                         <TabsTrigger key={tab.id} value={tab.id} className="text-xs md:text-sm">
                             {tab.icon}<span className="hidden md:inline ml-2">{tab.label}</span>
