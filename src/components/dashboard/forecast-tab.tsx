@@ -27,7 +27,7 @@ export function ForecastTab({ data }: ForecastTabProps) {
             </Card>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {data.kitAnalysis.map(kit => (
-                <Card key={kit.kitId} className={`border-l-4 ${getBorderColor(kit.daysLeft)}`}>
+                <Card key={kit.id} className={`border-l-4 ${getBorderColor(kit.daysLeft)}`}>
                     <CardHeader>
                         <div className="flex justify-between items-start">
                             <div>
