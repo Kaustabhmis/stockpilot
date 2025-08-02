@@ -91,6 +91,7 @@ export type AIPurchaseRecommendation = {
 export interface ProcessedData {
   stock: {
     summary: {
+      totalInventoryValue: number;
       totalMaterials: number;
       criticalItems: number;
       warningItems: number;

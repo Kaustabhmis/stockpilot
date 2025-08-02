@@ -12,8 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { SummaryCard } from '../summary-card';
 import type { MaterialWithStatus, ProcessedData } from '@/lib/types';
-import { BarChartBig, AlertTriangle, BellRing, CheckCircle, PackageSearch } from 'lucide-react';
+import { BarChartBig, AlertTriangle, BellRing, CheckCircle, PackageSearch, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { formatCurrency } from '@/lib/utils';
 
 interface StockLevelsTabProps {
   data: ProcessedData['stock'];
@@ -35,7 +36,8 @@ export function StockLevelsTab({ data, onAddMovement }: StockLevelsTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <SummaryCard title="Today's Inventory Cost" value={formatCurrency(data.summary.totalInventoryValue)} icon={<DollarSign className="h-4 w-4 text-green-500"/>} colorClass="text-green-500" />
         <SummaryCard title="Total Materials" value={data.summary.totalMaterials} icon={<PackageSearch className="h-4 w-4" />} />
         <SummaryCard title="Critical Items" value={data.summary.criticalItems} icon={<AlertTriangle className="h-4 w-4 text-red-500"/>} colorClass="text-red-500" />
         <SummaryCard title="Warning Items" value={data.summary.warningItems} icon={<BellRing className="h-4 w-4 text-yellow-500"/>} colorClass="text-yellow-500" />

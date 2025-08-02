@@ -16,6 +16,8 @@ export const processAllData = (
         return { ...m, currentQuantity };
     });
 
+    const totalInventoryValue = materialsWithStock.reduce((sum, m) => sum + (m.currentQuantity * m.costPerUnit), 0);
+
     const materialsWithStatus = materialsWithStock.map(m => {
         const safetyStock = Number(m.safetyStock); 
         const reorderPoint = Number(m.reorderPoint);
@@ -109,6 +111,7 @@ export const processAllData = (
     return {
         stock: {
             summary: {
+                totalInventoryValue,
                 totalMaterials: materials.length,
                 criticalItems: materialsWithStatus.filter(m => m.status === 'red').length,
                 warningItems: materialsWithStatus.filter(m => m.status === 'yellow').length,
