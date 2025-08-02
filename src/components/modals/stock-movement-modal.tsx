@@ -44,7 +44,7 @@ interface StockMovementModalProps {
 export function StockMovementModal({ isOpen, onClose, onSave, material }: StockMovementModalProps) {
   const form = useForm<MovementFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { type: 'in', quantity: undefined, notes: '' },
+    defaultValues: { type: 'in', quantity: '' as any, notes: '' },
   });
 
   if (!material) return null;
