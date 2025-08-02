@@ -13,6 +13,7 @@ import { KittingTab } from './dashboard/kitting-tab';
 import { SalesTab } from './dashboard/sales-tab';
 import { KitsTab } from './dashboard/kits-tab';
 import { MaterialsTab } from './dashboard/materials-tab';
+import { ReportTab } from './dashboard/report-tab';
 import { MaterialModal } from './modals/material-modal';
 import { KitModal } from './modals/kit-modal';
 import { StockMovementModal } from './modals/stock-movement-modal';
@@ -24,7 +25,7 @@ import useLocalStorage from '@/hooks/use-local-storage';
 import { useToast } from '@/hooks/use-toast';
 import { generatePurchaseRecommendations } from '@/lib/actions';
 import type { Material, Kit, StockMovement, Sale, ProcessedData, MaterialWithStatus, AIPurchaseRecommendation } from '@/lib/types';
-import { BarChartBig, ShoppingCart, TrendingUp, Package, DollarSign, ClipboardList, Settings, DatabaseZap } from 'lucide-react';
+import { BarChartBig, ShoppingCart, TrendingUp, Package, DollarSign, ClipboardList, Settings, DatabaseZap, FileText } from 'lucide-react';
 
 const TABS = [
     { id: "stock", label: "Stock Levels", icon: <BarChartBig className="h-4 w-4" /> },
@@ -32,6 +33,7 @@ const TABS = [
     { id: "forecast", label: "Forecast", icon: <TrendingUp className="h-4 w-4" /> },
     { id: "kitting", label: "Kitting Analysis", icon: <Package className="h-4 w-4" /> },
     { id: "sales", label: "Sales", icon: <DollarSign className="h-4 w-4" /> },
+    { id: "reports", label: "Reports", icon: <FileText className="h-4 w-4" /> },
     { id: "kits", label: "Kits / BOM", icon: <ClipboardList className="h-4 w-4" /> },
     { id: "materials", label: "Materials", icon: <Settings className="h-4 w-4" /> },
 ];
@@ -171,9 +173,9 @@ export default function InventoryClient() {
     return (
         <>
             <Tabs defaultValue="stock" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 lg:grid-cols-7 mb-4">
+                <TabsList className="grid w-full grid-cols-4 md:grid-cols-4 lg:grid-cols-8 mb-4">
                     {TABS.map(tab => (
-                        <TabsTrigger key={tab.id} value={tab.id} className="text-xs md:text-sm">
+                        <TabsTrigger key={tab.id} value={tab.id} className="text-xs md:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                             {tab.icon}<span className="hidden md:inline ml-2">{tab.label}</span>
                         </TabsTrigger>
                     ))}
@@ -185,6 +187,7 @@ export default function InventoryClient() {
                         <TabsContent value="forecast"><ForecastTab data={processedData.forecast} /></TabsContent>
                         <TabsContent value="kitting"><KittingTab data={processedData.kitting} /></TabsContent>
                         <TabsContent value="sales"><SalesTab kits={kits} sales={sales} onSave={handleSaveSale} /></TabsContent>
+                        <TabsContent value="reports"><ReportTab data={processedData} /></TabsContent>
                         <TabsContent value="kits"><KitsTab kits={kits} onAddKit={() => { setEditingKit(null); setModal('kit'); }} onEditKit={(k) => { setEditingKit(k); setModal('kit'); }} /></TabsContent>
                         <TabsContent value="materials"><MaterialsTab materials={materials} onAddMaterial={() => { setEditingMaterial(null); setModal('material'); }} onEditMaterial={(m) => { setEditingMaterial(m); setModal('material'); }} /></TabsContent>
                     </>

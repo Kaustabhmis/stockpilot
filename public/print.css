@@ -1,0 +1,50 @@
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-area, #print-area * {
+    visibility: visible;
+  }
+  #print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none;
+  }
+
+  @page {
+    size: auto;
+    margin: 0.5in;
+  }
+  
+  body {
+    background-color: #fff;
+    color: #000;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .print\:text-black {
+      color: #000 !important;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+
+  th {
+      background-color: #f2f2f2;
+  }
+}
