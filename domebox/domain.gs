@@ -835,6 +835,217 @@ function buildDigest(tasks, user, today, opts) {
   return { user: user, buckets: bucket, total: total, isEmpty: total === 0 };
 }
 
+// ---------------------------------------------------------------------------
+// PERIOD SCORING — weekly / monthly / quarterly / yearly
+// ---------------------------------------------------------------------------
+var PERIOD = { WEEK: 'week', MONTH: 'month', QUARTER: 'quarter', YEAR: 'year' };
+
+function startOfWeek(d) {           // ISO week: Monday
+  var x = startOfDay(d);
+  var dow = (x.getDay() + 6) % 7;   // Mon=0 … Sun=6
+  return addDays(x, -dow);
+}
+function isoWeekNumber(d) {
+  var x = startOfDay(d);
+  x.setDate(x.getDate() + 4 - ((x.getDay() + 6) % 7 + 1));  // nearest Thursday
+  var yearStart = new Date(x.getFullYear(), 0, 1);
+  return Math.ceil((((x - yearStart) / 86400000) + 1) / 7);
+}
+
+/**
+ * The window for a period, `offset` back from today (0 = current).
+ * Returns inclusive `from`/`to` day boundaries plus a short and long label.
+ */
+function periodRange(kind, offset, today) {
+  offset = Number(offset || 0);
+  var now = startOfDay(today || new Date());
+  var from, to, label, short;
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  if (kind === PERIOD.WEEK) {
+    from = addDays(startOfWeek(now), -7 * offset);
+    to = addDays(from, 6);
+    short = 'W' + isoWeekNumber(from);
+    label = 'Week ' + isoWeekNumber(from) + ' · ' + MONTHS[from.getMonth()] + ' ' + from.getDate();
+  } else if (kind === PERIOD.MONTH) {
+    var m = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    from = m;
+    to = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    short = MONTHS[from.getMonth()];
+    label = MONTHS[from.getMonth()] + ' ' + from.getFullYear();
+  } else if (kind === PERIOD.QUARTER) {
+    var qBase = new Date(now.getFullYear(), now.getMonth(), 1);
+    var qIndex = Math.floor(qBase.getMonth() / 3) - offset;
+    var qYear = qBase.getFullYear() + Math.floor(qIndex / 4);
+    var qMonth = ((qIndex % 4) + 4) % 4 * 3;
+    from = new Date(qYear, qMonth, 1);
+    to = new Date(qYear, qMonth + 3, 0);
+    short = 'Q' + (Math.floor(qMonth / 3) + 1);
+    label = 'Q' + (Math.floor(qMonth / 3) + 1) + ' ' + qYear;
+  } else {
+    var y = now.getFullYear() - offset;
+    from = new Date(y, 0, 1);
+    to = new Date(y, 11, 31);
+    short = String(y);
+    label = String(y);
+  }
+  return { kind: kind, from: startOfDay(from), to: startOfDay(to), label: label, short: short, offset: offset };
+}
+
+/** When a task counts as delivered — the verification date. */
+function closedAt(task) {
+  var history = task.history || [];
+  for (var i = history.length - 1; i >= 0; i--) {
+    if (history[i].status === STATUS.VERIFIED) return new Date(history[i].date);
+  }
+  return null;
+}
+
+function inWindow(date, range) {
+  if (!date) return false;
+  var d = startOfDay(date);
+  return d >= range.from && d <= range.to;
+}
+
+/**
+ * Score for one person over one period.
+ *
+ * A task belongs to the period it was CLOSED in, so "your March score" means
+ * the work you finished in March — not everything that happens to be open now.
+ * Queue health is judged as at the end of the window, so a historic period is
+ * measured on how the queue looked then rather than how it looks today.
+ */
+function scoreForPeriod(tasks, username, range) {
+  var closedInWindow = tasks.filter(function (t) {
+    return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
+  });
+
+  // Work that was open at the end of the window: raised on or before it, and
+  // either still open now or closed after the window ended.
+  var openThen = tasks.filter(function (t) {
+    if (t.assignee !== username) return false;
+    var due = parseYmd(t.due);
+    if (!due || due > range.to) return false;
+    var closed = closedAt(t);
+    if (closed && startOfDay(closed) <= range.to) return false;
+    return t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS || isClosed(t.status) === false;
+  }).map(function (t) {
+    return { assignee: t.assignee, status: STATUS.PENDING, title: t.title, due: t.due, priority: t.priority, reworkCount: t.reworkCount, history: [] };
+  });
+
+  /**
+   * Work that is waiting on this person as approver or reviewer. delegationScore
+   * reads it off the task list it is handed, so it has to survive the filtering
+   * above — without it a manager who owns no tasks is handed an empty list and
+   * scores "no data" every period, which is exactly the person the responsiveness
+   * path exists to keep measurable.
+   */
+  var waitingOnThem = tasks.filter(function (t) {
+    if (t.assignee === username) return false;
+    var due = parseYmd(t.due);
+    if (due && due > range.to) return false;
+    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
+           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
+  });
+
+  var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
+  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf);
+  result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
+  result.delivered = closedInWindow.length;
+  result.openThen = openThen.length;
+  result.awaitingThem = waitingOnThem.length;
+
+  /**
+   * A period score has to be earned inside the period. Without this gate, someone
+   * who closed nothing in the window still scores — purely on the queue health of
+   * work carried in from earlier — so on day 1 of a month a person with two old
+   * overdue tasks lands a 26 and gets banded "C · Needs action" for a month that
+   * has barely started. That is a snapshot of their open queue, not a measure of
+   * a period's performance, and it is the kind of number that loses an appraisal
+   * conversation. Delivery in the window, or a review queue they were sitting on,
+   * is the evidence; without either, the honest answer is "no data yet".
+   */
+  var responsivenessOnly = result.components.length === 1 && result.components[0].key === 'responsiveness';
+  if (result.hasData && !responsivenessOnly && closedInWindow.length === 0) {
+    result.hasData = false;
+    result.score = 0;
+    result.reason = openThen.length
+      ? 'Nothing closed in this period — ' + openThen.length + ' item(s) still open. Carried-over work is not scored here.'
+      : 'Nothing closed in this period.';
+  }
+  return result;
+}
+
+/** A trend of the last `count` periods, oldest first — ready to plot. */
+function scoreTrend(tasks, username, kind, count, today, endOffset) {
+  var end = Number(endOffset) || 0;
+  var out = [];
+  for (var i = count - 1 + end; i >= end; i--) {
+    var range = periodRange(kind, i, today);
+    var s = scoreForPeriod(tasks, username, range);
+    out.push({
+      label: range.label, short: range.short,
+      score: s.hasData ? s.score : null,
+      delivered: s.delivered,
+      hasData: s.hasData,
+      components: s.components,
+    });
+  }
+  return out;
+}
+
+/**
+ * Everything the analytics dashboard needs for one period, in one pass:
+ * headline counts, per-person scores, KRA split and the A/B/C spread.
+ */
+function periodAnalytics(tasks, users, range, today) {
+  var delivered = [], overdueNow = [], reworkLoops = 0, onTime = 0, onTimeBase = 0;
+
+  tasks.forEach(function (t) {
+    var closed = closedAt(t);
+    if (t.status === STATUS.VERIFIED && inWindow(closed, range)) {
+      delivered.push(t);
+      reworkLoops += Number(t.reworkCount || 0);
+      var sub = submittedAt(t), due = parseYmd(t.due);
+      if (sub && due) { onTimeBase++; if (dayDiff(sub, due) <= 0) onTime++; }
+    }
+    var d = parseYmd(t.due);
+    if (isOpen(t.status) && d && dayDiff(today || new Date(), d) > 0) overdueNow.push(t);
+  });
+
+  var people = users.map(function (u) {
+    var s = scoreForPeriod(tasks, u.username, range);
+    return {
+      username: u.username, name: u.name, role: u.role, dept: u.dept,
+      score: s.hasData ? s.score : null, hasData: s.hasData,
+      delivered: s.delivered, components: s.components,
+      band: s.hasData ? performanceBand(s.score).band : null,
+      reason: s.hasData ? null : (s.reason || 'Nothing closed in this period.'),
+    };
+  });
+
+  var kra = {};
+  delivered.forEach(function (t) { var k = t.kra || 'Unassigned'; kra[k] = (kra[k] || 0) + 1; });
+  var kraRows = Object.keys(kra).map(function (k) { return { kra: k, count: kra[k] }; })
+    .sort(function (a, b) { return b.count - a.count; });
+
+  var bands = { A: 0, B: 0, C: 0, none: 0 };
+  people.forEach(function (p) { bands[p.band || 'none']++; });
+
+  var scored = people.filter(function (p) { return p.hasData; });
+  return {
+    range: { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) },
+    delivered: delivered.length,
+    overdueNow: overdueNow.length,
+    reworkLoops: reworkLoops,
+    onTimeRate: onTimeBase ? Math.round(onTime / onTimeBase * 100) : null,
+    teamScore: scored.length ? Math.round(scored.reduce(function (s, p) { return s + p.score; }, 0) / scored.length) : null,
+    people: people,
+    kra: kraRows,
+    bands: bands,
+  };
+}
+
 // Export for the Node test harness; harmless inside Apps Script.
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -856,5 +1067,8 @@ if (typeof module !== 'undefined' && module.exports) {
     TRIGGERS: TRIGGERS, ACTIONS: ACTIONS, evaluateAutomations: evaluateAutomations,
     matchCondition: matchCondition, defaultAutomations: defaultAutomations,
     buildDigest: buildDigest,
+    PERIOD: PERIOD, startOfWeek: startOfWeek, isoWeekNumber: isoWeekNumber,
+    periodRange: periodRange, closedAt: closedAt, inWindow: inWindow,
+    scoreForPeriod: scoreForPeriod, scoreTrend: scoreTrend, periodAnalytics: periodAnalytics,
   };
 }

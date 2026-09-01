@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dome Box — Performance Analytics</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
+<style>
+  /* Palette validated with the dataviz validator against this surface (#161c2b):
+     categorical 1-3 and the 4-step ordinal ramp both pass every gate in dark
+     mode. Status colours are the reserved set and are ALWAYS paired with a
+     letter/label, because good-vs-critical fails CVD separation on hue alone. */
+  :root{
+    --page:#0f1420; --surface:#161c2b; --surface-2:#1d2434; --line:#28314a;
+    --ink:#e8edf7; --ink-2:#94a2be; --muted:#63718d; --grid:#232c42;
+
+    --series-1:#3987e5;  --series-2:#d95926;  --series-3:#199e70;
+    --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
+    --ramp-1:#b7d3f6; --ramp-2:#6da7ec; --ramp-3:#2a78d6; --ramp-4:#184f95;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;
+    background:var(--page);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  button,select{font:inherit;cursor:pointer}
+
+  .top{display:flex;align-items:center;gap:14px;padding:12px 18px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:800}
+  .logo i{width:23px;height:23px;border-radius:6px;background:linear-gradient(135deg,var(--series-1),#2a5fb8);display:grid;place-items:center;font-size:12px;font-style:normal;color:#fff}
+  .nav{display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:8px}
+  .nav a,.nav button{padding:5px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);text-decoration:none;border:none;background:none}
+  .nav .on{background:var(--series-1);color:#fff}
+  .spacer{flex:1}
+  select{background:var(--surface-2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-size:12.5px}
+
+  /* filters live in one row above the charts */
+  .filters{display:flex;align-items:center;gap:9px;padding:10px 18px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:53px;z-index:19}
+  .seg{display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:8px}
+  .seg button{padding:5px 13px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);border:none;background:none}
+  .seg button.on{background:var(--series-1);color:#fff}
+  .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+
+  .wrap{padding:18px;max-width:1500px;margin:0 auto}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:16px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin-bottom:7px}
+  .tile .v{font-size:31px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+  .tile .s{font-size:11.5px;color:var(--ink-2);margin-top:5px}
+  .delta{font-weight:700}
+
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(12,1fr)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:15px 16px 12px;min-width:0}
+  .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}
+  @media(max-width:1080px){.c8,.c6,.c4{grid-column:span 12}}
+  .card h2{font-size:13.5px;font-weight:700;margin-bottom:2px}
+  .card .sub{font-size:11.5px;color:var(--muted);margin-bottom:12px}
+  .chead{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+  .chead h2{margin:0}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-left:auto;font-size:11.5px;color:var(--ink-2)}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}
+  .tbtn{font-size:10.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .tbtn:hover{color:var(--ink)}
+
+  svg{display:block;overflow:visible}
+  .axis{font-size:10.5px;fill:var(--muted)}
+  .gridline{stroke:var(--grid);stroke-width:1}
+  .baseline{stroke:#383f57;stroke-width:1}
+  .dlabel{font-size:10.5px;font-weight:700;fill:var(--ink)}
+
+  .tblwrap{max-height:260px;overflow:auto;margin-top:10px;display:none}
+  .tblwrap.on{display:block}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;padding:6px 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em;background:var(--surface-2);position:sticky;top:0}
+  td{padding:6px 9px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+
+  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:#0b1020;border:1px solid var(--line);
+       border-radius:8px;padding:8px 11px;font-size:12px;box-shadow:0 12px 28px -10px #000;z-index:80;max-width:230px}
+  #tip .t{font-weight:700;margin-bottom:3px}
+  #tip .r{display:flex;justify-content:space-between;gap:14px;color:var(--ink-2)}
+  #tip .r b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .empty{padding:26px;text-align:center;color:var(--muted);font-size:12.5px}
+  @media (prefers-reduced-motion:reduce){#tip{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo"><i>D</i> Dome Box</div>
+  <nav class="nav">
+    <a href="/board.html">Board</a>
+    <button class="on">Analytics</button>
+  </nav>
+  <div class="spacer"></div>
+  <label class="lbl" for="person">Person</label>
+  <select id="person"></select>
+</div>
+
+<div class="filters">
+  <span class="lbl">Period</span>
+  <div class="seg" id="periodSeg">
+    <button data-p="week">Weekly</button>
+    <button data-p="month" class="on">Monthly</button>
+    <button data-p="quarter">Quarterly</button>
+    <button data-p="year">Full year</button>
+  </div>
+  <label class="lbl" for="offset" style="margin-left:6px">Period</label>
+  <select id="offset"></select>
+  <span class="lbl" style="margin-left:6px">Showing</span>
+  <select id="span"></select>
+  <span class="spacer"></span>
+  <span id="rangeLabel" class="lbl" style="color:var(--ink-2)"></span>
+</div>
+
+<div class="wrap">
+  <div class="tiles" id="tiles"></div>
+  <div class="grid">
+    <div class="card c8" id="cardTrend">
+      <div class="chead">
+        <div><h2>Performance trend</h2><div class="sub" id="trendSub"></div></div>
+        <div class="legend" id="trendLegend"></div>
+        <button class="tbtn" data-table="tableTrend">Table</button>
+      </div>
+      <div id="chartTrend"></div>
+      <div class="tblwrap" id="tableTrend"></div>
+    </div>
+
+    <div class="card c4" id="cardBands">
+      <div class="chead">
+        <div><h2>Performance bands</h2><div class="sub">Everyone scored this period</div></div>
+        <button class="tbtn" data-table="tableBands">Table</button>
+      </div>
+      <div id="chartBands"></div>
+      <div class="tblwrap" id="tableBands"></div>
+    </div>
+
+    <div class="card c6">
+      <div class="chead">
+        <div><h2>Score by person</h2><div class="sub" id="peopleSub"></div></div>
+        <button class="tbtn" data-table="tablePeople">Table</button>
+      </div>
+      <div id="chartPeople"></div>
+      <div class="tblwrap" id="tablePeople"></div>
+    </div>
+
+    <div class="card c6">
+      <div class="chead">
+        <div><h2>On-time delivery</h2><div class="sub">Share of the period's closed work that landed by its deadline</div></div>
+        <button class="tbtn" data-table="tableOnTime">Table</button>
+      </div>
+      <div id="chartOnTime"></div>
+      <div class="tblwrap" id="tableOnTime"></div>
+    </div>
+
+    <div class="card c6">
+      <div class="chead">
+        <div><h2>Work delivered by KRA</h2><div class="sub">Where the effort actually went</div></div>
+        <button class="tbtn" data-table="tableKra">Table</button>
+      </div>
+      <div id="chartKra"></div>
+      <div class="tblwrap" id="tableKra"></div>
+    </div>
+
+    <div class="card c6">
+      <div class="chead">
+        <div><h2>Rework loops</h2><div class="sub">Times work came back — the quality signal</div></div>
+        <button class="tbtn" data-table="tableRework">Table</button>
+      </div>
+      <div id="chartRework"></div>
+      <div class="tblwrap" id="tableRework"></div>
+    </div>
+
+    <div class="card c12">
+      <div class="chead">
+        <div><h2>Delivery heatmap</h2><div class="sub">Tasks verified per person, per week — darker is more</div></div>
+        <button class="tbtn" data-table="tableHeat">Table</button>
+      </div>
+      <div id="chartHeat"></div>
+      <div class="tblwrap" id="tableHeat"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tip"></div>
+<script src="/domain.js"></script>
+<script>
+/* ===========================================================================
+   Dome Box — Analytics
+   Every number here comes from the same engine the board and backend use, so a
+   score on this page is the score, not a second implementation of it.
+   =========================================================================== */
+const S = DomeBox.STATUS, P = DomeBox.PERIOD;
+const C = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---------- a year of plausible history ----------
+   Seeded so the page is identical on every load: a demo that reshuffles itself
+   is impossible to talk about in a meeting. */
+let _seed = 20260715;
+const rnd = () => (_seed = (_seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+const pick = (a) => a[Math.floor(rnd() * a.length)];
+
+const USERS = [
+  { username:'sruti@acme.in',  name:'Sruti Charulata', role:'HOD',  dept:'Operations', skill:0.86 },
+  { username:'imran@acme.in',  name:'Imran Qureshi',   role:'HOD',  dept:'Quality',    skill:0.62 },
+  { username:'payel@acme.in',  name:'Payel Sanyamath', role:'Doer', dept:'Operations', skill:0.91 },
+  { username:'vikram@acme.in', name:'Vikram Rathore',  role:'Doer', dept:'Purchase',   skill:0.58 },
+  { username:'neha@acme.in',   name:'Neha Bhandari',   role:'Doer', dept:'Quality',    skill:0.79 },
+];
+const KRAS = ['Vendor Quality','Inventory Accuracy','Rejection Control','Cost Savings','Process Compliance','Customer Satisfaction','Capability Building'];
+const TITLES = ['Vendor audit','Stock reconciliation','Rejection analysis','AMC negotiation','PDI checklist update','Complaint closure','Operator training','Costing review','Supplier CAPA','Line balancing','Calibration','Layout revision'];
+
+const TASKS = [];
+(function generate(){
+  const today = new Date();
+  let id = 1000;
+  for (let back = 364; back >= 0; back--) {
+    const day = DomeBox.addDays(today, -back);
+    if (day.getDay() === 0 || day.getDay() === 6) continue;   // weekdays only
+    USERS.forEach(u => {
+      if (rnd() > 0.34) return;                                // not everyone every day
+      // A dip in Aug–Sep so the trend has something real to show.
+      const m = day.getMonth();
+      const dip = (m === 7 || m === 8) ? 0.16 : 0;
+      const skill = Math.max(0.2, u.skill - dip);
+      const priority = pick(['High','Medium','Medium','Low']);
+      const dueOffset = 3 + Math.floor(rnd() * 9);
+      const due = DomeBox.addDays(day, dueOffset);
+      if (due > today) return;
+
+      const onTime = rnd() < skill;
+      const lateBy = onTime ? -Math.floor(rnd() * 3) : 1 + Math.floor(rnd() * 7);
+      const submitted = DomeBox.addDays(due, lateBy);
+      const reworks = rnd() < (1 - skill) * 0.55 ? 1 + (rnd() < 0.25 ? 1 : 0) : 0;
+      const verified = DomeBox.addDays(submitted, 1 + Math.floor(rnd() * 3));
+      if (verified > today) return;
+
+      const hist = [{ status:S.PENDING, date: day.toISOString() }];
+      for (let r = 0; r < reworks; r++) hist.push({ status:S.IN_PROGRESS, date: DomeBox.addDays(submitted,-1).toISOString() });
+      hist.push({ status:S.FOR_REVIEW, date: submitted.toISOString() });
+      hist.push({ status:S.VERIFIED,  date: verified.toISOString() });
+
+      TASKS.push({
+        id:'T-'+(++id), title: pick(TITLES), assignee:u.username, raisedBy:'rohan@acme.in',
+        approver:'rohan@acme.in', status:S.VERIFIED, priority, due: DomeBox.ymd(due),
+        kra: pick(KRAS), reworkCount: reworks, history: hist, blockedBy:[], subtasks:[],
+      });
+    });
+  }
+  // A live tail of open work so "overdue now" is real.
+  USERS.forEach((u,i) => {
+    for (let k = 0; k < 2 + (i % 3); k++) {
+      const due = DomeBox.addDays(new Date(), Math.floor(rnd()*18) - 9);
+      TASKS.push({ id:'T-'+(++id), title: pick(TITLES), assignee:u.username, raisedBy:'rohan@acme.in',
+        approver:'rohan@acme.in', status: rnd()<0.5 ? S.PENDING : S.IN_PROGRESS,
+        priority: pick(['High','Medium','Low']), due: DomeBox.ymd(due), kra: pick(KRAS),
+        reworkCount:0, history:[{status:S.PENDING,date:DomeBox.addDays(due,-6).toISOString()}], blockedBy:[], subtasks:[] });
+    }
+  });
+})();
+
+/* ---------- state ---------- */
+let KIND = P.MONTH, SPAN = 12, PERSON = '', OFFSET = 0;
+const SPANS = { week:[8,12,26], month:[6,12,18], quarter:[4,6,8], year:[2,3,5] };
+
+/* ---------- tiny chart toolkit (inline SVG, no library) ---------- */
+const tip = document.getElementById('tip');
+function showTip(html, e){
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY - h - pad;
+  if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+  if (y < 8) y = e.clientY + pad;
+  tip.style.left = x+'px'; tip.style.top = y+'px';
+}
+const hideTip = () => tip.style.opacity = 0;
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const svgEl = (n,a) => { const e=document.createElementNS('http://www.w3.org/2000/svg',n); for(const k in a) e.setAttribute(k,a[k]); return e; };
+
+/** Line chart with a crosshair. Null values break the line rather than
+ *  pretending a period with no data scored zero. */
+function lineChart(host, series, opts){
+  opts = opts||{};
+  const W = host.clientWidth || 720, H = opts.height || 230;
+  const m = { t:14, r:16, b:26, l:34 };
+  const iw = W-m.l-m.r, ih = H-m.t-m.b;
+  const labels = series[0].points.map(p=>p.label);
+  const n = labels.length;
+  const yMax = 100;
+  const x = i => m.l + (n===1 ? iw/2 : i*(iw/(n-1)));
+  const y = v => m.t + ih - (v/yMax)*ih;
+
+  host.innerHTML='';
+  const svg = svgEl('svg',{width:'100%',height:H,viewBox:`0 0 ${W} ${H}`,role:'img'});
+
+  [0,25,50,75,100].forEach(v=>{
+    svg.appendChild(svgEl('line',{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),class:v===0?'baseline':'gridline'}));
+    const t=svgEl('text',{x:m.l-7,y:y(v)+3.5,class:'axis','text-anchor':'end'}); t.textContent=v; svg.appendChild(t);
+  });
+  const step = Math.ceil(n/12);
+  labels.forEach((l,i)=>{ if(i%step) return;
+    const t=svgEl('text',{x:x(i),y:H-8,class:'axis','text-anchor':'middle'}); t.textContent=l; svg.appendChild(t);
+  });
+
+  series.forEach(s=>{
+    let run=[];
+    const flush=()=>{ if(run.length>1){
+        svg.appendChild(svgEl('path',{d:'M'+run.map(p=>`${x(p.i)},${y(p.v)}`).join('L'),
+          fill:'none',stroke:s.color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+      } else if(run.length===1){
+        svg.appendChild(svgEl('circle',{cx:x(run[0].i),cy:y(run[0].v),r:3,fill:s.color}));
+      } run=[]; };
+    s.points.forEach((p,i)=>{ if(p.value==null){flush();return;} run.push({i,v:p.value}); });
+    flush();
+    s.points.forEach((p,i)=>{ if(p.value==null) return;
+      svg.appendChild(svgEl('circle',{cx:x(i),cy:y(p.value),r:3.5,fill:s.color,stroke:C('--surface'),'stroke-width':2}));
+    });
+    // direct-label the final point so identity never depends on colour alone
+    for(let i=s.points.length-1;i>=0;i--){ if(s.points[i].value!=null){
+      const t=svgEl('text',{x:x(i)+8,y:y(s.points[i].value)+3.5,class:'dlabel',fill:s.color}); t.textContent=s.name; svg.appendChild(t); break; } }
+  });
+
+  const cross = svgEl('line',{y1:m.t,y2:m.t+ih,stroke:C('--muted'),'stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
+  svg.appendChild(cross);
+  const hit = svgEl('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});
+  svg.appendChild(hit);
+  hit.addEventListener('mousemove',e=>{
+    const r=svg.getBoundingClientRect();
+    const px=(e.clientX-r.left)*(W/r.width);
+    let i=Math.round((px-m.l)/(iw/Math.max(n-1,1))); i=Math.max(0,Math.min(n-1,i));
+    cross.setAttribute('x1',x(i)); cross.setAttribute('x2',x(i)); cross.setAttribute('opacity',1);
+    showTip(`<div class="t">${esc(series[0].points[i].label)}</div>`+
+      series.map(s=>`<div class="r"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:6px"></i>${esc(s.name)}</span><b>${s.points[i].value==null?'no data':s.points[i].value}</b></div>`).join('')
+      + (series[0].points[i].note?`<div class="r"><span>Delivered</span><b>${series[0].points[i].note}</b></div>`:''), e);
+  });
+  hit.addEventListener('mouseleave',()=>{ cross.setAttribute('opacity',0); hideTip(); });
+  host.appendChild(svg);
+}
+
+/** Horizontal bars — 4px rounded data-end, anchored to the baseline. */
+function barsH(host, rows, opts){
+  opts=opts||{};
+  const W = host.clientWidth||480, rowH=28, H = Math.max(rows.length*rowH+10, 40);
+  const labelW = opts.labelW || 118, pad = 46;
+  const iw = W-labelW-pad;
+  const max = opts.max || Math.max(1,...rows.map(r=>r.value||0));
+  host.innerHTML='';
+  if(!rows.length){ host.innerHTML='<div class="empty">Nothing delivered in this period.</div>'; return; }
+  const svg=svgEl('svg',{width:'100%',height:H,viewBox:`0 0 ${W} ${H}`,role:'img'});
+  rows.forEach((r,i)=>{
+    const y=i*rowH+6, bh=15;
+    const lt=svgEl('text',{x:0,y:y+bh-3,class:'axis',fill:C('--ink-2')}); lt.textContent=r.label; svg.appendChild(lt);
+    svg.appendChild(svgEl('rect',{x:labelW,y,width:iw,height:bh,rx:4,fill:C('--surface-2')}));
+    const w = r.value==null?0:Math.max(2,(r.value/max)*iw);
+    if(r.value!=null){
+      const bar=svgEl('rect',{x:labelW,y,width:w,height:bh,rx:4,fill:r.color||C('--series-1')});
+      bar.addEventListener('mousemove',e=>showTip(`<div class="t">${esc(r.label)}</div><div class="r"><span>${esc(opts.metric||'Value')}</span><b>${r.display??r.value}</b></div>`+(r.note?`<div class="r"><span>${esc(r.note.k)}</span><b>${esc(r.note.v)}</b></div>`:''),e));
+      bar.addEventListener('mouseleave',hideTip);
+      svg.appendChild(bar);
+    }
+    const vt=svgEl('text',{x:labelW+w+7,y:y+bh-3,class:'dlabel'});
+    vt.textContent = r.value==null ? 'no data' : (r.display??r.value);
+    if(r.value==null) vt.setAttribute('fill',C('--muted'));
+    svg.appendChild(vt);
+  });
+  host.appendChild(svg);
+}
+
+/** Ordinal heatmap on the validated 4-step blue ramp. */
+function heatmap(host, rowLabels, colLabels, values){
+  const W=host.clientWidth||1000, cell=Math.max(11,Math.min(26,(W-140)/colLabels.length-3)), gap=3;
+  const H=rowLabels.length*(cell+gap)+30;
+  const max=Math.max(1,...values.flat());
+  const ramp=[C('--ramp-1'),C('--ramp-2'),C('--ramp-3'),C('--ramp-4')];
+  host.innerHTML='';
+  const svg=svgEl('svg',{width:'100%',height:H,viewBox:`0 0 ${W} ${H}`,role:'img'});
+  rowLabels.forEach((rl,r)=>{
+    const t=svgEl('text',{x:0,y:r*(cell+gap)+cell-2,class:'axis',fill:C('--ink-2')}); t.textContent=rl; svg.appendChild(t);
+    values[r].forEach((v,c)=>{
+      const x=130+c*(cell+gap), y=r*(cell+gap);
+      // Zero stays as surface so "nothing happened" doesn't read as a value.
+      const fill = v===0 ? C('--surface-2') : ramp[Math.min(ramp.length-1, Math.floor((v/max)*ramp.length))];
+      const rect=svgEl('rect',{x,y,width:cell,height:cell,rx:3,fill});
+      rect.addEventListener('mousemove',e=>showTip(`<div class="t">${esc(rl)}</div><div class="r"><span>${esc(colLabels[c])}</span><b>${v} verified</b></div>`,e));
+      rect.addEventListener('mouseleave',hideTip);
+      svg.appendChild(rect);
+    });
+  });
+  colLabels.forEach((cl,c)=>{ if(c%Math.ceil(colLabels.length/14)) return;
+    const t=svgEl('text',{x:130+c*(cell+gap)+cell/2,y:H-8,class:'axis','text-anchor':'middle'}); t.textContent=cl; svg.appendChild(t);
+  });
+  host.appendChild(svg);
+}
+
+function tableFor(host, cols, rows){
+  host.innerHTML = `<table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const range = DomeBox.periodRange(KIND, OFFSET);
+  const a = DomeBox.periodAnalytics(TASKS, USERS, range);
+  const prev = DomeBox.periodAnalytics(TASKS, USERS, DomeBox.periodRange(KIND, OFFSET + 1));
+  document.getElementById('rangeLabel').textContent = a.range.label + '  ·  ' + a.range.from + ' → ' + a.range.to;
+
+  /* tiles */
+  const d = (now, before, unit) => {
+    if (now==null||before==null) return '<span class="s">no comparison</span>';
+    const diff = now - before;
+    const col = diff===0 ? 'var(--ink-2)' : (diff>0 ? 'var(--good)' : 'var(--critical)');
+    return `<span class="s"><span class="delta" style="color:${col}">${diff>0?'▲':diff<0?'▼':'■'} ${Math.abs(diff)}${unit||''}</span> vs previous</span>`;
+  };
+  document.getElementById('tiles').innerHTML = `
+    <div class="tile"><div class="k">Team score</div><div class="v" style="color:${a.teamScore==null?'var(--muted)':a.teamScore>=85?'var(--good)':a.teamScore>=60?'var(--warning)':'var(--critical)'}">${a.teamScore??'—'}</div>${d(a.teamScore,prev.teamScore)}</div>
+    <div class="tile"><div class="k">Delivered</div><div class="v">${a.delivered}</div>${d(a.delivered,prev.delivered)}</div>
+    <div class="tile"><div class="k">On-time</div><div class="v">${a.onTimeRate==null?'—':a.onTimeRate+'%'}</div>${d(a.onTimeRate,prev.onTimeRate,'pt')}</div>
+    <div class="tile"><div class="k">Rework loops</div><div class="v" style="color:${a.reworkLoops>prev.reworkLoops?'var(--critical)':'var(--ink)'}">${a.reworkLoops}</div>${d(a.reworkLoops,prev.reworkLoops)}</div>
+    <div class="tile"><div class="k">Overdue now</div><div class="v" style="color:${a.overdueNow?'var(--critical)':'var(--good)'}">${a.overdueNow}</div><div class="s">open past deadline</div></div>`;
+
+  /* trend: team average + optionally one person */
+  const teamTrend = [];
+  for (let i = SPAN-1+OFFSET; i >= OFFSET; i--) {
+    const r = DomeBox.periodRange(KIND, i);
+    const p = DomeBox.periodAnalytics(TASKS, USERS, r);
+    teamTrend.push({ label:r.short, full:r.label, value:p.teamScore, note:p.delivered });
+  }
+  const series = [{ name:'Team', color:C('--series-1'), points:teamTrend }];
+  if (PERSON) {
+    const t = DomeBox.scoreTrend(TASKS, PERSON, KIND, SPAN, null, OFFSET);
+    series.push({ name:(USERS.find(u=>u.username===PERSON)||{}).name.split(' ')[0],
+      color:C('--series-2'), points:t.map(x=>({label:x.short, value:x.score, note:x.delivered})) });
+  }
+  document.getElementById('trendSub').textContent =
+    `Delegation score across ${SPAN} ${KIND}s ending ${a.range.short}` + (PERSON?' — team versus individual':'');
+  document.getElementById('trendLegend').innerHTML = series.length>1
+    ? series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('') : '';
+  lineChart(document.getElementById('chartTrend'), series, {height:236});
+  tableFor(document.getElementById('tableTrend'),
+    ['Period', ...series.map(s=>s.name), 'Delivered'],
+    teamTrend.map((p,i)=>[p.full, ...series.map(s=>s.points[i].value??'no data'), p.note]));
+
+  /* bands — colour is backed by the letter, never colour alone */
+  const bandsHost = document.getElementById('chartBands');
+  const bandDefs = [
+    {k:'A', label:'A · Top performer', color:C('--good'), n:a.bands.A},
+    {k:'B', label:'B · Solid', color:C('--warning'), n:a.bands.B},
+    {k:'C', label:'C · Needs action', color:C('--critical'), n:a.bands.C},
+    {k:'—', label:'No data yet', color:C('--muted'), n:a.bands.none},
+  ];
+  const scoredN = Math.max(1, bandDefs.reduce((s,b)=>s+b.n,0));
+  bandsHost.innerHTML = bandDefs.map(b=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
+      <span style="width:22px;height:22px;border-radius:6px;background:${b.color};color:#08101f;
+        display:grid;place-items:center;font-weight:800;font-size:11px;flex:none">${b.k}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:4px">
+          <span style="color:var(--ink-2)">${b.label}</span><b>${b.n}</b></div>
+        <div style="height:5px;background:var(--surface-2);border-radius:99px;overflow:hidden">
+          <span style="display:block;height:100%;width:${b.n/scoredN*100}%;background:${b.color};border-radius:99px"></span></div>
+      </div></div>`).join('');
+  tableFor(document.getElementById('tableBands'), ['Band','People'], bandDefs.map(b=>[b.label,b.n]));
+
+  /* per-person score */
+  const ppl = a.people.slice().sort((x,y)=>(y.score??-1)-(x.score??-1));
+  document.getElementById('peopleSub').textContent = a.range.label + ' · sorted best first';
+  barsH(document.getElementById('chartPeople'), ppl.map(p=>({
+    // Band letter rides with the bar: the score colours fail CVD separation, so
+    // colour never carries the verdict on its own.
+    label:p.name.split(' ')[0], value:p.score,
+    display: p.score==null ? null : `${p.score} · ${p.band}`,
+    color: p.score==null?C('--muted'):p.score>=85?C('--good'):p.score>=60?C('--warning'):C('--critical'),
+    note: p.score==null ? {k:'Why',v:p.reason} : {k:'Delivered',v:p.delivered},
+  })), {max:100, metric:'Score'});
+  tableFor(document.getElementById('tablePeople'), ['Person','Role','Score','Band','Delivered'],
+    ppl.map(p=>[p.name,p.role,p.score??'no data',p.band??'—',p.delivered]));
+
+  /* on-time % per person — its own chart, never a second axis on the score chart */
+  const onTime = USERS.map(u=>{
+    const closed = TASKS.filter(t=>t.assignee===u.username && t.status===S.VERIFIED &&
+      DomeBox.inWindow(DomeBox.closedAt(t), range));
+    let ok=0,base=0;
+    closed.forEach(t=>{ const s=DomeBox.submittedAt(t), dd=DomeBox.parseYmd(t.due);
+      if(s&&dd){base++; if(DomeBox.dayDiff(s,dd)<=0) ok++;} });
+    return { label:u.name.split(' ')[0], value: base?Math.round(ok/base*100):null,
+      display: base?Math.round(ok/base*100)+'%':null, note:{k:'Closed',v:String(base)} };
+  }).sort((x,y)=>(y.value??-1)-(x.value??-1));
+  barsH(document.getElementById('chartOnTime'), onTime, {max:100, metric:'On-time'});
+  tableFor(document.getElementById('tableOnTime'), ['Person','On-time %'], onTime.map(r=>[r.label, r.display??'no data']));
+
+  /* KRA */
+  barsH(document.getElementById('chartKra'), a.kra.slice(0,7).map(k=>({label:k.kra, value:k.count})), {metric:'Tasks', labelW:150});
+  tableFor(document.getElementById('tableKra'), ['KRA','Delivered'], a.kra.map(k=>[k.kra,k.count]));
+
+  /* rework per person */
+  const rework = USERS.map(u=>{
+    const closed = TASKS.filter(t=>t.assignee===u.username && t.status===S.VERIFIED &&
+      DomeBox.inWindow(DomeBox.closedAt(t), range));
+    const loops = closed.reduce((s,t)=>s+Number(t.reworkCount||0),0);
+    return { label:u.name.split(' ')[0], value:loops, display:loops,
+      color: loops===0?C('--good'):loops<=3?C('--warning'):C('--critical'),
+      note:{k:'Closed',v:String(closed.length)} };
+  }).sort((x,y)=>y.value-x.value);
+  barsH(document.getElementById('chartRework'), rework, {metric:'Rework loops'});
+  tableFor(document.getElementById('tableRework'), ['Person','Rework loops'], rework.map(r=>[r.label,r.value]));
+
+  /* heatmap: last 20 weeks */
+  const weeks = [];
+  for (let i=19;i>=0;i--) weeks.push(DomeBox.periodRange(P.WEEK, i));
+  const rowsL = USERS.map(u=>u.name.split(' ')[0]);
+  const vals = USERS.map(u=>weeks.map(w=>TASKS.filter(t=>t.assignee===u.username &&
+    t.status===S.VERIFIED && DomeBox.inWindow(DomeBox.closedAt(t), w)).length));
+  heatmap(document.getElementById('chartHeat'), rowsL, weeks.map(w=>w.short), vals);
+  tableFor(document.getElementById('tableHeat'), ['Person', ...weeks.map(w=>w.short)],
+    USERS.map((u,i)=>[u.name, ...vals[i]]));
+}
+
+/* ---------- chrome ---------- */
+/* Which period to look at. Reviews are retrospective, so a closed period must be
+   reachable — and on day 1 of a month "this month" is legitimately empty. */
+const OFFSET_COUNT = { week:12, month:12, quarter:8, year:3 };
+function setOffsets(){
+  const n = OFFSET_COUNT[KIND] || 12;
+  const now = [];
+  for (let i=0;i<n;i++){
+    const r = DomeBox.periodRange(KIND, i);
+    const tag = i===0 ? ' (current)' : i===1 ? ' (last)' : '';
+    now.push(`<option value="${i}">${r.label}${tag}</option>`);
+  }
+  if (OFFSET >= n) OFFSET = 0;
+  const el = document.getElementById('offset');
+  el.innerHTML = now.join('');
+  el.value = String(OFFSET);
+}
+function setSpans(){
+  const opts = SPANS[KIND];
+  document.getElementById('span').innerHTML = opts.map(n=>`<option value="${n}">${n} ${KIND}s</option>`).join('');
+  SPAN = opts[1] ?? opts[0];
+  document.getElementById('span').value = SPAN;
+}
+document.getElementById('periodSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button[data-p]'); if(!b) return;
+  KIND=b.dataset.p;
+  document.querySelectorAll('#periodSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  setSpans(); setOffsets(); render();
+});
+document.getElementById('offset').addEventListener('change', e=>{ OFFSET=Number(e.target.value); render(); });
+document.getElementById('span').addEventListener('change', e=>{ SPAN=Number(e.target.value); render(); });
+document.getElementById('person').addEventListener('change', e=>{ PERSON=e.target.value; render(); });
+document.addEventListener('click', e=>{
+  const b=e.target.closest('[data-table]'); if(!b) return;
+  const el=document.getElementById(b.dataset.table);
+  if(!el) return;
+  const on=el.classList.toggle('on');
+  b.textContent = on?'Chart':'Table';
+  b.setAttribute('aria-expanded', on);
+});
+let rt; addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(render,180); });
+
+document.getElementById('person').innerHTML =
+  '<option value="">Team only</option>' + USERS.map(u=>`<option value="${u.username}">${u.name}</option>`).join('');
+setSpans();
+setOffsets();
+render();
+</script>
+</body>
+</html>
