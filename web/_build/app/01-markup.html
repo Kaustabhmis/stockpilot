@@ -1,0 +1,133 @@
+<!-- ===========================================================================
+     DOME BOX — TASK ASSIGNMENT + TEAM MANAGEMENT  (paste-in block)
+
+     INSTALL
+     1. Paste this whole block into index.html beside your other #view-… blocks.
+     2. Add nav entries:
+          <button onclick="toggleView('tasks')">Tasks</button>
+          <button onclick="toggleView('team')">Team</button>
+     3. After login, tell it who is using it and where the data lives:
+          DomeBoxApp.signIn({ username:'admin@acme.in', role:'Admin' });
+          DomeBoxApp.setBackend({ loadAll, saveTask, saveUser });   // optional
+        With no backend it persists to this browser via localStorage, so the
+        whole workflow is usable and demonstrable before the server exists.
+
+     WHAT ENFORCES THE RULES
+     Nothing in this UI decides what a person may do. Every action is offered by
+     DomeBox.allowedTransitions() and every drop is checked by
+     DomeBox.canDropInColumn() — the same engine the backend runs. A button that
+     should not exist is never drawn, and a move the engine refuses is refused
+     here with the engine's own reason.
+     =========================================================================== -->
+
+<style>
+  #view-tasks.hidden, #view-team.hidden { display:none !important; }
+  #view-tasks, #view-team { --ok:#047857; --warn:#d97706; --bad:#b91c1c; }
+
+  .dbx-col { background:#f1f5f9; border-radius:1rem; padding:.75rem; min-height:140px; }
+  .dbx-col.over { outline:2px dashed #2563eb; outline-offset:-4px; background:#eff6ff; }
+  .dbx-card { background:#fff; border-radius:.75rem; padding:.75rem; margin-bottom:.5rem;
+    border:1px solid #e5e7eb; cursor:grab; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .dbx-card:active { cursor:grabbing; }
+  .dbx-card.drag { opacity:.4; }
+  .dbx-card.p-High   { border-left:4px solid #b91c1c; }
+  .dbx-card.p-Medium { border-left:4px solid #d97706; }
+  .dbx-card.p-Low    { border-left:4px solid #2563eb; }
+
+  .dbx-chip { display:inline-flex; align-items:center; gap:.25rem; font-size:10px; font-weight:800;
+    text-transform:uppercase; letter-spacing:.06em; padding:.15rem .45rem; border-radius:.4rem; }
+
+  #dbx-scrim { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:80;
+    display:none; align-items:center; justify-content:center; padding:1rem; }
+  #dbx-scrim.on { display:flex; }
+  #dbx-modal { background:#fff; border-radius:1.5rem; width:100%; max-width:560px;
+    max-height:90vh; overflow-y:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,.35); }
+
+  #dbx-drawer { position:fixed; top:0; right:0; height:100%; width:100%; max-width:520px;
+    background:#fff; z-index:90; box-shadow:-20px 0 50px rgba(0,0,0,.2); overflow-y:auto;
+    transform:translateX(100%); transition:transform .2s ease-out; }
+  #dbx-drawer.on { transform:translateX(0); }
+
+  #dbx-toasts { position:fixed; bottom:1.25rem; right:1.25rem; z-index:9999;
+    display:flex; flex-direction:column; gap:.5rem; pointer-events:none; }
+  .dbx-toast { padding:.75rem 1rem; border-radius:.75rem; font-weight:700; font-size:13px;
+    color:#fff; box-shadow:0 10px 25px rgba(0,0,0,.2); max-width:340px; }
+  .dbx-toast.ok  { background:#047857; }
+  .dbx-toast.err { background:#b91c1c; }
+  .dbx-toast.info{ background:#1f2937; }
+
+  .dbx-in { width:100%; border:1px solid #e5e7eb; background:#f9fafb; border-radius:.75rem;
+    padding:.65rem .8rem; font-size:14px; outline:none; }
+  .dbx-in:focus { border-color:#2563eb; background:#fff; }
+  .dbx-lb { display:block; font-size:10px; font-weight:800; text-transform:uppercase;
+    letter-spacing:.08em; color:#9ca3af; margin-bottom:.3rem; }
+</style>
+
+<!-- ------------------------------- TASKS ---------------------------------- -->
+<div id="view-tasks" class="hidden min-h-screen bg-gray-50 flex-col">
+  <nav class="bg-white border-b border-gray-100 px-4 lg:px-8 h-16 flex justify-between items-center gap-2 sticky top-0 z-40">
+    <div class="flex items-center cursor-pointer" onclick="toggleView('dashboard')">
+      <span class="material-icons text-blue-600 mr-2">dashboard</span>
+      <span class="font-black text-xl tracking-tight whitespace-nowrap">Dome Box</span>
+      <span class="ml-3 text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-700 px-2 py-1 rounded-md">Tasks</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="toggleView('team')" class="text-gray-500 font-bold text-sm hover:text-blue-600 hidden sm:block">Team</button>
+      <button onclick="toggleView('analytics')" class="text-gray-500 font-bold text-sm hover:text-blue-600 hidden sm:block">Reports</button>
+      <button id="btnNewTask" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 flex items-center gap-1">
+        <span class="material-icons text-base">add</span><span class="hidden sm:inline">Assign Task</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="bg-white border-b border-gray-100 px-4 lg:px-8 py-3 flex flex-wrap items-center gap-2 sticky top-16 z-30">
+    <input id="fSearch" class="dbx-in max-w-[200px]" placeholder="Search tasks…">
+    <select id="fAssignee" class="dbx-in max-w-[170px]"></select>
+    <select id="fStatus" class="dbx-in max-w-[160px]"></select>
+    <select id="fPriority" class="dbx-in max-w-[130px]">
+      <option value="">Any priority</option><option>High</option><option>Medium</option><option>Low</option>
+    </select>
+    <label class="flex items-center gap-2 text-xs font-bold text-gray-600 px-2 whitespace-nowrap">
+      <input type="checkbox" id="fOverdue" class="w-4 h-4 accent-red-600"> Overdue only
+    </label>
+    <span class="flex-1"></span>
+    <div class="flex gap-1 bg-gray-100 p-1 rounded-xl">
+      <button data-mode="board" class="dbx-mode px-4 py-1.5 rounded-lg text-xs font-black">Board</button>
+      <button data-mode="list"  class="dbx-mode px-4 py-1.5 rounded-lg text-xs font-black">List</button>
+    </div>
+  </div>
+
+  <div id="wipBanner" class="hidden px-4 lg:px-8 pt-4"></div>
+
+  <div class="flex-1 p-4 lg:p-8 w-full">
+    <div id="tasksBoard" class="grid gap-4" style="grid-template-columns:repeat(5,minmax(240px,1fr));overflow-x:auto"></div>
+    <div id="tasksList" class="hidden bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
+    <div id="tasksEmpty" class="hidden text-center py-24 text-gray-400 font-bold">No tasks match these filters.</div>
+  </div>
+</div>
+
+<!-- -------------------------------- TEAM ---------------------------------- -->
+<div id="view-team" class="hidden min-h-screen bg-gray-50 flex-col">
+  <nav class="bg-white border-b border-gray-100 px-4 lg:px-8 h-16 flex justify-between items-center gap-2 sticky top-0 z-40">
+    <div class="flex items-center cursor-pointer" onclick="toggleView('dashboard')">
+      <span class="material-icons text-blue-600 mr-2">dashboard</span>
+      <span class="font-black text-xl tracking-tight whitespace-nowrap">Dome Box</span>
+      <span class="ml-3 text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-700 px-2 py-1 rounded-md">Team</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="toggleView('tasks')" class="text-gray-500 font-bold text-sm hover:text-blue-600 hidden sm:block">Tasks</button>
+      <button onclick="toggleView('analytics')" class="text-gray-500 font-bold text-sm hover:text-blue-600 hidden sm:block">Reports</button>
+      <button id="btnNewUser" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 flex items-center gap-1">
+        <span class="material-icons text-base">person_add</span><span class="hidden sm:inline">Add Member</span>
+      </button>
+    </div>
+  </nav>
+  <div class="flex-1 p-4 lg:p-8 max-w-[1400px] mx-auto w-full">
+    <div id="teamStats" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+    <div id="teamTable" class="bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
+  </div>
+</div>
+
+<div id="dbx-scrim"><div id="dbx-modal"></div></div>
+<div id="dbx-drawer"></div>
+<div id="dbx-toasts"></div>
