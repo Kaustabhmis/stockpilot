@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refer a buyer — Grihobazar Partners</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">GB</span> <span data-brand>Grihobazar Partners</span></a>
+    <nav data-nav></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap mid">
+    <h1>Refer a buyer</h1>
+    <p class="muted" id="introLine">
+      Give us the buyer's name and number. Our team takes it from there, and you can
+      follow the status in your dashboard.
+    </p>
+
+    <div class="msg msg-warn" id="refBanner" hidden></div>
+
+    <div class="card" id="formCard">
+      <div class="msg" id="msg" hidden></div>
+      <form id="form" novalidate>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="buyerName">Buyer's full name</label>
+            <input type="text" id="buyerName" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label for="buyerPhone">Buyer's mobile number</label>
+            <input type="tel" id="buyerPhone" inputmode="numeric" maxlength="15" required>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="buyerEmail">Buyer's email <span class="muted" style="font-weight:400">(optional)</span></label>
+            <input type="email" id="buyerEmail" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="location">Preferred location</label>
+            <input type="text" id="location" placeholder="e.g. Newtown, Rajarhat">
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="budget">Budget</label>
+            <input type="text" id="budget" placeholder="e.g. 60–80 lakh">
+          </div>
+          <div class="field">
+            <label for="bhk">Configuration</label>
+            <select id="bhk">
+              <option value="">Not sure</option>
+              <option>1 BHK</option>
+              <option>2 BHK</option>
+              <option>3 BHK</option>
+              <option>4 BHK</option>
+              <option>4+ BHK</option>
+              <option>Commercial</option>
+              <option>Plot / Land</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="propertyTitle">Interested in a specific property? <span class="muted" style="font-weight:400">(optional)</span></label>
+          <input type="text" id="propertyTitle" placeholder="Project or property name">
+        </div>
+
+        <div class="field">
+          <label for="notes">Anything we should know</label>
+          <textarea id="notes" placeholder="Best time to call, urgency, loan requirement…"></textarea>
+        </div>
+
+        <div class="field" id="codeField" hidden>
+          <label for="referralCode">Referral code</label>
+          <input type="text" id="referralCode" class="mono" placeholder="e.g. GB7K4M2Q" style="text-transform:uppercase">
+          <div class="hint">The code of the person who sent you here.</div>
+        </div>
+
+        <div class="msg msg-warn small" style="margin-bottom:16px">
+          Please make sure the buyer knows you are sharing their number with us —
+          we will call them.
+        </div>
+
+        <button class="btn btn-block" type="submit" id="submitBtn">Submit referral</button>
+      </form>
+    </div>
+
+    <div class="card center" id="doneCard" hidden>
+      <h2 id="doneTitle">Referral received</h2>
+      <p class="muted" id="doneMsg"></p>
+      <p class="small muted">Reference: <span class="mono" id="doneRef"></span></p>
+      <div class="row" style="justify-content:center">
+        <button class="btn" id="againBtn">Refer another buyer</button>
+        <a class="btn btn-ghost" href="dashboard.html" id="dashLink">Go to dashboard</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var urlCode = (params.get('ref') || '').trim().toUpperCase();
+  var loggedIn = GB.Session.isLoggedIn();
+  var me = GB.Session.user();
+
+  var form = GB.$('#form'), msg = GB.$('#msg'), btn = GB.$('#submitBtn');
+  var codeField = GB.$('#codeField'), codeInput = GB.$('#referralCode');
+
+  // Three ways onto this page: logged in (own code), arrived via someone's
+  // link (?ref=), or neither — in which case we ask for the code.
+  if (loggedIn && me && me.referralCode) {
+    GB.$('#introLine').textContent =
+      'This referral will be recorded against your code ' + me.referralCode + '.';
+  } else if (urlCode) {
+    codeField.hidden = false;
+    codeInput.value = urlCode;
+    codeInput.readOnly = true;
+    GB.$('#refBanner').hidden = false;
+    GB.$('#refBanner').textContent =
+      'You were referred by a Grihobazar partner (code ' + urlCode + '). Submitting this form costs you nothing.';
+    GB.$('#dashLink').hidden = true;
+  } else {
+    codeField.hidden = false;
+    GB.$('#introLine').textContent =
+      'Have a referral code? Enter it below so the right person gets credited. ' +
+      'No code yet — you can join free in a minute.';
+    GB.$('#dashLink').hidden = true;
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    GB.hide(msg);
+
+    var phone = GB.$('#buyerPhone').value.replace(/\D/g, '').slice(-10);
+    if (GB.$('#buyerName').value.trim().length < 3) return GB.show(msg, "Enter the buyer's full name");
+    if (!/^[6-9]\d{9}$/.test(phone)) return GB.show(msg, 'Enter a valid 10-digit buyer mobile number');
+
+    var payload = {
+      buyerName: GB.$('#buyerName').value.trim(),
+      buyerPhone: phone,
+      buyerEmail: GB.$('#buyerEmail').value.trim(),
+      location: GB.$('#location').value.trim(),
+      budget: GB.$('#budget').value.trim(),
+      bhk: GB.$('#bhk').value,
+      propertyTitle: GB.$('#propertyTitle').value.trim(),
+      notes: GB.$('#notes').value.trim()
+    };
+    if (!loggedIn) {
+      payload.referralCode = codeInput.value.trim().toUpperCase();
+      if (!payload.referralCode) return GB.show(msg, 'Please enter the referral code');
+    }
+
+    GB.busy(btn, true, 'Submitting…');
+    GB.api('submitLead', payload).then(function (data) {
+      GB.$('#formCard').hidden = true;
+      GB.$('#doneCard').hidden = false;
+      GB.$('#doneRef').textContent = data.referralId;
+      GB.$('#doneMsg').textContent = data.message;
+      if (data.duplicate) {
+        GB.$('#doneTitle').textContent = 'Recorded as duplicate';
+      }
+      window.scrollTo(0, 0);
+    }).catch(function (err) {
+      GB.busy(btn, false);
+      if (GB.guard(err)) return;
+      GB.show(msg, err.message);
+    });
+  });
+
+  GB.$('#againBtn').addEventListener('click', function () {
+    form.reset();
+    if (urlCode) codeInput.value = urlCode;
+    GB.busy(btn, false);
+    GB.$('#doneCard').hidden = true;
+    GB.$('#formCard').hidden = false;
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in — Grihobazar Partners</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">GB</span> <span data-brand>Grihobazar Partners</span></a>
+    <nav data-nav></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap narrow">
+    <h1>Log in</h1>
+    <p class="muted">Use the mobile number you registered with.</p>
+
+    <div class="card">
+      <div class="msg" id="msg" hidden></div>
+      <form id="form" novalidate>
+        <div class="field">
+          <label for="phone">Mobile number</label>
+          <input type="tel" id="phone" inputmode="numeric" autocomplete="username" maxlength="15" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-block" type="submit" id="submitBtn">Log in</button>
+      </form>
+    </div>
+
+    <p class="center muted small" style="margin-top:16px">
+      New here? <a href="signup.html">Create a free account</a>
+    </p>
+    <p class="center muted small">
+      Forgot your password? Contact us and we will reset it for you.
+    </p>
+  </div>
+</main>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  if (GB.Session.isLoggedIn()) { location.replace('dashboard.html'); return; }
+
+  var params = new URLSearchParams(location.search);
+  var next = params.get('next') || 'dashboard.html';
+  // Only ever bounce to a page on this site.
+  if (!/^[a-z0-9_-]+\.html$/i.test(next)) next = 'dashboard.html';
+
+  var form = GB.$('#form'), msg = GB.$('#msg'), btn = GB.$('#submitBtn');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    GB.hide(msg);
+    GB.busy(btn, true, 'Logging in…');
+    GB.api('login', {
+      phone: GB.$('#phone').value.trim(),
+      password: GB.$('#password').value
+    }).then(function (data) {
+      GB.Session.save(data.token, data.referrer);
+      location.href = next;
+    }).catch(function (err) {
+      GB.busy(btn, false);
+      GB.show(msg, err.message);
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — Grihobazar Partners</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">GB</span> <span data-brand>Grihobazar Partners</span></a>
+    <nav data-nav></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <h1 id="greeting">Dashboard</h1>
+    <div class="msg" id="msg" hidden></div>
+
+    <div class="card card-tight">
+      <h3>Your referral code</h3>
+      <div class="code-box">
+        <span class="code" id="codeText">…</span>
+        <button class="btn btn-sm btn-ghost" id="copyCode">Copy code</button>
+        <a class="btn btn-sm" href="refer.html">Refer a buyer</a>
+      </div>
+      <div class="field" style="margin:12px 0 0">
+        <label for="shareLink">Your share link</label>
+        <input class="share-link" id="shareLink" readonly>
+        <div class="row" style="margin-top:8px">
+          <button class="btn btn-sm btn-ghost" id="copyLink">Copy link</button>
+          <a class="btn btn-sm btn-ghost" id="waShare" target="_blank" rel="noopener">Share on WhatsApp</a>
+        </div>
+        <div class="hint">Anyone who opens this link and fills the form is credited to you.</div>
+      </div>
+    </div>
+
+    <div class="grid grid-4" style="margin-top:16px">
+      <div class="stat"><div class="label">Referrals</div><div class="value" id="sReferrals">—</div><div class="sub" id="sReferralsSub">&nbsp;</div></div>
+      <div class="stat"><div class="label">Deals closed</div><div class="value" id="sDeals">—</div><div class="sub" id="sDealsSub">&nbsp;</div></div>
+      <div class="stat"><div class="label">Earned</div><div class="value" id="sEarned">—</div><div class="sub">net of TDS</div></div>
+      <div class="stat"><div class="label">Pending payout</div><div class="value" id="sPending">—</div><div class="sub" id="sPaidSub">&nbsp;</div></div>
+    </div>
+
+    <div class="msg msg-warn" id="kycNote" hidden></div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h2 style="margin:0">Your referrals</h2>
+        <span class="small muted" id="listCount"></span>
+      </div>
+      <div class="table-scroll" style="margin-top:12px">
+        <table>
+          <thead>
+            <tr>
+              <th>Buyer</th>
+              <th>Property / area</th>
+              <th>Status</th>
+              <th class="num">Deal value</th>
+              <th class="num">Your commission</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            <tr><td colspan="6" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Payouts</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Date</th><th class="num">Amount</th><th>Mode</th><th>Reference</th><th>Status</th></tr>
+          </thead>
+          <tbody id="payoutRows">
+            <tr><td colspan="5" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Payout details</h2>
+      <p class="muted small">We need these before we can release money to you. Changing them sends your KYC back for a quick re-check.</p>
+      <div class="msg" id="profileMsg" hidden></div>
+      <form id="profileForm">
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="pName">Name</label>
+            <input type="text" id="pName">
+          </div>
+          <div class="field">
+            <label for="pCity">City</label>
+            <input type="text" id="pCity">
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="pEmail">Email</label>
+            <input type="email" id="pEmail">
+          </div>
+          <div class="field">
+            <label for="pPan">PAN</label>
+            <input type="text" id="pPan" class="mono" maxlength="10" style="text-transform:uppercase">
+            <div class="hint">Required for TDS credit.</div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="pUpi">UPI ID</label>
+            <input type="text" id="pUpi" placeholder="name@bank">
+          </div>
+          <div class="field">
+            <label for="pBank">Bank name</label>
+            <input type="text" id="pBank">
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="pAcct">Account number</label>
+            <input type="text" id="pAcct" class="mono" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="pIfsc">IFSC</label>
+            <input type="text" id="pIfsc" class="mono" maxlength="11" style="text-transform:uppercase">
+          </div>
+        </div>
+        <button class="btn" type="submit" id="profileBtn">Save payout details</button>
+      </form>
+    </div>
+  </div>
+</main>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  if (!GB.requireLogin()) return;
+
+  var msg = GB.$('#msg');
+  var me = GB.Session.user() || {};
+
+  function paintIdentity(r) {
+    me = r;
+    GB.Session.update(r);
+    GB.$('#greeting').textContent = 'Hello, ' + (r.name || '').split(' ')[0];
+    GB.$('#codeText').textContent = r.referralCode;
+    var link = GB.referLink(r.referralCode);
+    GB.$('#shareLink').value = link;
+    GB.$('#waShare').href = 'https://wa.me/?text=' + encodeURIComponent(
+      'Planning to buy a property? Fill this short form and the Grihobazar team will help you find the right one: ' + link
+    );
+    GB.$('#pName').value = r.name || '';
+    GB.$('#pCity').value = r.city || '';
+    GB.$('#pEmail').value = r.email || '';
+  }
+
+  paintIdentity(me);
+
+  GB.$('#copyCode').addEventListener('click', function () {
+    GB.copy(me.referralCode || '', this);
+  });
+  GB.$('#copyLink').addEventListener('click', function () {
+    GB.copy(GB.$('#shareLink').value, this);
+  });
+
+  if (new URLSearchParams(location.search).get('welcome')) {
+    GB.show(msg, 'Welcome aboard. Share your link below — the first referral is the hardest.', 'ok');
+  }
+
+  // Refresh identity from the server so a KYC change made by admin shows up.
+  GB.api('me', {}).then(function (d) { paintIdentity(d.referrer); })
+    .catch(function (e) { GB.guard(e); });
+
+  GB.api('myEarnings', {}).then(function (d) {
+    var t = d.totals;
+    GB.$('#sReferrals').textContent = t.totalReferrals;
+    GB.$('#sDeals').textContent = t.dealsClosed;
+    GB.$('#sDealsSub').textContent = t.dealsInProgress ? t.dealsInProgress + ' in progress' : 'none in progress';
+    GB.$('#sEarned').textContent = GB.rupees(t.earned);
+    GB.$('#sPending').textContent = GB.rupees(t.pending);
+    GB.$('#sPaidSub').textContent = GB.rupees(t.paid) + ' already paid';
+
+    var sc = d.stageCount || {};
+    var live = (sc.new || 0) + (sc.contacted || 0) + (sc.visit_scheduled || 0) +
+               (sc.visited || 0) + (sc.negotiation || 0);
+    GB.$('#sReferralsSub').textContent = live + ' active';
+
+    if (!d.hasPayoutDetails) {
+      GB.show(GB.$('#kycNote'),
+        'Add your UPI or bank details below so we can pay you when a deal closes.', 'warn');
+    } else if (String(d.kycStatus).toLowerCase() === 'pending') {
+      GB.show(GB.$('#kycNote'),
+        'Your payout details are with us for verification. Nothing is held up — this only needs to clear before your first payout.', 'warn');
+    }
+  }).catch(function (e) { if (!GB.guard(e)) GB.show(msg, e.message); });
+
+  GB.api('myReferrals', {}).then(function (d) {
+    var tbody = GB.$('#rows');
+    tbody.innerHTML = '';
+    GB.$('#listCount').textContent = d.referrals.length
+      ? d.referrals.length + ' total' : '';
+
+    if (!d.referrals.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">' +
+        'No referrals yet. Share your link above to get started.</td></tr>';
+      return;
+    }
+
+    d.referrals.forEach(function (r) {
+      var tr = document.createElement('tr');
+
+      var buyer = document.createElement('td');
+      buyer.className = 'wrap-cell';
+      buyer.innerHTML = '<strong>' + esc(r.buyerName) + '</strong><br>' +
+                        '<span class="muted small mono">' + esc(r.buyerPhone) + '</span>';
+      tr.appendChild(buyer);
+
+      var prop = document.createElement('td');
+      prop.className = 'wrap-cell';
+      prop.innerHTML = esc(r.propertyTitle || '—') +
+        (r.location ? '<br><span class="muted small">' + esc(r.location) + '</span>' : '');
+      tr.appendChild(prop);
+
+      var stage = document.createElement('td');
+      stage.appendChild(GB.stagePill(r.stage));
+      if (r.stageNote) {
+        stage.className = 'wrap-cell';
+        var note = document.createElement('div');
+        note.className = 'muted small';
+        note.textContent = r.stageNote;
+        stage.appendChild(note);
+      }
+      tr.appendChild(stage);
+
+      var value = document.createElement('td');
+      value.className = 'num';
+      value.textContent = r.dealValue ? GB.rupeesShort(r.dealValue) : '—';
+      tr.appendChild(value);
+
+      var comm = document.createElement('td');
+      comm.className = 'num';
+      if (r.commission) {
+        comm.innerHTML = '<strong>' + GB.rupees(r.commission) + '</strong>' +
+          (r.dealStage ? '<br><span class="muted small">' + (GB.STAGE_LABELS[r.dealStage] || r.dealStage) + '</span>' : '');
+      } else {
+        comm.textContent = '—';
+      }
+      tr.appendChild(comm);
+
+      var when = document.createElement('td');
+      when.className = 'muted small';
+      when.textContent = GB.fmtDate(r.createdAt);
+      tr.appendChild(when);
+
+      tbody.appendChild(tr);
+    });
+  }).catch(function (e) {
+    if (GB.guard(e)) return;
+    GB.$('#rows').innerHTML = '<tr><td colspan="6" class="empty">' + esc(e.message) + '</td></tr>';
+  });
+
+  GB.api('myPayouts', {}).then(function (d) {
+    var tbody = GB.$('#payoutRows');
+    tbody.innerHTML = '';
+    if (!d.payouts.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">No payouts yet.</td></tr>';
+      return;
+    }
+    d.payouts.forEach(function (p) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + GB.fmtDate(p.paidAt) + '</td>' +
+        '<td class="num"><strong>' + GB.rupees(p.amount) + '</strong></td>' +
+        '<td>' + esc(p.mode || '—') + '</td>' +
+        '<td class="mono small">' + esc(p.reference || '—') + '</td>' +
+        '<td></td>';
+      tr.lastChild.appendChild(GB.stagePill(p.status));
+      tbody.appendChild(tr);
+    });
+  }).catch(function (e) {
+    if (GB.guard(e)) return;
+    GB.$('#payoutRows').innerHTML = '<tr><td colspan="5" class="empty">' + esc(e.message) + '</td></tr>';
+  });
+
+  GB.$('#profileForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var pmsg = GB.$('#profileMsg'), pbtn = GB.$('#profileBtn');
+    GB.hide(pmsg);
+    GB.busy(pbtn, true, 'Saving…');
+    GB.api('updateProfile', {
+      name: GB.$('#pName').value.trim(),
+      city: GB.$('#pCity').value.trim(),
+      email: GB.$('#pEmail').value.trim(),
+      pan: GB.$('#pPan').value.trim(),
+      upi: GB.$('#pUpi').value.trim(),
+      bankName: GB.$('#pBank').value.trim(),
+      accountNumber: GB.$('#pAcct').value.trim(),
+      ifsc: GB.$('#pIfsc').value.trim()
+    }).then(function (d) {
+      GB.busy(pbtn, false);
+      paintIdentity(d.referrer);
+      GB.show(pmsg, 'Saved. We will verify and confirm.', 'ok');
+    }).catch(function (err) {
+      GB.busy(pbtn, false);
+      if (GB.guard(err)) return;
+      GB.show(pmsg, err.message);
+    });
+  });
+
+  /** Buyer names come from user input — escape before any innerHTML. */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+})();
+</script>
+</body>
+</html>
