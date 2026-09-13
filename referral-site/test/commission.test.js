@@ -37,7 +37,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 
-for (const f of ['Util.gs', 'Auth.gs', 'Referrals.gs', 'Deals.gs', 'Code.gs']) {
+for (const f of ['Util.gs', 'Auth.gs', 'Referrals.gs', 'Deals.gs', 'Properties.gs', 'Code.gs']) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'apps-script', f), 'utf8'), sandbox, { filename: f });
 }
 // Config comes from the sheet in production; feed it directly here.
@@ -121,6 +121,99 @@ for (const [input, wantNorm, wantValid] of cases) {
   const ok = gotNorm === wantNorm && gotValid === wantValid;
   console.log((ok ? '  ok   ' : '  FAIL ') + input + ' -> ' + gotNorm + ' valid=' + gotValid);
   ok ? pass++ : fail++;
+}
+
+console.log('\nparsePriceText_ — the free-text Price column from the live sheet');
+{
+  const shapes = [
+    ['81 Lakhs Onwards',              8100000,  8100000],
+    ['78 Lakhs onwards.',             7800000,  7800000],
+    ['₹64 Lakh Onwards',              6400000,  6400000],
+    ['₹55 Lakhs Onwards*',            5500000,  5500000],
+    ['Price: ₹2.20 Cr Onwards*',     22000000, 22000000],
+    ['68 Lakh Approx',                6800000,  6800000],
+    // The first figure carries no unit and must inherit Cr from the second.
+    ['₹2.44  - ₹4.25 Cr',            24400000, 42500000],
+    // A '+' between number and unit must not detach the unit.
+    ['₹69 Lakhs – ₹1.25+ Cr',         6900000, 12500000],
+    ['4.35+ Crore Onwards',          43500000, 43500000],
+    // Room counts are not prices.
+    ['₹1.75 Cr 3 BHK, 2.60 Cr 4BHK', 17500000, 26000000],
+    // Yes, this spelling is in the data.
+    ['34 laksh ownerds',              3400000,  3400000],
+    ['₹1.05 Cr – ₹1.42+ Cr',         10500000, 14200000]
+  ];
+  for (const [text, wantMin, wantMax] of shapes) {
+    const r = vm.runInContext('parsePriceText_(' + JSON.stringify(text) + ')', sandbox);
+    const ok = r && r.min === wantMin && r.max === wantMax;
+    console.log((ok ? '  ok   ' : '  FAIL ') + JSON.stringify(text).padEnd(34) +
+                (r ? r.min + ' – ' + r.max : 'null') +
+                (ok ? '' : '   want ' + wantMin + ' – ' + wantMax));
+    ok ? pass++ : fail++;
+  }
+
+  // Things that are not prices must be rejected, not guessed at.
+  for (const junk of ['', 'Price on request', 'Call for price', '1064', 'abc']) {
+    const r = vm.runInContext('parsePriceText_(' + JSON.stringify(junk) + ')', sandbox);
+    const ok = r === null;
+    console.log((ok ? '  ok   ' : '  FAIL ') + 'rejects ' + JSON.stringify(junk));
+    ok ? pass++ : fail++;
+  }
+
+  // Every Price value from the live sheet, as a regression guard.
+  const live = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures-prices.json'), 'utf8'));
+  let parsedCount = 0;
+  const unparsed = [];
+  for (const text of live) {
+    const r = vm.runInContext('parsePriceText_(' + JSON.stringify(text) + ')', sandbox);
+    if (r && r.min > 0 && r.max >= r.min) parsedCount++; else unparsed.push(text);
+  }
+  const allParsed = parsedCount === live.length;
+  console.log((allParsed ? '  ok   ' : '  FAIL ') + 'all ' + live.length +
+              ' live Price values parse (' + parsedCount + ')');
+  if (!allParsed) unparsed.slice(0, 5).forEach(u => console.log('        unparsed: ' + JSON.stringify(u)));
+  allParsed ? pass++ : fail++;
+}
+
+console.log('\nbhkLabel_ — recovering the cells Sheets turned into dates');
+{
+  // "3,4" became 4 March 2026. Month and day carry the two numbers; checked
+  // against the BHK ranges stated in the listing titles, 7 of 7 agree.
+  const dated = [
+    [new Date(2026, 2, 4), '3–4'],
+    [new Date(2026, 1, 3), '2–3'],
+    [new Date(2026, 3, 6), '4–6'],
+    [new Date(2026, 0, 3), '1–3']
+  ];
+  for (const [d, want] of dated) {
+    const got = vm.runInContext('bhkLabel_(new Date(' + d.getTime() + '))', sandbox);
+    const ok = got === want;
+    console.log((ok ? '  ok   ' : '  FAIL ') + d.toDateString() + ' -> ' + got + (ok ? '' : '  want ' + want));
+    ok ? pass++ : fail++;
+  }
+  const plain = [['2,3', '2–3'], ['3', '3'], ['Beds: 2, 3 & 4 BHK', '2–4'], ['', ''], [null, '']];
+  for (const [input, want] of plain) {
+    const got = vm.runInContext('bhkLabel_(' + JSON.stringify(input) + ')', sandbox);
+    const ok = got === want;
+    console.log((ok ? '  ok   ' : '  FAIL ') + JSON.stringify(input) + ' -> ' + JSON.stringify(got));
+    ok ? pass++ : fail++;
+  }
+}
+
+console.log('\nfirstImage_ — ImageURL holds a comma-separated list');
+{
+  const cases = [
+    ['https://a.test/1, https://a.test/2', 'https://a.test/1'],
+    ['https://a.test/only', 'https://a.test/only'],
+    ['', ''],
+    ['not a url', '']
+  ];
+  for (const [input, want] of cases) {
+    const got = vm.runInContext('firstImage_(' + JSON.stringify(input) + ')', sandbox);
+    const ok = got === want;
+    console.log((ok ? '  ok   ' : '  FAIL ') + JSON.stringify(input) + ' -> ' + JSON.stringify(got));
+    ok ? pass++ : fail++;
+  }
 }
 
 console.log('\nclient parseAmount — what people actually type');

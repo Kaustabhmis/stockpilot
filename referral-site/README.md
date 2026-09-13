@@ -5,6 +5,9 @@ close the deal, and the partner earns a share of our brokerage.
 
 - **Frontend** — plain HTML, CSS and JavaScript. No build step, no framework.
 - **Backend** — a **new, private** Google Sheet driven by Google Apps Script.
+- **Listings** — read (never written) from your existing classifieds spreadsheet,
+  so a partner types a budget and sees real properties with real photos and what
+  each one would pay them.
 - **Money** — we charge the seller `brokerage_pct` (default 2%) of the deal
   value. The partner gets 15% of that brokerage below ₹1 Cr and 20% at ₹1 Cr and
   above. From the partner's share we keep a `platform_fee_pct` (default 10%), and
@@ -93,10 +96,46 @@ In the sheet's `Config` tab:
 | `tds_pct` | 2 | TDS on the balance after the fee — **confirm the rate with your CA** |
 | `attribution_lock_days` | 90 | How long the first referrer owns a buyer's number |
 | `payout_days_after_registration` | 15 | The payout promise made on the site |
+| `listings_sheet_id` | *(blank)* | ID of the spreadsheet holding your listings — **required for the property grid** |
+| `listings_tab` | Properties | Tab name inside that spreadsheet |
+| `listing_band_low` / `listing_band_high` | 0.5 / 1.25 | Price band around the buyer's budget |
 | `notify_email` | *(blank)* | Gets an email on every new lead; blank disables it |
 | `support_phone` / `support_email` | *(blank)* | Shown to partners in the footer |
 
-### 5. Optional — housekeeping triggers
+### 5. Connect your listings
+
+Copy the ID out of your listings spreadsheet URL —
+`docs.google.com/spreadsheets/d/`**`THIS_PART`**`/edit` — and paste it into
+`listings_sheet_id` in the Config tab.
+
+The script only ever **reads** that sheet. It runs as you, so the listings sheet
+can (and should) stay private — you do not need to share it with anyone for this
+to work.
+
+What it reads per row: `Title`, `Location`, `Type`, `Bedrooms`, `Area`, `Price`,
+`ImageURL`, `Status`, `Possession`. A row is shown only when it has a readable
+price, at least one image, and a `Status` that is blank or `Available`. All 147
+rows in the current sheet qualify.
+
+Listings are cached for 10 minutes. After editing the listings sheet, run
+`refreshListings()` from the Apps Script editor to see the change immediately.
+
+**Two things the code works around, so you don't have to fix the sheet first:**
+
+- **Price is free text.** Not one of the 147 values is a number — they read
+  `81 Lakhs Onwards`, `Price: ₹2.20 Cr Onwards*`, `₹2.44  - ₹4.25 Cr`,
+  `₹1.75 Cr 3 BHK, 2.60 Cr 4BHK`, even `34 laksh ownerds`. `parsePriceText_`
+  reads all 147 correctly, including inheriting the unit across a range and
+  ignoring room counts that look like prices. Every one of those shapes is in
+  the test suite.
+- **The date-corrupted `Bedrooms` cells are recovered.** Sheets turned entries
+  like `3,4` into 4 March, and the date still carries both numbers as month and
+  day. Against the 7 rows whose titles also state the BHK range, the
+  reconstruction agrees 7 times and disagrees none, so those cells display as
+  `3–4 BHK` rather than a date. Worth still fixing the sheet eventually — but
+  nothing is blocked on it.
+
+### 6. Optional — housekeeping triggers
 
 In the Apps Script editor, **Triggers → Add trigger**, daily:
 
@@ -127,7 +166,7 @@ partner submits lead  →  new  →  contacted  →  visit_scheduled  →  visit
 
 | File | Who sees it |
 |---|---|
-| `web/index.html` | Public — pitch, live earnings calculator, rate card, FAQ |
+| `web/index.html` | Public — pitch, live earnings calculator, matching properties, rate card, FAQ |
 | `web/signup.html` / `web/login.html` | Public — partner accounts |
 | `web/dashboard.html` | Partner — code, share link, referrals, earnings, payout details |
 | `web/refer.html` | Partner, or anyone opening `refer.html?ref=CODE` |
@@ -178,6 +217,11 @@ that accepts `85 lakh`, `1.2 Cr`, `₹85,00,000`. No deployment needed.
 - **Apps Script quotas** apply: roughly 20,000 URL-fetch-free web app calls and
   100 emails a day on a free Gmail account. Fine for hundreds of partners, not
   for tens of thousands.
+- **Listing photos are Drive links.** `ImageURL` points at
+  `lh3.googleusercontent.com/d/<id>`. Those files must stay shared as "anyone
+  with the link" or the cards show a "Photo unavailable" placeholder instead.
+  This is the one thing in the listings sheet that has to remain public — the
+  rows themselves do not.
 - **Sheets is not a database.** Reads scan the whole tab, so past a few thousand
   referrals the dashboard gets slow. That is the point to move to Postgres or
   Firebase — the API shape here is deliberately plain so the frontend would not

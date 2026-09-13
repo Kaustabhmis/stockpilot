@@ -58,7 +58,8 @@ function route_(action, payload, token) {
     'login':  actionLogin_,
     'logout': actionLogout_,
     'quote':  actionQuote_,
-    'rates':  function () { return actionRates_(); }
+    'rates':  function () { return actionRates_(); },
+    'listings': actionListings_
   };
   if (publicActions[action]) return publicActions[action](payload);
 
@@ -158,6 +159,10 @@ var DEFAULT_CONFIG = [
   ['tier_high_pct', 20, '% of brokerage shared with the referrer AT/ABOVE the threshold'],
   ['platform_fee_pct', 10, 'Platform fee kept from the referrer commission, as % of their share'],
   ['tds_pct', 2, 'TDS deducted after the platform fee — confirm the rate with your CA'],
+  ['listings_sheet_id', '', 'ID of the spreadsheet holding your property listings (from its URL)'],
+  ['listings_tab', 'Properties', 'Tab name inside that spreadsheet'],
+  ['listing_band_low', 0.5, 'Show listings priced from this multiple of the buyer budget'],
+  ['listing_band_high', 1.25, 'Show listings priced up to this multiple of the buyer budget'],
   ['attribution_lock_days', 90, 'First referrer owns a buyer phone for this many days'],
   ['payout_days_after_registration', 15, 'Promised payout window after registration'],
   ['admin_emails', '', 'Extra admin emails (same Workspace domain only)'],

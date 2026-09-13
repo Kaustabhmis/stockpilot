@@ -22,7 +22,8 @@
     <p class="lede">
       Send us a buyer. We handle the calls, site visits, negotiation and paperwork.
       When they register the property, you take a share of our brokerage — paid within
-      <strong data-payout-days>15</strong> days of registration.
+      <strong data-payout-days>15</strong> days of registration. Put a budget in below
+      and see the real properties you could earn on.
     </p>
     <div class="hero-cta">
       <a class="btn" href="signup.html">Join free</a>
@@ -77,6 +78,14 @@
       </div>
 
     </div>
+  </section>
+
+  <section class="wrap" style="margin-top:16px" id="listingsSection">
+    <div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:12px">
+      <h2 style="margin:0" id="listingsHeading">Properties in this budget</h2>
+      <span class="small muted" id="listingsNote"></span>
+    </div>
+    <div class="listing-grid" id="listingGrid"></div>
   </section>
 
   <section class="wrap" style="margin-top:16px">
@@ -234,13 +243,95 @@
     GB.$('#supportLine').textContent = support.join('  ·  ');
   }
 
-  priceInput.addEventListener('input', recalc);
+  // ---- properties in budget -------------------------------------------
+
+  var grid = GB.$('#listingGrid');
+  var listingsNote = GB.$('#listingsNote');
+  var lastBudget = null;
+  var listingTimer = null;
+
+  function loadListings(budget) {
+    if (budget === lastBudget) return;
+    lastBudget = budget;
+    grid.innerHTML = skeletonCards(3);
+    listingsNote.textContent = '';
+
+    GB.api('listings', { budget: budget, limit: 6 }).then(function (d) {
+      if (budget !== lastBudget) return;          // a newer request has overtaken this one
+      renderListings(d);
+    }).catch(function (e) {
+      grid.innerHTML = '';
+      listingsNote.textContent = e.code === 'listings_unavailable'
+        ? 'Listings are not connected yet.'
+        : e.message;
+    });
+  }
+
+  function skeletonCards(n) {
+    var out = '';
+    for (var i = 0; i < n; i++) {
+      out += '<article class="listing"><div class="listing-img skeleton"></div>' +
+             '<div class="listing-body"><div class="skeleton" style="height:16px;margin-bottom:8px"></div>' +
+             '<div class="skeleton" style="height:13px;width:60%"></div></div></article>';
+    }
+    return out;
+  }
+
+  function renderListings(d) {
+    if (!d.listings.length) {
+      grid.innerHTML = '';
+      listingsNote.textContent = 'No listings to show yet.';
+      return;
+    }
+    listingsNote.textContent = d.matched
+      ? d.listings.length + ' of ' + d.total + ' listings near this budget'
+      : 'Closest listings we have right now';
+
+    grid.innerHTML = d.listings.map(function (l) {
+      var meta = [l.bhk ? esc(l.bhk) + ' BHK' : '', esc(l.type || ''), esc(l.possession || '')]
+        .filter(Boolean).join(' · ');
+      return '' +
+        '<article class="listing">' +
+          '<div class="listing-img">' +
+            '<img src="' + esc(l.image) + '" alt="" loading="lazy" ' +
+                 'onerror="this.closest(\'.listing-img\').classList.add(\'no-img\')">' +
+            '<span class="listing-earn">Earn ' + GB.rupees(l.earning) + '</span>' +
+          '</div>' +
+          '<div class="listing-body">' +
+            '<h3 class="listing-title">' + esc(l.title) + '</h3>' +
+            (l.location ? '<div class="muted small">' + esc(l.location) + '</div>' : '') +
+            (meta ? '<div class="muted small">' + meta + '</div>' : '') +
+            '<div class="listing-price">' + esc(l.priceLabel) + '</div>' +
+            '<div class="listing-foot small muted">' +
+              'Your ' + l.sharePct + '% share on ' + GB.rupeesShort(l.priceMin) +
+            '</div>' +
+          '</div>' +
+        '</article>';
+    }).join('');
+  }
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  priceInput.addEventListener('input', function () {
+    recalc();
+    clearTimeout(listingTimer);
+    listingTimer = setTimeout(function () {
+      var v = GB.parseAmount(priceInput.value);
+      if (v && v > 0) loadListings(v);
+    }, 450);
+  });
 
   GB.rates().then(function (r) {
     R = r;
     paintBrandBits();
     paintRateCard();
     recalc();
+    var v = GB.parseAmount(priceInput.value);
+    if (v) loadListings(v);
   }).catch(function (e) {
     GB.$('#rateRows').innerHTML = '<tr><td colspan="4" class="empty">Could not load rates. ' + e.message + '</td></tr>';
     noteEl.textContent = 'Rates could not be loaded — please refresh.';

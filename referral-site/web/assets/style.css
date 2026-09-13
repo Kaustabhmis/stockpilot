@@ -270,3 +270,51 @@ td.wrap-cell { white-space: normal; min-width: 180px; }
   :root:not([data-theme="light"]) .calc-out { border-color: #2c5344; }
   :root:not([data-theme="light"]) .code-box { border-color: #3a404e; }
 }
+
+/* ---------------------------------------------------------------- listings */
+
+.listing-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 560px) { .listing-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 900px) { .listing-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.listing {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+}
+
+.listing-img {
+  position: relative; aspect-ratio: 4 / 3; max-width: 100%;
+  background: var(--surface-2); overflow: hidden;
+}
+.listing-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* A broken Drive link must not leave a torn-image icon on the card. */
+.listing-img.no-img img { display: none; }
+.listing-img.no-img::after {
+  content: 'Photo unavailable';
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--muted); font-size: 13px;
+}
+
+.listing-earn {
+  position: absolute; left: 10px; bottom: 10px;
+  background: var(--brand); color: var(--brand-ink);
+  padding: 5px 11px; border-radius: 999px;
+  font-size: 14px; font-weight: 700; letter-spacing: -.01em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+}
+
+.listing-body { padding: 14px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.listing-title {
+  font-size: 15px; margin: 0; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.listing-price { font-weight: 600; margin-top: 6px; }
+.listing-foot {
+  margin-top: auto; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
