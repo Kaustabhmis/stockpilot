@@ -156,7 +156,7 @@ var DEFAULT_CONFIG = [
   ['tier_threshold', 10000000, 'Deal value at or above which the higher share applies (₹1 Cr)'],
   ['tier_low_pct', 15, '% of brokerage shared with the referrer BELOW the threshold'],
   ['tier_high_pct', 20, '% of brokerage shared with the referrer AT/ABOVE the threshold'],
-  ['platform_fee_pct', 5, 'Platform fee kept from the referrer commission, as % of their share'],
+  ['platform_fee_pct', 10, 'Platform fee kept from the referrer commission, as % of their share'],
   ['tds_pct', 2, 'TDS deducted after the platform fee — confirm the rate with your CA'],
   ['attribution_lock_days', 90, 'First referrer owns a buyer phone for this many days'],
   ['payout_days_after_registration', 15, 'Promised payout window after registration'],

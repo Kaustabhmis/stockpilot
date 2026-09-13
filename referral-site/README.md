@@ -7,22 +7,26 @@ close the deal, and the partner earns a share of our brokerage.
 - **Backend** — a **new, private** Google Sheet driven by Google Apps Script.
 - **Money** — we charge the seller `brokerage_pct` (default 2%) of the deal
   value. The partner gets 15% of that brokerage below ₹1 Cr and 20% at ₹1 Cr and
-  above. From the partner's share we keep a `platform_fee_pct` (default 5%), and
+  above. From the partner's share we keep a `platform_fee_pct` (default 10%), and
   TDS is deducted on what is left.
 
 ```
 deal value → brokerage (2%) → partner share (15% / 20%)
-                                  → less platform fee (5%)   ← we keep this
+                                  → less platform fee (10%)  ← we keep this
                                   → less TDS (2%)            ← goes to the taxman
                                   → net paid to the partner
 ```
 
-On an ₹85 L deal: brokerage ₹1,70,000 → partner share 15% = ₹25,500 → less ₹1,275
-platform fee → ₹24,225 → less ₹484.50 TDS = **₹23,740.50** to the partner, of
-which **₹1,275** is ours on top of the ₹1,44,500 brokerage we keep.
+On an ₹85 L deal: brokerage ₹1,70,000 → partner share 15% = ₹25,500 → less ₹2,550
+platform fee → ₹22,950 → less ₹459 TDS = **₹22,491** to the partner, of which
+**₹2,550** is ours on top of the ₹1,44,500 brokerage we keep.
 
 On a ₹2.5 Cr deal: brokerage ₹5,00,000 → partner share 20% = ₹1,00,000 → less
-₹5,000 platform fee → ₹95,000 → less ₹1,900 TDS = **₹93,100** to the partner.
+₹10,000 platform fee → ₹90,000 → less ₹1,800 TDS = **₹88,200** to the partner.
+
+After the fee the partner's effective take is 13.5% of brokerage below the
+threshold and 18% above it. Worth keeping in view when comparing against what
+other referral programmes advertise.
 
 The platform fee comes off **before** TDS, so tax is deducted on what the partner
 is actually paid rather than on money that never reaches them. The fee is shown
@@ -85,7 +89,7 @@ In the sheet's `Config` tab:
 | `tier_threshold` | 10000000 | Deal value at/above which the higher share applies |
 | `tier_low_pct` | 15 | Partner's % of brokerage below the threshold |
 | `tier_high_pct` | 20 | Partner's % of brokerage at/above it |
-| `platform_fee_pct` | 5 | Your cut, taken from the partner's share |
+| `platform_fee_pct` | 10 | Your cut, taken from the partner's share |
 | `tds_pct` | 2 | TDS on the balance after the fee — **confirm the rate with your CA** |
 | `attribution_lock_days` | 90 | How long the first referrer owns a buyer's number |
 | `payout_days_after_registration` | 15 | The payout promise made on the site |

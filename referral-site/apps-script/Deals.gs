@@ -5,7 +5,7 @@
  * -----------
  *   brokerage       = deal value x brokerage_pct      (what Grihobazar earns, default 2%)
  *   referrer share  = brokerage x share_pct           (15% or 20%, by deal value)
- *   platform fee    = referrer share x platform_fee_pct   (our cut, default 5%)
+ *   platform fee    = referrer share x platform_fee_pct   (our cut, default 10%)
  *   after fee       = referrer share - platform fee
  *   TDS             = after fee x tds_pct             (deducted at source)
  *   net payable     = after fee - TDS
@@ -23,7 +23,7 @@ function commissionFor_(dealValue) {
   var threshold      = cfgNum_('tier_threshold', 10000000);   // ₹1 Cr
   var lowPct         = cfgNum_('tier_low_pct', 15);
   var highPct        = cfgNum_('tier_high_pct', 20);
-  var platformFeePct = cfgNum_('platform_fee_pct', 5);
+  var platformFeePct = cfgNum_('platform_fee_pct', 10);
   var tdsPct         = cfgNum_('tds_pct', 2);
 
   // Everything settles in whole rupees. Payouts, TDS challans and the figure on
@@ -72,7 +72,7 @@ function actionRates_() {
     threshold: cfgNum_('tier_threshold', 10000000),
     lowPct: cfgNum_('tier_low_pct', 15),
     highPct: cfgNum_('tier_high_pct', 20),
-    platformFeePct: cfgNum_('platform_fee_pct', 5),
+    platformFeePct: cfgNum_('platform_fee_pct', 10),
     tdsPct: cfgNum_('tds_pct', 2),
     attributionLockDays: cfgNum_('attribution_lock_days', 90),
     payoutDays: cfgNum_('payout_days_after_registration', 15),
