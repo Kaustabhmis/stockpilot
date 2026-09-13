@@ -11,7 +11,7 @@ function seed(){
     { username:'payel@acme.in',  name:'Payel Sanyamath', role:ROLE.DOER,    dept:'Operations', manager:'sruti@acme.in' },
     { username:'vikram@acme.in', name:'Vikram Rathore',  role:ROLE.DOER,    dept:'Purchase',   manager:'sruti@acme.in' },
     { username:'neha@acme.in',   name:'Neha Bhandari',   role:ROLE.DOER,    dept:'Quality',    manager:'imran@acme.in' },
-  ].map(normUser);
+  ].map(u => normUser(Object.assign({_demo:true}, u)));
 
   const d = n => DomeBox.ymd(DomeBox.addDays(new Date(), n));
   const h = (status, back, note) => ({ status,
@@ -52,7 +52,7 @@ function seed(){
       raisedBy:'imran@acme.in', approver:'imran@acme.in', status:S.VERIFIED, priority:'Medium',
       due:d(-15), kra:'Process Compliance', cadence:CAD.QUARTERLY,
       history:[h(S.PENDING,25),h(S.IN_PROGRESS,20),h(S.FOR_REVIEW,17),h(S.VERIFIED,16)] },
-  ].map(normTask);
+  ].map(t => normTask(Object.assign({_demo:true}, t)));
   Store.persist();
 }
 
@@ -95,7 +95,26 @@ window.DomeBoxApp = {
    *  may return promises; without them everything persists to localStorage. */
   setBackend: function(b){ Store.backend = b; return this; },
   setCompany: function(id){ Store.company = id || 'domebox'; return this; },
-  load: function(){ return Store.load(); },
+  /**
+   * The one entry point. Nothing loads until this is called, so a backend is
+   * always attached before any data exists.
+   *   DomeBoxApp.start({ company:'acme', backend:{...} })   // live
+   *   DomeBoxApp.start({ demo:true })                       // sales demo
+   * Pass demo:true ONLY on a sandbox. It is the only thing that creates sample
+   * rows, and those rows are refused by any backend write.
+   */
+  start: function(opts){
+    opts = opts || {};
+    if (opts.company) Store.company = opts.company;
+    if (opts.backend) Store.backend = opts.backend;
+    /* Load BEFORE signing in. signIn() adds the actor to the roster, and an
+       actor sitting in the roster would make the store look non-empty and
+       suppress the demo seed. */
+    const self = this;
+    return Promise.resolve(Store.load({ demo: opts.demo === true }))
+      .then(function(){ if (opts.actor) self.signIn(opts.actor); });
+  },
+  load: function(opts){ return Store.load(opts || {}); },
   open: function(){ render(); },
   refresh: render,
   data: function(){ return { users: Store.users, tasks: Store.tasks }; },
@@ -108,4 +127,5 @@ window.DomeBoxApp = {
   _test: { applyTransition, spawnNext, Store },
 };
 
-Store.load();
+/* Deliberately no auto-load. Call DomeBoxApp.start() once you know who is
+   signed in and where the data lives. */

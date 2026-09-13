@@ -1882,7 +1882,17 @@ const Store = {
 
   key(){ return 'domebox:' + this.company; },
 
-  load(){
+  /* Demo rows are NEVER created unless the host explicitly asks for them. On a
+     live deployment the block must come up empty and wait for real data rather
+     than inventing any, because anything it invents can be edited and pushed
+     back to a customer's sheet. */
+  load(opts){
+    opts = opts || {};
+    /* Drop whatever the previous tenant left in memory FIRST. Without this, a
+       user who signs out of one company and into another in the same tab still
+       has the first company's rows loaded — and a later save would write them
+       into the second company's sheet. */
+    this.users = []; this.tasks = [];
     if (this.backend && this.backend.loadAll) {
       return Promise.resolve(this.backend.loadAll()).then(d => {
         this.users = (d.users||[]).map(normUser);
@@ -1895,9 +1905,9 @@ const Store = {
       if (raw) { const d = JSON.parse(raw);
         this.users = (d.users||[]).map(normUser);
         this.tasks = (d.tasks||[]).map(normTask); }
-    } catch(e){ /* private mode, cleared storage — fall through to the seed */ }
-    if (!this.users.length) seed();
-    this.reseq();
+    } catch(e){ /* private mode or cleared storage: come up empty, never guess */ }
+    if (!this.users.length && opts.demo === true) seed();
+    this.reseq(); render();
     return Promise.resolve();
   },
 
@@ -1918,6 +1928,13 @@ const Store = {
   commit(what, rec){
     this.persist();
     if (this.backend) {
+      /* Second line of defence. If a browser still holds demo rows from before a
+         backend was attached, editing one must not write sample data into a real
+         customer's spreadsheet. */
+      if (rec && rec._demo) {
+        toast('That is demo data and was not sent to the server. Run DomeBoxApp.resetDemo() first.', 'err');
+        render(); return;
+      }
       try {
         if (what === 'task' && this.backend.saveTask) this.backend.saveTask(rec);
         if (what === 'user' && this.backend.saveUser) this.backend.saveUser(rec);
@@ -1942,7 +1959,7 @@ function normTask(t){
     status:t.status||S.PENDING, priority:t.priority||'Medium', due:t.due||'',
     kra:t.kra||'', cadence:t.cadence||CAD.ONE_TIME, intervalDays:t.intervalDays||0,
     reworkCount:Number(t.reworkCount||0), blockedBy:t.blockedBy||[],
-    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[] };
+    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[], _demo: !!t._demo };
 }
 
 /* ---------- shared UI ---------------------------------------------------- */
@@ -2402,9 +2419,14 @@ function renderWip(){
 
 function render(){
   if (!Store.actor) return;
+  const bare = !Store.tasks.length && !Store.users.filter(u=>u.username!==Store.actor.username).length;
   if (!$('view-tasks').classList.contains('hidden')) {
     syncFilters();
     const rows = visible();
+    $('tasksEmpty').innerHTML = bare
+      ? '<div class="text-lg font-black text-gray-500 mb-2">Nothing here yet</div>'
+        + '<div class="text-sm font-semibold text-gray-400">Add your team, then assign the first task.</div>'
+      : 'No tasks match these filters.';
     $('tasksEmpty').classList.toggle('hidden', rows.length > 0);
     $('tasksBoard').classList.toggle('hidden', MODE !== 'board' || !rows.length);
     $('tasksList').classList.toggle('hidden', MODE !== 'list' || !rows.length);
@@ -2617,7 +2639,7 @@ function seed(){
     { username:'payel@acme.in',  name:'Payel Sanyamath', role:ROLE.DOER,    dept:'Operations', manager:'sruti@acme.in' },
     { username:'vikram@acme.in', name:'Vikram Rathore',  role:ROLE.DOER,    dept:'Purchase',   manager:'sruti@acme.in' },
     { username:'neha@acme.in',   name:'Neha Bhandari',   role:ROLE.DOER,    dept:'Quality',    manager:'imran@acme.in' },
-  ].map(normUser);
+  ].map(u => normUser(Object.assign({_demo:true}, u)));
 
   const d = n => DomeBox.ymd(DomeBox.addDays(new Date(), n));
   const h = (status, back, note) => ({ status,
@@ -2658,7 +2680,7 @@ function seed(){
       raisedBy:'imran@acme.in', approver:'imran@acme.in', status:S.VERIFIED, priority:'Medium',
       due:d(-15), kra:'Process Compliance', cadence:CAD.QUARTERLY,
       history:[h(S.PENDING,25),h(S.IN_PROGRESS,20),h(S.FOR_REVIEW,17),h(S.VERIFIED,16)] },
-  ].map(normTask);
+  ].map(t => normTask(Object.assign({_demo:true}, t)));
   Store.persist();
 }
 
@@ -2701,7 +2723,26 @@ window.DomeBoxApp = {
    *  may return promises; without them everything persists to localStorage. */
   setBackend: function(b){ Store.backend = b; return this; },
   setCompany: function(id){ Store.company = id || 'domebox'; return this; },
-  load: function(){ return Store.load(); },
+  /**
+   * The one entry point. Nothing loads until this is called, so a backend is
+   * always attached before any data exists.
+   *   DomeBoxApp.start({ company:'acme', backend:{...} })   // live
+   *   DomeBoxApp.start({ demo:true })                       // sales demo
+   * Pass demo:true ONLY on a sandbox. It is the only thing that creates sample
+   * rows, and those rows are refused by any backend write.
+   */
+  start: function(opts){
+    opts = opts || {};
+    if (opts.company) Store.company = opts.company;
+    if (opts.backend) Store.backend = opts.backend;
+    /* Load BEFORE signing in. signIn() adds the actor to the roster, and an
+       actor sitting in the roster would make the store look non-empty and
+       suppress the demo seed. */
+    const self = this;
+    return Promise.resolve(Store.load({ demo: opts.demo === true }))
+      .then(function(){ if (opts.actor) self.signIn(opts.actor); });
+  },
+  load: function(opts){ return Store.load(opts || {}); },
   open: function(){ render(); },
   refresh: render,
   data: function(){ return { users: Store.users, tasks: Store.tasks }; },
@@ -2714,7 +2755,8 @@ window.DomeBoxApp = {
   _test: { applyTransition, spawnNext, Store },
 };
 
-Store.load();
+/* Deliberately no auto-load. Call DomeBoxApp.start() once you know who is
+   signed in and where the data lives. */
 
 })();
 </script>

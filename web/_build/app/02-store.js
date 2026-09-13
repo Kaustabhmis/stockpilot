@@ -17,7 +17,17 @@ const Store = {
 
   key(){ return 'domebox:' + this.company; },
 
-  load(){
+  /* Demo rows are NEVER created unless the host explicitly asks for them. On a
+     live deployment the block must come up empty and wait for real data rather
+     than inventing any, because anything it invents can be edited and pushed
+     back to a customer's sheet. */
+  load(opts){
+    opts = opts || {};
+    /* Drop whatever the previous tenant left in memory FIRST. Without this, a
+       user who signs out of one company and into another in the same tab still
+       has the first company's rows loaded — and a later save would write them
+       into the second company's sheet. */
+    this.users = []; this.tasks = [];
     if (this.backend && this.backend.loadAll) {
       return Promise.resolve(this.backend.loadAll()).then(d => {
         this.users = (d.users||[]).map(normUser);
@@ -30,9 +40,9 @@ const Store = {
       if (raw) { const d = JSON.parse(raw);
         this.users = (d.users||[]).map(normUser);
         this.tasks = (d.tasks||[]).map(normTask); }
-    } catch(e){ /* private mode, cleared storage — fall through to the seed */ }
-    if (!this.users.length) seed();
-    this.reseq();
+    } catch(e){ /* private mode or cleared storage: come up empty, never guess */ }
+    if (!this.users.length && opts.demo === true) seed();
+    this.reseq(); render();
     return Promise.resolve();
   },
 
@@ -53,6 +63,13 @@ const Store = {
   commit(what, rec){
     this.persist();
     if (this.backend) {
+      /* Second line of defence. If a browser still holds demo rows from before a
+         backend was attached, editing one must not write sample data into a real
+         customer's spreadsheet. */
+      if (rec && rec._demo) {
+        toast('That is demo data and was not sent to the server. Run DomeBoxApp.resetDemo() first.', 'err');
+        render(); return;
+      }
       try {
         if (what === 'task' && this.backend.saveTask) this.backend.saveTask(rec);
         if (what === 'user' && this.backend.saveUser) this.backend.saveUser(rec);
@@ -77,7 +94,7 @@ function normTask(t){
     status:t.status||S.PENDING, priority:t.priority||'Medium', due:t.due||'',
     kra:t.kra||'', cadence:t.cadence||CAD.ONE_TIME, intervalDays:t.intervalDays||0,
     reworkCount:Number(t.reworkCount||0), blockedBy:t.blockedBy||[],
-    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[] };
+    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[], _demo: !!t._demo };
 }
 
 /* ---------- shared UI ---------------------------------------------------- */

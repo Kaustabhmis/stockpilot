@@ -109,9 +109,14 @@ function renderWip(){
 
 function render(){
   if (!Store.actor) return;
+  const bare = !Store.tasks.length && !Store.users.filter(u=>u.username!==Store.actor.username).length;
   if (!$('view-tasks').classList.contains('hidden')) {
     syncFilters();
     const rows = visible();
+    $('tasksEmpty').innerHTML = bare
+      ? '<div class="text-lg font-black text-gray-500 mb-2">Nothing here yet</div>'
+        + '<div class="text-sm font-semibold text-gray-400">Add your team, then assign the first task.</div>'
+      : 'No tasks match these filters.';
     $('tasksEmpty').classList.toggle('hidden', rows.length > 0);
     $('tasksBoard').classList.toggle('hidden', MODE !== 'board' || !rows.length);
     $('tasksList').classList.toggle('hidden', MODE !== 'list' || !rows.length);
