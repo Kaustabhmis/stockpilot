@@ -123,6 +123,7 @@
     </div>
   </nav>
   <div class="flex-1 p-4 lg:p-8 max-w-[1400px] mx-auto w-full">
+    <div id="planBanner"></div>
     <div id="teamStats" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
     <div id="teamTable" class="bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
   </div>
@@ -627,6 +628,55 @@ var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
 var MAX_MANAGER_DEDUCTION = 15;     // total cap
 var MAX_MANAGER_DEDUCTION_PER_TASK = 10;
 
+// ---------------------------------------------------------------------------
+// WORKING CALENDAR — holidays and approved leave
+// A person on sanctioned leave still accrued overdue days, so a fortnight off
+// wrecked their score and the first appraisal that used it became an argument
+// nobody could win. When a calendar is supplied, lateness is counted in
+// chargeable days only: weekends, company holidays and that person's approved
+// leave are skipped. With no calendar every function below is a no-op and
+// scoring is exactly what it was.
+// ---------------------------------------------------------------------------
+var DEFAULT_WEEKEND = [0, 6];   // Sunday, Saturday
+
+/**
+ * cal = {
+ *   weekend:  [0,6],
+ *   holidays: ['2026-01-26', '2026-08-15'],
+ *   leave:    { 'asha@x.in': [{ from:'2026-09-01', to:'2026-09-07' }] }
+ * }
+ */
+function isNonWorkingDay(date, username, cal) {
+  if (!cal) return false;
+  var d = startOfDay(date);
+  var weekend = cal.weekend || DEFAULT_WEEKEND;
+  if (weekend.indexOf(d.getDay()) > -1) return true;
+  if ((cal.holidays || []).indexOf(ymd(d)) > -1) return true;
+  var spans = (cal.leave || {})[username] || [];
+  for (var i = 0; i < spans.length; i++) {
+    var from = parseYmd(spans[i].from), to = parseYmd(spans[i].to || spans[i].from);
+    if (from && to && d >= from && d <= to) return true;
+  }
+  return false;
+}
+
+/**
+ * Days late that the person is answerable for. Negative or zero means on time,
+ * and is returned unchanged so "delivered three days early" still reads as three
+ * days early. Only lateness is discounted.
+ */
+function chargeableLateDays(due, actual, username, cal) {
+  var raw = dayDiff(actual, due);
+  if (!cal || raw <= 0) return raw;
+  var n = 0, cursor = addDays(parseYmd(ymd(due)), 1), end = startOfDay(actual);
+  var guard = 0;
+  while (cursor <= end && guard++ < 3660) {
+    if (!isNonWorkingDay(cursor, username, cal)) n++;
+    cursor = addDays(cursor, 1);
+  }
+  return n;
+}
+
 function timelinessPoints(daysLate) {
   if (daysLate <= 0) return 100;
   return Math.max(0, 100 - daysLate * LATENESS_POINTS_PER_DAY);
@@ -664,7 +714,7 @@ function submittedAt(task) {
  * an unearned 0. With nothing at all, hasData is false and the caller should
  * say "not enough data" rather than print a number.
  */
-function delegationScore(tasks, username, today) {
+function delegationScore(tasks, username, today, cal) {
   today = today || new Date();
   var mine = tasks.filter(function (t) { return t.assignee === username; });
   var breakdown = [];
@@ -684,7 +734,7 @@ function delegationScore(tasks, username, today) {
   closed.forEach(function (t) {
     var sub = submittedAt(t);
     if (!sub) return;
-    var late = dayDiff(sub, parseYmd(t.due) || sub);
+    var late = chargeableLateDays(parseYmd(t.due) || sub, sub, t.assignee, cal);
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
     otSum += pts * w; otW += w; otCount++;
@@ -716,7 +766,7 @@ function delegationScore(tasks, username, today) {
   var qhW = 0, qhSum = 0, overdue = 0;
   open.forEach(function (t) {
     var due = parseYmd(t.due);
-    var late = due ? dayDiff(today, due) : 0;
+    var late = due ? chargeableLateDays(due, today, t.assignee, cal) : 0;
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
     qhSum += pts * w; qhW += w;
@@ -747,7 +797,7 @@ function delegationScore(tasks, username, today) {
   var deduction = 0;
   waitingOnMe.forEach(function (t) {
     var due = parseYmd(t.due);
-    var late = due ? dayDiff(today, due) : 0;
+    var late = due ? chargeableLateDays(due, today, username, cal) : 0;
     if (late <= 0) return;
     var penalty = Math.min(late, MAX_MANAGER_DEDUCTION_PER_TASK);
     deduction += penalty;
@@ -770,7 +820,7 @@ function delegationScore(tasks, username, today) {
     var rW = 0, rSum = 0;
     waitingOnMe.forEach(function (t) {
       var due = parseYmd(t.due);
-      var waited = due ? dayDiff(today, due) : 0;
+      var waited = due ? chargeableLateDays(due, today, username, cal) : 0;
       var w = priorityWeight(t.priority);
       rSum += timelinessPoints(waited) * w;
       rW += w;
@@ -1247,7 +1297,7 @@ function inWindow(date, range) {
  * Queue health is judged as at the end of the window, so a historic period is
  * measured on how the queue looked then rather than how it looks today.
  */
-function scoreForPeriod(tasks, username, range) {
+function scoreForPeriod(tasks, username, range, cal) {
   var closedInWindow = tasks.filter(function (t) {
     return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
   });
@@ -1281,7 +1331,7 @@ function scoreForPeriod(tasks, username, range) {
   });
 
   var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
-  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf);
+  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf, cal);
   result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
   result.delivered = closedInWindow.length;
   result.openThen = openThen.length;
@@ -1309,12 +1359,12 @@ function scoreForPeriod(tasks, username, range) {
 }
 
 /** A trend of the last `count` periods, oldest first — ready to plot. */
-function scoreTrend(tasks, username, kind, count, today, endOffset) {
+function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
   var end = Number(endOffset) || 0;
   var out = [];
   for (var i = count - 1 + end; i >= end; i--) {
     var range = periodRange(kind, i, today);
-    var s = scoreForPeriod(tasks, username, range);
+    var s = scoreForPeriod(tasks, username, range, cal);
     out.push({
       label: range.label, short: range.short,
       score: s.hasData ? s.score : null,
@@ -1330,7 +1380,7 @@ function scoreTrend(tasks, username, kind, count, today, endOffset) {
  * Everything the analytics dashboard needs for one period, in one pass:
  * headline counts, per-person scores, KRA split and the A/B/C spread.
  */
-function periodAnalytics(tasks, users, range, today) {
+function periodAnalytics(tasks, users, range, today, cal) {
   var delivered = [], overdueNow = [], reworkLoops = 0, onTime = 0, onTimeBase = 0;
 
   tasks.forEach(function (t) {
@@ -1339,14 +1389,14 @@ function periodAnalytics(tasks, users, range, today) {
       delivered.push(t);
       reworkLoops += Number(t.reworkCount || 0);
       var sub = submittedAt(t), due = parseYmd(t.due);
-      if (sub && due) { onTimeBase++; if (dayDiff(sub, due) <= 0) onTime++; }
+      if (sub && due) { onTimeBase++; if (chargeableLateDays(due, sub, t.assignee, cal) <= 0) onTime++; }
     }
     var d = parseYmd(t.due);
     if (isOpen(t.status) && d && dayDiff(today || new Date(), d) > 0) overdueNow.push(t);
   });
 
   var people = users.map(function (u) {
-    var s = scoreForPeriod(tasks, u.username, range);
+    var s = scoreForPeriod(tasks, u.username, range, cal);
     return {
       username: u.username, name: u.name, role: u.role, dept: u.dept,
       score: s.hasData ? s.score : null, hasData: s.hasData,
@@ -1399,6 +1449,8 @@ if (typeof module !== 'undefined' && module.exports) {
     TRIGGERS: TRIGGERS, ACTIONS: ACTIONS, evaluateAutomations: evaluateAutomations,
     matchCondition: matchCondition, defaultAutomations: defaultAutomations,
     buildDigest: buildDigest,
+    DEFAULT_WEEKEND: DEFAULT_WEEKEND, isNonWorkingDay: isNonWorkingDay,
+    chargeableLateDays: chargeableLateDays,
     PERIOD: PERIOD, startOfWeek: startOfWeek, isoWeekNumber: isoWeekNumber,
     periodRange: periodRange, closedAt: closedAt, inWindow: inWindow,
     scoreForPeriod: scoreForPeriod, scoreTrend: scoreTrend, periodAnalytics: periodAnalytics,
@@ -1410,6 +1462,8 @@ if (typeof module !== 'undefined' && module.exports) {
 })(typeof window !== 'undefined' ? window : this);
 
 (function(g){
+var startOfDay = g.DomeBox.startOfDay, dayDiff = g.DomeBox.dayDiff,
+    addDays = g.DomeBox.addDays, ymd = g.DomeBox.ymd, parseYmd = g.DomeBox.parseYmd;
 /**
  * DOME BOX — WHATSAPP CHANNEL
  * =============================================================================
@@ -1599,6 +1653,138 @@ function waIsOptIn(text) {
 
 
 g.DomeBoxWA = { waNormalizePhone: waNormalizePhone, WA: WA };
+})(window);
+(function(g){
+var startOfDay = g.DomeBox.startOfDay, dayDiff = g.DomeBox.dayDiff,
+    addDays = g.DomeBox.addDays, ymd = g.DomeBox.ymd, parseYmd = g.DomeBox.parseYmd;
+/**
+ * DOME BOX — PLAN LIMITS
+ * =============================================================================
+ * The published pricing promises specific caps. Nothing enforced them, so every
+ * plan was effectively Enterprise. These are the rules; they are pure, so the
+ * browser and the server can both run them and agree.
+ *
+ * Enforce on the SERVER. A limit checked only in the browser is a suggestion.
+ * =============================================================================
+ */
+
+var PLANS = {
+  'Free Tier':  { users: 5,   tasksPerMonth: 50,   analytics: false, whatsapp: false, email: false, kraForms: false },
+  'Standard':   { users: 20,  tasksPerMonth: 500,  analytics: false, whatsapp: false, email: true,  kraForms: false },
+  'Pro Yearly': { users: 300, tasksPerMonth: null, analytics: true,  whatsapp: true,  email: true,  kraForms: true },
+  'Enterprise': { users: null, tasksPerMonth: null, analytics: true, whatsapp: true,  email: true,  kraForms: true },
+};
+
+var PLAN_ALIASES = {
+  'free': 'Free Tier', 'free tier': 'Free Tier', 'trial': 'Free Tier', '': 'Free Tier',
+  'standard': 'Standard', 'basic': 'Standard',
+  'pro': 'Pro Yearly', 'pro yearly': 'Pro Yearly', 'proyearly': 'Pro Yearly', 'premium': 'Pro Yearly',
+  'enterprise': 'Enterprise', 'custom': 'Enterprise',
+};
+
+/** An unknown plan name must fall back to the LEAST generous tier, never the most. */
+function normalizePlan(name) {
+  var raw = String(name == null ? '' : name).trim();
+  if (PLANS[raw]) return raw;
+  var k = raw.toLowerCase().replace(/\s+/g, ' ');
+  return PLAN_ALIASES[k] || 'Free Tier';
+}
+
+function planLimits(name) { return PLANS[normalizePlan(name)]; }
+
+/**
+ * Counts tasks created in the calendar month a date falls in. Recurring
+ * occurrences spawned by the system are NOT counted: a customer on Free with
+ * five daily recurring jobs would otherwise burn the whole 50 in ten days
+ * through no action of their own, and would rightly call that a bug. The cap is
+ * on what people create.
+ */
+function tasksCreatedInMonth(tasks, when) {
+  var ref = when || new Date();
+  var from = new Date(ref.getFullYear(), ref.getMonth(), 1);
+  var to = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+  var n = 0;
+  (tasks || []).forEach(function (t) {
+    if (t.spawnedBy || t.systemGenerated) return;
+    var created = firstHistoryDate_(t);
+    if (!created) return;
+    var d = startOfDay(created);
+    if (d >= startOfDay(from) && d <= startOfDay(to)) n++;
+  });
+  return n;
+}
+
+function firstHistoryDate_(task) {
+  var h = task.history || [];
+  for (var i = 0; i < h.length; i++) {
+    var raw = h[i].date || h[i].at;
+    if (raw) { var d = new Date(raw); if (!isNaN(d)) return d; }
+  }
+  return task.createdAt ? new Date(task.createdAt) : null;
+}
+
+/** May this tenant add another active user? */
+function canAddUser(plan, activeUserCount) {
+  var lim = planLimits(plan);
+  if (lim.users == null) return { ok: true, unlimited: true };
+  if (activeUserCount < lim.users) {
+    return { ok: true, remaining: lim.users - activeUserCount, limit: lim.users };
+  }
+  return { ok: false, limit: lim.users,
+    reason: normalizePlan(plan) + ' includes ' + lim.users + ' users. You have ' + activeUserCount + '.',
+    upgradeTo: nextPlanUp(plan) };
+}
+
+/** May this tenant create another task this month? */
+function canCreateTask(plan, tasksThisMonth) {
+  var lim = planLimits(plan);
+  if (lim.tasksPerMonth == null) return { ok: true, unlimited: true };
+  if (tasksThisMonth < lim.tasksPerMonth) {
+    return { ok: true, remaining: lim.tasksPerMonth - tasksThisMonth, limit: lim.tasksPerMonth };
+  }
+  return { ok: false, limit: lim.tasksPerMonth,
+    reason: normalizePlan(plan) + ' includes ' + lim.tasksPerMonth + ' tasks a month. ' +
+            'You have created ' + tasksThisMonth + '. It resets on the 1st.',
+    upgradeTo: nextPlanUp(plan) };
+}
+
+function planAllows(plan, feature) { return !!planLimits(plan)[feature]; }
+
+var PLAN_ORDER = ['Free Tier', 'Standard', 'Pro Yearly', 'Enterprise'];
+function nextPlanUp(plan) {
+  var i = PLAN_ORDER.indexOf(normalizePlan(plan));
+  return i > -1 && i < PLAN_ORDER.length - 1 ? PLAN_ORDER[i + 1] : null;
+}
+
+/**
+ * What a tenant should see before they hit a wall. Warning at 80% is early
+ * enough to upgrade without the work stopping mid-week.
+ */
+function planUsage(plan, activeUsers, tasksThisMonth) {
+  var lim = planLimits(plan), warnings = [];
+  var pct = function (n, cap) { return cap == null ? 0 : Math.round(n / cap * 100); };
+
+  var uPct = pct(activeUsers, lim.users), tPct = pct(tasksThisMonth, lim.tasksPerMonth);
+  if (lim.users != null && uPct >= 80) {
+    warnings.push({ kind: 'users', pct: uPct, atLimit: activeUsers >= lim.users,
+      text: activeUsers >= lim.users
+        ? 'You are at your ' + lim.users + '-user limit.'
+        : 'You are using ' + activeUsers + ' of ' + lim.users + ' users.' });
+  }
+  if (lim.tasksPerMonth != null && tPct >= 80) {
+    warnings.push({ kind: 'tasks', pct: tPct, atLimit: tasksThisMonth >= lim.tasksPerMonth,
+      text: tasksThisMonth >= lim.tasksPerMonth
+        ? 'You have used all ' + lim.tasksPerMonth + ' tasks this month.'
+        : 'You have used ' + tasksThisMonth + ' of ' + lim.tasksPerMonth + ' tasks this month.' });
+    }
+  return { plan: normalizePlan(plan), limits: lim, users: { used: activeUsers, limit: lim.users, pct: uPct },
+    tasks: { used: tasksThisMonth, limit: lim.tasksPerMonth, pct: tPct },
+    warnings: warnings, upgradeTo: nextPlanUp(plan) };
+}
+
+
+g.DomeBoxPlans = { normalizePlan, planLimits, canAddUser, canCreateTask,
+  planAllows, planUsage, tasksCreatedInMonth, nextPlanUp };
 })(window);
 </script>
 
@@ -2067,7 +2253,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
    page and the reports can never drift apart.
    ------------------------------------------------------------------------- */
 const Store = {
-  users: [], tasks: [], actor: null, wipLimit: 5, company: 'domebox',
+  users: [], tasks: [], actor: null, wipLimit: 5, company: 'domebox', plan: 'Free Tier',
   backend: null,          // { loadAll, saveTask, saveUser } — all optional
   seq: 0,
 
@@ -2152,7 +2338,8 @@ function normTask(t){
     status:t.status||S.PENDING, priority:t.priority||'Medium', due:t.due||'',
     kra:t.kra||'', cadence:t.cadence||CAD.ONE_TIME, intervalDays:t.intervalDays||0,
     reworkCount:Number(t.reworkCount||0), blockedBy:t.blockedBy||[],
-    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[], _demo: !!t._demo };
+    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[],
+    spawnedBy: t.spawnedBy || '', _demo: !!t._demo };
 }
 
 /* ---------- shared UI ---------------------------------------------------- */
@@ -2259,6 +2446,9 @@ function spawnNext(task){
   const next = normTask({
     id: Store.nextId(), title: task.title, desc: task.desc, assignee: task.assignee,
     raisedBy: task.raisedBy, approver: task.approver, status: S.PENDING,
+    // Marks it as system-generated so it does not spend the tenant's monthly
+    // task quota: nobody chose to create it.
+    spawnedBy: task.id,
     priority: task.priority, due, kra: task.kra, cadence: task.cadence,
     intervalDays: task.intervalDays,
     subtasks: (task.subtasks || []).map(s => ({ text: s.text, done: false })),
@@ -2278,6 +2468,13 @@ function wipLimitFor(username){
 function assignForm(){
   const people = Store.active();
   if (!people.length) { toast('Add a team member first.', 'err'); return; }
+
+  /* The published pricing promises a monthly cap. Checked here so the customer
+     is told before they type, and again server-side — a limit enforced only in
+     the browser is a suggestion. */
+  const used = DomeBoxPlans.tasksCreatedInMonth(Store.tasks, new Date());
+  const gate = DomeBoxPlans.canCreateTask(Store.plan, used);
+  if (!gate.ok) { upgradeModal('Task limit reached', gate); return; }
   const kras = [...new Set(Store.tasks.map(t => t.kra).filter(Boolean))];
   openModal(`
     <form id="fAssign" class="p-6 lg:p-8">
@@ -2316,6 +2513,8 @@ function assignForm(){
           <textarea id="aSubs" rows="2" class="dbx-in" placeholder="Collect quotes&#10;Compare rates"></textarea></div>
       </div>
       <div id="aRoute" class="mt-5 text-xs font-bold rounded-xl px-4 py-3 bg-blue-50 text-blue-800"></div>
+      ${gate.unlimited ? '' : `<div class="mt-2 text-[11px] font-bold ${gate.remaining<=5?'text-amber-700':'text-gray-400'}">
+        ${gate.remaining} of ${gate.limit} tasks left this month on ${esc(DomeBoxPlans.normalizePlan(Store.plan))}.</div>`}
       <div class="flex gap-3 mt-6">
         <button type="button" onclick="DomeBoxApp._closeModal()" class="flex-1 border-2 border-gray-200 py-3 rounded-2xl font-black text-gray-600">Cancel</button>
         <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-black shadow-lg shadow-blue-600/20">Assign</button>
@@ -2357,6 +2556,20 @@ function assignForm(){
       ? 'Sent to ' + nameOf(route.approver) + ' for approval'
       : 'Assigned to ' + target.name, 'ok');
   });
+}
+
+/** One place to say "your plan stops here", so the wording and the upsell match. */
+function upgradeModal(title, gate){
+  openModal(`<div class="p-6 lg:p-8 text-center">
+    <div class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-5">
+      <span class="material-icons text-2xl">lock</span></div>
+    <h2 class="text-2xl font-black mb-2">${esc(title)}</h2>
+    <p class="text-sm text-gray-500 font-semibold leading-relaxed mb-6">${esc(gate.reason||'')}</p>
+    <div class="flex gap-3">
+      <button onclick="DomeBoxApp._closeModal()" class="flex-1 border-2 border-gray-200 py-3 rounded-2xl font-black text-gray-600">Not now</button>
+      ${gate.upgradeTo?`<a href="https://www.domebox.in/#pricing-landing" target="_blank" rel="noopener"
+        class="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-black">Upgrade to ${esc(gate.upgradeTo)}</a>`:''}
+    </div></div>`);
 }
 
 /* ---------- detail drawer ------------------------------------------------ */
@@ -2649,6 +2862,19 @@ function renderTeam(){
   const range = DomeBox.periodRange(DomeBox.PERIOD.MONTH, 1);   // last full month
   const open = u => Store.tasks.filter(t => t.assignee === u && DomeBox.isOpen(t.status)).length;
 
+  const usage = DomeBoxPlans.planUsage(Store.plan, Store.active().length,
+    DomeBoxPlans.tasksCreatedInMonth(Store.tasks, new Date()));
+  $('planBanner').innerHTML = usage.warnings.length
+    ? `<div class="rounded-2xl px-5 py-4 mb-6 flex flex-wrap items-center gap-3 ${
+        usage.warnings.some(w=>w.atLimit)?'bg-red-50 text-red-900':'bg-amber-50 text-amber-900'}">
+        <span class="text-xs font-black uppercase tracking-widest">${esc(usage.plan)}</span>
+        <span class="text-sm font-bold">${usage.warnings.map(w=>esc(w.text)).join(' ')}</span>
+        <span class="flex-1"></span>
+        ${usage.upgradeTo?`<a href="https://www.domebox.in/#pricing-landing" target="_blank" rel="noopener"
+          class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs">Upgrade to ${esc(usage.upgradeTo)}</a>`:''}
+      </div>`
+    : '';
+
   $('teamStats').innerHTML = [
     ['Members', Store.active().length],
     ['Open tasks', Store.tasks.filter(t=>DomeBox.isOpen(t.status)).length],
@@ -2695,6 +2921,10 @@ function renderTeam(){
 
 function userForm(u){
   const editing = !!u;
+  if (!editing) {
+    const gate = DomeBoxPlans.canAddUser(Store.plan, Store.active().length);
+    if (!gate.ok) { upgradeModal('User limit reached', gate); return; }
+  }
   u = u || { username:'', name:'', role:ROLE.DOER, dept:'', manager:'', wipLimit:'', active:true, kras:[] };
   const mgrs = Store.active().filter(x => x.username !== u.username);
   openModal(`<form id="fUser" class="p-6 lg:p-8">
@@ -2955,6 +3185,10 @@ window.DomeBoxApp = {
    *  may return promises; without them everything persists to localStorage. */
   setBackend: function(b){ Store.backend = b; return this; },
   setCompany: function(id){ Store.company = id || 'domebox'; return this; },
+  /** The tenant's plan decides the caps and which features are offered. */
+  setPlan: function(p){ Store.plan = DomeBoxPlans.normalizePlan(p); render(); return this; },
+  usage: function(){ return DomeBoxPlans.planUsage(Store.plan, Store.active().length,
+    DomeBoxPlans.tasksCreatedInMonth(Store.tasks, new Date())); },
   /**
    * The one entry point. Nothing loads until this is called, so a backend is
    * always attached before any data exists.
@@ -2966,6 +3200,12 @@ window.DomeBoxApp = {
   start: function(opts){
     opts = opts || {};
     if (opts.company) Store.company = opts.company;
+    /* A demo exists to show the whole product, and the sample company has six
+       people — on the Free tier's five-user cap the first click would be an
+       upgrade wall. A live tenant with no plan given stays on Free, which is the
+       safe default there. */
+    if (opts.plan) Store.plan = DomeBoxPlans.normalizePlan(opts.plan);
+    else if (opts.demo === true) Store.plan = 'Pro Yearly';
     if (opts.backend) Store.backend = opts.backend;
     /* Load BEFORE signing in. signIn() adds the actor to the roster, and an
        actor sitting in the roster would make the store look non-empty and

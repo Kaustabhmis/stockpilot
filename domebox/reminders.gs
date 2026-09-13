@@ -335,6 +335,10 @@ function generateRecurringJobs() {
           if (col.id !== undefined) newRow[col.id] = Utilities.getUuid();
           if (col.reworkcount !== undefined) newRow[col.reworkcount] = 0;
           if (col.isarchived !== undefined) newRow[col.isarchived] = false;
+          // Marks it system-generated so it does not spend the tenant's monthly
+          // task quota — nobody chose to create it, and a customer on Free with
+          // five daily recurring jobs would otherwise burn all 50 in ten days.
+          if (col.spawnedby !== undefined) newRow[col.spawnedby] = series.row[col.id] || 'recurring';
           if (col.history !== undefined) {
             newRow[col.history] = JSON.stringify([{
               status: 'Pending', note: 'Auto-generated (' + series.cadence + ')',

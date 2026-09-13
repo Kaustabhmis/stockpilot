@@ -302,6 +302,55 @@ var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
 var MAX_MANAGER_DEDUCTION = 15;     // total cap
 var MAX_MANAGER_DEDUCTION_PER_TASK = 10;
 
+// ---------------------------------------------------------------------------
+// WORKING CALENDAR — holidays and approved leave
+// A person on sanctioned leave still accrued overdue days, so a fortnight off
+// wrecked their score and the first appraisal that used it became an argument
+// nobody could win. When a calendar is supplied, lateness is counted in
+// chargeable days only: weekends, company holidays and that person's approved
+// leave are skipped. With no calendar every function below is a no-op and
+// scoring is exactly what it was.
+// ---------------------------------------------------------------------------
+var DEFAULT_WEEKEND = [0, 6];   // Sunday, Saturday
+
+/**
+ * cal = {
+ *   weekend:  [0,6],
+ *   holidays: ['2026-01-26', '2026-08-15'],
+ *   leave:    { 'asha@x.in': [{ from:'2026-09-01', to:'2026-09-07' }] }
+ * }
+ */
+function isNonWorkingDay(date, username, cal) {
+  if (!cal) return false;
+  var d = startOfDay(date);
+  var weekend = cal.weekend || DEFAULT_WEEKEND;
+  if (weekend.indexOf(d.getDay()) > -1) return true;
+  if ((cal.holidays || []).indexOf(ymd(d)) > -1) return true;
+  var spans = (cal.leave || {})[username] || [];
+  for (var i = 0; i < spans.length; i++) {
+    var from = parseYmd(spans[i].from), to = parseYmd(spans[i].to || spans[i].from);
+    if (from && to && d >= from && d <= to) return true;
+  }
+  return false;
+}
+
+/**
+ * Days late that the person is answerable for. Negative or zero means on time,
+ * and is returned unchanged so "delivered three days early" still reads as three
+ * days early. Only lateness is discounted.
+ */
+function chargeableLateDays(due, actual, username, cal) {
+  var raw = dayDiff(actual, due);
+  if (!cal || raw <= 0) return raw;
+  var n = 0, cursor = addDays(parseYmd(ymd(due)), 1), end = startOfDay(actual);
+  var guard = 0;
+  while (cursor <= end && guard++ < 3660) {
+    if (!isNonWorkingDay(cursor, username, cal)) n++;
+    cursor = addDays(cursor, 1);
+  }
+  return n;
+}
+
 function timelinessPoints(daysLate) {
   if (daysLate <= 0) return 100;
   return Math.max(0, 100 - daysLate * LATENESS_POINTS_PER_DAY);
@@ -339,7 +388,7 @@ function submittedAt(task) {
  * an unearned 0. With nothing at all, hasData is false and the caller should
  * say "not enough data" rather than print a number.
  */
-function delegationScore(tasks, username, today) {
+function delegationScore(tasks, username, today, cal) {
   today = today || new Date();
   var mine = tasks.filter(function (t) { return t.assignee === username; });
   var breakdown = [];
@@ -359,7 +408,7 @@ function delegationScore(tasks, username, today) {
   closed.forEach(function (t) {
     var sub = submittedAt(t);
     if (!sub) return;
-    var late = dayDiff(sub, parseYmd(t.due) || sub);
+    var late = chargeableLateDays(parseYmd(t.due) || sub, sub, t.assignee, cal);
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
     otSum += pts * w; otW += w; otCount++;
@@ -391,7 +440,7 @@ function delegationScore(tasks, username, today) {
   var qhW = 0, qhSum = 0, overdue = 0;
   open.forEach(function (t) {
     var due = parseYmd(t.due);
-    var late = due ? dayDiff(today, due) : 0;
+    var late = due ? chargeableLateDays(due, today, t.assignee, cal) : 0;
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
     qhSum += pts * w; qhW += w;
@@ -422,7 +471,7 @@ function delegationScore(tasks, username, today) {
   var deduction = 0;
   waitingOnMe.forEach(function (t) {
     var due = parseYmd(t.due);
-    var late = due ? dayDiff(today, due) : 0;
+    var late = due ? chargeableLateDays(due, today, username, cal) : 0;
     if (late <= 0) return;
     var penalty = Math.min(late, MAX_MANAGER_DEDUCTION_PER_TASK);
     deduction += penalty;
@@ -445,7 +494,7 @@ function delegationScore(tasks, username, today) {
     var rW = 0, rSum = 0;
     waitingOnMe.forEach(function (t) {
       var due = parseYmd(t.due);
-      var waited = due ? dayDiff(today, due) : 0;
+      var waited = due ? chargeableLateDays(due, today, username, cal) : 0;
       var w = priorityWeight(t.priority);
       rSum += timelinessPoints(waited) * w;
       rW += w;
@@ -922,7 +971,7 @@ function inWindow(date, range) {
  * Queue health is judged as at the end of the window, so a historic period is
  * measured on how the queue looked then rather than how it looks today.
  */
-function scoreForPeriod(tasks, username, range) {
+function scoreForPeriod(tasks, username, range, cal) {
   var closedInWindow = tasks.filter(function (t) {
     return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
   });
@@ -956,7 +1005,7 @@ function scoreForPeriod(tasks, username, range) {
   });
 
   var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
-  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf);
+  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf, cal);
   result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
   result.delivered = closedInWindow.length;
   result.openThen = openThen.length;
@@ -984,12 +1033,12 @@ function scoreForPeriod(tasks, username, range) {
 }
 
 /** A trend of the last `count` periods, oldest first — ready to plot. */
-function scoreTrend(tasks, username, kind, count, today, endOffset) {
+function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
   var end = Number(endOffset) || 0;
   var out = [];
   for (var i = count - 1 + end; i >= end; i--) {
     var range = periodRange(kind, i, today);
-    var s = scoreForPeriod(tasks, username, range);
+    var s = scoreForPeriod(tasks, username, range, cal);
     out.push({
       label: range.label, short: range.short,
       score: s.hasData ? s.score : null,
@@ -1005,7 +1054,7 @@ function scoreTrend(tasks, username, kind, count, today, endOffset) {
  * Everything the analytics dashboard needs for one period, in one pass:
  * headline counts, per-person scores, KRA split and the A/B/C spread.
  */
-function periodAnalytics(tasks, users, range, today) {
+function periodAnalytics(tasks, users, range, today, cal) {
   var delivered = [], overdueNow = [], reworkLoops = 0, onTime = 0, onTimeBase = 0;
 
   tasks.forEach(function (t) {
@@ -1014,14 +1063,14 @@ function periodAnalytics(tasks, users, range, today) {
       delivered.push(t);
       reworkLoops += Number(t.reworkCount || 0);
       var sub = submittedAt(t), due = parseYmd(t.due);
-      if (sub && due) { onTimeBase++; if (dayDiff(sub, due) <= 0) onTime++; }
+      if (sub && due) { onTimeBase++; if (chargeableLateDays(due, sub, t.assignee, cal) <= 0) onTime++; }
     }
     var d = parseYmd(t.due);
     if (isOpen(t.status) && d && dayDiff(today || new Date(), d) > 0) overdueNow.push(t);
   });
 
   var people = users.map(function (u) {
-    var s = scoreForPeriod(tasks, u.username, range);
+    var s = scoreForPeriod(tasks, u.username, range, cal);
     return {
       username: u.username, name: u.name, role: u.role, dept: u.dept,
       score: s.hasData ? s.score : null, hasData: s.hasData,
@@ -1074,6 +1123,8 @@ if (typeof module !== 'undefined' && module.exports) {
     TRIGGERS: TRIGGERS, ACTIONS: ACTIONS, evaluateAutomations: evaluateAutomations,
     matchCondition: matchCondition, defaultAutomations: defaultAutomations,
     buildDigest: buildDigest,
+    DEFAULT_WEEKEND: DEFAULT_WEEKEND, isNonWorkingDay: isNonWorkingDay,
+    chargeableLateDays: chargeableLateDays,
     PERIOD: PERIOD, startOfWeek: startOfWeek, isoWeekNumber: isoWeekNumber,
     periodRange: periodRange, closedAt: closedAt, inWindow: inWindow,
     scoreForPeriod: scoreForPeriod, scoreTrend: scoreTrend, periodAnalytics: periodAnalytics,

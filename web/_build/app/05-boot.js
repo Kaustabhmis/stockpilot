@@ -95,6 +95,10 @@ window.DomeBoxApp = {
    *  may return promises; without them everything persists to localStorage. */
   setBackend: function(b){ Store.backend = b; return this; },
   setCompany: function(id){ Store.company = id || 'domebox'; return this; },
+  /** The tenant's plan decides the caps and which features are offered. */
+  setPlan: function(p){ Store.plan = DomeBoxPlans.normalizePlan(p); render(); return this; },
+  usage: function(){ return DomeBoxPlans.planUsage(Store.plan, Store.active().length,
+    DomeBoxPlans.tasksCreatedInMonth(Store.tasks, new Date())); },
   /**
    * The one entry point. Nothing loads until this is called, so a backend is
    * always attached before any data exists.
@@ -106,6 +110,12 @@ window.DomeBoxApp = {
   start: function(opts){
     opts = opts || {};
     if (opts.company) Store.company = opts.company;
+    /* A demo exists to show the whole product, and the sample company has six
+       people — on the Free tier's five-user cap the first click would be an
+       upgrade wall. A live tenant with no plan given stays on Free, which is the
+       safe default there. */
+    if (opts.plan) Store.plan = DomeBoxPlans.normalizePlan(opts.plan);
+    else if (opts.demo === true) Store.plan = 'Pro Yearly';
     if (opts.backend) Store.backend = opts.backend;
     /* Load BEFORE signing in. signIn() adds the actor to the roster, and an
        actor sitting in the roster would make the store look non-empty and

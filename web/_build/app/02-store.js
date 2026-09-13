@@ -11,7 +11,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
    page and the reports can never drift apart.
    ------------------------------------------------------------------------- */
 const Store = {
-  users: [], tasks: [], actor: null, wipLimit: 5, company: 'domebox',
+  users: [], tasks: [], actor: null, wipLimit: 5, company: 'domebox', plan: 'Free Tier',
   backend: null,          // { loadAll, saveTask, saveUser } — all optional
   seq: 0,
 
@@ -96,7 +96,8 @@ function normTask(t){
     status:t.status||S.PENDING, priority:t.priority||'Medium', due:t.due||'',
     kra:t.kra||'', cadence:t.cadence||CAD.ONE_TIME, intervalDays:t.intervalDays||0,
     reworkCount:Number(t.reworkCount||0), blockedBy:t.blockedBy||[],
-    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[], _demo: !!t._demo };
+    subtasks:t.subtasks||[], history:t.history||[], comments:t.comments||[],
+    spawnedBy: t.spawnedBy || '', _demo: !!t._demo };
 }
 
 /* ---------- shared UI ---------------------------------------------------- */

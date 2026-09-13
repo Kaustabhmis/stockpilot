@@ -67,6 +67,9 @@ function spawnNext(task){
   const next = normTask({
     id: Store.nextId(), title: task.title, desc: task.desc, assignee: task.assignee,
     raisedBy: task.raisedBy, approver: task.approver, status: S.PENDING,
+    // Marks it as system-generated so it does not spend the tenant's monthly
+    // task quota: nobody chose to create it.
+    spawnedBy: task.id,
     priority: task.priority, due, kra: task.kra, cadence: task.cadence,
     intervalDays: task.intervalDays,
     subtasks: (task.subtasks || []).map(s => ({ text: s.text, done: false })),
@@ -86,6 +89,13 @@ function wipLimitFor(username){
 function assignForm(){
   const people = Store.active();
   if (!people.length) { toast('Add a team member first.', 'err'); return; }
+
+  /* The published pricing promises a monthly cap. Checked here so the customer
+     is told before they type, and again server-side — a limit enforced only in
+     the browser is a suggestion. */
+  const used = DomeBoxPlans.tasksCreatedInMonth(Store.tasks, new Date());
+  const gate = DomeBoxPlans.canCreateTask(Store.plan, used);
+  if (!gate.ok) { upgradeModal('Task limit reached', gate); return; }
   const kras = [...new Set(Store.tasks.map(t => t.kra).filter(Boolean))];
   openModal(`
     <form id="fAssign" class="p-6 lg:p-8">
@@ -124,6 +134,8 @@ function assignForm(){
           <textarea id="aSubs" rows="2" class="dbx-in" placeholder="Collect quotes&#10;Compare rates"></textarea></div>
       </div>
       <div id="aRoute" class="mt-5 text-xs font-bold rounded-xl px-4 py-3 bg-blue-50 text-blue-800"></div>
+      ${gate.unlimited ? '' : `<div class="mt-2 text-[11px] font-bold ${gate.remaining<=5?'text-amber-700':'text-gray-400'}">
+        ${gate.remaining} of ${gate.limit} tasks left this month on ${esc(DomeBoxPlans.normalizePlan(Store.plan))}.</div>`}
       <div class="flex gap-3 mt-6">
         <button type="button" onclick="DomeBoxApp._closeModal()" class="flex-1 border-2 border-gray-200 py-3 rounded-2xl font-black text-gray-600">Cancel</button>
         <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-black shadow-lg shadow-blue-600/20">Assign</button>
@@ -165,6 +177,20 @@ function assignForm(){
       ? 'Sent to ' + nameOf(route.approver) + ' for approval'
       : 'Assigned to ' + target.name, 'ok');
   });
+}
+
+/** One place to say "your plan stops here", so the wording and the upsell match. */
+function upgradeModal(title, gate){
+  openModal(`<div class="p-6 lg:p-8 text-center">
+    <div class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-5">
+      <span class="material-icons text-2xl">lock</span></div>
+    <h2 class="text-2xl font-black mb-2">${esc(title)}</h2>
+    <p class="text-sm text-gray-500 font-semibold leading-relaxed mb-6">${esc(gate.reason||'')}</p>
+    <div class="flex gap-3">
+      <button onclick="DomeBoxApp._closeModal()" class="flex-1 border-2 border-gray-200 py-3 rounded-2xl font-black text-gray-600">Not now</button>
+      ${gate.upgradeTo?`<a href="https://www.domebox.in/#pricing-landing" target="_blank" rel="noopener"
+        class="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-black">Upgrade to ${esc(gate.upgradeTo)}</a>`:''}
+    </div></div>`);
 }
 
 /* ---------- detail drawer ------------------------------------------------ */

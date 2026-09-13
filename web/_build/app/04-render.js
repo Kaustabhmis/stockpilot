@@ -146,6 +146,19 @@ function renderTeam(){
   const range = DomeBox.periodRange(DomeBox.PERIOD.MONTH, 1);   // last full month
   const open = u => Store.tasks.filter(t => t.assignee === u && DomeBox.isOpen(t.status)).length;
 
+  const usage = DomeBoxPlans.planUsage(Store.plan, Store.active().length,
+    DomeBoxPlans.tasksCreatedInMonth(Store.tasks, new Date()));
+  $('planBanner').innerHTML = usage.warnings.length
+    ? `<div class="rounded-2xl px-5 py-4 mb-6 flex flex-wrap items-center gap-3 ${
+        usage.warnings.some(w=>w.atLimit)?'bg-red-50 text-red-900':'bg-amber-50 text-amber-900'}">
+        <span class="text-xs font-black uppercase tracking-widest">${esc(usage.plan)}</span>
+        <span class="text-sm font-bold">${usage.warnings.map(w=>esc(w.text)).join(' ')}</span>
+        <span class="flex-1"></span>
+        ${usage.upgradeTo?`<a href="https://www.domebox.in/#pricing-landing" target="_blank" rel="noopener"
+          class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-xs">Upgrade to ${esc(usage.upgradeTo)}</a>`:''}
+      </div>`
+    : '';
+
   $('teamStats').innerHTML = [
     ['Members', Store.active().length],
     ['Open tasks', Store.tasks.filter(t=>DomeBox.isOpen(t.status)).length],
@@ -192,6 +205,10 @@ function renderTeam(){
 
 function userForm(u){
   const editing = !!u;
+  if (!editing) {
+    const gate = DomeBoxPlans.canAddUser(Store.plan, Store.active().length);
+    if (!gate.ok) { upgradeModal('User limit reached', gate); return; }
+  }
   u = u || { username:'', name:'', role:ROLE.DOER, dept:'', manager:'', wipLimit:'', active:true, kras:[] };
   const mgrs = Store.active().filter(x => x.username !== u.username);
   openModal(`<form id="fUser" class="p-6 lg:p-8">
