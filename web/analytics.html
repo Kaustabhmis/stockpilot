@@ -80,7 +80,8 @@
   #tip .t{font-weight:700;margin-bottom:3px}
   #tip .r{display:flex;justify-content:space-between;gap:14px;color:var(--ink-2)}
   #tip .r b{color:var(--ink);font-variant-numeric:tabular-nums}
-  .empty{padding:26px;text-align:center;color:var(--muted);font-size:12.5px}
+  #chartHeat{ overflow-x:auto; }
+.empty{padding:26px;text-align:center;color:var(--muted);font-size:12.5px}
   @media (prefers-reduced-motion:reduce){#tip{transition:none}}
 </style>
 </head>
@@ -297,7 +298,9 @@ function lineChart(host, series, opts){
     svg.appendChild(svgEl('line',{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),class:v===0?'baseline':'gridline'}));
     const t=svgEl('text',{x:m.l-7,y:y(v)+3.5,class:'axis','text-anchor':'end'}); t.textContent=v; svg.appendChild(t);
   });
-  const step = Math.ceil(n/12);
+  // Label interval comes from the width available, not the number of points:
+  // twelve months at 390px collided into "SepOctNovDec".
+  const step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw/40))));
   labels.forEach((l,i)=>{ if(i%step) return;
     const t=svgEl('text',{x:x(i),y:H-8,class:'axis','text-anchor':'middle'}); t.textContent=l; svg.appendChild(t);
   });
@@ -317,7 +320,13 @@ function lineChart(host, series, opts){
     });
     // direct-label the final point so identity never depends on colour alone
     for(let i=s.points.length-1;i>=0;i--){ if(s.points[i].value!=null){
-      const t=svgEl('text',{x:x(i)+8,y:y(s.points[i].value)+3.5,class:'dlabel',fill:s.color}); t.textContent=s.name; svg.appendChild(t); break; } }
+      // Flip the label inward when it would run past the plot edge, rather than
+      // letting the viewBox clip it down to its first letter.
+      const wide = s.name.length*6.4 + 10;
+      const flip = x(i)+wide > W-2;
+      const t=svgEl('text',{x: flip ? x(i)-8 : x(i)+8, y:y(s.points[i].value)+3.5,
+        class:'dlabel', fill:s.color, 'text-anchor': flip ? 'end' : 'start'});
+      t.textContent=s.name; svg.appendChild(t); break; } }
   });
 
   const cross = svgEl('line',{y1:m.t,y2:m.t+ih,stroke:C('--muted'),'stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
@@ -341,7 +350,13 @@ function lineChart(host, series, opts){
 function barsH(host, rows, opts){
   opts=opts||{};
   const W = host.clientWidth||480, rowH=28, H = Math.max(rows.length*rowH+10, 40);
-  const labelW = opts.labelW || 118, pad = 46;
+  const labelW = opts.labelW || 118;
+  // Reserve room for the widest value label. A fixed pad silently clips anything
+  // longer than three characters — "100 · A" came out as "100 · /".
+  const longest = rows.reduce(function(m,r){
+    var t = r.value==null ? 'no data' : String(r.display==null ? r.value : r.display);
+    return Math.max(m, t.length); }, 3);
+  const pad = Math.max(46, longest*6.6 + 14);
   const iw = W-labelW-pad;
   const max = opts.max || Math.max(1,...rows.map(r=>r.value||0));
   host.innerHTML='';
@@ -368,16 +383,24 @@ function barsH(host, rows, opts){
 
 /** Ordinal heatmap on the validated 4-step blue ramp. */
 function heatmap(host, rowLabels, colLabels, values){
-  const W=host.clientWidth||1000, cell=Math.max(11,Math.min(26,(W-140)/colLabels.length-3)), gap=3;
+  const W=host.clientWidth||1000, gap=3;
+  const gut=Math.min(130,Math.max(52,Math.round(W*0.3)));
+  const cell=Math.max(11,Math.min(26,(W-gut-10)/colLabels.length-3));
+  /* If the cells cannot fit the host even at their minimum size, widen the canvas
+     and let the container scroll. Shrinking them further makes the ramp
+     unreadable, and the SVG viewBox would otherwise clip the right-hand columns
+     silently — dropping whole weeks off the chart with nothing to show it. */
+  const needed=gut+colLabels.length*(cell+gap)+10;
+  const CW=Math.max(W,needed);
   const H=rowLabels.length*(cell+gap)+30;
   const max=Math.max(1,...values.flat());
   const ramp=[C('--ramp-1'),C('--ramp-2'),C('--ramp-3'),C('--ramp-4')];
   host.innerHTML='';
-  const svg=svgEl('svg',{width:'100%',height:H,viewBox:`0 0 ${W} ${H}`,role:'img'});
+  const svg=svgEl('svg',{width:CW>W?CW:'100%',height:H,viewBox:`0 0 ${CW} ${H}`,role:'img'});
   rowLabels.forEach((rl,r)=>{
     const t=svgEl('text',{x:0,y:r*(cell+gap)+cell-2,class:'axis',fill:C('--ink-2')}); t.textContent=rl; svg.appendChild(t);
     values[r].forEach((v,c)=>{
-      const x=130+c*(cell+gap), y=r*(cell+gap);
+      const x=gut+c*(cell+gap), y=r*(cell+gap);
       // Zero stays as surface so "nothing happened" doesn't read as a value.
       const fill = v===0 ? C('--surface-2') : ramp[Math.min(ramp.length-1, Math.floor((v/max)*ramp.length))];
       const rect=svgEl('rect',{x,y,width:cell,height:cell,rx:3,fill});
@@ -386,8 +409,9 @@ function heatmap(host, rowLabels, colLabels, values){
       svg.appendChild(rect);
     });
   });
-  colLabels.forEach((cl,c)=>{ if(c%Math.ceil(colLabels.length/14)) return;
-    const t=svgEl('text',{x:130+c*(cell+gap)+cell/2,y:H-8,class:'axis','text-anchor':'middle'}); t.textContent=cl; svg.appendChild(t);
+  const cstep = Math.max(1, Math.ceil(34/(cell+gap)));
+  colLabels.forEach((cl,c)=>{ if(c%cstep) return;
+    const t=svgEl('text',{x:gut+c*(cell+gap)+cell/2,y:H-8,class:'axis','text-anchor':'middle'}); t.textContent=cl; svg.appendChild(t);
   });
   host.appendChild(svg);
 }

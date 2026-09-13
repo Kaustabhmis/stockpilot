@@ -1,0 +1,342 @@
+<!-- ===========================================================================
+     DOME BOX — ANALYTICS VIEW  (paste-in block for the live single-file app)
+
+     HOW TO INSTALL
+     1. Paste this whole block into index.html, next to the other <div id="view-…">
+        blocks (order does not matter — it starts hidden).
+     2. Add a nav entry that opens it:
+            <button onclick="toggleView('analytics')">Reports</button>
+     3. Feed it your real data once the user is logged in and tasks are loaded:
+            DomeBoxAnalytics.setData({ users: USERS_FROM_SHEET, tasks: TASKS_FROM_SHEET });
+        Until you call that, the view renders a seeded demo so you can see the
+        layout before wiring anything up.
+
+     WHY IT RE-RENDERS ON OPEN, NOT ON LOAD
+     A hidden element has clientWidth 0, so charts laid out while the view is
+     hidden would all silently collapse to their fallback widths. toggleView()
+     must unhide first and then call DomeBoxAnalytics.open().
+     =========================================================================== -->
+
+<div id="view-analytics" class="hidden min-h-screen bg-gray-50 flex-col">
+
+  <style>
+  /* Scoped to #view-analytics so nothing here can leak into the rest of the app. */
+  /* The view's closed state must not depend on Tailwind having loaded. If the
+     CDN is slow or blocked, a missing .hidden rule would render the whole
+     reports page on top of whatever the user was looking at. */
+  #view-analytics.hidden{ display:none !important; }
+  #view-analytics{
+    /* Categorical — validated on a white surface: all-pairs CVD + contrast PASS. */
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+    /* Status — PASSES every check on light, including CVD separation, which the
+       dark-surface set never did. Still always paired with a letter or a label. */
+    --good:#047857; --warning:#d97706; --critical:#b91c1c;
+    /* Sequential ramp for the heatmap: monotonic lightness, adjacent steps above
+       the normal-vision floor. The lightest step is low-contrast by nature, which
+       is what the table view under every chart is there to relieve. */
+    --ramp-1:#9dc6f0; --ramp-2:#4a8ede; --ramp-3:#1f5fae; --ramp-4:#0f3563;
+    --surface:#ffffff; --surface-2:#f1f5f9; --line:#e5e7eb;
+    --ink:#111827; --ink-2:#4b5563; --muted:#9ca3af;
+  }
+  #view-analytics .gridline{ stroke:var(--line); stroke-width:1; }
+  #view-analytics .baseline{ stroke:#d1d5db; stroke-width:1; }
+  #view-analytics text.axis{ font-size:11px; fill:var(--muted); font-weight:600; }
+  #view-analytics text.dlabel{ font-size:11px; fill:var(--ink); font-weight:800; }
+  #view-analytics #chartHeat{ overflow-x:auto; }
+  #view-analytics .empty{ padding:28px 4px; color:var(--muted); font-size:13px; font-weight:600; }
+
+  #view-analytics .tile .k{ font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); font-weight:800; }
+  #view-analytics .tile .v{ font-size:34px; font-weight:900; line-height:1.1; margin-top:6px; color:var(--ink); }
+  #view-analytics .tile .s{ font-size:11px; color:var(--muted); font-weight:600; margin-top:4px; }
+
+  #view-analytics .tblwrap{ display:none; overflow-x:auto; margin-top:4px; }
+  #view-analytics .tblwrap.on{ display:block; }
+  #view-analytics .tblwrap table{ width:100%; border-collapse:collapse; font-size:12px; }
+  #view-analytics .tblwrap th{ text-align:left; font-weight:800; color:var(--muted);
+    text-transform:uppercase; font-size:10px; letter-spacing:.08em;
+    padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  #view-analytics .tblwrap td{ padding:8px 10px; border-bottom:1px solid #f3f4f6;
+    color:var(--ink-2); white-space:nowrap; }
+
+  #view-analytics .seg button{ padding:8px 16px; border-radius:10px; font-weight:800;
+    font-size:13px; color:var(--ink-2); }
+  #view-analytics .seg button.on{ background:#2563eb; color:#fff; box-shadow:0 4px 12px rgba(37,99,235,.3); }
+
+  #dbx-tip{ position:fixed; pointer-events:none; opacity:0; transition:opacity .12s;
+    background:#111827; color:#fff; border-radius:10px; padding:10px 12px; font-size:12px;
+    z-index:9999; box-shadow:0 12px 28px rgba(0,0,0,.24); min-width:150px; }
+  #dbx-tip .t{ font-weight:800; margin-bottom:6px; }
+  #dbx-tip .r{ display:flex; justify-content:space-between; gap:18px; padding:2px 0; color:#d1d5db; }
+  #dbx-tip .r b{ color:#fff; font-weight:800; }
+
+  @media (max-width:900px){ #view-analytics .card{ grid-column:span 12 !important; } }
+  </style>
+
+  <nav class="bg-white border-b border-gray-100 px-4 lg:px-8 h-16 flex justify-between items-center gap-2 sticky top-0 z-40">
+    <div class="flex items-center cursor-pointer" onclick="toggleView('dashboard')">
+      <span class="material-icons text-blue-600 mr-2">dashboard</span>
+      <span class="font-black text-xl tracking-tight whitespace-nowrap">Dome Box</span>
+      <span class="ml-3 text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-700 px-2 py-1 rounded-md">Reports</span>
+    </div>
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+      <label class="hidden sm:block text-[10px] font-black uppercase tracking-widest text-gray-400" for="person">Person</label>
+      <select id="person" class="border border-gray-200 bg-gray-50 rounded-xl px-2 sm:px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 min-w-0 max-w-[42vw] sm:max-w-none"></select>
+      <button onclick="toggleView('dashboard')" class="text-blue-600 font-bold text-sm hover:underline">Back</button>
+    </div>
+  </nav>
+
+  <div class="bg-white border-b border-gray-100 px-4 lg:px-8 py-3 flex flex-wrap items-center gap-3 sticky top-16 z-30">
+    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Period</span>
+    <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="periodSeg">
+      <button data-p="week">Weekly</button>
+      <button data-p="month" class="on">Monthly</button>
+      <button data-p="quarter">Quarterly</button>
+      <button data-p="year">Full year</button>
+    </div>
+    <select id="offset" class="border border-gray-200 bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"></select>
+    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Showing</span>
+    <select id="span" class="border border-gray-200 bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"></select>
+    <span class="flex-1"></span>
+    <span id="rangeLabel" class="text-xs font-black uppercase tracking-widest text-gray-500"></span>
+  </div>
+
+  <div class="flex-1 p-4 lg:p-8 max-w-[1600px] mx-auto w-full">
+
+    <div id="tiles" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6"></div>
+
+    <div class="grid grid-cols-12 gap-6">
+
+      <div class="card col-span-12 lg:col-span-8 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Performance trend</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1" id="trendSub"></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div id="trendLegend" class="flex gap-3 text-xs font-bold text-gray-500 [&_i]:inline-block [&_i]:w-2 [&_i]:h-2 [&_i]:rounded-sm [&_i]:mr-1.5"></div>
+            <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableTrend">Table</button>
+          </div>
+        </div>
+        <div id="chartTrend"></div>
+        <div class="tblwrap" id="tableTrend"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-4 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Performance bands</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Everyone scored this period</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableBands">Table</button>
+        </div>
+        <div id="chartBands"></div>
+        <div class="tblwrap" id="tableBands"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Score by person</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1" id="peopleSub"></div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tablePeople">Table</button>
+        </div>
+        <div id="chartPeople"></div>
+        <div class="tblwrap" id="tablePeople"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">On-time delivery</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Share of the period's closed work that landed by its deadline</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableOnTime">Table</button>
+        </div>
+        <div id="chartOnTime"></div>
+        <div class="tblwrap" id="tableOnTime"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Work delivered by KRA</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Where the effort actually went</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableKra">Table</button>
+        </div>
+        <div id="chartKra"></div>
+        <div class="tblwrap" id="tableKra"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Rework loops</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Times work came back — the quality signal</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableRework">Table</button>
+        </div>
+        <div id="chartRework"></div>
+        <div class="tblwrap" id="tableRework"></div>
+      </div>
+
+      <div class="card col-span-12 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Delivery heatmap</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Tasks verified per person, per week — darker is more</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableHeat">Table</button>
+        </div>
+        <div id="chartHeat"></div>
+        <div class="tblwrap" id="tableHeat"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="dbx-tip"></div>
+
+<script>
+/* ===========================================================================
+   Dome Box scoring engine — the same file the board and the Apps Script backend
+   run, so a score shown here is the score, not a second implementation of it.
+   Generated from domebox/domain.gs; do not hand-edit.
+   =========================================================================== */
+/*__ENGINE__*/
+</script>
+
+<script>
+(function(){
+'use strict';
+const S = DomeBox.STATUS, P = DomeBox.PERIOD;
+const C = (n) => getComputedStyle(document.getElementById('view-analytics')).getPropertyValue(n).trim();
+
+let USERS = [], TASKS = [];
+let KIND = P.MONTH, SPAN = 12, PERSON = '', OFFSET = 0;
+const SPANS = { week:[8,12,26], month:[6,12,18], quarter:[4,6,8], year:[2,3,5] };
+
+const isVisible = () => {
+  const v = document.getElementById('view-analytics');
+  return !!(v && !v.classList.contains('hidden') && v.clientWidth > 0);
+};
+
+/*__CHARTS__*/
+
+/* ---------- data seam ----------------------------------------------------
+   The engine needs these fields per task. Map your sheet's column names onto
+   them here; everything else on the row is ignored.
+
+     assignee     login email of the person doing the work
+     status       one of DomeBox.STATUS (Pending / In Progress / For Review /
+                  Awaiting Approval / Verified …)
+     due          'YYYY-MM-DD'
+     priority     'High' | 'Medium' | 'Low'   (weights the score 3x / 2x / 1x)
+     kra          KRA name, for the KRA split
+     reworkCount  how many times it came back
+     history      [{status, date}] — the audit trail. This is what decides which
+                  period a task counts in: a task belongs to the period it was
+                  VERIFIED in, not the one it was raised in.
+     raisedBy     who raised it   } these two make managers scoreable on how
+     approver     who approves it } fast they clear reviews and approvals
+   ------------------------------------------------------------------------ */
+function mapTask(row){
+  return {
+    id: row.id || row.taskId || row.ID,
+    title: row.title || row.task || row.Task || '',
+    assignee: row.assignee || row.assignedTo || row.username || '',
+    raisedBy: row.raisedBy || row.assignedBy || row.createdBy || '',
+    approver: row.approver || row.raisedBy || row.assignedBy || '',
+    status: row.status || row.Status,
+    priority: row.priority || row.Priority || 'Medium',
+    due: row.due || row.dueDate || row.deadline || '',
+    kra: row.kra || row.KRA || row.category || 'Unassigned',
+    reworkCount: Number(row.reworkCount || row.reworks || 0),
+    history: Array.isArray(row.history) ? row.history
+           : (typeof row.history === 'string' && row.history ? safeParse(row.history) : []),
+    blockedBy: row.blockedBy || [], subtasks: row.subtasks || [],
+  };
+}
+function mapUser(row){
+  return {
+    username: row.username || row.email || row.emailId || '',
+    name: row.name || row.fullName || row.username || '',
+    role: row.role || row.Role || 'Doer',
+    dept: row.dept || row.department || '',
+  };
+}
+function safeParse(s){ try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch(e){ return []; } }
+
+/* ---------- public API --------------------------------------------------- */
+window.DomeBoxAnalytics = {
+  /** Hand it the rows you already loaded for the dashboard. */
+  setData: function(d){
+    USERS = (d && d.users || []).map(mapUser).filter(u => u.username);
+    TASKS = (d && d.tasks || []).map(mapTask).filter(t => t.assignee);
+    document.getElementById('person').innerHTML =
+      '<option value="">Team only</option>' +
+      USERS.map(u => '<option value="'+u.username+'">'+u.name+'</option>').join('');
+    if (isVisible()) { setSpans(); setOffsets(); render(); }
+    return this;
+  },
+  /** Call this AFTER the view is unhidden — a hidden host measures 0 wide. */
+  open: function(){
+    if (!USERS.length) this.setData(demo());
+    setSpans(); setOffsets(); render();
+  },
+  refresh: function(){ if (isVisible()) render(); },
+};
+
+/* ---------- seeded demo, so the page is viewable before it is wired ------- */
+function demo(){
+  let seed = 20260715;
+  const rnd = () => (seed = (seed*1664525 + 1013904223) % 4294967296) / 4294967296;
+  const pick = a => a[Math.floor(rnd()*a.length)];
+  const users = [
+    { username:'sruti@acme.in',  name:'Sruti Charulata', role:'HOD',  dept:'Operations', skill:.86 },
+    { username:'imran@acme.in',  name:'Imran Qureshi',   role:'HOD',  dept:'Quality',    skill:.62 },
+    { username:'payel@acme.in',  name:'Payel Sanyamath', role:'Doer', dept:'Operations', skill:.91 },
+    { username:'vikram@acme.in', name:'Vikram Rathore',  role:'Doer', dept:'Purchase',   skill:.58 },
+    { username:'neha@acme.in',   name:'Neha Bhandari',   role:'Doer', dept:'Quality',    skill:.79 },
+  ];
+  const kras = ['Vendor Quality','Inventory Accuracy','Rejection Control','Cost Savings','Process Compliance','Customer Satisfaction','Capability Building'];
+  const titles = ['Vendor audit','Stock reconciliation','Rejection analysis','AMC negotiation','PDI checklist update','Complaint closure','Operator training','Costing review','Supplier CAPA','Line balancing','Calibration','Layout revision'];
+  const tasks = [], today = new Date(); let id = 1000;
+  for (let back = 364; back >= 0; back--) {
+    const day = DomeBox.addDays(today, -back);
+    if (day.getDay() === 0 || day.getDay() === 6) continue;
+    users.forEach(u => {
+      if (rnd() > .34) return;
+      const m = day.getMonth(), dip = (m===7||m===8) ? .16 : 0;
+      const skill = Math.max(.2, u.skill - dip);
+      const priority = pick(['High','Medium','Medium','Low']);
+      const due = DomeBox.addDays(day, 3 + Math.floor(rnd()*9));
+      if (due > today) return;
+      const lateBy = rnd() < skill ? -Math.floor(rnd()*3) : 1 + Math.floor(rnd()*7);
+      const submitted = DomeBox.addDays(due, lateBy);
+      const reworks = rnd() < (1-skill)*.55 ? 1 + (rnd()<.25?1:0) : 0;
+      const verified = DomeBox.addDays(submitted, 1 + Math.floor(rnd()*3));
+      if (verified > today) return;
+      const hist = [{ status:S.PENDING, date: day.toISOString() }];
+      for (let r=0;r<reworks;r++) hist.push({ status:S.IN_PROGRESS, date: DomeBox.addDays(submitted,-1).toISOString() });
+      hist.push({ status:S.FOR_REVIEW, date: submitted.toISOString() });
+      hist.push({ status:S.VERIFIED,  date: verified.toISOString() });
+      tasks.push({ id:'T-'+(++id), title:pick(titles), assignee:u.username, raisedBy:'rohan@acme.in',
+        approver:'rohan@acme.in', status:S.VERIFIED, priority, due:DomeBox.ymd(due),
+        kra:pick(kras), reworkCount:reworks, history:hist });
+    });
+  }
+  users.forEach((u,i) => { for (let k=0;k<2+(i%3);k++){
+    const due = DomeBox.addDays(new Date(), Math.floor(rnd()*18)-9);
+    tasks.push({ id:'T-'+(++id), title:pick(titles), assignee:u.username, raisedBy:'rohan@acme.in',
+      approver:'rohan@acme.in', status: rnd()<.5?S.PENDING:S.IN_PROGRESS,
+      priority:pick(['High','Medium','Low']), due:DomeBox.ymd(due), kra:pick(kras),
+      reworkCount:0, history:[{status:S.PENDING,date:DomeBox.addDays(due,-6).toISOString()}] });
+  }});
+  return { users, tasks };
+}
+})();
+</script>
