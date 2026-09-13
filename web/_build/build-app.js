@@ -19,6 +19,16 @@ function analyticsBody(){
   return { markup: markup.replace(/^<!--[\s\S]*?-->\n/, ''), body };
 }
 
+/* Only the rules half of whatsapp.gs goes to the browser: the I/O half holds
+   credentials handling and Apps Script globals that have no meaning here. */
+function whatsappRules(){
+  const full = R('domebox/whatsapp.gs');
+  const cut = full.indexOf('// ===========================================================================\n// APPS SCRIPT I/O');
+  if (cut < 0) throw new Error('could not find the I/O boundary in whatsapp.gs');
+  const pure = full.slice(0, cut).replace(/if \(typeof module[\s\S]*$/, '');
+  return `(function(g){\n${pure}\ng.DomeBoxWA = { waNormalizePhone: waNormalizePhone, WA: WA };\n})(window);`;
+}
+
 const a = analyticsBody();
 const parts = ['01-markup.html','02-store.js','03-tasks.js','04-render.js','05-boot.js']
   .map(f => R('web/_build/app/' + f));
@@ -32,6 +42,7 @@ ${a.markup}
    backend runs; do not hand-edit.
    =========================================================================== */
 ${R('web/domain.js')}
+${whatsappRules()}
 </script>
 
 ${a.body}

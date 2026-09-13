@@ -158,7 +158,7 @@ function renderTeam(){
 
   $('teamTable').innerHTML = `<table class="w-full text-sm">
     <thead><tr class="text-[10px] uppercase tracking-widest text-gray-400 border-b border-gray-100">
-      ${['Member','Role','Department','Reports to','Open','WIP','Last month','']
+      ${['Member','Role','Department','Reports to','Open','WIP','WhatsApp','Last month','']
         .map(h=>`<th class="text-left font-black px-5 py-3 whitespace-nowrap">${h}</th>`).join('')}
     </tr></thead><tbody>
     ${Store.users.map(u=>{
@@ -176,6 +176,10 @@ function renderTeam(){
         <td class="px-5 py-3 text-gray-600 whitespace-nowrap">${esc(u.manager?nameOf(u.manager):'—')}</td>
         <td class="px-5 py-3 font-bold text-gray-700">${open(u.username)}</td>
         <td class="px-5 py-3 font-bold whitespace-nowrap ${wip.exceeded?'text-red-700':wip.nearing?'text-amber-700':'text-gray-700'}">${wip.count}/${wip.limit||'∞'}</td>
+        <td class="px-5 py-3 whitespace-nowrap">${
+          u.waOptIn && u.phone ? '<span class="dbx-chip bg-emerald-50 text-emerald-800">Opted in</span>'
+          : u.phone ? '<span class="dbx-chip bg-gray-100 text-gray-500">Not opted in</span>'
+          : '<span class="text-gray-300 text-xs font-bold">—</span>'}</td>
         <td class="px-5 py-3 font-black whitespace-nowrap">${
           s.hasData ? `${s.score} · ${band}` : '<span class="text-gray-300">no data</span>'}</td>
         <td class="px-5 py-3 text-right whitespace-nowrap">
@@ -210,6 +214,19 @@ function userForm(u){
           ${mgrs.map(m=>`<option value="${esc(m.username)}"${m.username===u.manager?' selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
         <div><label class="dbx-lb" for="uWip">WIP limit</label>
           <input id="uWip" type="number" min="0" class="dbx-in" placeholder="default ${Store.wipLimit}" value="${u.wipLimit==null?'':esc(u.wipLimit)}"></div>
+      </div>
+      <div class="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+        <label class="dbx-lb" for="uPhone">WhatsApp number</label>
+        <input id="uPhone" class="dbx-in bg-white" placeholder="9876543210" value="${esc(u.phone||'')}">
+        <div id="uPhoneMsg" class="text-xs font-bold mt-1.5"></div>
+        <label class="flex items-start gap-2 text-xs font-semibold text-gray-600 mt-3 leading-relaxed">
+          <input type="checkbox" id="uWaOptIn" class="w-4 h-4 accent-blue-600 mt-0.5 shrink-0" ${u.waOptIn?'checked':''}>
+          <span>Send me Dome Box task reminders on WhatsApp at this number.
+            I can reply STOP at any time.</span>
+        </label>
+        <div class="text-[11px] text-gray-400 font-semibold mt-2">
+          Consent must be given by the person themselves. Never tick this on someone's behalf.
+        </div>
       </div>
       <div>
         <div class="flex justify-between items-center mb-2">
@@ -254,6 +271,20 @@ function userForm(u){
   drawKras();
   $('uAddKra').addEventListener('click', () => { kras.push({item:'', weight:0}); drawKras(); });
 
+  /* Validated by the same function the sender uses, so a number the form accepts
+     can never be one the sender then rejects — or worse, one that reaches a
+     stranger. */
+  const phoneMsg = () => {
+    const raw = $('uPhone').value.trim();
+    const box = $('uPhoneMsg'), ok = raw ? DomeBoxWA.waNormalizePhone(raw, '91') : null;
+    if (!raw) { box.textContent = ''; return null; }
+    box.textContent = ok ? 'Will send to ' + ok : 'Not a usable mobile number.';
+    box.className = 'text-xs font-bold mt-1.5 ' + (ok ? 'text-emerald-700' : 'text-red-700');
+    return ok;
+  };
+  $('uPhone').addEventListener('input', phoneMsg);
+  phoneMsg();
+
   $('fUser').addEventListener('submit', e => {
     e.preventDefault();
     const mail = $('uMail').value.trim().toLowerCase();
@@ -263,10 +294,18 @@ function userForm(u){
       const v = DomeBox.validateKraBlueprint(filled);
       if (!v.ok) { toast(v.error, 'err'); return; }   // weights over 100% never save
     }
+    const phoneRaw = $('uPhone').value.trim();
+    const phone = phoneRaw ? DomeBoxWA.waNormalizePhone(phoneRaw, '91') : '';
+    if (phoneRaw && !phone) { toast('That WhatsApp number is not usable.', 'err'); return; }
+    if ($('uWaOptIn').checked && !phone) {
+      toast('Add a usable WhatsApp number before opting in.', 'err'); return;
+    }
     const wipRaw = $('uWip').value.trim();
     const rec = normUser({ username: mail, name:$('uName').value.trim(), role:$('uRole').value,
       dept:$('uDept').value.trim(), manager:$('uMgr').value,
       wipLimit: wipRaw === '' ? null : Number(wipRaw),
+      phone: phone, waOptIn: $('uWaOptIn').checked,
+      waOptInAt: ($('uWaOptIn').checked && !u.waOptIn) ? new Date().toISOString() : (u.waOptInAt || ''),
       active: editing ? $('uActive').checked : true, kras: filled });
 
     if (editing) {

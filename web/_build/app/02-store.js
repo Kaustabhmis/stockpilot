@@ -86,7 +86,9 @@ const Store = {
 function normUser(u){
   return { username:u.username||u.email||'', name:u.name||u.username||'', role:u.role||ROLE.DOER,
     dept:u.dept||u.department||'', manager:u.manager||'', active:u.active !== false,
-    wipLimit: u.wipLimit == null ? null : Number(u.wipLimit), kras: u.kras || [] };
+    wipLimit: u.wipLimit == null ? null : Number(u.wipLimit), kras: u.kras || [],
+    phone: u.phone || '', waOptIn: !!u.waOptIn, waOptInAt: u.waOptInAt || '',
+    _demo: !!u._demo };
 }
 function normTask(t){
   return { id:t.id, title:t.title||'', desc:t.desc||'', assignee:t.assignee||'',
