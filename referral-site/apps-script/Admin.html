@@ -412,14 +412,20 @@ $('#dealValue').addEventListener('input', function () {
   if (!RATES) return;
   var v = Number(this.value) || 0;
   if (!v) { $('#dealPreview').textContent = ''; return; }
-  var brokerage = v * RATES.brokeragePct / 100;
+  // Same rounding points as commissionFor_ in Deals.gs.
+  var brokerage = Math.round(v * RATES.brokeragePct / 100);
   var pct = v >= RATES.threshold ? RATES.highPct : RATES.lowPct;
-  var gross = brokerage * pct / 100;
-  var net = gross * (1 - RATES.tdsPct / 100);
+  var gross = Math.round(brokerage * pct / 100);
+  var fee = Math.round(gross * RATES.platformFeePct / 100);
+  var afterFee = gross - fee;
+  var tds = Math.round(afterFee * RATES.tdsPct / 100);
+  var net = afterFee - tds;
   $('#dealPreview').innerHTML =
-    'Brokerage ' + rupees(brokerage) + ' @ ' + RATES.brokeragePct + '% · ' +
-    'partner share <strong>' + pct + '%</strong> = ' + rupees(gross) +
-    ' · net after ' + RATES.tdsPct + '% TDS <strong>' + rupees(net) + '</strong>';
+    'Brokerage ' + rupees(brokerage) + ' @ ' + RATES.brokeragePct + '%<br>' +
+    'Partner share @ <strong>' + pct + '%</strong> = ' + rupees(gross) + '<br>' +
+    'Platform fee @ ' + RATES.platformFeePct + '% = <strong>' + rupees(fee) + '</strong> (you keep this)<br>' +
+    'TDS @ ' + RATES.tdsPct + '% = ' + rupees(tds) + '<br>' +
+    'Partner is paid <strong>' + rupees(net) + '</strong>';
 });
 
 $('#dealForm').addEventListener('submit', function (e) {

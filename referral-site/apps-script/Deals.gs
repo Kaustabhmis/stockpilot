@@ -3,39 +3,57 @@
  *
  * Money model
  * -----------
- *   brokerage       = deal value x brokerage_pct            (what Grihobazar earns, default 2%)
- *   referrer share  = brokerage x share_pct                 (15% or 20%, by deal value)
- *   TDS             = referrer share x tds_pct              (deducted at source)
- *   net payable     = referrer share - TDS
+ *   brokerage       = deal value x brokerage_pct      (what Grihobazar earns, default 2%)
+ *   referrer share  = brokerage x share_pct           (15% or 20%, by deal value)
+ *   platform fee    = referrer share x platform_fee_pct   (our cut, default 5%)
+ *   after fee       = referrer share - platform fee
+ *   TDS             = after fee x tds_pct             (deducted at source)
+ *   net payable     = after fee - TDS
+ *
+ * The platform fee comes off BEFORE TDS, so tax is deducted on what the
+ * referrer is actually paid rather than on money that never reaches them.
  *
  * The split is decided by deal value against `tier_threshold`, so it is
  * reproducible from the numbers alone — nobody has to take our word for it.
  */
 
 function commissionFor_(dealValue) {
-  var value        = Number(dealValue) || 0;
-  var brokeragePct = cfgNum_('brokerage_pct', 2);
-  var threshold    = cfgNum_('tier_threshold', 10000000);   // ₹1 Cr
-  var lowPct       = cfgNum_('tier_low_pct', 15);
-  var highPct      = cfgNum_('tier_high_pct', 20);
-  var tdsPct       = cfgNum_('tds_pct', 2);
+  var value          = Number(dealValue) || 0;
+  var brokeragePct   = cfgNum_('brokerage_pct', 2);
+  var threshold      = cfgNum_('tier_threshold', 10000000);   // ₹1 Cr
+  var lowPct         = cfgNum_('tier_low_pct', 15);
+  var highPct        = cfgNum_('tier_high_pct', 20);
+  var platformFeePct = cfgNum_('platform_fee_pct', 5);
+  var tdsPct         = cfgNum_('tds_pct', 2);
 
-  var brokerage = value * brokeragePct / 100;
-  var sharePct  = value >= threshold ? highPct : lowPct;
-  var gross     = brokerage * sharePct / 100;
-  var tds       = gross * tdsPct / 100;
+  // Everything settles in whole rupees. Payouts, TDS challans and the figure on
+  // the landing page all have to agree, and paise are where they stop agreeing.
+  // Net is derived by subtraction, so fee + TDS + net always equals the gross.
+  var brokerage   = roundRs_(value * brokeragePct / 100);
+  var sharePct    = value >= threshold ? highPct : lowPct;
+  var gross       = roundRs_(brokerage * sharePct / 100);
+  var platformFee = roundRs_(gross * platformFeePct / 100);
+  var afterFee    = gross - platformFee;
+  var tds         = roundRs_(afterFee * tdsPct / 100);
 
   return {
     dealValue: value,
     brokeragePct: brokeragePct,
-    brokerageAmount: round2_(brokerage),
+    brokerageAmount: brokerage,
     sharePct: sharePct,
-    grossCommission: round2_(gross),
+    grossCommission: gross,
+    platformFeePct: platformFeePct,
+    platformFeeAmount: platformFee,
+    commissionAfterFee: afterFee,
     tdsPct: tdsPct,
-    tdsAmount: round2_(tds),
-    netPayable: round2_(gross - tds),
+    tdsAmount: tds,
+    netPayable: afterFee - tds,
     threshold: threshold
   };
+}
+
+function roundRs_(n) {
+  return Math.round(Number(n) || 0);
 }
 
 function round2_(n) {
@@ -54,6 +72,7 @@ function actionRates_() {
     threshold: cfgNum_('tier_threshold', 10000000),
     lowPct: cfgNum_('tier_low_pct', 15),
     highPct: cfgNum_('tier_high_pct', 20),
+    platformFeePct: cfgNum_('platform_fee_pct', 5),
     tdsPct: cfgNum_('tds_pct', 2),
     attributionLockDays: cfgNum_('attribution_lock_days', 90),
     payoutDays: cfgNum_('payout_days_after_registration', 15),
@@ -204,6 +223,9 @@ function actionAdminCreateDeal_(p) {
       BrokerageAmount: q.brokerageAmount,
       SharePct: q.sharePct,
       GrossCommission: q.grossCommission,
+      PlatformFeePct: q.platformFeePct,
+      PlatformFeeAmount: q.platformFeeAmount,
+      CommissionAfterFee: q.commissionAfterFee,
       TdsPct: q.tdsPct,
       TdsAmount: q.tdsAmount,
       NetPayable: q.netPayable,

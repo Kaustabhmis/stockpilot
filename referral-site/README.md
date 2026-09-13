@@ -7,12 +7,28 @@ close the deal, and the partner earns a share of our brokerage.
 - **Backend** — a **new, private** Google Sheet driven by Google Apps Script.
 - **Money** — we charge the seller `brokerage_pct` (default 2%) of the deal
   value. The partner gets 15% of that brokerage below ₹1 Cr and 20% at ₹1 Cr and
-  above. TDS is deducted from the partner's share.
+  above. From the partner's share we keep a `platform_fee_pct` (default 5%), and
+  TDS is deducted on what is left.
 
-On an ₹85 L deal: brokerage ₹1,70,000 → partner share 15% = ₹25,500 → less 2%
-TDS = **₹24,990**.
+```
+deal value → brokerage (2%) → partner share (15% / 20%)
+                                  → less platform fee (5%)   ← we keep this
+                                  → less TDS (2%)            ← goes to the taxman
+                                  → net paid to the partner
+```
+
+On an ₹85 L deal: brokerage ₹1,70,000 → partner share 15% = ₹25,500 → less ₹1,275
+platform fee → ₹24,225 → less ₹484.50 TDS = **₹23,740.50** to the partner, of
+which **₹1,275** is ours on top of the ₹1,44,500 brokerage we keep.
+
 On a ₹2.5 Cr deal: brokerage ₹5,00,000 → partner share 20% = ₹1,00,000 → less
-TDS = **₹98,000**.
+₹5,000 platform fee → ₹95,000 → less ₹1,900 TDS = **₹93,100** to the partner.
+
+The platform fee comes off **before** TDS, so tax is deducted on what the partner
+is actually paid rather than on money that never reaches them. The fee is shown
+as its own line in the calculator and on every deal — a partner told "15% of
+brokerage" who then receives less will work the gap out at their first payout,
+and that is a worse conversation than showing the number up front.
 
 Every rate lives in the `Config` tab. Change a number there and the site, the
 calculator and the admin console all follow — no code change.
@@ -69,7 +85,8 @@ In the sheet's `Config` tab:
 | `tier_threshold` | 10000000 | Deal value at/above which the higher share applies |
 | `tier_low_pct` | 15 | Partner's % of brokerage below the threshold |
 | `tier_high_pct` | 20 | Partner's % of brokerage at/above it |
-| `tds_pct` | 2 | TDS on partner commission — **confirm the rate with your CA** |
+| `platform_fee_pct` | 5 | Your cut, taken from the partner's share |
+| `tds_pct` | 2 | TDS on the balance after the fee — **confirm the rate with your CA** |
 | `attribution_lock_days` | 90 | How long the first referrer owns a buyer's number |
 | `payout_days_after_registration` | 15 | The payout promise made on the site |
 | `notify_email` | *(blank)* | Gets an email on every new lead; blank disables it |
@@ -92,9 +109,9 @@ partner submits lead  →  new  →  contacted  →  visit_scheduled  →  visit
                             paid  ←  payable  ←  registered  ←  booked/negotiation
 ```
 
-- A **Deal** row is created when you mark a lead **Booked**. The commission
-  numbers are frozen at that moment, so a later rate change in `Config` cannot
-  alter a deal you already promised.
+- A **Deal** row is created when you mark a lead **Booked**. Every number —
+  brokerage, share %, platform fee, TDS, net — is frozen at that moment, so a
+  later rate change in `Config` cannot alter a deal you already promised.
 - Commission becomes **payable** at **registration**, not at booking — a booking
   can fall through, a registration cannot.
 - **Attribution**: the first partner to submit a buyer's mobile number owns that
@@ -126,8 +143,9 @@ node test/commission.test.js
 ```
 
 Stubs the Apps Script globals and runs the real source: commission at, above and
-below the threshold, junk input, phone normalisation, and the amount parser that
-accepts `85 lakh`, `1.2 Cr`, `₹85,00,000`. No deployment needed.
+below the threshold, the platform fee and TDS split, that fee + TDS + net always
+add back to the gross, junk input, phone normalisation, and the amount parser
+that accepts `85 lakh`, `1.2 Cr`, `₹85,00,000`. No deployment needed.
 
 ## Notes on the data
 

@@ -118,7 +118,7 @@
       </details>
       <details>
         <summary>Is anything deducted?</summary>
-        <p>TDS at <span data-tds-pct>2</span>% is deducted at source on commission, as the law requires. The calculator above already shows you the net amount.</p>
+        <p>Two things, and the calculator above already shows both, so the figure you see is what reaches your account. A platform fee of <span data-fee-pct>5</span>% of your share covers running the platform and processing the payout. Then TDS at <span data-tds-pct>2</span>% is deducted at source on the balance, as the law requires — that is tax credited against your PAN, not something we keep.</p>
       </details>
       <details>
         <summary>Is there a target or a joining fee?</summary>
@@ -159,6 +159,20 @@
     return '<div class="calc-line"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
   }
 
+  // Mirrors commissionFor_ in Deals.gs exactly, rounding at the same points.
+  // If these two ever disagree, the site quotes one number and the sheet pays
+  // another — so keep them in step.
+  function quote(value) {
+    var brokerage = Math.round(value * R.brokeragePct / 100);
+    var sharePct = value >= R.threshold ? R.highPct : R.lowPct;
+    var gross = Math.round(brokerage * sharePct / 100);
+    var fee = Math.round(gross * R.platformFeePct / 100);
+    var afterFee = gross - fee;
+    var tds = Math.round(afterFee * R.tdsPct / 100);
+    return { brokerage: brokerage, sharePct: sharePct, gross: gross,
+             fee: fee, afterFee: afterFee, tds: tds, net: afterFee - tds };
+  }
+
   // The whole calculation runs locally from the published rate card, so the
   // number updates as you type and matches what the server would quote.
   function recalc() {
@@ -170,17 +184,16 @@
       noteEl.textContent = 'Enter a price to see your earning.';
       return;
     }
-    var brokerage = value * R.brokeragePct / 100;
-    var sharePct = value >= R.threshold ? R.highPct : R.lowPct;
-    var gross = brokerage * sharePct / 100;
-    var tds = gross * R.tdsPct / 100;
-    var net = gross - tds;
+    var q = quote(value);
+    var brokerage = q.brokerage, sharePct = q.sharePct, gross = q.gross;
+    var fee = q.fee, tds = q.tds, net = q.net;
 
     earnEl.textContent = GB.rupees(net);
     breakdownEl.innerHTML =
       line('Deal value', GB.rupees(value) + ' <span class="muted">(' + GB.rupeesShort(value) + ')</span>') +
       line('Our brokerage @ ' + R.brokeragePct + '%', GB.rupees(brokerage)) +
       line('Your share @ ' + sharePct + '%', GB.rupees(gross)) +
+      line('Less platform fee @ ' + R.platformFeePct + '%', '− ' + GB.rupees(fee)) +
       line('Less TDS @ ' + R.tdsPct + '%', '− ' + GB.rupees(tds));
 
     noteEl.textContent = value >= R.threshold
@@ -192,8 +205,7 @@
     var below = R.threshold * 0.6;
     var above = R.threshold * 1.5;
     function row(label, value, pct) {
-      var gross = value * R.brokeragePct / 100 * pct / 100;
-      var net = gross * (1 - R.tdsPct / 100);
+      var net = quote(value).net;
       return '<tr><td>' + label + '</td>' +
              '<td class="num">' + R.brokeragePct + '%</td>' +
              '<td class="num"><strong>' + pct + '%</strong> of brokerage</td>' +
@@ -203,7 +215,8 @@
       row('Below ' + GB.rupeesShort(R.threshold), below, R.lowPct) +
       row(GB.rupeesShort(R.threshold) + ' and above', above, R.highPct);
     GB.$('#tdsNote').textContent =
-      'Earnings shown are net of ' + R.tdsPct + '% TDS. Commission is released within ' +
+      'Earnings shown are what reaches you — after a ' + R.platformFeePct +
+      '% platform fee and ' + R.tdsPct + '% TDS. Commission is released within ' +
       R.payoutDays + ' days of the buyer registering the property.';
   }
 
@@ -213,6 +226,7 @@
     GB.$$('[data-brokerage-pct]').forEach(function (el) { el.textContent = R.brokeragePct; });
     GB.$$('[data-lock-days]').forEach(function (el) { el.textContent = R.attributionLockDays; });
     GB.$$('[data-tds-pct]').forEach(function (el) { el.textContent = R.tdsPct; });
+    GB.$$('[data-fee-pct]').forEach(function (el) { el.textContent = R.platformFeePct; });
     document.title = 'Refer a buyer, earn a share of the brokerage — ' + R.brandName;
     var support = [];
     if (R.supportPhone) support.push('Call ' + R.supportPhone);

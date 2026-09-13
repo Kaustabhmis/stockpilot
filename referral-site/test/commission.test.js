@@ -8,7 +8,7 @@ const ROOT = path.join(__dirname, '..');
 
 const CONFIG = {
   brokerage_pct: 2, tier_threshold: 10000000, tier_low_pct: 15,
-  tier_high_pct: 20, tds_pct: 2, attribution_lock_days: 90,
+  tier_high_pct: 20, platform_fee_pct: 5, tds_pct: 2, attribution_lock_days: 90,
   payout_days_after_registration: 15, brand_name: 'Grihobazar Partners'
 };
 
@@ -55,14 +55,17 @@ let q = vm.runInContext('commissionFor_(8500000)', sandbox);   // ₹85 L
 eq('brokerage @2%', q.brokerageAmount, 170000);
 eq('share pct', q.sharePct, 15);
 eq('gross commission', q.grossCommission, 25500);
-eq('TDS @2%', q.tdsAmount, 510);
-eq('net payable', q.netPayable, 24990);
+eq('platform fee @5%', q.platformFeeAmount, 1275);
+eq('commission after fee', q.commissionAfterFee, 24225);
+eq('TDS @2% of after-fee', q.tdsAmount, 485);
+eq('net payable', q.netPayable, 23740);
 
 console.log('\ncommissionFor_ — exactly at the threshold (20% share)');
 q = vm.runInContext('commissionFor_(10000000)', sandbox);      // ₹1 Cr
 eq('share pct', q.sharePct, 20);
 eq('gross commission', q.grossCommission, 40000);
-eq('net payable', q.netPayable, 39200);
+eq('platform fee', q.platformFeeAmount, 2000);
+eq('net payable', q.netPayable, 37240);
 
 console.log('\ncommissionFor_ — one rupee below the threshold stays at 15%');
 q = vm.runInContext('commissionFor_(9999999)', sandbox);
@@ -72,11 +75,37 @@ console.log('\ncommissionFor_ — a ₹2.5 Cr deal');
 q = vm.runInContext('commissionFor_(25000000)', sandbox);
 eq('brokerage', q.brokerageAmount, 500000);
 eq('share pct', q.sharePct, 20);
-eq('net payable', q.netPayable, 98000);
+eq('gross commission', q.grossCommission, 100000);
+eq('platform fee', q.platformFeeAmount, 5000);
+eq('net payable', q.netPayable, 93100);
+
+console.log('\ncommissionFor_ — every figure is a whole number of rupees');
+for (const value of [4500000, 7350000, 8500000, 12345678, 25000000]) {
+  const r = vm.runInContext('commissionFor_(' + value + ')', sandbox);
+  const whole = [r.brokerageAmount, r.grossCommission, r.platformFeeAmount,
+                 r.commissionAfterFee, r.tdsAmount, r.netPayable]
+    .every(n => Number.isInteger(n));
+  console.log((whole ? '  ok   ' : '  FAIL ') + 'whole rupees @ ' + value +
+              '  net=' + r.netPayable);
+  whole ? pass++ : fail++;
+}
+
+console.log('\ncommissionFor_ — the deductions must add up to the gross');
+for (const value of [4500000, 8500000, 10000000, 25000000, 61000000]) {
+  const r = vm.runInContext('commissionFor_(' + value + ')', sandbox);
+  eq('gross = fee + tds + net @ ' + value,
+     r.platformFeeAmount + r.tdsAmount + r.netPayable, r.grossCommission);
+}
+
+console.log('\ncommissionFor_ — platform fee is our cut of the brokerage, not extra revenue');
+q = vm.runInContext('commissionFor_(25000000)', sandbox);
+eq('we keep brokerage minus partner share plus fee',
+   q.brokerageAmount - q.grossCommission + q.platformFeeAmount, 405000);
 
 console.log('\ncommissionFor_ — junk input must not produce a payout');
 q = vm.runInContext('commissionFor_("abc")', sandbox);
 eq('net payable', q.netPayable, 0);
+eq('platform fee', q.platformFeeAmount, 0);
 
 console.log('\nnormPhone_ / isValidPhone_');
 const cases = [
