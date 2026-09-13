@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join free — Grihobazar Partners</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">GB</span> <span data-brand>Grihobazar Partners</span></a>
+    <nav data-nav></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap narrow">
+    <h1>Create your account</h1>
+    <p class="muted">Free, no targets. You will get your referral code as soon as you sign up.</p>
+
+    <div class="card">
+      <div class="msg" id="msg" hidden></div>
+      <form id="form" novalidate>
+        <div class="field">
+          <label for="name">Full name</label>
+          <input type="text" id="name" name="name" autocomplete="name" required>
+        </div>
+        <div class="field">
+          <label for="phone">Mobile number</label>
+          <input type="tel" id="phone" name="phone" inputmode="numeric" autocomplete="tel"
+                 placeholder="10-digit mobile number" maxlength="15" required>
+          <div class="hint">This is also your login ID.</div>
+        </div>
+        <div class="field">
+          <label for="email">Email <span class="muted" style="font-weight:400">(optional)</span></label>
+          <input type="email" id="email" name="email" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="city">City</label>
+          <input type="text" id="city" name="city" autocomplete="address-level2" placeholder="e.g. Kolkata">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="new-password" minlength="8" required>
+          <div class="hint">At least 8 characters.</div>
+        </div>
+        <button class="btn btn-block" type="submit" id="submitBtn">Create account</button>
+      </form>
+    </div>
+
+    <p class="center muted small" style="margin-top:16px">
+      Already registered? <a href="login.html">Log in</a>
+    </p>
+  </div>
+</main>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  if (GB.Session.isLoggedIn()) { location.replace('dashboard.html'); return; }
+
+  var form = GB.$('#form'), msg = GB.$('#msg'), btn = GB.$('#submitBtn');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    GB.hide(msg);
+
+    var payload = {
+      name: GB.$('#name').value.trim(),
+      phone: GB.$('#phone').value.trim(),
+      email: GB.$('#email').value.trim(),
+      city: GB.$('#city').value.trim(),
+      password: GB.$('#password').value
+    };
+
+    if (payload.name.length < 3) return GB.show(msg, 'Please enter your full name');
+    if (!/^[6-9]\d{9}$/.test(payload.phone.replace(/\D/g, '').slice(-10))) {
+      return GB.show(msg, 'Enter a valid 10-digit mobile number');
+    }
+    if (payload.password.length < 8) return GB.show(msg, 'Password must be at least 8 characters');
+
+    GB.busy(btn, true, 'Creating…');
+    GB.api('signup', payload).then(function (data) {
+      GB.Session.save(data.token, data.referrer);
+      location.href = 'dashboard.html?welcome=1';
+    }).catch(function (err) {
+      GB.busy(btn, false);
+      GB.show(msg, err.message);
+    });
+  });
+})();
+</script>
+</body>
+</html>

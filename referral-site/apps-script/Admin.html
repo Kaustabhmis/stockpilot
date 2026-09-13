@@ -1,0 +1,458 @@
+<!doctype html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg:#f7f8fa; --surface:#fff; --border:#e2e5ec; --text:#171a20; --muted:#626a7a;
+    --brand:#0f5c3f; --ok:#1a7f4b; --ok-soft:#e7f4ed; --danger:#b3261e; --danger-soft:#fdeceb;
+    --warn:#8a6100; --warn-soft:#fdf3dd; --blue:#1b4ea8; --blue-soft:#e8eefc;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 20px;
+           display:flex; gap:16px; align-items:center; position:sticky; top:0; z-index:5; }
+  header h1 { font-size:17px; margin:0; }
+  .tabs { display:flex; gap:4px; margin-left:auto; flex-wrap:wrap; }
+  .tabs button { border:1px solid var(--border); background:var(--surface); color:var(--muted);
+                 padding:7px 13px; border-radius:8px; cursor:pointer; font:inherit; font-size:14px; }
+  .tabs button.on { background:var(--brand); color:#fff; border-color:var(--brand); }
+  main { padding:20px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+          padding:16px; margin-bottom:16px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+          padding:12px 16px; min-width:130px; }
+  .stat .k { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; }
+  .stat .v { font-size:22px; font-weight:700; }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  td.num,th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tbody tr:hover { background:#f1f3f7; }
+  select,input { font:inherit; font-size:14px; padding:6px 8px; border:1px solid var(--border);
+                 border-radius:7px; background:var(--surface); color:var(--text); }
+  button.act { font:inherit; font-size:13px; padding:6px 10px; border-radius:7px; cursor:pointer;
+               border:1px solid var(--border); background:var(--surface); color:var(--text); }
+  button.act.primary { background:var(--brand); color:#fff; border-color:var(--brand); }
+  button.act:disabled { opacity:.5; cursor:not-allowed; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+  .p-new,.p-contacted { background:var(--blue-soft); color:var(--blue); }
+  .p-visit_scheduled,.p-visited,.p-negotiation { background:var(--warn-soft); color:var(--warn); }
+  .p-booked { background:#e7f2ec; color:var(--brand); }
+  .p-registered,.p-payable,.p-paid { background:var(--ok-soft); color:var(--ok); }
+  .p-rejected,.p-duplicate,.p-expired,.p-cancelled { background:var(--danger-soft); color:var(--danger); }
+  .msg { padding:10px 12px; border-radius:8px; margin-bottom:12px; font-size:14px; }
+  .msg.err { background:var(--danger-soft); color:var(--danger); }
+  .msg.ok  { background:var(--ok-soft); color:var(--ok); }
+  .empty { padding:28px; text-align:center; color:var(--muted); }
+  .muted { color:var(--muted); }
+  .small { font-size:12px; }
+  .mono { font-family:ui-monospace,Menlo,Consolas,monospace; }
+  dialog { border:1px solid var(--border); border-radius:12px; padding:20px; max-width:420px; width:92%; }
+  dialog h3 { margin:0 0 12px; }
+  dialog label { display:block; font-size:13px; font-weight:600; margin:10px 0 4px; }
+  dialog input,dialog select { width:100%; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Referral admin</h1>
+  <div class="tabs">
+    <button data-tab="pipeline" class="on">Pipeline</button>
+    <button data-tab="partners">Partners &amp; payouts</button>
+    <button data-tab="refresh">Refresh</button>
+  </div>
+</header>
+
+<main>
+  <div id="msg" class="msg" hidden></div>
+
+  <section id="tab-pipeline">
+    <div class="stats" id="pipeStats"></div>
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <label class="small muted" for="stageFilter">Show</label>
+        <select id="stageFilter">
+          <option value="">All stages</option>
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="visit_scheduled">Visit scheduled</option>
+          <option value="visited">Visited</option>
+          <option value="negotiation">In negotiation</option>
+          <option value="booked">Booked</option>
+          <option value="registered">Registered</option>
+          <option value="duplicate">Duplicate</option>
+          <option value="rejected">Not converted</option>
+          <option value="expired">Expired</option>
+        </select>
+        <span class="small muted" id="pipeCount"></span>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Buyer</th><th>Referred by</th><th>Requirement</th>
+              <th>Stage</th><th>Deal</th><th>Actions</th><th>Received</th>
+            </tr>
+          </thead>
+          <tbody id="pipeRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-partners" hidden>
+    <div class="card">
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Partner</th><th>Code</th><th class="num">Leads</th><th class="num">Deals</th>
+              <th class="num">Earned</th><th class="num">Paid</th><th class="num">Pending</th>
+              <th>Payout details</th><th>KYC</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="partnerRows"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="dealDialog">
+  <form method="dialog" id="dealForm">
+    <h3>Record a booking</h3>
+    <p class="small muted" id="dealBuyer"></p>
+    <label for="dealValue">Deal value (₹)</label>
+    <input type="number" id="dealValue" min="1" step="1000" required placeholder="e.g. 8500000">
+    <label for="bookingDate">Booking date</label>
+    <input type="date" id="bookingDate">
+    <div id="dealPreview" class="small muted" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end">
+      <button class="act" value="cancel">Cancel</button>
+      <button class="act primary" id="dealSave" value="save">Create deal</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="payoutDialog">
+  <form method="dialog" id="payoutForm">
+    <h3>Record a payout</h3>
+    <p class="small muted" id="payoutWho"></p>
+    <label for="payAmount">Amount (₹)</label>
+    <input type="number" id="payAmount" min="1" step="1" required>
+    <label for="payMode">Mode</label>
+    <select id="payMode">
+      <option value="bank_transfer">Bank transfer</option>
+      <option value="upi">UPI</option>
+      <option value="cheque">Cheque</option>
+      <option value="cash">Cash</option>
+    </select>
+    <label for="payRef">Reference / UTR</label>
+    <input type="text" id="payRef" class="mono">
+    <div class="row" style="margin-top:16px;justify-content:flex-end">
+      <button class="act" value="cancel">Cancel</button>
+      <button class="act primary" value="save">Record payout</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+var RATES = null, REFERRALS = [], PARTNERS = [];
+
+function $(s) { return document.querySelector(s); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+  });
+}
+function rupees(n) { return '₹' + (Number(n)||0).toLocaleString('en-IN', {maximumFractionDigits:0}); }
+function shortRs(n) {
+  var v = Number(n)||0;
+  if (v >= 10000000) return '₹' + (Math.round(v/100000)/100) + ' Cr';
+  if (v >= 100000) return '₹' + (Math.round(v/1000)/100) + ' L';
+  return rupees(v);
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return isNaN(d) ? String(iso) : d.toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'2-digit'});
+}
+function pill(stage) {
+  var labels = { new:'New', contacted:'Contacted', visit_scheduled:'Visit scheduled', visited:'Visited',
+    negotiation:'Negotiation', booked:'Booked', registered:'Registered', rejected:'Not converted',
+    duplicate:'Duplicate', expired:'Expired', payable:'Payable', paid:'Paid', cancelled:'Cancelled' };
+  return '<span class="pill p-' + esc(stage) + '">' + esc(labels[stage] || stage) + '</span>';
+}
+/** KYC and account state need their own labels — reusing the deal-stage pill
+    printed "Paid" for a verified partner and "Not converted" for a blocked one. */
+function badge(text, cls) {
+  return '<span class="pill ' + cls + '">' + esc(text) + '</span>';
+}
+
+function say(text, kind) {
+  var m = $('#msg');
+  m.textContent = text;
+  m.className = 'msg ' + (kind || 'err');
+  m.hidden = false;
+  if (kind === 'ok') setTimeout(function () { m.hidden = true; }, 4000);
+}
+function call(fn, payload) {
+  return new Promise(function (resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.ok) resolve(res.data);
+        else reject(new Error((res && res.error) || 'Request failed'));
+      })
+      .withFailureHandler(function (e) { reject(e); })
+      [fn](payload || {});
+  });
+}
+
+var STAGE_FLOW = ['new','contacted','visit_scheduled','visited','negotiation','rejected'];
+
+function loadPipeline() {
+  $('#pipeRows').innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+  call('adminListReferrals', {}).then(function (d) {
+    REFERRALS = d.referrals;
+    paintPipeline();
+  }).catch(function (e) {
+    $('#pipeRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>';
+  });
+}
+
+function paintPipeline() {
+  var filter = $('#stageFilter').value;
+  var rows = REFERRALS.filter(function (r) { return !filter || r.stage === filter; });
+  $('#pipeCount').textContent = rows.length + ' of ' + REFERRALS.length;
+
+  var counts = {}, pipelineValue = 0, payable = 0;
+  REFERRALS.forEach(function (r) {
+    counts[r.stage] = (counts[r.stage] || 0) + 1;
+    if (r.deal && r.deal.stage !== 'cancelled') {
+      pipelineValue += r.deal.value;
+      if (r.deal.stage === 'payable') payable += r.deal.net;
+    }
+  });
+  var live = ['new','contacted','visit_scheduled','visited','negotiation']
+    .reduce(function (a, s) { return a + (counts[s] || 0); }, 0);
+  $('#pipeStats').innerHTML =
+    stat('Total leads', REFERRALS.length) +
+    stat('Active', live) +
+    stat('Booked', counts.booked || 0) +
+    stat('Registered', counts.registered || 0) +
+    stat('Deal value', shortRs(pipelineValue)) +
+    stat('Payable now', rupees(payable));
+
+  if (!rows.length) {
+    $('#pipeRows').innerHTML = '<tr><td colspan="7" class="empty">Nothing here.</td></tr>';
+    return;
+  }
+
+  $('#pipeRows').innerHTML = rows.map(function (r) {
+    var options = STAGE_FLOW.map(function (s) {
+      return '<option value="' + s + '"' + (r.stage === s ? ' selected' : '') + '>' +
+             esc(s.replace(/_/g, ' ')) + '</option>';
+    }).join('');
+
+    var stageCell = (r.stage === 'booked' || r.stage === 'registered' || r.stage === 'duplicate')
+      ? pill(r.stage) + (r.duplicateOf ? '<div class="small muted">of ' + esc(r.duplicateOf) + '</div>' : '')
+      : '<select class="stageSel" data-id="' + esc(r.id) + '">' + options + '</select>';
+
+    var dealCell = r.deal
+      ? shortRs(r.deal.value) + '<div class="small muted">' + rupees(r.deal.net) + ' · ' + esc(r.deal.stage) + '</div>'
+      : '<span class="muted">—</span>';
+
+    var actions = [];
+    if (!r.deal && r.stage !== 'duplicate' && r.stage !== 'rejected' && r.stage !== 'expired') {
+      actions.push('<button class="act primary bookBtn" data-id="' + esc(r.id) + '">Booked</button>');
+    }
+    if (r.deal && r.deal.stage === 'booked') {
+      actions.push('<button class="act primary regBtn" data-deal="' + esc(r.deal.id) + '">Registered</button>');
+    }
+    if (r.deal && r.deal.stage === 'payable') {
+      actions.push('<button class="act primary payBtn" data-deal="' + esc(r.deal.id) +
+                   '" data-amount="' + r.deal.net + '">Pay</button>');
+    }
+
+    return '<tr>' +
+      '<td><strong>' + esc(r.buyerName) + '</strong><div class="small mono muted">' + esc(r.buyerPhone) + '</div></td>' +
+      '<td>' + esc(r.referrerName) + '<div class="small mono muted">' + esc(r.referralCode) + '</div></td>' +
+      '<td>' + esc(r.propertyTitle || r.location || '—') +
+        '<div class="small muted">' + esc([r.bhk, r.budget].filter(Boolean).join(' · ') || '') + '</div></td>' +
+      '<td>' + stageCell + '</td>' +
+      '<td>' + dealCell + '</td>' +
+      '<td>' + (actions.join(' ') || '<span class="muted small">—</span>') + '</td>' +
+      '<td class="small muted">' + fmtDate(r.createdAt) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function stat(k, v) {
+  return '<div class="stat"><div class="k">' + esc(k) + '</div><div class="v">' + v + '</div></div>';
+}
+
+function loadPartners() {
+  $('#partnerRows').innerHTML = '<tr><td colspan="10" class="empty">Loading…</td></tr>';
+  call('adminListReferrers', {}).then(function (d) {
+    PARTNERS = d.referrers;
+    if (!PARTNERS.length) {
+      $('#partnerRows').innerHTML = '<tr><td colspan="10" class="empty">No partners yet.</td></tr>';
+      return;
+    }
+    $('#partnerRows').innerHTML = PARTNERS.map(function (p) {
+      var payout = p.upi ? esc(p.upi)
+        : (p.accountNumber ? esc(p.bankName) + ' ' + esc(p.accountNumber) + '<div class="small mono muted">' + esc(p.ifsc) + '</div>'
+                           : '<span class="muted">not given</span>');
+      var kycBtn = p.kycStatus === 'verified'
+        ? '<button class="act kycBtn" data-id="' + esc(p.id) + '" data-to="pending">Un-verify</button>'
+        : '<button class="act primary kycBtn" data-id="' + esc(p.id) + '" data-to="verified">Verify</button>';
+      var blockBtn = p.status === 'blocked'
+        ? '<button class="act statusBtn" data-id="' + esc(p.id) + '" data-to="active">Unblock</button>'
+        : '<button class="act statusBtn" data-id="' + esc(p.id) + '" data-to="blocked">Block</button>';
+      return '<tr>' +
+        '<td><strong>' + esc(p.name) + '</strong><div class="small mono muted">' + esc(p.phone) + '</div></td>' +
+        '<td class="mono">' + esc(p.referralCode) + '</td>' +
+        '<td class="num">' + p.leads + '</td>' +
+        '<td class="num">' + p.deals + '</td>' +
+        '<td class="num">' + rupees(p.earned) + '</td>' +
+        '<td class="num">' + rupees(p.paid) + '</td>' +
+        '<td class="num"><strong>' + rupees(p.pending) + '</strong></td>' +
+        '<td>' + payout + '<div class="small mono muted">' + esc(p.pan || '') + '</div></td>' +
+        '<td>' + badge(p.kycStatus === 'verified' ? 'Verified' : 'KYC pending',
+                       p.kycStatus === 'verified' ? 'p-paid' : 'p-visited') +
+          (p.status === 'blocked' ? ' ' + badge('Blocked', 'p-rejected') : '') + '</td>' +
+        '<td>' + kycBtn + ' ' + blockBtn + '</td>' +
+        '</tr>';
+    }).join('');
+  }).catch(function (e) {
+    $('#partnerRows').innerHTML = '<tr><td colspan="10" class="empty">' + esc(e.message) + '</td></tr>';
+  });
+}
+
+// ------------------------------------------------------------------ events
+
+document.querySelectorAll('.tabs button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var tab = b.dataset.tab;
+    if (tab === 'refresh') { loadPipeline(); loadPartners(); return; }
+    document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    $('#tab-pipeline').hidden = tab !== 'pipeline';
+    $('#tab-partners').hidden = tab !== 'partners';
+  });
+});
+
+$('#stageFilter').addEventListener('change', paintPipeline);
+
+document.addEventListener('change', function (e) {
+  if (!e.target.classList.contains('stageSel')) return;
+  var sel = e.target;
+  sel.disabled = true;
+  call('adminUpdateStage', { referralId: sel.dataset.id, stage: sel.value })
+    .then(function () { say('Stage updated', 'ok'); loadPipeline(); })
+    .catch(function (err) { sel.disabled = false; say(err.message); });
+});
+
+document.addEventListener('click', function (e) {
+  var t = e.target;
+
+  if (t.classList.contains('bookBtn')) {
+    var r = REFERRALS.filter(function (x) { return x.id === t.dataset.id; })[0];
+    if (!r) return;
+    $('#dealDialog').dataset.referralId = r.id;
+    $('#dealBuyer').textContent = r.buyerName + ' — referred by ' + r.referrerName;
+    $('#dealValue').value = '';
+    $('#dealPreview').textContent = '';
+    $('#dealDialog').showModal();
+  }
+
+  if (t.classList.contains('regBtn')) {
+    if (!confirm('Mark this deal as registered? The commission becomes payable.')) return;
+    t.disabled = true;
+    call('adminUpdateDeal', { dealId: t.dataset.deal, stage: 'registered' })
+      .then(function () { say('Marked registered — commission is now payable', 'ok'); loadPipeline(); })
+      .catch(function (err) { t.disabled = false; say(err.message); });
+  }
+
+  if (t.classList.contains('payBtn')) {
+    $('#payoutDialog').dataset.dealId = t.dataset.deal;
+    $('#payAmount').value = t.dataset.amount;
+    $('#payoutWho').textContent = 'Deal ' + t.dataset.deal;
+    $('#payRef').value = '';
+    $('#payoutDialog').showModal();
+  }
+
+  if (t.classList.contains('kycBtn')) {
+    t.disabled = true;
+    call('adminUpdateReferrer', { referrerId: t.dataset.id, kycStatus: t.dataset.to })
+      .then(function () { say('KYC updated', 'ok'); loadPartners(); })
+      .catch(function (err) { t.disabled = false; say(err.message); });
+  }
+
+  if (t.classList.contains('statusBtn')) {
+    if (t.dataset.to === 'blocked' && !confirm('Block this partner? They will not be able to log in or refer.')) return;
+    t.disabled = true;
+    call('adminUpdateReferrer', { referrerId: t.dataset.id, status: t.dataset.to })
+      .then(function () { say('Partner updated', 'ok'); loadPartners(); })
+      .catch(function (err) { t.disabled = false; say(err.message); });
+  }
+});
+
+// Live commission preview inside the booking dialog, from the same rate card
+// the referrer saw on the landing page.
+$('#dealValue').addEventListener('input', function () {
+  if (!RATES) return;
+  var v = Number(this.value) || 0;
+  if (!v) { $('#dealPreview').textContent = ''; return; }
+  var brokerage = v * RATES.brokeragePct / 100;
+  var pct = v >= RATES.threshold ? RATES.highPct : RATES.lowPct;
+  var gross = brokerage * pct / 100;
+  var net = gross * (1 - RATES.tdsPct / 100);
+  $('#dealPreview').innerHTML =
+    'Brokerage ' + rupees(brokerage) + ' @ ' + RATES.brokeragePct + '% · ' +
+    'partner share <strong>' + pct + '%</strong> = ' + rupees(gross) +
+    ' · net after ' + RATES.tdsPct + '% TDS <strong>' + rupees(net) + '</strong>';
+});
+
+$('#dealForm').addEventListener('submit', function (e) {
+  if (e.submitter && e.submitter.value === 'cancel') return;
+  var value = Number($('#dealValue').value);
+  if (!value) { e.preventDefault(); say('Enter the deal value'); return; }
+  call('adminCreateDeal', {
+    referralId: $('#dealDialog').dataset.referralId,
+    dealValue: value,
+    bookingDate: $('#bookingDate').value
+  }).then(function (d) {
+    say('Deal created — partner commission ' + rupees(d.deal.NetPayable), 'ok');
+    loadPipeline();
+  }).catch(function (err) { say(err.message); });
+});
+
+$('#payoutForm').addEventListener('submit', function (e) {
+  if (e.submitter && e.submitter.value === 'cancel') return;
+  call('adminRecordPayout', {
+    dealId: $('#payoutDialog').dataset.dealId,
+    amount: Number($('#payAmount').value),
+    mode: $('#payMode').value,
+    reference: $('#payRef').value.trim()
+  }).then(function () {
+    say('Payout recorded', 'ok');
+    loadPipeline();
+    loadPartners();
+  }).catch(function (err) { say(err.message); });
+});
+
+call('adminRates', {}).then(function (r) { RATES = r; }).catch(function () {});
+loadPipeline();
+loadPartners();
+</script>
+</body>
+</html>

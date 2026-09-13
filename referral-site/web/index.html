@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refer a buyer, earn a share of the brokerage — Grihobazar Partners</title>
+<meta name="description" content="Refer a property buyer. When the deal closes, you earn 15–20% of our 2% brokerage. Free to join, no targets.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">GB</span> <span data-brand>Grihobazar Partners</span></a>
+    <nav data-nav></nav>
+  </div>
+</header>
+
+<main>
+  <section class="wrap hero">
+    <h1>Know someone buying a home?<br><span>Earn when the deal closes.</span></h1>
+    <p class="lede">
+      Send us a buyer. We handle the calls, site visits, negotiation and paperwork.
+      When they register the property, you take a share of our brokerage — paid within
+      <strong data-payout-days>15</strong> days of registration.
+    </p>
+    <div class="hero-cta">
+      <a class="btn" href="signup.html">Join free</a>
+      <a class="btn btn-ghost" href="login.html">I already have an account</a>
+    </div>
+  </section>
+
+  <section class="wrap" style="margin-top:28px">
+    <div class="grid grid-2">
+
+      <div class="card">
+        <h2>What will I earn?</h2>
+        <p class="muted small">
+          We charge the seller <strong data-brokerage-pct>2</strong>% brokerage on the deal value.
+          You get a share of that — and the rate is fixed by the deal size, not by negotiation.
+        </p>
+
+        <div class="field">
+          <label for="calcPrice">Property price</label>
+          <input type="text" id="calcPrice" inputmode="decimal" placeholder="e.g. 85 lakh, 1.2 cr, 8500000" value="85 lakh">
+          <div class="hint">Type it any way — 85L, 85 lakh, 1.2 Cr or the full number.</div>
+        </div>
+
+        <div class="calc-out" id="calcOut">
+          <div class="small muted" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">You earn</div>
+          <div class="big" id="calcEarn">₹—</div>
+          <div id="calcBreakdown" style="margin-top:10px;border-top:1px solid rgba(0,0,0,.08);padding-top:10px"></div>
+        </div>
+        <p class="hint" id="calcNote"></p>
+      </div>
+
+      <div class="card">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li>
+            <h3>Join and get your code</h3>
+            <p class="muted small">Sign up with your mobile number. You get a referral code and a link to share — takes a minute, costs nothing.</p>
+          </li>
+          <li>
+            <h3>Send us a buyer</h3>
+            <p class="muted small">Submit their name and number from your dashboard, or just share your link and let them fill the form.</p>
+          </li>
+          <li>
+            <h3>We close the deal</h3>
+            <p class="muted small">Our team takes over — calls, site visits, price talks, paperwork. You can watch the status move in your dashboard.</p>
+          </li>
+          <li>
+            <h3>You get paid</h3>
+            <p class="muted small">Once the buyer registers the property, your commission is released within <span data-payout-days>15</span> days to your bank account or UPI.</p>
+          </li>
+        </ol>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="wrap" style="margin-top:16px">
+    <div class="card">
+      <h2>The rate card</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Deal value</th>
+              <th class="num">Our brokerage</th>
+              <th class="num">Your share</th>
+              <th class="num">Example earning</th>
+            </tr>
+          </thead>
+          <tbody id="rateRows">
+            <tr><td colspan="4" class="empty">Loading rates…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" id="tdsNote"></p>
+    </div>
+  </section>
+
+  <section class="wrap" style="margin-top:16px">
+    <div class="card faq">
+      <h2>Questions people ask</h2>
+      <details>
+        <summary>Do I need a licence or a RERA registration?</summary>
+        <p>No. You are referring a buyer to us, not brokering the deal yourself. We do the selling and we hold the brokerage agreement with the seller.</p>
+      </details>
+      <details>
+        <summary>What if two people refer the same buyer?</summary>
+        <p>The first referral wins. Whoever submits a buyer's mobile number first owns that buyer for <span data-lock-days>90</span> days. A later referral for the same number is still recorded — marked duplicate — so if there is any dispute we can see exactly who came first and when.</p>
+      </details>
+      <details>
+        <summary>When exactly do I get paid?</summary>
+        <p>After registration, not after booking. A booking can fall through; a registration cannot. Once the property is registered in the buyer's name, your commission becomes payable and is released within <span data-payout-days>15</span> days.</p>
+      </details>
+      <details>
+        <summary>Is anything deducted?</summary>
+        <p>TDS at <span data-tds-pct>2</span>% is deducted at source on commission, as the law requires. The calculator above already shows you the net amount.</p>
+      </details>
+      <details>
+        <summary>Is there a target or a joining fee?</summary>
+        <p>Neither. Refer one buyer a year or twenty, it works the same way, and joining is free.</p>
+      </details>
+      <details>
+        <summary>What does the buyer pay?</summary>
+        <p>Nothing to you. Our brokerage comes from the seller side, so your referral costs the buyer nothing extra.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="wrap center" style="margin-top:28px">
+    <h2>Start with one name.</h2>
+    <p class="muted">The people you already know are the ones buying. You just have not been paid for it yet.</p>
+    <a class="btn" href="signup.html">Create my free account</a>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div data-brand>Grihobazar Partners</div>
+    <div class="small" id="supportLine"></div>
+  </div>
+</footer>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  var priceInput = GB.$('#calcPrice');
+  var earnEl = GB.$('#calcEarn');
+  var breakdownEl = GB.$('#calcBreakdown');
+  var noteEl = GB.$('#calcNote');
+  var R = null;
+
+  function line(k, v) {
+    return '<div class="calc-line"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+  }
+
+  // The whole calculation runs locally from the published rate card, so the
+  // number updates as you type and matches what the server would quote.
+  function recalc() {
+    if (!R) return;
+    var value = GB.parseAmount(priceInput.value);
+    if (!value || value <= 0) {
+      earnEl.textContent = '₹—';
+      breakdownEl.innerHTML = '';
+      noteEl.textContent = 'Enter a price to see your earning.';
+      return;
+    }
+    var brokerage = value * R.brokeragePct / 100;
+    var sharePct = value >= R.threshold ? R.highPct : R.lowPct;
+    var gross = brokerage * sharePct / 100;
+    var tds = gross * R.tdsPct / 100;
+    var net = gross - tds;
+
+    earnEl.textContent = GB.rupees(net);
+    breakdownEl.innerHTML =
+      line('Deal value', GB.rupees(value) + ' <span class="muted">(' + GB.rupeesShort(value) + ')</span>') +
+      line('Our brokerage @ ' + R.brokeragePct + '%', GB.rupees(brokerage)) +
+      line('Your share @ ' + sharePct + '%', GB.rupees(gross)) +
+      line('Less TDS @ ' + R.tdsPct + '%', '− ' + GB.rupees(tds));
+
+    noteEl.textContent = value >= R.threshold
+      ? 'Deals of ' + GB.rupeesShort(R.threshold) + ' and above earn the higher ' + R.highPct + '% share.'
+      : 'Cross ' + GB.rupeesShort(R.threshold) + ' and your share rises from ' + R.lowPct + '% to ' + R.highPct + '%.';
+  }
+
+  function paintRateCard() {
+    var below = R.threshold * 0.6;
+    var above = R.threshold * 1.5;
+    function row(label, value, pct) {
+      var gross = value * R.brokeragePct / 100 * pct / 100;
+      var net = gross * (1 - R.tdsPct / 100);
+      return '<tr><td>' + label + '</td>' +
+             '<td class="num">' + R.brokeragePct + '%</td>' +
+             '<td class="num"><strong>' + pct + '%</strong> of brokerage</td>' +
+             '<td class="num">' + GB.rupees(net) + ' <span class="muted small">on a ' + GB.rupeesShort(value) + ' deal</span></td></tr>';
+    }
+    GB.$('#rateRows').innerHTML =
+      row('Below ' + GB.rupeesShort(R.threshold), below, R.lowPct) +
+      row(GB.rupeesShort(R.threshold) + ' and above', above, R.highPct);
+    GB.$('#tdsNote').textContent =
+      'Earnings shown are net of ' + R.tdsPct + '% TDS. Commission is released within ' +
+      R.payoutDays + ' days of the buyer registering the property.';
+  }
+
+  function paintBrandBits() {
+    GB.$$('[data-brand]').forEach(function (el) { el.textContent = R.brandName; });
+    GB.$$('[data-payout-days]').forEach(function (el) { el.textContent = R.payoutDays; });
+    GB.$$('[data-brokerage-pct]').forEach(function (el) { el.textContent = R.brokeragePct; });
+    GB.$$('[data-lock-days]').forEach(function (el) { el.textContent = R.attributionLockDays; });
+    GB.$$('[data-tds-pct]').forEach(function (el) { el.textContent = R.tdsPct; });
+    document.title = 'Refer a buyer, earn a share of the brokerage — ' + R.brandName;
+    var support = [];
+    if (R.supportPhone) support.push('Call ' + R.supportPhone);
+    if (R.supportEmail) support.push(R.supportEmail);
+    GB.$('#supportLine').textContent = support.join('  ·  ');
+  }
+
+  priceInput.addEventListener('input', recalc);
+
+  GB.rates().then(function (r) {
+    R = r;
+    paintBrandBits();
+    paintRateCard();
+    recalc();
+  }).catch(function (e) {
+    GB.$('#rateRows').innerHTML = '<tr><td colspan="4" class="empty">Could not load rates. ' + e.message + '</td></tr>';
+    noteEl.textContent = 'Rates could not be loaded — please refresh.';
+  });
+})();
+</script>
+</body>
+</html>
