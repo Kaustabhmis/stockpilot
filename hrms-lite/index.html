@@ -296,6 +296,14 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
     <!-- ---------------- DASHBOARD (home, not a module) ---------------- -->
     <section class="view active" id="view-dashboard">
+      <div class="card" style="padding:12px 18px;margin-bottom:16px;">
+        <div class="toolbar" style="margin-bottom:0;">
+          <label class="field">Attendance as on<input type="date" id="dash-date" onchange="renderDashboard()"></label>
+          <button class="ghost sm" style="margin-bottom:1px" onclick="el('dash-date').value=today();renderDashboard()">Today</button>
+          <span class="spacer"></span>
+          <span class="sub-line">Every tile below is clickable &mdash; it opens the list of employees behind the number.</span>
+        </div>
+      </div>
       <div class="kpis" id="dash-kpis"></div>
       <div class="grid-half">
         <div class="card">
@@ -960,6 +968,7 @@ function start() {
   el('who').textContent = S.user.email;
   el('avatar').textContent = (S.user.email[0] || 'U').toUpperCase();
   ['att-month', 'pay-month', 'rep-month', 'leave-month'].forEach(function (id) { el(id).value = thisMonth(); });
+  el('dash-date').value = today();
   el('leave-year').value = new Date().getFullYear();
   return reload();
 }
@@ -1057,29 +1066,48 @@ function renderDashboard() {
   var actives = activeEmployees();
   var todayIso = today();
 
-  /* --- KPI row --- */
-  var presentToday = 0, leaveToday = 0, absentToday = 0, unmarkedToday = 0;
-  actives.forEach(function (e) {
-    var st = statusOf(ym, e.emp_code, new Date().getDate());
-    if (st === 'P' || st === 'HD') presentToday++;
-    else if (st === 'L') leaveToday++;
-    else if (st === 'A') absentToday++;
-    else if (!st) unmarkedToday++;
-  });
+  /* --- KPI row: each tile opens the list of people behind its number --- */
+  var iso = dashDate();
+  var dayLabel = iso === todayIso ? 'today' : 'on ' + iso;
+  var nonWorking = isWeeklyOff(iso.slice(0, 7), +iso.slice(8)) || !!holidayOn(iso);
+  var hol = holidayOn(iso);
+  var counts = {
+    headcount: peopleOn('headcount', iso).length,
+    present:   peopleOn('present', iso).length,
+    absent:    peopleOn('absent', iso).length,
+    late:      peopleOn('late', iso).length,
+    leave:     peopleOn('leave', iso).length,
+    unmarked:  peopleOn('unmarked', iso).length
+  };
   var pending = S.leave.filter(function (l) { return l.status === 'Pending'; });
   var lastRunMonth = Object.keys(S.payroll.reduce(function (m, r) { m[r.month] = 1; return m; }, {})).sort().pop();
   var lastRunNet = S.payroll.filter(function (r) { return r.month === lastRunMonth; })
     .reduce(function (s, r) { return s + num(r.net); }, 0);
   var lopMonth = actives.reduce(function (s, e) { return s + attStats(ym, e.emp_code).lop; }, 0);
   var monthlyCost = actives.reduce(function (s, e) { return s + grossOf(e); }, 0);
-  var isWeekend = isWeeklyOff(ym, new Date().getDate()) || !!holidayOn(todayIso);
+  var dash = function (v) { return nonWorking ? '&mdash;' : v; };
+  var offNote = hol ? 'holiday: ' + hol.name : 'weekly off';
 
   el('dash-kpis').innerHTML =
-    kpi('Active headcount', actives.length, monthlyCost ? shortMoney(monthlyCost) + ' monthly gross' : '', "go('employees')", 'hero') +
-    kpi('Present today', isWeekend ? '&mdash;' : presentToday,
-        isWeekend ? 'non-working day' : (unmarkedToday ? unmarkedToday + ' not marked yet' : 'all marked'), "go('attendance')") +
-    kpi('Out today', isWeekend ? '&mdash;' : (leaveToday + absentToday),
-        isWeekend ? 'non-working day' : leaveToday + ' on leave, ' + absentToday + ' absent', "go('leave')") +
+    kpi('Headcount', counts.headcount,
+        monthlyCost ? shortMoney(monthlyCost) + ' monthly gross' : 'active employees',
+        "showPeople('headcount')", 'hero') +
+    kpi('Present ' + dayLabel, dash(counts.present),
+        nonWorking ? offNote : counts.headcount ? Math.round(counts.present * 100 / counts.headcount) + '% of headcount' : '',
+        "showPeople('present')") +
+    kpi('Absent ' + dayLabel, dash(counts.absent),
+        nonWorking ? offNote : (counts.absent ? 'unpaid unless marked otherwise' : 'nobody absent'),
+        "showPeople('absent')") +
+    kpi('Late coming ' + dayLabel, dash(counts.late),
+        nonWorking ? offNote : 'in after ' + (S.settings.shift_start || '09:30') + ' + ' +
+        (S.settings.grace_minutes || 15) + ' min grace',
+        "showPeople('late')") +
+    kpi('On leave ' + dayLabel, dash(counts.leave),
+        nonWorking ? offNote : (counts.leave ? 'approved leave' : 'nobody on leave'),
+        "showPeople('leave')") +
+    kpi('Not marked ' + dayLabel, dash(counts.unmarked),
+        nonWorking ? offNote : (counts.unmarked ? 'will be paid as LOP' : 'attendance complete'),
+        "showPeople('unmarked')") +
     kpi('Pending approvals', pending.length, pending.length ? 'waiting on you' : 'nothing waiting', "go('leave')") +
     kpi('LOP this month', lopMonth, 'days of unpaid absence', "go('attendance')") +
     kpi('Last net payout', lastRunMonth ? shortMoney(lastRunNet) : '&mdash;',
@@ -1138,7 +1166,7 @@ function renderDashboard() {
   }));
 
   renderDashActions();
-  renderDashToday(ym, actives, isWeekend);
+  renderDashToday(iso, nonWorking);
   renderDashUpcoming();
 }
 
@@ -1191,34 +1219,129 @@ function renderDashActions() {
   }).join('') : '<div class="all-clear">&#10003; Nothing pending. Payroll can run clean.</div>';
 }
 
-/* --- who is out today --- */
-function renderDashToday(ym, actives, isWeekend) {
-  var d = new Date().getDate();
-  el('dash-today-date').textContent = new Date().toDateString() +
-    (isWeekend ? ' - non-working day' : '');
-  if (isWeekend) {
-    var hol = holidayOn(today());
+/* --- the people behind each dashboard number --- */
+function dashDate() {
+  var v = el('dash-date');
+  return (v && v.value) || today();
+}
+
+/* kind: headcount | present | absent | late | leave | unmarked | halfday */
+function peopleOn(kind, iso) {
+  var ym = iso.slice(0, 7), d = +iso.slice(8);
+  var nonWorking = isWeeklyOff(ym, d) || !!holidayOn(iso);
+  return activeEmployees().map(function (e) {
+    var rec = recordFor(ym, e.emp_code, d);
+    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
+    return { e: e, st: st, rec: rec || {}, late: (st === 'P' || st === 'HD') ? lateMinutes(rec) : 0 };
+  }).filter(function (x) {
+    switch (kind) {
+      case 'headcount': return true;
+      case 'present':   return !nonWorking && (x.st === 'P' || x.st === 'HD');
+      case 'absent':    return !nonWorking && x.st === 'A';
+      case 'halfday':   return !nonWorking && x.st === 'HD';
+      case 'late':      return !nonWorking && x.late > 0;
+      case 'leave':     return !nonWorking && x.st === 'L';
+      case 'unmarked':  return !nonWorking && !x.st;
+      default:          return false;
+    }
+  });
+}
+
+var PEOPLE_KINDS = {
+  headcount: { title: 'Active headcount', note: 'Everyone on the payroll right now.' },
+  present:   { title: 'Present', note: 'Marked P or HD on the attendance register.' },
+  absent:    { title: 'Absent', note: 'Marked A. These days are unpaid unless the marking changes.' },
+  late:      { title: 'Late coming', note: 'In-time later than the shift start plus the grace period.' },
+  leave:     { title: 'On approved leave', note: 'Marked L from an approved leave application.' },
+  unmarked:  { title: 'Attendance not marked', note: 'No marking yet. Payroll treats a past unmarked day as LOP.' }
+};
+
+function showPeople(kind, iso) {
+  iso = iso || dashDate();
+  var meta = PEOPLE_KINDS[kind] || { title: kind, note: '' };
+  var list = peopleOn(kind, iso);
+  var ym = iso.slice(0, 7), d = +iso.slice(8);
+  var nonWorking = isWeeklyOff(ym, d) || !!holidayOn(iso);
+  var hol = holidayOn(iso);
+  var dateText = new Date(iso + 'T00:00:00').toDateString();
+
+  var extraHead = { late: 'In time', present: 'In / out', absent: 'Remarks',
+                    leave: 'Leave type', unmarked: '', headcount: 'Today' }[kind] || '';
+  var body = list.map(function (x) {
+    var e = x.e, extra = '';
+    if (kind === 'late') {
+      extra = '<td class="num-col">' + esc(x.rec.in_time || '-') +
+        ' <span class="badge b-amber">' + x.late + ' min late</span></td>';
+    } else if (kind === 'present') {
+      extra = '<td class="num-col">' + esc(x.rec.in_time || '-') + ' - ' + esc(x.rec.out_time || '-') +
+        (x.st === 'HD' ? ' <span class="badge b-amber">half day</span>' : '') +
+        (x.late ? ' <span class="badge b-amber">' + x.late + 'm late</span>' : '') + '</td>';
+    } else if (kind === 'absent') {
+      extra = '<td class="num-col">' + esc(x.rec.remarks || '&mdash;') + '</td>';
+    } else if (kind === 'leave') {
+      var lv = S.leave.filter(function (l) {
+        return String(l.emp_code) === String(e.emp_code) && l.status === 'Approved' &&
+          String(l.from_date) <= iso && iso <= String(l.to_date);
+      })[0];
+      extra = '<td class="num-col">' + esc(lv ? lv.type + ' (' + lv.from_date + ' to ' + lv.to_date + ')' : 'Leave') + '</td>';
+    } else if (kind === 'headcount') {
+      extra = '<td class="num-col"><span class="badge ' +
+        (x.st === 'P' ? 'b-green' : x.st === 'A' ? 'b-red' : x.st === 'L' ? 'b-blue' :
+         x.st === 'HD' ? 'b-amber' : x.st ? 'b-gray' : 'b-amber') + '">' +
+        esc(x.st || 'not marked') + '</span></td>';
+    }
+    return '<tr><td><b>' + esc(e.emp_code) + '</b></td>' +
+      '<td>' + esc(e.name) + '<div class="sub-line">' + esc(e.email || '') + '</div></td>' +
+      '<td>' + esc(e.department || '-') + '</td>' +
+      '<td>' + esc(e.designation || '-') + '</td>' + extra +
+      '<td class="num-col"><button class="ghost sm" onclick="employee360(\'' + esc(e.emp_code) +
+      '\')">Open</button></td></tr>';
+  }).join('');
+
+  var head = '<thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th>' +
+    (extraHead ? '<th class="num-col">' + extraHead + '</th>' : '') + '<th></th></tr></thead>';
+
+  var note = nonWorking && kind !== 'headcount'
+    ? '<div class="locked-note">' + esc(dateText) + ' is a ' + (hol ? 'holiday (' + hol.name + ')' : 'weekly off') +
+      ', so there is no attendance to show.</div>'
+    : '<div class="card-sub">' + esc(dateText) + ' &mdash; ' + esc(meta.note) + '</div>';
+
+  showModal(meta.title + ' (' + list.length + ')',
+    note + '<div class="table-wrap" style="max-height:60vh">' +
+    '<table>' + head + '<tbody>' + (body ||
+      '<tr><td colspan="6" class="empty">Nobody in this list.</td></tr>') + '</tbody></table></div>',
+    [{ label: 'Close', cls: 'ghost', onClick: closeModal },
+     { label: 'Open attendance register', onClick: function () {
+        closeModal(); go('attendance'); el('att-month').value = ym; onAttMonth();
+     } }], true);
+}
+
+/* --- who is out on the selected day --- */
+function renderDashToday(iso, nonWorking) {
+  var hol = holidayOn(iso);
+  el('dash-today-date').textContent = new Date(iso + 'T00:00:00').toDateString() +
+    (nonWorking ? ' - non-working day' : '');
+  if (nonWorking) {
     el('dash-today').innerHTML = '<div class="all-clear" style="color:var(--text-muted)">' +
       (hol ? 'Holiday: ' + esc(hol.name) : 'Weekly off') + '</div>';
     return;
   }
-  var out = actives.map(function (e) {
-    return { e: e, st: statusOf(ym, e.emp_code, d) };
-  }).filter(function (x) { return x.st === 'L' || x.st === 'A' || x.st === 'HD'; });
+  var out = peopleOn('leave', iso)
+    .concat(peopleOn('absent', iso))
+    .concat(peopleOn('halfday', iso));
   el('dash-today').innerHTML = out.length ? out.map(function (x) {
     var lv = S.leave.filter(function (l) {
       return String(l.emp_code) === String(x.e.emp_code) && l.status === 'Approved' &&
-        String(l.from_date) <= today() && today() <= String(l.to_date);
+        String(l.from_date) <= iso && iso <= String(l.to_date);
     })[0];
     var badge = x.st === 'L' ? '<span class="badge b-blue">' + esc(lv ? lv.type + ' leave' : 'Leave') + '</span>'
       : (x.st === 'HD' ? '<span class="badge b-amber">Half day</span>'
       : '<span class="badge b-red">Absent (LOP)</span>');
-    return '<div class="action" style="cursor:default" onclick="employee360(\'' + esc(x.e.emp_code) + '\')">' +
-      '<div class="avatar" style="width:28px;height:28px;font-size:.7rem">' +
-      esc((x.e.name || '?')[0]) + '</div>' +
+    return '<div class="action" onclick="employee360(\'' + esc(x.e.emp_code) + '\')">' +
+      '<div class="avatar" style="width:28px;height:28px;font-size:.7rem">' + esc((x.e.name || '?')[0]) + '</div>' +
       '<div class="txt"><b>' + esc(x.e.name) + '</b><span>' + esc(x.e.department || '') + '</span></div>' +
       badge + '</div>';
-  }).join('') : '<div class="all-clear">&#10003; Full attendance today.</div>';
+  }).join('') : '<div class="all-clear">&#10003; Full attendance.</div>';
 }
 
 /* --- birthdays and work anniversaries --- */

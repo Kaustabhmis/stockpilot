@@ -9,13 +9,20 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 
 ## Dashboard
 
-- Six KPI tiles: headcount, present today, out today, pending approvals, LOP this month, last net payout
+- An **as-on date** picker: every attendance tile below reflects the day you pick, not just today
+- Nine KPI tiles. The first six — **headcount, present, absent, late coming, on leave, not marked** —
+  are **clickable**: each opens the list of the employees behind that number, with the detail that
+  matters for it (in/out times, minutes late, leave type, remarks) and a link into the full
+  employee profile or the attendance register. The rest: pending approvals, LOP this month,
+  last net payout
+- On a weekly off or holiday the attendance tiles read "—" and say which it is, instead of
+  reporting everyone absent
 - **Needs your attention** — the only list that matters: pending approvals, unmarked attendance
   days, a month whose payroll has not been run, employee records missing PAN/UAN/bank details.
   Each row clicks through to the module that fixes it
 - Three charts: attendance over the last 14 working days (stacked), headcount by department,
   payroll cost across the last six saved runs — all with hover detail
-- Who is out today, and birthdays / work anniversaries in the next 30 days
+- Who is out on the selected day, and birthdays / work anniversaries in the next 30 days
 
 ## The five modules
 
