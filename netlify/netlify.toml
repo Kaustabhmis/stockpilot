@@ -1,0 +1,51 @@
+# Dome Box — Netlify configuration
+# Static site: no build step, no framework. Netlify serves this folder as-is.
+
+[build]
+  publish = "."
+  command = ""
+
+# Serve /privacy for privacy.html, /terms for terms.html, and so on.
+# Without this, your policy URLs only work with the .html suffix — and Razorpay's
+# reviewer, Google Ads' reviewer and Googlebot all get 404s on the clean URLs
+# you will have given them.
+[build.processing]
+  skip_processing = false
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Your login form collects passwords. Without this a third-party site can
+    # frame the page and overlay it — the user types their password into what
+    # they believe is your site.
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(), payment=(self)"
+    Cross-Origin-Opener-Policy = "same-origin"
+    # 1 year. Netlify provisions and renews the certificate automatically, so
+    # there is no risk of locking yourself out of your own domain.
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+
+# HTML must never be cached: it carries your app code, so a stale copy means a
+# customer running last month's logic against this month's data.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Fingerprinted assets are safe to cache forever: a change produces a new name.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/og-cover.png"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"

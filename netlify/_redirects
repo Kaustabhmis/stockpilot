@@ -1,0 +1,16 @@
+# Clean URLs for the policy pages. Netlify usually strips .html on its own, but
+# these are explicit because Razorpay's and Google's reviewers will hit the exact
+# URLs you type into their forms, and a 404 there costs you the approval.
+/privacy      /privacy.html    200
+/terms        /terms.html      200
+/refund       /refund.html     200
+/cancellation /refund.html     200
+/contact      /contact.html    200
+
+# Old in-app anchors, in case they are linked anywhere.
+/privacy-policy      /privacy.html   301
+/terms-and-conditions /terms.html    301
+
+# Do NOT add an apex-to-www redirect here. Set the primary domain in
+# Netlify > Domain management instead; Netlify then issues the 301 itself, and a
+# hand-written rule on top of that can produce a redirect loop.
