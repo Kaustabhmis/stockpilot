@@ -1,0 +1,21 @@
+{
+  "hrmsUrl": "https://script.google.com/macros/s/XXXXXXXX/exec",
+  "ingestToken": "paste-the-token-from-Settings-Integrations",
+  "sql": {
+    "server": "localhost\\SQLEXPRESS",
+    "database": "etimetracklite1",
+    "user": "sa",
+    "password": "",
+    "table": "DeviceLogs",
+    "columns": {
+      "deviceId": "UserId",
+      "punchTime": "LogDate",
+      "device": "DeviceId",
+      "direction": "C1"
+    },
+    "options": {
+      "encrypt": false,
+      "trustServerCertificate": true
+    }
+  }
+}

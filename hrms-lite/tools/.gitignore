@@ -1,0 +1,3 @@
+# the real config holds the SQL password and the ingest token
+essl-sync.config.json
+node_modules/

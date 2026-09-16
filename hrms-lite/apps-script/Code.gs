@@ -14,10 +14,11 @@ var SHEETS = {
                'doj', 'status', 'basic', 'hra', 'special_allowance', 'other_allowance',
                'pf_applicable', 'esi_applicable', 'tds_monthly', 'pan', 'uan', 'esic_no',
                'bank_account', 'ifsc', 'manager', 'dob', 'gender', 'address', 'notes',
-               'updated_at', 'exit_date'],
+               'updated_at', 'exit_date', 'device_id'],
   Attendance: ['id', 'date', 'emp_code', 'status', 'in_time', 'out_time', 'hours',
                'remarks', 'updated_at'],
   Holidays:   ['id', 'date', 'name', 'optional'],
+  Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source', 'imported_at'],
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
                'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note'],
   Payroll:    ['id', 'month', 'emp_code', 'total_days', 'lop_days', 'paid_days',
@@ -43,6 +44,21 @@ var DEFAULT_SETTINGS = {
   shift_end: '18:30',
   grace_minutes: '15',
   ot_after_minutes: '30',
+  full_day_hours: '8',
+  half_day_hours: '4',
+  essl_mode: 'none',
+  essl_api_url: '',
+  essl_api_user: '',
+  essl_auth_style: 'basic',
+  essl_device_serial: '',
+  essl_push_url: '',
+  essl_push_enabled: 'no',
+  sql_server: '',
+  sql_database: 'etimetracklite1',
+  sql_table: 'DeviceLogs',
+  sql_user: '',
+  sync_last_pull: '',
+  sync_last_push: '',
   leave_types: 'Casual,Sick,Earned,Unpaid',
   quota_casual: '12',
   quota_sick: '6',
@@ -94,6 +110,12 @@ function route(action, p) {
     case 'removeMany':  return removeMany(p.sheet, p.ids);
     case 'saveSettings':return saveSettings(p.settings);
     case 'changePassword': return changePassword(p.email, p.oldPassword, p.newPassword);
+    case 'setSecret':     return setSecret(p.key, p.value);
+    case 'secretStatus':  return secretStatus();
+    case 'esslPull':      return esslPull(p.from, p.to);
+    case 'esslPush':      return esslPush(p.month, p.rows);
+    case 'ingestPunches': return ingestPunches(p.punches, p.token, p.source);
+    case 'testIntegration': return testIntegration();
     default: throw new Error('Unknown action: ' + action);
   }
 }
@@ -194,6 +216,7 @@ function bootstrap() {
     leave:      readSheet('Leave'),
     payroll:    readSheet('Payroll'),
     holidays:   readSheet('Holidays'),
+    secrets:    secretStatus(),
     users:      readSheet('Users').map(function (u) {
       return { email: u.email, role: u.role, emp_code: u.emp_code, active: u.active };
     })
@@ -247,7 +270,10 @@ function keyColumn(name) { return name === 'Employees' ? 'emp_code' : (name === 
 function upsert(name, row) {
   var headers = SHEETS[name];
   var key = keyColumn(name);
-  if (!row[key]) row[key] = name === 'Employees' ? nextEmpCode() : newId();
+  if (name === 'Employees' && !String(row.emp_code || '').trim()) {
+    throw new Error('Employee code is required - it is entered by you, not generated.');
+  }
+  if (!row[key]) row[key] = newId();
   var sh = sheet(name);
   var rows = indexed(name);
   var line = headers.map(function (h) { return row[h] === undefined ? '' : row[h]; });
@@ -298,15 +324,6 @@ function removeMany(name, ids) {
   return { removed: removed };
 }
 
-function nextEmpCode() {
-  var max = 0;
-  readSheet('Employees').forEach(function (e) {
-    var m = String(e.emp_code || '').match(/(\d+)\s*$/);
-    if (m) max = Math.max(max, parseInt(m[1], 10));
-  });
-  return 'EMP' + ('000' + (max + 1)).slice(-4);
-}
-
 function newId() {
   return Utilities.getUuid().split('-')[0] + Date.now().toString(36).slice(-4);
 }
@@ -345,4 +362,258 @@ function json(obj) {
 function jsonp(obj, callback) {
   return ContentService.createTextOutput(callback + '(' + JSON.stringify(obj) + ')')
     .setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
+
+/* ==================================================================
+   Integrations: eSSL biometric pull/push, and punch ingestion
+   ------------------------------------------------------------------
+   Two ways in:
+   1. "api"       - this script calls your eSSL/eTimeTrackLite web API
+                    directly. Only works if that URL is reachable from
+                    Google's servers (a public host, not a LAN address).
+   2. "sql-agent" - tools/essl-sync.js runs on a machine inside your
+                    network, reads the eSSL SQL Server table, and POSTs
+                    punches here with the ingest token. Use this when
+                    the device or SQL box is on the office LAN.
+   ================================================================== */
+
+var SECRET_KEYS = ['essl_api_password', 'sql_password', 'ingest_token', 'push_token'];
+
+function props() { return PropertiesService.getScriptProperties(); }
+
+function setSecret(key, value) {
+  if (SECRET_KEYS.indexOf(key) < 0) throw new Error('Unknown secret: ' + key);
+  if (value === '' || value === null || value === undefined) props().deleteProperty(key);
+  else props().setProperty(key, String(value));
+  return secretStatus();
+}
+
+/** Never returns the values - only whether each one is set. */
+function secretStatus() {
+  var all = props().getProperties();
+  var out = {};
+  SECRET_KEYS.forEach(function (k) { out[k] = !!all[k]; });
+  return out;
+}
+
+function secret(key) { return props().getProperty(key) || ''; }
+
+/** A private/LAN address can never be reached from Google's servers. */
+function looksPrivate(url) {
+  var host = String(url || '').replace(/^https?:\/\//i, '').split('/')[0].split(':')[0];
+  return /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(host) ||
+         /\.local$/i.test(host);
+}
+
+function authHeaders(settings) {
+  var headers = {};
+  var pass = secret('essl_api_password');
+  var style = String(settings.essl_auth_style || 'basic').toLowerCase();
+  if (style === 'bearer' && pass) headers.Authorization = 'Bearer ' + pass;
+  else if (settings.essl_api_user && pass) {
+    headers.Authorization = 'Basic ' + Utilities.base64Encode(settings.essl_api_user + ':' + pass);
+  }
+  return headers;
+}
+
+function testIntegration() {
+  var st = settingsMap();
+  var out = { mode: st.essl_mode || 'none', checks: [] };
+  if (st.essl_api_url) {
+    if (looksPrivate(st.essl_api_url)) {
+      out.checks.push({ name: 'eSSL API URL', ok: false,
+        note: 'This is a private/LAN address. Google’s servers cannot reach it - use the SQL agent mode instead.' });
+    } else {
+      try {
+        var r = UrlFetchApp.fetch(st.essl_api_url, {
+          method: 'get', headers: authHeaders(st), muteHttpExceptions: true,
+          validateHttpsCertificates: true, followRedirects: true
+        });
+        out.checks.push({ name: 'eSSL API URL', ok: r.getResponseCode() < 400,
+          note: 'HTTP ' + r.getResponseCode() });
+      } catch (e) {
+        out.checks.push({ name: 'eSSL API URL', ok: false, note: String(e.message || e) });
+      }
+    }
+  } else {
+    out.checks.push({ name: 'eSSL API URL', ok: false, note: 'Not configured' });
+  }
+  if (st.essl_push_url) {
+    out.checks.push({ name: 'Push URL', ok: !looksPrivate(st.essl_push_url),
+      note: looksPrivate(st.essl_push_url) ? 'Private address - unreachable from here' : 'Looks reachable' });
+  }
+  var sec = secretStatus();
+  out.checks.push({ name: 'API password stored', ok: sec.essl_api_password, note: sec.essl_api_password ? 'Set' : 'Not set' });
+  out.checks.push({ name: 'Ingest token (for the SQL agent)', ok: sec.ingest_token,
+    note: sec.ingest_token ? 'Set' : 'Not set - the agent cannot post without it' });
+  return out;
+}
+
+/** Pull punches from the configured eSSL web API for a date range. */
+function esslPull(from, to) {
+  var st = settingsMap();
+  if (!st.essl_api_url) throw new Error('No eSSL API URL configured in Settings > Integrations.');
+  if (looksPrivate(st.essl_api_url)) {
+    throw new Error('The eSSL URL is a LAN address, which Google’s servers cannot reach. ' +
+      'Use the SQL agent (tools/essl-sync.js) instead.');
+  }
+  var url = st.essl_api_url +
+    (st.essl_api_url.indexOf('?') >= 0 ? '&' : '?') +
+    'from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) +
+    (st.essl_device_serial ? '&serial=' + encodeURIComponent(st.essl_device_serial) : '');
+  var res = UrlFetchApp.fetch(url, {
+    method: 'get', headers: authHeaders(st), muteHttpExceptions: true, followRedirects: true
+  });
+  if (res.getResponseCode() >= 400) {
+    throw new Error('eSSL replied HTTP ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
+  }
+  var body = res.getContentText();
+  var data;
+  try { data = JSON.parse(body); }
+  catch (e) { throw new Error('eSSL did not return JSON. First 200 characters: ' + body.slice(0, 200)); }
+  var list = data;
+  if (!Array.isArray(list)) list = data.data || data.Data || data.result || data.logs || [];
+  if (!Array.isArray(list)) throw new Error('Could not find a punch array in the eSSL response.');
+
+  var result = applyPunches(list.map(normalizePunch), 'essl-api');
+  saveSettings({ sync_last_pull: new Date().toISOString() });
+  result.fetched = list.length;
+  return result;
+}
+
+/** Relay rows to an external system (another HRMS, an ERP, a SQL bridge). */
+function esslPush(month, rows) {
+  var st = settingsMap();
+  if (String(st.essl_push_enabled || 'no').toLowerCase() !== 'yes') {
+    throw new Error('Push is switched off in Settings > Integrations.');
+  }
+  if (!st.essl_push_url) throw new Error('No push URL configured.');
+  if (looksPrivate(st.essl_push_url)) {
+    throw new Error('The push URL is a LAN address, which Google’s servers cannot reach.');
+  }
+  var headers = { 'Content-Type': 'application/json' };
+  if (secret('push_token')) headers.Authorization = 'Bearer ' + secret('push_token');
+  var res = UrlFetchApp.fetch(st.essl_push_url, {
+    method: 'post', headers: headers, muteHttpExceptions: true,
+    payload: JSON.stringify({ company: st.company_name, month: month, rows: rows || [] })
+  });
+  saveSettings({ sync_last_push: new Date().toISOString() });
+  return { code: res.getResponseCode(), body: res.getContentText().slice(0, 500), sent: (rows || []).length };
+}
+
+/** Called by the LAN agent. Requires the ingest token once one is set. */
+function ingestPunches(punches, token, source) {
+  if (secret('ingest_token') && String(token || '') !== secret('ingest_token')) {
+    throw new Error('Invalid or missing ingest token.');
+  }
+  return applyPunches((punches || []).map(normalizePunch), source || 'agent');
+}
+
+/** Accepts the many field names eSSL exports use. */
+function normalizePunch(p) {
+  var pick = function (keys) {
+    for (var i = 0; i < keys.length; i++) {
+      for (var k in p) {
+        if (k.toLowerCase().replace(/[^a-z0-9]/g, '') === keys[i]) return p[k];
+      }
+    }
+    return '';
+  };
+  return {
+    emp_code:  String(pick(['empcode', 'employeecode', 'employeeid', 'empid']) || '').trim(),
+    device_id: String(pick(['deviceid', 'userid', 'enrollno', 'enrollnumber', 'indexid', 'usrid']) || '').trim(),
+    punch_time: String(pick(['punchtime', 'logdate', 'attdatetime', 'datetime', 'timestamp',
+                             'punchdate', 'recordtime']) || '').trim(),
+    device:    String(pick(['device', 'devicename', 'serialnumber', 'deviceserial']) || '').trim(),
+    direction: String(pick(['direction', 'inout', 'punchtype', 'c1']) || '').trim()
+  };
+}
+
+function parsePunchTime(v) {
+  var s = String(v || '').trim().replace('T', ' ');
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ ]?(\d{2})?:?(\d{2})?/);
+  if (m) return { date: m[1] + '-' + m[2] + '-' + m[3], time: (m[4] || '00') + ':' + (m[5] || '00') };
+  m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})[ ]+(\d{1,2}):(\d{2})/);   /* dd/mm/yyyy hh:mm */
+  if (m) {
+    return { date: m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2),
+             time: ('0' + m[4]).slice(-2) + ':' + m[5] };
+  }
+  return null;
+}
+
+/**
+ * Turn raw punches into attendance rows: first punch in, last punch out,
+ * status from the hours worked. Approved leave and finalised months are
+ * never overwritten.
+ */
+function applyPunches(punches, source) {
+  var st = settingsMap();
+  var fullHours = parseFloat(st.full_day_hours || 8);
+  var halfHours = parseFloat(st.half_day_hours || 4);
+
+  var byDevice = {}, known = {};
+  readSheet('Employees').forEach(function (e) {
+    known[String(e.emp_code).toUpperCase()] = e.emp_code;
+    if (e.device_id) byDevice[String(e.device_id).trim()] = e.emp_code;
+  });
+
+  var lockedMonths = {};
+  readSheet('Payroll').forEach(function (r) {
+    if (r.status === 'Finalised') lockedMonths[String(r.month)] = true;
+  });
+
+  var leaveDays = {};
+  readSheet('Attendance').forEach(function (a) {
+    if (a.status === 'L') leaveDays[a.emp_code + '_' + a.date] = true;
+  });
+
+  var groups = {}, skipped = [], rawRows = [], stamp = new Date().toISOString();
+  punches.forEach(function (p, i) {
+    var code = p.emp_code && known[p.emp_code.toUpperCase()]
+      ? known[p.emp_code.toUpperCase()]
+      : (p.device_id ? byDevice[p.device_id] : '');
+    var when = parsePunchTime(p.punch_time);
+    if (!when) { skipped.push('Row ' + (i + 1) + ': unreadable time "' + p.punch_time + '"'); return; }
+    if (!code) {
+      skipped.push('Row ' + (i + 1) + ': no employee matches code "' + p.emp_code +
+        '" / device id "' + p.device_id + '"');
+      return;
+    }
+    rawRows.push({ id: newId(), punch_time: when.date + ' ' + when.time, emp_code: code,
+                   device_id: p.device_id, device: p.device, direction: p.direction,
+                   source: source, imported_at: stamp });
+    var key = code + '_' + when.date;
+    groups[key] = groups[key] || { code: code, date: when.date, times: [] };
+    groups[key].times.push(when.time);
+  });
+
+  var rows = [], conflicts = 0;
+  Object.keys(groups).forEach(function (key) {
+    var g = groups[key];
+    if (lockedMonths[g.date.slice(0, 7)]) { conflicts++; return; }
+    if (leaveDays[key]) { conflicts++; return; }
+    g.times.sort();
+    var inT = g.times[0], outT = g.times[g.times.length - 1];
+    var mins = function (t) { return (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)); };
+    var hours = g.times.length > 1 ? (mins(outT) - mins(inT)) / 60 : 0;
+    var status, remark = source;
+    if (g.times.length < 2) { status = 'P'; remark = source + ' - single punch, verify'; }
+    else if (hours >= fullHours) status = 'P';
+    else if (hours >= halfHours) { status = 'HD'; remark = source + ' - ' + hours.toFixed(1) + ' h'; }
+    else { status = 'A'; remark = source + ' - only ' + hours.toFixed(1) + ' h, verify'; }
+    rows.push({
+      id: key, date: g.date, emp_code: g.code, status: status,
+      in_time: inT, out_time: g.times.length > 1 ? outT : '',
+      hours: g.times.length > 1 ? Math.round(hours * 10) / 10 : 0,
+      remarks: remark, updated_at: stamp.slice(0, 10)
+    });
+  });
+
+  if (rawRows.length) upsertMany('Punches', rawRows);
+  if (rows.length) upsertMany('Attendance', rows);
+
+  return {
+    punches: punches.length, days: rows.length, skipped: skipped.slice(0, 20),
+    skippedCount: skipped.length, protectedDays: conflicts, source: source
+  };
 }

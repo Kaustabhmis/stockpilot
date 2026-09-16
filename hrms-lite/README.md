@@ -9,6 +9,7 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 
 ## Dashboard
 
+- A **live clock** with the date and the configured shift
 - An **as-on date** picker: every attendance tile below reflects the day you pick, not just today
 - Nine KPI tiles. The first six — **headcount, present, absent, late coming, on leave, not marked** —
   are **clickable**: each opens the list of the employees behind that number, with the detail that
@@ -34,15 +35,93 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 | 4 | **Payroll** | Generates from attendance, prorates by paid days, computes PF / ESI / PT / TDS plus employer PF & ESI and CTC. Editable arrears, bonus and other deductions per employee. Month-on-month variance per employee. Draft → finalise → (reopen if needed). Printable payslips, bulk payslip print, bank transfer CSV |
 | 5 | **Reports** | Five reports, each exportable: salary register, PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
 
-Settings (company details, shift and grace, statutory rates, leave quotas, **holiday calendar**,
-password) live in a modal, not a sixth module.
+## Settings
+
+Everything configurable lives in one modal, not a sixth module. Eight tabs:
+
+| Tab | Holds |
+|---|---|
+| **Company** | name, address, currency |
+| **Attendance & shift** | weekly off, shift start/end, late grace, overtime threshold, hours that count as a full and a half day |
+| **Statutory** | PF and ESI percentages (employee and employer), wage ceilings, professional tax |
+| **Leave** | leave types and annual quotas |
+| **Holidays** | the holiday calendar — these auto-mark **H** on the register |
+| **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
+| **Import data** | manual import of punch logs, attendance and employees from CSV or Excel |
+| **Account** | change your password |
+
+### Employee codes are yours
+
+Codes are **never generated**. You type the code your records already use — `DE-014`, `1024`,
+`RK-PROD-3` — and it is checked for duplicates and format on save. Once an employee exists the code
+is locked, because attendance, leave and payslips all hang off it. Imports reject any row without
+one. Each employee also carries a **biometric device ID** (the enrolment number on the eSSL machine)
+used to match punches.
+
+## Biometric / eSSL integration
+
+Two ways in, chosen with **Biometric source** in Settings → Integrations:
+
+**`api`** — the Apps Script backend calls your eSSL / eTimeTrackLite web API directly.
+This only works if that URL is reachable from the public internet. Google's servers cannot reach
+`192.168.x.x`, `10.x.x.x` or `localhost`, and the app tells you so instead of failing silently.
+
+**`sql-agent`** — the normal choice for an office LAN. `tools/essl-sync.js` runs on the machine that
+can see the eSSL SQL Server, reads the punch table, and POSTs the punches to your web app:
+
+```
+cd tools
+npm install mssql
+cp essl-sync.config.example.json essl-sync.config.json   # fill in SQL + the ingest token
+node essl-sync.js --days 2
+node essl-sync.js --from 2026-09-01 --to 2026-09-30      # backfill
+node essl-sync.js --csv exported-punches.csv             # no SQL Server needed
+node essl-sync.js --dry-run                              # show, do not send
+```
+
+Schedule it with Task Scheduler or cron every 15–30 minutes. Re-sending the same punches is safe: a
+day is keyed by employee + date, so a repeat import overwrites that day instead of duplicating it.
+
+**How punches become attendance** (the same rule wherever they enter): punches are grouped per
+employee per day — first punch in, last punch out. Hours at or above *full day hours* → **P**, at or
+above *half day hours* → **HD**, below that → **A** with a "verify" remark. A single punch is marked
+**P** and flagged for checking. Approved leave and months with a finalised payroll run are never
+overwritten; those days are reported back as skipped. Every raw punch is also kept on a **Punches**
+tab for audit.
+
+**Pushing data out:** set a push endpoint URL, switch *Push data out* to `yes`, and use
+**Push data out** to send `{company, month, rows}` as JSON — attendance day-by-day or the payroll
+run. **Export attendance as SQL** writes a file of `INSERT` statements you can run against any SQL
+database instead.
+
+**Credentials** (eSSL password, SQL password, agent ingest token, push bearer token) are stored in
+the Apps Script project's private properties — never in the spreadsheet, and never sent back to the
+browser. The UI only ever shows whether each one is set.
+
+## Importing data by hand
+
+Settings → **Import data** takes **.csv and .xlsx** (the Excel reader is built in, so the file still
+works offline with no library). Four shapes:
+
+- **Biometric punch log** — a device export: employee or device id plus a punch time
+- **Attendance, one row per day** — `emp_code, date, status, in_time, out_time, remarks`
+- **Attendance, month grid** — one row per employee, one column per day, exactly what the Attendance
+  module exports
+- **Employee master** — adds or updates employees; every row needs its employee code
+
+Each import shows a **preview of the exact rows that will be written**, plus every problem row
+(unknown employee, unreadable date, a day protected by leave or a locked payroll). Nothing is
+written until you press Import. Excel date and time cells stored as serial numbers are converted
+automatically. A template for each shape is one click away.
 
 ## Files
 
 ```
 hrms-lite/
-├── index.html            the whole front end — one file, no build step, no npm
-├── apps-script/Code.gs   the backend, runs inside your Google Sheet
+├── index.html                       the whole front end — one file, no build step, no npm
+├── apps-script/Code.gs              the backend, runs inside your Google Sheet
+├── tools/essl-sync.js               biometric sync agent for your office LAN
+├── tools/essl-sync.config.example.json
 └── README.md
 ```
 
@@ -64,16 +143,18 @@ attendance register and mark someone absent → generate and finalise payroll �
    paste everything from `apps-script/Code.gs`, and save.
 3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
    dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates seven tabs — `Settings`, `Users`, `Employees`, `Attendance`,
-   `Leave`, `Payroll`, `Holidays` — and seeds the first admin login. It is safe to re-run:
-   new columns are appended, existing data is left where it is.
+   spreadsheet). This creates eight tabs — `Settings`, `Users`, `Employees`, `Attendance`,
+   `Leave`, `Payroll`, `Holidays`, `Punches` — and seeds the first admin login. It is safe to
+   re-run: new columns are appended, existing data is left where it is.
 4. **Deploy the web app.** *Deploy → New deployment → type: Web app*.
    - Execute as: **Me**
    - Who has access: **Anyone**
 
    Copy the `/exec` URL it gives you.
-5. **Sign in.** Open `index.html`, paste that URL, and log in with
-   **admin@company.com / admin123**. Change the password immediately from *Settings*.
+5. **Sign in.** Open `index.html`, expand **Connection settings** on the login screen, paste that
+   URL, and log in with **admin@company.com / admin123**. Change the password immediately from
+   *Settings → Account*. The URL is remembered on that device and can be changed later from
+   *Settings → Integrations*.
 
 Host `index.html` anywhere static (Google Drive, an internal share, GitHub Pages, any web
 server) or just email the file — it needs no server of its own.

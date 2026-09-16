@@ -106,6 +106,15 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .b-amber{background:#fef3c7;color:#92400e;} .b-blue{background:#dbeafe;color:#1e40af;}
 .b-gray{background:#e2e8f0;color:#475569;} .b-violet{background:#ede9fe;color:#5b21b6;}
 
+/* ---------------- Clock ---------------- */
+.clock{display:flex;align-items:center;gap:14px;}
+.clock .time{font-size:1.65rem;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1;}
+.clock .time small{font-size:.8rem;font-weight:700;color:var(--text-muted);margin-left:3px;}
+.clock .meta{font-size:.74rem;color:var(--text-muted);line-height:1.5;}
+.clock .dot{width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;
+  animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
 /* ---------------- Charts ---------------- */
 .chart{position:relative;}
 .chart svg{display:block;width:100%;height:auto;overflow:visible;}
@@ -195,13 +204,45 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .x:hover{background:none;color:var(--text-dark);}
 
 /* ---------------- Login ---------------- */
-.login-bg{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a,#1e3a8a);display:flex;align-items:center;
-  justify-content:center;z-index:200;padding:20px;}
-.login-card{background:#fff;border-radius:14px;padding:32px;width:100%;max-width:420px;}
-.login-card h1{font-size:1.4rem;font-weight:800;margin-bottom:4px;}
-.login-card p.sub{color:var(--text-muted);font-size:.82rem;margin-bottom:22px;}
-.login-card label.field{margin-bottom:14px;}
-.login-card button{width:100%;padding:11px;font-size:.9rem;}
+.login-bg{position:fixed;inset:0;background:#0b1220;display:flex;align-items:stretch;z-index:200;overflow:auto;}
+.login-split{display:grid;grid-template-columns:1.05fr .95fr;width:100%;min-height:100vh;}
+.login-brand{background:linear-gradient(160deg,#0f172a 0%,#152a52 55%,#1e3a8a 100%);color:#fff;
+  padding:56px 56px 40px;display:flex;flex-direction:column;position:relative;overflow:hidden;}
+.login-brand::after{content:'';position:absolute;right:-120px;bottom:-140px;width:420px;height:420px;
+  border-radius:50%;background:rgba(37,99,235,.18);}
+.login-logo{display:flex;align-items:center;gap:12px;font-size:1.15rem;font-weight:800;letter-spacing:-.2px;}
+.login-logo .glyph{width:38px;height:38px;border-radius:9px;background:var(--primary);display:flex;
+  align-items:center;justify-content:center;font-size:.95rem;font-weight:800;letter-spacing:-.5px;}
+.login-brand h2{font-size:2.1rem;line-height:1.2;font-weight:800;margin:auto 0 14px;max-width:15ch;letter-spacing:-.6px;}
+.login-brand p.lede{font-size:.95rem;color:#c7d2e5;max-width:42ch;line-height:1.6;margin-bottom:26px;}
+.login-mods{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px;margin-bottom:auto;max-width:430px;}
+.login-mods div{display:flex;align-items:center;gap:10px;font-size:.85rem;color:#dbe4f3;}
+.login-mods span{width:20px;height:20px;border-radius:5px;background:rgba(255,255,255,.1);display:flex;
+  align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#93c5fd;flex-shrink:0;}
+.login-foot{font-size:.74rem;color:#64748b;position:relative;z-index:1;padding-top:32px;}
+.login-pane{background:#fff;display:flex;align-items:center;justify-content:center;padding:48px 40px;}
+.login-card{width:100%;max-width:392px;}
+.login-card h1{font-size:1.45rem;font-weight:800;margin-bottom:6px;letter-spacing:-.3px;}
+.login-card p.sub{color:var(--text-muted);font-size:.85rem;margin-bottom:26px;}
+.login-card label.field{margin-bottom:16px;}
+.login-card button{width:100%;padding:12px;font-size:.9rem;}
+.login-adv{border-top:1px solid var(--border);margin-top:22px;padding-top:16px;}
+.login-adv summary{font-size:.78rem;font-weight:700;color:var(--text-muted);cursor:pointer;
+  text-transform:uppercase;letter-spacing:.5px;list-style:none;display:flex;align-items:center;gap:7px;}
+.login-adv summary::-webkit-details-marker{display:none;}
+.login-adv summary::before{content:'\25B8';transition:transform .15s;display:inline-block;}
+.login-adv[open] summary::before{transform:rotate(90deg);}
+.login-adv .body{padding-top:14px;}
+.login-or{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--text-soft);font-size:.72rem;
+  text-transform:uppercase;letter-spacing:.6px;font-weight:700;}
+.login-or::before,.login-or::after{content:'';flex:1;height:1px;background:var(--border);}
+@media (max-width:900px){
+  .login-split{grid-template-columns:1fr;}
+  .login-brand{padding:36px 28px;min-height:auto;}
+  .login-brand h2{font-size:1.5rem;margin:22px 0 10px;}
+  .login-mods{display:none;}
+  .login-pane{padding:32px 24px 48px;}
+}
 .err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:7px;font-size:.8rem;margin-bottom:14px;display:none;}
 .err.show{display:block;}
 .hintbox{font-size:.72rem;color:var(--text-muted);margin-top:16px;line-height:1.6;border-top:1px solid var(--border);padding-top:14px;}
@@ -235,22 +276,58 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
 <!-- ============================ LOGIN ============================ -->
 <div class="login-bg" id="login">
-  <div class="login-card">
-    <h1>HRMS <span style="color:var(--accent)">Lite</span></h1>
-    <p class="sub">Dashboard + five modules. Google Sheets as the database.</p>
-    <div class="err" id="login-err"></div>
-    <label class="field">Google Apps Script Web App URL
-      <input id="in-api" type="url" placeholder="https://script.google.com/macros/s/..../exec">
-    </label>
-    <label class="field">Email<input id="in-email" type="email" value="admin@company.com" autocomplete="username"></label>
-    <label class="field">Password<input id="in-pass" type="password" value="admin123" autocomplete="current-password"></label>
-    <button id="btn-login">Sign in</button>
-    <button class="ghost" id="btn-demo" style="width:100%;margin-top:10px;">Open demo (sample data, no setup)</button>
-    <div class="hintbox">
-      First run: open your Google Sheet &rarr; <b>Extensions &rarr; Apps Script</b>, paste <b>Code.gs</b>,
-      run <code>setup()</code>, deploy as a Web app, then paste the <code>/exec</code> URL above.
-      Default sign-in is <b>admin@company.com</b> / <b>admin123</b>.
+  <div class="login-split">
+
+    <div class="login-brand">
+      <div class="login-logo"><span class="glyph">HR</span> HRMS Lite</div>
+      <h2>HR and payroll, without a database server.</h2>
+      <p class="lede">One dashboard and five modules, running on a Google Sheet your
+        finance team already knows how to read. Biometric punches in, payslips out.</p>
+      <div class="login-mods">
+        <div><span>1</span> Employees</div>
+        <div><span>2</span> Attendance</div>
+        <div><span>3</span> Leave</div>
+        <div><span>4</span> Payroll</div>
+        <div><span>5</span> Reports</div>
+        <div><span>&#9679;</span> Dashboard</div>
+      </div>
+      <div class="login-foot">Your data stays in your own Google Sheet. Nothing is sent anywhere else.</div>
     </div>
+
+    <div class="login-pane">
+      <div class="login-card">
+        <h1>Sign in</h1>
+        <p class="sub" id="login-target">Connect to your company workspace.</p>
+        <div class="err" id="login-err"></div>
+
+        <label class="field">Email address
+          <input id="in-email" type="email" value="admin@company.com" autocomplete="username"
+            placeholder="you@company.com">
+        </label>
+        <label class="field">Password
+          <input id="in-pass" type="password" value="admin123" autocomplete="current-password">
+        </label>
+        <button id="btn-login">Sign in</button>
+
+        <details class="login-adv" id="login-adv">
+          <summary>Connection settings</summary>
+          <div class="body">
+            <label class="field">Google Apps Script Web App URL
+              <input id="in-api" type="url" placeholder="https://script.google.com/macros/s/..../exec">
+            </label>
+            <p style="font-size:.74rem;color:var(--text-muted);line-height:1.6">
+              Open your Google Sheet &rarr; <b>Extensions &rarr; Apps Script</b>, paste <b>Code.gs</b>,
+              run <code>setup()</code> once, then deploy it as a Web app and paste the
+              <code>/exec</code> URL here. It is remembered on this device.
+            </p>
+          </div>
+        </details>
+
+        <div class="login-or">or</div>
+        <button class="ghost" id="btn-demo">Explore the demo with sample data</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -296,12 +373,21 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
     <!-- ---------------- DASHBOARD (home, not a module) ---------------- -->
     <section class="view active" id="view-dashboard">
-      <div class="card" style="padding:12px 18px;margin-bottom:16px;">
-        <div class="toolbar" style="margin-bottom:0;">
+      <div class="card" style="padding:14px 18px;margin-bottom:16px;">
+        <div class="toolbar" style="margin-bottom:0;align-items:center;">
+          <div class="clock">
+            <div class="dot"></div>
+            <div>
+              <div class="time" id="clock-time">--:--:--</div>
+              <div class="meta" id="clock-date">&nbsp;</div>
+            </div>
+          </div>
+          <span style="width:1px;height:38px;background:var(--border);margin:0 6px;"></span>
           <label class="field">Attendance as on<input type="date" id="dash-date" onchange="renderDashboard()"></label>
           <button class="ghost sm" style="margin-bottom:1px" onclick="el('dash-date').value=today();renderDashboard()">Today</button>
           <span class="spacer"></span>
-          <span class="sub-line">Every tile below is clickable &mdash; it opens the list of employees behind the number.</span>
+          <span class="sub-line" style="text-align:right;max-width:280px">Every tile below is clickable &mdash;
+            it opens the list of employees behind the number.</span>
         </div>
       </div>
       <div class="kpis" id="dash-kpis"></div>
@@ -500,7 +586,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
 var S = {
   api: '', demo: false, user: null, view: 'dashboard',
-  settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [],
+  settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
   attDirty: {}, payDraft: null, attVersion: 0,
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -777,7 +863,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v2';
+var DEMO_KEY = 'hrms_lite_demo_v3';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -788,10 +874,14 @@ function demoDb() {
       currency: 'INR', pf_employee_pct: '12', pf_employer_pct: '13', pf_wage_ceiling: '15000',
       esi_employee_pct: '0.75', esi_employer_pct: '3.25', esi_wage_ceiling: '21000',
       pt_amount: '200', weekly_off: 'Sun', shift_start: '09:30', shift_end: '18:30',
-      grace_minutes: '15', ot_after_minutes: '30',
+      grace_minutes: '15', ot_after_minutes: '30', full_day_hours: '8', half_day_hours: '4',
+      essl_mode: 'sql-agent', essl_api_url: '', essl_api_user: '', essl_auth_style: 'basic',
+      essl_device_serial: '', essl_push_enabled: 'no', essl_push_url: '',
+      sql_server: 'localhost\\SQLEXPRESS', sql_database: 'etimetracklite1', sql_table: 'DeviceLogs',
+      sql_user: 'sa', sync_last_pull: '', sync_last_push: '',
       leave_types: 'Casual,Sick,Earned,Unpaid', quota_casual: '12', quota_sick: '6', quota_earned: '15'
     },
-    employees: [], attendance: [], leave: [], payroll: [], holidays: [],
+    employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [],
     users: [{ email: 'admin@company.com', role: 'admin', emp_code: '', active: 'yes' }]
   };
   var seed = [
@@ -817,7 +907,8 @@ function demoDb() {
       tds_monthly: r[3] >= 30000 ? 2500 : 0,
       pan: i % 4 === 3 ? '' : 'ABCDE' + (1000 + i) + 'F',
       uan: i % 5 === 4 ? '' : '1001' + (10000000 + i * 37),
-      esic_no: '', bank_account: i % 3 === 2 ? '' : '5011' + (100000000 + i * 7919),
+      esic_no: '', device_id: String(101 + i),
+      bank_account: i % 3 === 2 ? '' : '5011' + (100000000 + i * 7919),
       ifsc: i % 3 === 2 ? '' : 'HDFC0001234', manager: i === 0 ? '' : 'Ramesh Kumar',
       dob: r[6], gender: i % 2 ? 'F' : 'M', address: '', notes: '', updated_at: today()
     });
@@ -889,7 +980,7 @@ function demoSave(db) { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); }
 function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet === 'Users' ? 'email' : 'id'); }
 var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
-  Payroll: 'payroll', Users: 'users', Holidays: 'holidays'
+  Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches'
 };
 function demoApi(action, p) {
   var db = demoDb(), list, key, i;
@@ -898,11 +989,14 @@ function demoApi(action, p) {
       return { email: 'admin@company.com', role: 'admin', emp_code: '', token: 'demo' };
     case 'bootstrap':
       return { settings: db.settings, employees: db.employees, attendance: db.attendance,
-               leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users };
+               leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users,
+               secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
-      if (!p.row[key]) p.row[key] = p.sheet === 'Employees' ? nextDemoCode(db) : 'ID' + Date.now().toString(36) +
-        Math.floor(Math.random() * 1000);
+      if (p.sheet === 'Employees' && !String(p.row.emp_code || '').trim()) {
+        throw new Error('Employee code is required - it is entered by you, not generated.');
+      }
+      if (!p.row[key]) p.row[key] = 'ID' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
       for (i = 0; i < list.length; i++) {
         if (String(list[i][key]) === String(p.row[key])) {
           list[i] = Object.assign({}, list[i], p.row); demoSave(db); return p.row;
@@ -928,25 +1022,25 @@ function demoApi(action, p) {
       Object.assign(db.settings, p.settings || {}); demoSave(db); return db.settings;
     case 'changePassword':
       return { changed: true };
+    case 'ping':
+      return { service: 'HRMS Lite (demo)', version: 1 };
+    case 'setSecret':
+    case 'secretStatus':
+      return { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false };
     default:
       return {};
   }
 }
-function nextDemoCode(db) {
-  var max = 0;
-  db.employees.forEach(function (e) {
-    var m = String(e.emp_code || '').match(/(\d+)\s*$/);
-    if (m) max = Math.max(max, parseInt(m[1], 10));
-  });
-  return 'EMP' + ('000' + (max + 1)).slice(-4);
-}
-
 /* ----------------------------- login ---------------------------- */
 function showLoginError(msg) { var e = el('login-err'); e.textContent = msg; e.className = 'err show'; }
 
 el('btn-login').onclick = function () {
   var url = el('in-api').value.trim();
-  if (!url) return showLoginError('Paste your Apps Script Web App URL, or use the demo button below.');
+  if (!url) {
+    el('login-adv').open = true;
+    return showLoginError('Add your Apps Script Web App URL under "Connection settings", ' +
+      'or explore the demo below.');
+  }
   S.api = url; S.demo = false;
   var btn = this; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Signing in...';
   api('login', { email: el('in-email').value.trim(), password: el('in-pass').value })
@@ -954,6 +1048,11 @@ el('btn-login').onclick = function () {
     .catch(function (e) { showLoginError(e.message); })
     .then(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
 };
+el('in-api').addEventListener('change', function () {
+  try {
+    el('login-target').textContent = 'Connecting to ' + new URL(this.value.trim()).hostname + '.';
+  } catch (e) { el('login-target').textContent = 'Connect to your company workspace.'; }
+});
 el('btn-demo').onclick = function () {
   S.demo = true;
   S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
@@ -970,6 +1069,7 @@ function start() {
   ['att-month', 'pay-month', 'rep-month', 'leave-month'].forEach(function (id) { el(id).value = thisMonth(); });
   el('dash-date').value = today();
   el('leave-year').value = new Date().getFullYear();
+  startClock();
   return reload();
 }
 
@@ -981,6 +1081,7 @@ function reload() {
     S.leave = d.leave || [];
     S.payroll = d.payroll || [];
     S.holidays = d.holidays || [];
+    S.secrets = d.secrets || {};
     S.attDirty = {}; S.payDraft = null; S.attVersion++;
     el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
     document.querySelectorAll('.adm').forEach(function (n) { n.style.display = isAdmin() ? '' : 'none'; });
@@ -1390,7 +1491,7 @@ function missingFields(e) {
    ================================================================= */
 
 var EMP_FIELDS = [
-  ['emp_code', 'Employee code', 'text', true],
+  ['emp_code', 'Employee code *', 'text'],
   ['name', 'Full name', 'text'],
   ['email', 'Email', 'email'],
   ['phone', 'Phone', 'text'],
@@ -1412,6 +1513,7 @@ var EMP_FIELDS = [
   ['bank_account', 'Bank account', 'text'],
   ['ifsc', 'IFSC', 'text'],
   ['manager', 'Reporting manager', 'text'],
+  ['device_id', 'Biometric device ID', 'text'],
   ['dob', 'Date of birth', 'date'],
   ['gender', 'Gender', 'select:,M,F,Other'],
   ['address', 'Address', 'text'],
@@ -1521,11 +1623,14 @@ function openEmployee(code) {
   var e = code ? empByCode(code) : { status: 'Active', pf_applicable: 'yes', esi_applicable: 'yes', doj: today() };
   if (!e) return;
   var body = '<div id="emp-errors"></div><div class="grid2">' + EMP_FIELDS.map(function (f) {
-    return (f[0] === 'emp_code' && !code) ? '' : fieldInput(f, e[f[0]]);
+    /* the code is yours to choose when adding, and fixed afterwards so history stays attached */
+    return fieldInput(f[0] === 'emp_code' && code ? [f[0], f[1], f[2], true] : f, e[f[0]]);
   }).join('') + '</div>' +
-    '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted)">' +
-    'Gross = Basic + HRA + Special + Other; payroll prorates these by paid days. ' +
-    'PAN and bank details are needed for TDS and the bank transfer file.</p>';
+    '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted);line-height:1.7">' +
+    '<b>Employee code</b> is yours to set - use whatever your records already use ' +
+    '(DE-014, 1024, RK-PROD-3). It cannot be changed later, because attendance, leave and payslips ' +
+    'hang off it.<br>Gross = Basic + HRA + Special + Other; payroll prorates these by paid days. ' +
+    '<b>Biometric device ID</b> is the enrolment number on the eSSL machine, used to match punches.</p>';
   showModal(code ? 'Edit ' + e.name : 'Add employee', body, [
     { label: 'Cancel', cls: 'ghost', onClick: closeModal },
     { label: 'Save employee', onClick: function () { saveEmployee(code); } }
@@ -1534,6 +1639,19 @@ function openEmployee(code) {
 
 function validateEmployee(row, code) {
   var errs = [];
+  var newCode = String(row.emp_code || '').trim();
+  if (!newCode) errs.push('Employee code is required - you choose it, it is not generated.');
+  else if (!/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,19}$/.test(newCode)) {
+    errs.push('Employee code can use letters, numbers, dot, dash, slash or underscore (up to 20 characters).');
+  } else if (!code && S.employees.some(function (x) {
+    return String(x.emp_code).trim().toUpperCase() === newCode.toUpperCase();
+  })) {
+    errs.push('Employee code "' + newCode + '" is already used.');
+  }
+  var dev = String(row.device_id || '').trim();
+  if (dev && S.employees.some(function (x) {
+    return String(x.device_id || '').trim() === dev && String(x.emp_code) !== String(code || newCode);
+  })) errs.push('Biometric device ID "' + dev + '" is already mapped to another employee.');
   if (!String(row.name || '').trim()) errs.push('Name is required.');
   var email = String(row.email || '').trim().toLowerCase();
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errs.push('Email does not look valid.');
@@ -1555,7 +1673,8 @@ function validateEmployee(row, code) {
 
 function saveEmployee(code) {
   var row = collectFields();
-  if (code) row.emp_code = code;
+  if (code) row.emp_code = code;                 /* codes never change once used */
+  else row.emp_code = String(row.emp_code || '').trim();
   if (row.pan) row.pan = String(row.pan).trim().toUpperCase();
   var errs = validateEmployee(row, code);
   if (errs.length) {
@@ -2985,75 +3104,115 @@ function exportReport() {
 <script>
 /* =================================================================
    SETTINGS  (configuration - deliberately not a sixth module)
+   Everything configurable lives here: company, shift, statutory,
+   leave, holidays, integrations (eSSL / SQL / API) and data import.
    ================================================================= */
 
-var SETTING_FIELDS = [
-  ['company_name', 'Company name', 'text'],
-  ['company_address', 'Company address', 'text'],
-  ['currency', 'Currency', 'select:INR,USD,AED,GBP,EUR'],
-  ['weekly_off', 'Weekly off (comma separated)', 'text'],
-  ['shift_start', 'Shift start', 'time'],
-  ['shift_end', 'Shift end', 'time'],
-  ['grace_minutes', 'Late grace (minutes)', 'number'],
-  ['ot_after_minutes', 'Overtime counts after (minutes)', 'number'],
-  ['pf_employee_pct', 'PF employee %', 'number'],
-  ['pf_employer_pct', 'PF employer %', 'number'],
-  ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
-  ['esi_employee_pct', 'ESI employee %', 'number'],
-  ['esi_employer_pct', 'ESI employer %', 'number'],
-  ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
-  ['pt_amount', 'Professional tax / month', 'number'],
-  ['leave_types', 'Leave types (comma separated)', 'text'],
-  ['quota_casual', 'Casual leave quota / year', 'number'],
-  ['quota_sick', 'Sick leave quota / year', 'number'],
-  ['quota_earned', 'Earned leave quota / year', 'number']
+var SETTING_GROUPS = [
+  { id: 'company', label: 'Company', fields: [
+    ['company_name', 'Company name', 'text'],
+    ['company_address', 'Company address', 'text'],
+    ['currency', 'Currency', 'select:INR,USD,AED,GBP,EUR']
+  ], note: 'Shown on payslips and reports.' },
+
+  { id: 'shift', label: 'Attendance &amp; shift', fields: [
+    ['weekly_off', 'Weekly off (comma separated)', 'text'],
+    ['shift_start', 'Shift start', 'time'],
+    ['shift_end', 'Shift end', 'time'],
+    ['grace_minutes', 'Late grace (minutes)', 'number'],
+    ['ot_after_minutes', 'Overtime counts after (minutes)', 'number'],
+    ['full_day_hours', 'Hours for a full day', 'number'],
+    ['half_day_hours', 'Hours for a half day', 'number']
+  ], note: 'Late marks and overtime are measured against the shift and grace. Full/half day hours ' +
+           'decide what a biometric punch pair becomes: at or above full = P, at or above half = HD, ' +
+           'below that = A for review.' },
+
+  { id: 'statutory', label: 'Statutory', fields: [
+    ['pf_employee_pct', 'PF employee %', 'number'],
+    ['pf_employer_pct', 'PF employer %', 'number'],
+    ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
+    ['esi_employee_pct', 'ESI employee %', 'number'],
+    ['esi_employer_pct', 'ESI employer %', 'number'],
+    ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
+    ['pt_amount', 'Professional tax / month', 'number']
+  ], note: 'Rates apply to every payroll run from now on. Runs already finalised keep the numbers ' +
+           'they were saved with.' },
+
+  { id: 'leave', label: 'Leave', fields: [
+    ['leave_types', 'Leave types (comma separated)', 'text'],
+    ['quota_casual', 'Casual leave quota / year', 'number'],
+    ['quota_sick', 'Sick leave quota / year', 'number'],
+    ['quota_earned', 'Earned leave quota / year', 'number']
+  ], note: 'Quotas are per calendar year and are matched to a leave type by name.' }
 ];
 
 function openSettings() {
-  var body =
-    '<div class="tabs">' +
-      '<div class="tab active" data-stab="general" onclick="settingsTab(\'general\')">Company &amp; payroll</div>' +
-      '<div class="tab" data-stab="holidays" onclick="settingsTab(\'holidays\')">Holiday calendar</div>' +
-      '<div class="tab" data-stab="account" onclick="settingsTab(\'account\')">Your account</div>' +
-    '</div>' +
-    '<div id="stab-general"><div class="grid2">' +
-      SETTING_FIELDS.map(function (f) { return fieldInput(f, S.settings[f[0]]); }).join('') +
-    '</div>' +
-    '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted)">Rates apply to every payroll run from ' +
-    'now on. Runs already finalised keep the numbers they were saved with.</p></div>' +
-    '<div id="stab-holidays" style="display:none">' +
-      '<div class="toolbar"><span class="spacer"></span>' +
-      '<button class="ghost sm" onclick="addHolidayRow()">+ Add holiday</button></div>' +
-      '<table id="hol-table"></table>' +
-      '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Holidays show as <b>H</b> on the ' +
-      'attendance register, are paid, and are skipped when leave days are counted.</p>' +
-    '</div>' +
-    '<div id="stab-account" style="display:none">' +
-      '<div class="grid2">' +
-        '<label class="field">Current password<input id="pw-old" type="password"></label>' +
-        '<label class="field">New password<input id="pw-new" type="password"></label>' +
-      '</div>' +
-      '<button class="ghost sm" style="margin-top:12px" onclick="changePassword()">Update password</button>' +
-      '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted)">Signed in as ' + esc(S.user.email) +
-      ' (' + esc(S.user.role) + '). Add more users by adding rows to the <b>Users</b> tab of the sheet.</p>' +
-    '</div>';
+  var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
+    .concat([['holidays', 'Holidays'], ['integrations', 'Integrations'],
+             ['import', 'Import data'], ['account', 'Account']]);
+
+  var body = '<div class="tabs">' + tabs.map(function (t, i) {
+    return '<div class="tab' + (i === 0 ? ' active' : '') + '" data-stab="' + t[0] +
+      '" onclick="settingsTab(\'' + t[0] + '\')">' + t[1] + '</div>';
+  }).join('') + '</div>' +
+  SETTING_GROUPS.map(function (g, i) {
+    return '<div class="set-pane" id="stab-' + g.id + '"' + (i ? ' style="display:none"' : '') + '>' +
+      '<div class="grid2">' + g.fields.map(function (f) { return fieldInput(f, S.settings[f[0]]); }).join('') +
+      '</div><p style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.6">' +
+      g.note + '</p></div>';
+  }).join('') +
+  '<div id="stab-holidays" style="display:none">' + holidaysPane() + '</div>' +
+  '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' +
+  '<div id="stab-import" style="display:none">' + importPane() + '</div>' +
+  '<div id="stab-account" style="display:none">' + accountPane() + '</div>';
+
   showModal('Settings', body, [
     { label: 'Close', cls: 'ghost', onClick: closeModal },
     { label: 'Save settings', onClick: saveSettingsForm }
   ], true);
   renderHolidays();
+  renderImportHelp();
+  el('imp-any').onchange = function () { if (this.files[0]) onImportFile(this.files[0]); };
 }
 
 function settingsTab(tab) {
-  ['general', 'holidays', 'account'].forEach(function (t) {
-    el('stab-' + t).style.display = t === tab ? '' : 'none';
+  var all = SETTING_GROUPS.map(function (g) { return g.id; })
+    .concat(['holidays', 'integrations', 'import', 'account']);
+  all.forEach(function (t) {
+    var pane = el('stab-' + t);
+    if (pane) pane.style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('#modal .tab').forEach(function (n) {
     n.classList.toggle('active', n.dataset.stab === tab);
   });
+  el('modal-body').scrollTop = 0;
+}
+
+function saveSettingsForm() {
+  var values = {};
+  document.querySelectorAll('#modal .set-pane [data-f]').forEach(function (n) {
+    values[n.dataset.f] = n.value;
+  });
+  if (!Object.keys(values).length) return closeModal();
+  api('saveSettings', { settings: values }).then(function (settings) {
+    S.settings = settings || Object.assign({}, S.settings, values);
+    S.attVersion++;
+    el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
+    closeModal(); toast('Settings saved', 'good'); renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* ----------------------------- holidays -------------------------- */
+function holidaysPane() {
+  return '<div class="toolbar"><span class="spacer"></span>' +
+    '<button class="ghost sm" onclick="addHolidayRow()">+ Add holiday</button></div>' +
+    '<table id="hol-table"></table>' +
+    '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Holidays show as <b>H</b> on the ' +
+    'attendance register, are paid, and are skipped when leave days are counted.</p>';
 }
 
 function renderHolidays() {
+  if (!el('hol-table')) return;
   var rows = S.holidays.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
   el('hol-table').innerHTML =
     '<thead><tr><th>Date</th><th>Name</th><th></th></tr></thead><tbody>' +
@@ -3065,9 +3224,8 @@ function renderHolidays() {
 }
 
 function addHolidayRow() {
-  var year = new Date().getFullYear();
   el('hol-table').insertAdjacentHTML('beforeend',
-    '<tbody id="hol-new"><tr><td><input id="hol-date" type="date" value="' + year + '-01-26' + '"></td>' +
+    '<tbody id="hol-new"><tr><td><input id="hol-date" type="date" value="' + today() + '"></td>' +
     '<td><input id="hol-name" placeholder="Republic Day"></td>' +
     '<td class="num-col"><button class="ok sm" onclick="saveHoliday()">Add</button></td></tr></tbody>');
   el('hol-date').focus();
@@ -3092,15 +3250,271 @@ function removeHoliday(id) {
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
-function saveSettingsForm() {
-  var values = {};
-  el('stab-general').querySelectorAll('[data-f]').forEach(function (n) { values[n.dataset.f] = n.value; });
-  api('saveSettings', { settings: values }).then(function (settings) {
-    S.settings = settings || values;
-    S.attVersion++;
-    el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
-    closeModal(); toast('Settings saved', 'good'); renderAll();
+/* --------------------------- integrations ------------------------ */
+var INTEGRATION_FIELDS = [
+  ['essl_mode', 'Biometric source', 'select:none,api,sql-agent'],
+  ['essl_api_url', 'eSSL / eTimeTrackLite API URL', 'text'],
+  ['essl_api_user', 'API username', 'text'],
+  ['essl_auth_style', 'API auth style', 'select:basic,bearer'],
+  ['essl_device_serial', 'Device serial (optional)', 'text'],
+  ['essl_push_enabled', 'Push data out', 'select:no,yes'],
+  ['essl_push_url', 'Push endpoint URL', 'text'],
+  ['sql_server', 'SQL Server host\\instance', 'text'],
+  ['sql_database', 'SQL database', 'text'],
+  ['sql_table', 'Punch log table', 'text'],
+  ['sql_user', 'SQL username', 'text']
+];
+
+function secretRow(key, label, hint) {
+  var set = S.secrets && S.secrets[key];
+  return '<div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap">' +
+    '<label class="field" style="flex:1;min-width:210px">' + esc(label) +
+      '<input type="password" id="sec-' + key + '" placeholder="' +
+      (set ? '•••••• stored' : 'not set') + '"></label>' +
+    '<button class="ghost sm" style="margin-bottom:1px" onclick="saveSecret(\'' + key + '\')">Save</button>' +
+    (set ? '<button class="ghost sm" style="margin-bottom:1px" onclick="clearSecret(\'' + key +
+      '\')">Clear</button><span class="badge b-green" style="margin-bottom:6px">stored</span>'
+     : '<span class="badge b-gray" style="margin-bottom:6px">not set</span>') +
+    '<div style="flex-basis:100%;font-size:.72rem;color:var(--text-muted)">' + hint + '</div></div>';
+}
+
+function integrationsPane() {
+  var st = S.settings;
+  return '' +
+  '<div class="card" style="margin-bottom:14px;background:#f8fafc">' +
+    '<h3>This workspace</h3>' +
+    '<div class="card-sub">The API every client and agent talks to.</div>' +
+    '<label class="field">Apps Script Web App URL' +
+      '<input id="set-api-url" value="' + esc(S.demo ? '' : S.api) + '" ' +
+      (S.demo ? 'placeholder="demo mode - not connected to a sheet" disabled' : '') + '></label>' +
+    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="ghost sm" onclick="saveApiUrl()">Use this URL on this device</button>' +
+      '<button class="ghost sm" onclick="copyApiUrl()">Copy</button>' +
+      '<button class="ghost sm" onclick="pingApi()">Test API</button>' +
+    '</div>' +
+    '<p style="margin-top:10px;font-size:.72rem;color:var(--text-muted)">Changing this signs you out, ' +
+    'because it points the app at a different sheet.</p>' +
+  '</div>' +
+
+  '<h3 style="margin:18px 0 4px">Biometric / eSSL</h3>' +
+  '<div class="card-sub">Pull punches in from your device, and push attendance or payroll out.</div>' +
+  '<div class="grid2">' +
+    INTEGRATION_FIELDS.map(function (f) { return fieldInput(f, st[f[0]]); }).join('') +
+  '</div>' +
+
+  '<h3 style="margin:20px 0 8px">Credentials</h3>' +
+  '<div class="card-sub">Stored in the script’s private properties, never in the spreadsheet, ' +
+  'and never sent back to the browser.</div>' +
+  secretRow('essl_api_password', 'eSSL API password / token',
+            'Used as Basic auth with the username above, or as a Bearer token.') +
+  secretRow('sql_password', 'SQL Server password',
+            'Only needed if you let the agent read it from here; normally it stays in the agent’s own config file.') +
+  secretRow('ingest_token', 'Agent ingest token',
+            'The shared secret the LAN agent sends with every batch of punches. ' +
+            '<a href="#" onclick="suggestToken();return false;">Generate one</a>.') +
+  secretRow('push_token', 'Push endpoint bearer token', 'Sent as Authorization: Bearer on every push.') +
+
+  '<div class="toolbar" style="margin:18px 0 8px">' +
+    '<button class="ghost sm" onclick="runTestIntegration()">Test connection</button>' +
+    '<button class="ghost sm" onclick="openPull()">Pull punches now</button>' +
+    '<button class="ghost sm" onclick="openPush()">Push data out</button>' +
+    '<button class="ghost sm" onclick="downloadAgentConfig()">Download agent config</button>' +
+    '<button class="ghost sm" onclick="exportSql()">Export attendance as SQL</button>' +
+  '</div>' +
+  '<div id="integration-out" style="font-size:.8rem"></div>' +
+
+  '<div class="locked-note" style="background:#dbeafe;color:#1e40af;margin-top:16px;align-items:flex-start">' +
+    '<div>&#9432;</div><div style="font-weight:500;line-height:1.6">' +
+    '<b>Which mode do you need?</b><br>' +
+    '<b>api</b> works only if your eSSL server has a public https address - Google’s servers cannot ' +
+    'reach <code>192.168.x.x</code> or <code>localhost</code>.<br>' +
+    '<b>sql-agent</b> is the normal choice for an office LAN: run <code>tools/essl-sync.js</code> on the ' +
+    'machine that can see SQL Server and schedule it every 15-30 minutes. It reads the punch table and ' +
+    'posts here with the ingest token.<br>' +
+    'Last pull: <b>' + esc(st.sync_last_pull || 'never') + '</b> &middot; ' +
+    'last push: <b>' + esc(st.sync_last_push || 'never') + '</b>' +
+    '</div></div>';
+}
+
+function saveApiUrl() {
+  var url = el('set-api-url').value.trim();
+  if (!url) return toast('Enter a URL', 'bad');
+  localStorage.setItem('hrms_lite_api', url);
+  toast('Saved. Sign in again to connect to it.', 'good');
+}
+function copyApiUrl() {
+  var v = el('set-api-url').value;
+  navigator.clipboard ? navigator.clipboard.writeText(v).then(function () { toast('URL copied', 'good'); })
+    : toast(v);
+}
+function pingApi() {
+  if (S.demo) return toast('Demo mode is not connected to a sheet');
+  api('ping').then(function (d) { toast('API replied: ' + d.service + ' v' + d.version, 'good'); })
+    .catch(function (e) { toast(e.message, 'bad'); });
+}
+function suggestToken() {
+  var t = 'tok_' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  el('sec-ingest_token').type = 'text';
+  el('sec-ingest_token').value = t;
+  toast('Token generated - press Save next to it, then paste it into the agent config');
+}
+function saveSecret(key) {
+  var v = el('sec-' + key).value;
+  if (!v) return toast('Nothing to save', 'bad');
+  if (S.demo) return toast('Credentials are not stored in demo mode');
+  api('setSecret', { key: key, value: v }).then(function (status) {
+    S.secrets = status;
+    el('sec-' + key).value = ''; el('sec-' + key).type = 'password';
+    toast('Saved to the script’s private properties', 'good');
+    refreshIntegrationsPane();
   }).catch(function (e) { toast(e.message, 'bad'); });
+}
+function clearSecret(key) {
+  if (S.demo) return toast('Credentials are not stored in demo mode');
+  api('setSecret', { key: key, value: '' }).then(function (status) {
+    S.secrets = status; toast('Cleared', 'good'); refreshIntegrationsPane();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+function refreshIntegrationsPane() {
+  var pane = el('stab-integrations');
+  if (pane) pane.innerHTML = integrationsPane();
+}
+
+function runTestIntegration() {
+  if (S.demo) return toast('Demo mode has no backend to test');
+  var out = el('integration-out');
+  out.innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Testing...';
+  api('testIntegration').then(function (r) {
+    out.innerHTML = '<table><tbody>' + r.checks.map(function (c) {
+      return '<tr><td>' + esc(c.name) + '</td><td><span class="badge ' + (c.ok ? 'b-green' : 'b-red') + '">' +
+        (c.ok ? 'ok' : 'check') + '</span></td><td class="sub-line">' + esc(c.note) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  }).catch(function (e) { out.innerHTML = '<div class="err show">' + esc(e.message) + '</div>'; });
+}
+
+function openPull() {
+  if (S.demo) return toast('Demo mode has no device to pull from');
+  var from = new Date(); from.setDate(from.getDate() - 7);
+  showModal('Pull punches from eSSL',
+    '<div class="grid2">' +
+      '<label class="field">From<input id="pull-from" type="date" value="' + from.toISOString().slice(0, 10) + '"></label>' +
+      '<label class="field">To<input id="pull-to" type="date" value="' + today() + '"></label>' +
+    '</div>' +
+    '<p style="margin-top:12px;font-size:.8rem;color:var(--text-muted);line-height:1.6">' +
+    'Punches are grouped per employee per day: first punch in, last punch out, and the status comes from ' +
+    'the hours worked. Approved leave and months with a finalised payroll are never overwritten.</p>' +
+    '<div id="pull-out" style="margin-top:12px;font-size:.8rem"></div>',
+    [{ label: 'Close', cls: 'ghost', onClick: closeModal },
+     { label: 'Pull now', onClick: function () {
+        var out = el('pull-out');
+        out.innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Contacting the device...';
+        api('esslPull', { from: el('pull-from').value, to: el('pull-to').value }).then(function (r) {
+          out.innerHTML = '<div class="locked-note" style="background:#d1fae5;color:#065f46">' +
+            'Fetched ' + r.fetched + ' punches &rarr; wrote ' + r.days + ' attendance day(s).' +
+            (r.protectedDays ? ' ' + r.protectedDays + ' day(s) left alone (leave or locked payroll).' : '') +
+            '</div>' + (r.skipped.length ? '<div class="err show" style="margin-top:8px">' +
+            r.skipped.map(esc).join('<br>') + '</div>' : '');
+          reload();
+        }).catch(function (e) { out.innerHTML = '<div class="err show">' + esc(e.message) + '</div>'; });
+     } }]);
+}
+
+function openPush() {
+  if (S.demo) return toast('Demo mode has nowhere to push to');
+  var ym = thisMonth();
+  showModal('Push data to an external system',
+    '<div class="grid2">' +
+      '<label class="field">Month<input id="push-month" type="month" value="' + ym + '"></label>' +
+      '<label class="field">What to send<select id="push-what">' +
+        '<option value="attendance">Attendance (day by day)</option>' +
+        '<option value="payroll">Payroll run</option>' +
+      '</select></label>' +
+    '</div>' +
+    '<p style="margin-top:12px;font-size:.8rem;color:var(--text-muted);line-height:1.6">' +
+    'Sends a JSON body <code>{company, month, rows}</code> to the push endpoint configured above, with the ' +
+    'bearer token if one is stored. The endpoint must be reachable from the public internet.</p>' +
+    '<div id="push-out" style="margin-top:12px;font-size:.8rem"></div>',
+    [{ label: 'Close', cls: 'ghost', onClick: closeModal },
+     { label: 'Send', onClick: function () {
+        var ym2 = el('push-month').value;
+        var what = el('push-what').value;
+        var rows = what === 'payroll' ? savedRunFor(ym2) : attendanceRowsFor(ym2);
+        if (!rows.length) return toast('Nothing to send for ' + monthLabel(ym2), 'bad');
+        var out = el('push-out');
+        out.innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Sending ' + rows.length + ' rows...';
+        api('esslPush', { month: ym2, rows: rows }).then(function (r) {
+          out.innerHTML = '<div class="locked-note" style="background:#d1fae5;color:#065f46">' +
+            'Sent ' + r.sent + ' rows. Endpoint replied HTTP ' + r.code + '.</div>' +
+            '<pre style="font-size:.7rem;background:#f1f5f9;padding:8px;border-radius:6px;overflow:auto">' +
+            esc(r.body) + '</pre>';
+        }).catch(function (e) { out.innerHTML = '<div class="err show">' + esc(e.message) + '</div>'; });
+     } }]);
+}
+
+function attendanceRowsFor(ym) {
+  return S.attendance.filter(function (a) { return String(a.date).slice(0, 7) === ym; });
+}
+
+function downloadAgentConfig() {
+  var st = S.settings;
+  var cfg = {
+    hrmsUrl: S.demo ? 'https://script.google.com/macros/s/XXXX/exec' : S.api,
+    ingestToken: 'paste-the-token-you-saved-above',
+    sql: {
+      server: st.sql_server || 'localhost\\SQLEXPRESS',
+      database: st.sql_database || 'etimetracklite1',
+      user: st.sql_user || 'sa',
+      password: '',
+      table: st.sql_table || 'DeviceLogs',
+      columns: { deviceId: 'UserId', punchTime: 'LogDate', device: 'DeviceId', direction: 'C1' },
+      options: { encrypt: false, trustServerCertificate: true }
+    }
+  };
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' }));
+  a.download = 'essl-sync.config.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Put this next to tools/essl-sync.js on the machine that can see SQL Server');
+}
+
+/* Generate INSERT statements so attendance can be pushed into any SQL database. */
+function exportSql() {
+  var ym = el('att-month') && el('att-month').value ? el('att-month').value : thisMonth();
+  var rows = attendanceRowsFor(ym);
+  if (!rows.length) return toast('No attendance saved for ' + monthLabel(ym), 'bad');
+  var table = S.settings.sql_table || 'DeviceLogs';
+  var q = function (v) { return "'" + String(v === undefined || v === null ? '' : v).replace(/'/g, "''") + "'"; };
+  var sql = [
+    '-- HRMS Lite attendance export for ' + ym,
+    '-- Target table: ' + table + '  (adjust the column list to match your schema)',
+    'BEGIN TRANSACTION;'
+  ].concat(rows.map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    return 'INSERT INTO ' + table +
+      ' (emp_code, device_id, att_date, status, in_time, out_time, hours, remarks) VALUES (' +
+      [q(r.emp_code), q(e.device_id || ''), q(r.date), q(r.status), q(r.in_time), q(r.out_time),
+       num(r.hours), q(r.remarks)].join(', ') + ');';
+  })).concat(['COMMIT;']).join('\n');
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([sql], { type: 'text/plain' }));
+  a.download = 'attendance-' + ym + '.sql';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(rows.length + ' INSERT statements written');
+}
+
+/* ------------------------------ account -------------------------- */
+function accountPane() {
+  return '<div class="grid2">' +
+      '<label class="field">Current password<input id="pw-old" type="password"></label>' +
+      '<label class="field">New password<input id="pw-new" type="password"></label>' +
+    '</div>' +
+    '<button class="ghost sm" style="margin-top:12px" onclick="changePassword()">Update password</button>' +
+    '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.7">Signed in as <b>' +
+    esc(S.user.email) + '</b> (' + esc(S.user.role) + ').<br>' +
+    'Add more users by adding rows to the <b>Users</b> tab of the sheet: email, password hash, role ' +
+    '(<code>admin</code> or <code>employee</code>), employee code, active.</p>';
 }
 
 function changePassword() {
@@ -3113,15 +3527,459 @@ function changePassword() {
     .catch(function (e) { toast(e.message, 'bad'); });
 }
 
+
+/* ---------------------------- live clock ------------------------ */
+function startClock() {
+  if (S._clock) return;
+  var tick = function () {
+    var now = new Date();
+    var h = now.getHours(), m = now.getMinutes(), sec = now.getSeconds();
+    var ampm = h < 12 ? 'AM' : 'PM';
+    var h12 = h % 12 || 12;
+    var pad = function (n) { return ('0' + n).slice(-2); };
+    var t = el('clock-time');
+    if (t) t.innerHTML = h12 + ':' + pad(m) + ':' + pad(sec) + ' <small>' + ampm + '</small>';
+    var d = el('clock-date');
+    if (d) {
+      d.innerHTML = now.toLocaleDateString(undefined, {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      }) + (S.settings.shift_start ? ' &middot; shift ' + esc(S.settings.shift_start) + '-' +
+            esc(S.settings.shift_end || '') : '');
+    }
+  };
+  tick();
+  S._clock = setInterval(tick, 1000);
+}
+
 /* ------------------------------ init ---------------------------- */
 (function init() {
   var saved = localStorage.getItem('hrms_lite_api');
-  if (saved) el('in-api').value = saved;
-  el('in-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-login').click(); });
+  if (saved) {
+    el('in-api').value = saved;
+    try {
+      el('login-target').textContent = 'Connecting to ' + new URL(saved).hostname + '.';
+    } catch (e) { /* keep the default line */ }
+  } else {
+    el('login-adv').open = true;      /* first run: show where the URL goes */
+  }
+  ['in-pass', 'in-email'].forEach(function (id) {
+    el(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-login').click(); });
+  });
   window.addEventListener('resize', function () {
     if (S.user && S.view === 'dashboard') renderDashboard();
   });
 })();
 </script>
+<script>
+/* =================================================================
+   SETTINGS > IMPORT DATA
+   Manual import of attendance, biometric punch logs and employees
+   from CSV or Excel (.xlsx). The Excel reader is built in - no
+   external library, so the file still works offline.
+   ================================================================= */
+
+var IMPORT_KINDS = {
+  punch: {
+    label: 'Biometric punch log (device export)',
+    note: 'One row per punch. Needs an employee or device-id column and a punch time. ' +
+          'Punches are grouped per employee per day: first in, last out, status from the hours worked.',
+    columns: 'emp_code or device_id / user_id / enroll_no, and punch_time / log_date / att_datetime'
+  },
+  attendance: {
+    label: 'Attendance, one row per day',
+    note: 'One row per employee per day. Status is optional - a row with an in-time counts as Present.',
+    columns: 'emp_code, date, and optionally status, in_time, out_time, remarks'
+  },
+  grid: {
+    label: 'Attendance, month grid (one column per day)',
+    note: 'The layout the Attendance module exports: one row per employee, one column per day of the month.',
+    columns: 'emp_code, then columns headed 1, 2, 3 ... 31 holding P / A / HD / L / WO / H'
+  },
+  employees: {
+    label: 'Employee master',
+    note: 'Adds or updates employees. Employee codes are yours - every row must carry one.',
+    columns: 'emp_code, name, and any other employee field'
+  }
+};
+
+function importPane() {
+  return '' +
+  '<div class="grid2">' +
+    '<label class="field">What are you importing' +
+      '<select id="imp-kind" onchange="renderImportHelp()">' +
+        Object.keys(IMPORT_KINDS).map(function (k) {
+          return '<option value="' + k + '">' + esc(IMPORT_KINDS[k].label) + '</option>';
+        }).join('') +
+      '</select></label>' +
+    '<label class="field">Month (grid imports only)<input type="month" id="imp-month" value="' + thisMonth() + '"></label>' +
+  '</div>' +
+  '<div id="imp-help" style="margin:12px 0"></div>' +
+  '<label class="field">File (.csv or .xlsx)<input type="file" id="imp-any" accept=".csv,.xlsx,.xls,text/csv"></label>' +
+  '<div id="imp-preview" style="margin-top:14px"></div>' +
+  '<div class="toolbar" style="margin-top:14px">' +
+    '<button class="ghost sm" onclick="downloadImportTemplate()">Download template</button>' +
+    '<span class="spacer"></span>' +
+    '<button id="imp-go" onclick="runImport()" disabled>Import</button>' +
+  '</div>' +
+  '<p style="margin-top:6px;font-size:.72rem;color:var(--text-muted);line-height:1.6">' +
+  'Nothing is written until you press Import, and the preview shows exactly what will be written. ' +
+  'Approved leave and months with a finalised payroll run are never overwritten.</p>';
+}
+
+function renderImportHelp() {
+  var k = IMPORT_KINDS[el('imp-kind').value];
+  el('imp-help').innerHTML = '<div class="locked-note" style="background:#f1f5f9;color:var(--text-dark);' +
+    'align-items:flex-start"><div>&#9432;</div><div style="font-weight:500;line-height:1.6">' +
+    esc(k.note) + '<br><b>Columns:</b> <code>' + esc(k.columns) + '</code></div></div>';
+  el('imp-preview').innerHTML = '';
+  el('imp-go').disabled = true;
+  S.importRows = null;
+}
+
+/* ---------------------------- file reading ----------------------- */
+function readSpreadsheet(file) {
+  var name = (file.name || '').toLowerCase();
+  if (name.slice(-5) === '.xlsx' || name.slice(-4) === '.xls') {
+    return file.arrayBuffer().then(readXlsx);
+  }
+  return file.text().then(function (t) { return parseCSV(t); });
+}
+
+/* Minimal .xlsx reader: unzip with DecompressionStream, then parse the XML. */
+function readXlsx(buf) {
+  if (typeof DecompressionStream === 'undefined') {
+    return Promise.reject(new Error('This browser cannot open .xlsx files. Save the sheet as CSV and try again.'));
+  }
+  var dv = new DataView(buf), dec = new TextDecoder();
+  var eocd = -1;
+  for (var i = buf.byteLength - 22; i >= 0 && i > buf.byteLength - 66000; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return Promise.reject(new Error('That is not a readable .xlsx file.'));
+
+  var count = dv.getUint16(eocd + 10, true), p = dv.getUint32(eocd + 16, true), files = {};
+  for (var n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    var nameLen = dv.getUint16(p + 28, true);
+    files[dec.decode(new Uint8Array(buf, p + 46, nameLen))] = {
+      method: dv.getUint16(p + 10, true),
+      compSize: dv.getUint32(p + 20, true),
+      localOff: dv.getUint32(p + 42, true)
+    };
+    p += 46 + nameLen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+  }
+
+  var readEntry = function (entryName) {
+    var f = files[entryName];
+    if (!f) return Promise.resolve(null);
+    var start = f.localOff + 30 + dv.getUint16(f.localOff + 26, true) + dv.getUint16(f.localOff + 28, true);
+    var data = new Uint8Array(buf, start, f.compSize);
+    if (f.method === 0) return Promise.resolve(dec.decode(data));
+    var stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(stream).text();
+  };
+
+  var sheetName = files['xl/worksheets/sheet1.xml'] ? 'xl/worksheets/sheet1.xml'
+    : Object.keys(files).filter(function (k) { return /^xl\/worksheets\/.*\.xml$/.test(k); }).sort()[0];
+  if (!sheetName) return Promise.reject(new Error('No worksheet found inside the workbook.'));
+
+  return Promise.all([readEntry('xl/sharedStrings.xml'), readEntry(sheetName)])
+    .then(function (parts) {
+      var parser = new DOMParser();
+      var shared = [];
+      if (parts[0]) {
+        var sx = parser.parseFromString(parts[0], 'application/xml');
+        Array.prototype.forEach.call(sx.getElementsByTagName('si'), function (si) {
+          var text = '';
+          Array.prototype.forEach.call(si.getElementsByTagName('t'), function (t) { text += t.textContent; });
+          shared.push(text);
+        });
+      }
+      var doc = parser.parseFromString(parts[1], 'application/xml');
+      var rows = [];
+      Array.prototype.forEach.call(doc.getElementsByTagName('row'), function (row) {
+        var out = [];
+        Array.prototype.forEach.call(row.getElementsByTagName('c'), function (c) {
+          var ref = c.getAttribute('r') || '', type = c.getAttribute('t');
+          var col = colIndex((ref.match(/^[A-Z]+/) || ['A'])[0]);
+          var vEl = c.getElementsByTagName('v')[0];
+          var value = '';
+          if (type === 's' && vEl) value = shared[+vEl.textContent] || '';
+          else if (type === 'inlineStr') {
+            var isEl = c.getElementsByTagName('t')[0];
+            value = isEl ? isEl.textContent : '';
+          } else if (vEl) value = vEl.textContent;
+          while (out.length < col) out.push('');
+          out[col] = value;
+        });
+        rows.push(out);
+      });
+      return rows.filter(function (r) { return r.join('').trim() !== ''; });
+    });
+}
+
+function colIndex(letters) {
+  var n = 0;
+  for (var i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64);
+  return n - 1;
+}
+
+/* Excel stores dates and times as a serial number counted from 1899-12-30. */
+function excelSerial(v) {
+  var n = parseFloat(v);
+  if (isNaN(n) || n < 20000 || n > 90000) return null;
+  var ms = Math.round((n - 25569) * 86400 * 1000);
+  var d = new Date(ms);
+  var pad = function (x) { return ('0' + x).slice(-2); };
+  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
+    ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+}
+function cellDateTime(v) {
+  var serial = excelSerial(v);
+  return serial || String(v || '').trim();
+}
+
+/* ---------------------------- preview ---------------------------- */
+function headerIndex(headers, names) {
+  for (var i = 0; i < names.length; i++) {
+    var ix = headers.indexOf(names[i]);
+    if (ix >= 0) return ix;
+  }
+  return -1;
+}
+function normHeaders(row) {
+  return row.map(function (h) { return String(h || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''); });
+}
+
+function buildImport(rows, kind, ym) {
+  var headers = normHeaders(rows[0]);
+  var out = { rows: [], problems: [], kind: kind };
+  var known = {};
+  S.employees.forEach(function (e) {
+    known[String(e.emp_code).toUpperCase()] = e.emp_code;
+    if (e.device_id) known['DEV:' + String(e.device_id).trim()] = e.emp_code;
+  });
+
+  if (kind === 'employees') {
+    var cols = EMP_FIELDS.map(function (f) { return f[0]; });
+    rows.slice(1).forEach(function (r, i) {
+      var obj = {};
+      headers.forEach(function (h, c) {
+        var match = cols.filter(function (x) { return x.replace(/[^a-z0-9]/g, '') === h; })[0];
+        if (match) obj[match] = String(r[c] === undefined ? '' : r[c]).trim();
+      });
+      if (!obj.name && !obj.emp_code) return;
+      if (!obj.emp_code) { out.problems.push('Row ' + (i + 2) + ': no employee code - codes are entered by you'); return; }
+      obj.updated_at = today();
+      var errs = validateEmployee(obj, obj.emp_code);
+      if (errs.length) out.problems.push('Row ' + (i + 2) + ': ' + errs[0]);
+      else out.rows.push(obj);
+    });
+    return out;
+  }
+
+  if (kind === 'punch') {
+    var iCode = headerIndex(headers, ['empcode', 'employeecode', 'employeeid']);
+    var iDev = headerIndex(headers, ['deviceid', 'userid', 'enrollno', 'enrollnumber', 'usrid', 'indexid']);
+    var iTime = headerIndex(headers, ['punchtime', 'logdate', 'attdatetime', 'datetime', 'timestamp', 'recordtime']);
+    if (iTime < 0) { out.problems.push('No punch time column found.'); return out; }
+    if (iCode < 0 && iDev < 0) { out.problems.push('No employee code or device id column found.'); return out; }
+    var punches = [];
+    rows.slice(1).forEach(function (r, i) {
+      var raw = cellDateTime(r[iTime]);
+      var when = parsePunchStamp(raw);
+      var code = iCode >= 0 ? known[String(r[iCode] || '').trim().toUpperCase()] : null;
+      if (!code && iDev >= 0) code = known['DEV:' + String(r[iDev] || '').trim()];
+      if (!when) { out.problems.push('Row ' + (i + 2) + ': unreadable punch time "' + raw + '"'); return; }
+      if (!code) {
+        out.problems.push('Row ' + (i + 2) + ': no employee matches "' +
+          (iCode >= 0 ? r[iCode] : '') + (iDev >= 0 ? ' / device ' + r[iDev] : '') + '"');
+        return;
+      }
+      punches.push({ code: code, date: when.date, time: when.time });
+    });
+    out.rows = punchesToAttendance(punches, out.problems);
+    return out;
+  }
+
+  if (kind === 'attendance') {
+    var aCode = headerIndex(headers, ['empcode', 'employeecode', 'code', 'employeeid']);
+    var aDate = headerIndex(headers, ['date', 'attdate', 'attendancedate', 'day']);
+    var aStat = headerIndex(headers, ['status', 'attstatus']);
+    var aIn = headerIndex(headers, ['intime', 'in', 'punchin']);
+    var aOut = headerIndex(headers, ['outtime', 'out', 'punchout']);
+    var aRem = headerIndex(headers, ['remarks', 'remark', 'note']);
+    if (aCode < 0 || aDate < 0) { out.problems.push('Need an employee code column and a date column.'); return out; }
+    rows.slice(1).forEach(function (r, i) {
+      var code = known[String(r[aCode] || '').trim().toUpperCase()];
+      var iso = normalizeDate(excelSerial(r[aDate]) ? excelSerial(r[aDate]).slice(0, 10) : r[aDate]);
+      if (!code) { out.problems.push('Row ' + (i + 2) + ': unknown employee "' + r[aCode] + '"'); return; }
+      if (!iso) { out.problems.push('Row ' + (i + 2) + ': unreadable date "' + r[aDate] + '"'); return; }
+      var inT = aIn >= 0 ? timeOnly(r[aIn]) : '';
+      var st = aStat >= 0 ? String(r[aStat] || '').trim().toUpperCase() : '';
+      if (STATUSES.indexOf(st) < 0) st = inT ? 'P' : 'A';
+      out.rows.push(attRow(code, iso, st, inT, aOut >= 0 ? timeOnly(r[aOut]) : '',
+                           aRem >= 0 ? String(r[aRem] || '') : 'file import'));
+    });
+    return out;
+  }
+
+  /* grid: emp_code + one column per day */
+  var gCode = headerIndex(headers, ['empcode', 'employeecode', 'code', 'employeeid']);
+  if (gCode < 0) { out.problems.push('Need an emp_code column.'); return out; }
+  var dayCols = [];
+  headers.forEach(function (h, c) {
+    var d = parseInt(h, 10);
+    if (!isNaN(d) && d >= 1 && d <= 31 && String(d) === h.replace(/^0+/, '')) dayCols.push({ day: d, col: c });
+  });
+  if (!dayCols.length) { out.problems.push('No day columns (headed 1 to 31) found.'); return out; }
+  rows.slice(1).forEach(function (r, i) {
+    var code = known[String(r[gCode] || '').trim().toUpperCase()];
+    if (!code) { out.problems.push('Row ' + (i + 2) + ': unknown employee "' + r[gCode] + '"'); return; }
+    dayCols.forEach(function (dc) {
+      var st = String(r[dc.col] || '').trim().toUpperCase();
+      if (!st || STATUSES.indexOf(st) < 0) return;
+      if (dc.day > daysInMonth(ym)) return;
+      out.rows.push(attRow(code, dateStr(ym, dc.day), st, '', '', 'file import'));
+    });
+  });
+  return out;
+}
+
+function timeOnly(v) {
+  var s = excelSerial(v);
+  if (s) return s.slice(11);
+  var m = String(v || '').trim().match(/(\d{1,2}):(\d{2})/);
+  return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
+}
+function parsePunchStamp(v) {
+  var s = String(v || '').trim().replace('T', ' ');
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ ]+(\d{1,2}):(\d{2})/);
+  if (m) return { date: m[1] + '-' + m[2] + '-' + m[3], time: ('0' + m[4]).slice(-2) + ':' + m[5] };
+  m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})[ ]+(\d{1,2}):(\d{2})/);
+  if (m) {
+    return { date: m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2),
+             time: ('0' + m[4]).slice(-2) + ':' + m[5] };
+  }
+  return null;
+}
+function attRow(code, iso, status, inT, outT, remark) {
+  var hours = 0;
+  if (minutesOf(inT) !== null && minutesOf(outT) !== null) {
+    hours = Math.round((minutesOf(outT) - minutesOf(inT)) / 6) / 10;
+  } else if (status === 'P') hours = 9;
+  else if (status === 'HD') hours = 4.5;
+  return { id: code + '_' + iso, date: iso, emp_code: code, status: status,
+           in_time: inT || '', out_time: outT || '', hours: hours,
+           remarks: remark || '', updated_at: today() };
+}
+
+/* First punch in, last punch out, status from hours - the same rule the backend uses. */
+function punchesToAttendance(punches, problems) {
+  var full = num(S.settings.full_day_hours || 8), half = num(S.settings.half_day_hours || 4);
+  var groups = {};
+  punches.forEach(function (p) {
+    var key = p.code + '_' + p.date;
+    groups[key] = groups[key] || { code: p.code, date: p.date, times: [] };
+    groups[key].times.push(p.time);
+  });
+  var rows = [];
+  Object.keys(groups).forEach(function (key) {
+    var g = groups[key];
+    if (monthLocked(g.date.slice(0, 7))) {
+      problems.push(g.code + ' ' + g.date + ': payroll for that month is finalised - left alone');
+      return;
+    }
+    var existing = attMap(g.date.slice(0, 7))[key];
+    if (existing && existing.status === 'L') {
+      problems.push(g.code + ' ' + g.date + ': on approved leave - left alone');
+      return;
+    }
+    g.times.sort();
+    var inT = g.times[0], outT = g.times[g.times.length - 1];
+    var hours = g.times.length > 1 ? (minutesOf(outT) - minutesOf(inT)) / 60 : 0;
+    var status, remark = 'punch import';
+    if (g.times.length < 2) { status = 'P'; remark = 'single punch, verify'; }
+    else if (hours >= full) status = 'P';
+    else if (hours >= half) { status = 'HD'; remark = hours.toFixed(1) + ' h'; }
+    else { status = 'A'; remark = 'only ' + hours.toFixed(1) + ' h, verify'; }
+    rows.push(attRow(g.code, g.date, status, inT, g.times.length > 1 ? outT : '', remark));
+  });
+  return rows;
+}
+
+/* ---------------------------- preview + run ---------------------- */
+function onImportFile(file) {
+  var kind = el('imp-kind').value, ym = el('imp-month').value || thisMonth();
+  el('imp-preview').innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Reading the file...';
+  readSpreadsheet(file).then(function (rows) {
+    if (!rows || rows.length < 2) throw new Error('The file has a header row but no data rows.');
+    var built = buildImport(rows, kind, ym);
+    S.importRows = built;
+    var sample = built.rows.slice(0, 8);
+    var cols = sample.length ? Object.keys(sample[0]) : [];
+    el('imp-preview').innerHTML =
+      '<div class="locked-note" style="background:' + (built.rows.length ? '#d1fae5' : '#fee2e2') +
+      ';color:' + (built.rows.length ? '#065f46' : '#991b1b') + '">' +
+      (built.rows.length
+        ? built.rows.length + ' row(s) ready to write from ' + (rows.length - 1) + ' file row(s).'
+        : 'Nothing importable was found in this file.') + '</div>' +
+      (built.problems.length ? '<div class="err show" style="margin-top:10px">' +
+        built.problems.slice(0, 8).map(esc).join('<br>') +
+        (built.problems.length > 8 ? '<br>and ' + (built.problems.length - 8) + ' more' : '') + '</div>' : '') +
+      (sample.length ? '<div class="table-wrap" style="margin-top:12px;max-height:230px"><table><thead><tr>' +
+        cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        sample.map(function (r) {
+          return '<tr>' + cols.map(function (c) { return '<td>' + esc(r[c]) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div class="sub-line" style="margin-top:6px">Showing the first ' + sample.length + ' of ' +
+        built.rows.length + ' rows.</div>' : '');
+    el('imp-go').disabled = !built.rows.length;
+  }).catch(function (e) {
+    el('imp-preview').innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
+    el('imp-go').disabled = true;
+  });
+}
+
+function runImport() {
+  var built = S.importRows;
+  if (!built || !built.rows.length) return;
+  var btn = el('imp-go');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Importing...';
+  var sheet = built.kind === 'employees' ? 'Employees' : 'Attendance';
+  api('saveMany', { sheet: sheet, rows: built.rows }).then(function () {
+    toast(built.rows.length + ' row(s) imported', 'good');
+    closeModal();
+    reload();
+  }).catch(function (e) {
+    btn.disabled = false; btn.textContent = 'Import'; toast(e.message, 'bad');
+  });
+}
+
+function downloadImportTemplate() {
+  var kind = el('imp-kind').value, ym = el('imp-month').value || thisMonth();
+  if (kind === 'employees') {
+    var cols = EMP_FIELDS.map(function (f) { return f[0]; });
+    return download('employees-template.csv', toCSV(cols, [cols.map(function (c) {
+      return c === 'emp_code' ? 'YOUR-CODE-001' : (c === 'name' ? 'Full Name' : '');
+    })]));
+  }
+  if (kind === 'punch') {
+    return download('punch-template.csv', toCSV(['emp_code', 'device_id', 'punch_time'],
+      [['EMP001', '12', '2026-09-16 09:28'], ['EMP001', '12', '2026-09-16 18:41']]));
+  }
+  if (kind === 'attendance') {
+    return download('attendance-template.csv', toCSV(
+      ['emp_code', 'date', 'status', 'in_time', 'out_time', 'remarks'],
+      [['EMP001', today(), 'P', '09:30', '18:30', '']]));
+  }
+  var cols2 = ['emp_code'];
+  for (var d = 1; d <= daysInMonth(ym); d++) cols2.push(String(d));
+  download('attendance-grid-' + ym + '.csv', toCSV(cols2, S.employees.slice(0, 3).map(function (e) {
+    return [e.emp_code].concat(cols2.slice(1).map(function () { return 'P'; }));
+  })));
+}
+</script>
+
 </body>
 </html>
