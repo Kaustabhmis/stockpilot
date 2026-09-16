@@ -3,69 +3,85 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HRMS Lite &mdash; 5 Module HR &amp; Payroll</title>
+<title>HRMS Lite &mdash; Dashboard + 5 Modules</title>
 <style>
 :root{
   --primary:#2563eb; --primary-hover:#1d4ed8; --accent:#0ea5e9;
   --success:#10b981; --warning:#f59e0b; --danger:#ef4444;
   --bg-main:#f1f5f9; --bg-card:#ffffff; --border:#e2e8f0;
-  --text-dark:#0f172a; --text-muted:#64748b;
+  --text-dark:#0f172a; --text-muted:#64748b; --text-soft:#94a3b8;
   --sidebar-bg:#0f172a; --sidebar-text:#94a3b8; --sidebar-active:#1e293b;
   --font-sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  /* data-viz roles (validated light palette) */
+  --series-present:#1baf7a; --series-leave:#2a78d6; --series-absent:#eb6834;
+  --seq-500:#256abf; --seq-450:#2a78d6; --seq-350:#5598e7; --seq-250:#86b6ef; --seq-150:#b7d3f6;
+  --grid:#e2e8f0;
 }
 *{box-sizing:border-box;margin:0;padding:0;font-family:var(--font-sans);}
 body{background:var(--bg-main);color:var(--text-dark);display:flex;height:100vh;overflow:hidden;font-size:14px;}
 
-/* Sidebar */
+/* ---------------- Sidebar ---------------- */
 .sidebar{width:250px;background:var(--sidebar-bg);color:#fff;display:flex;flex-direction:column;flex-shrink:0;}
 .sidebar-header{padding:20px;font-size:1.25rem;font-weight:800;border-bottom:1px solid rgba(255,255,255,.06);}
 .sidebar-header span{color:var(--accent);}
-.sidebar-header small{display:block;font-size:.65rem;font-weight:600;letter-spacing:1px;color:#475569;margin-top:4px;text-transform:uppercase;}
-.nav-items{flex:1;padding:14px 0;overflow-y:auto;}
-.nav-label{font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:#475569;padding:6px 20px 8px;font-weight:700;}
+.sidebar-header small{display:block;font-size:.65rem;font-weight:600;letter-spacing:1px;color:#475569;margin-top:4px;
+  text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nav-items{flex:1;padding:10px 0;overflow-y:auto;}
+.nav-label{font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:#475569;padding:14px 20px 8px;font-weight:700;}
 .nav-item{padding:11px 20px;display:flex;align-items:center;gap:12px;color:var(--sidebar-text);cursor:pointer;
   border-left:3px solid transparent;font-size:.9rem;font-weight:500;transition:.15s;}
 .nav-item:hover{background:rgba(255,255,255,.05);color:#fff;}
 .nav-item.active{background:var(--sidebar-active);color:#fff;border-left-color:var(--primary);}
 .nav-item .num{margin-left:auto;font-size:.65rem;color:#475569;font-weight:700;}
+.nav-item.home{border-bottom:1px solid rgba(255,255,255,.06);}
+.nav-item .dot{margin-left:auto;background:var(--danger);color:#fff;border-radius:99px;padding:1px 7px;
+  font-size:.65rem;font-weight:800;display:none;}
 .sidebar-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.06);font-size:.72rem;color:#475569;}
+.sidebar-footer a{color:var(--sidebar-text);text-decoration:none;}
+.sidebar-footer a:hover{color:#fff;}
 
-/* Layout */
+/* ---------------- Layout ---------------- */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .topbar{background:var(--bg-card);padding:12px 26px;display:flex;justify-content:space-between;align-items:center;
-  border-bottom:1px solid var(--border);flex-shrink:0;}
+  border-bottom:1px solid var(--border);flex-shrink:0;gap:16px;}
 .topbar h2{font-size:1.1rem;font-weight:700;}
 .topbar .sub{font-size:.75rem;color:var(--text-muted);font-weight:500;margin-top:2px;}
 .userbox{display:flex;align-items:center;gap:12px;}
 .avatar{width:32px;height:32px;background:var(--primary);border-radius:50%;display:flex;align-items:center;
-  justify-content:center;color:#fff;font-weight:700;font-size:.8rem;}
-.content{flex:1;overflow-y:auto;padding:24px 26px 60px;}
+  justify-content:center;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0;}
+.content{flex:1;overflow-y:auto;padding:22px 26px 60px;}
 .view{display:none;}
 .view.active{display:block;}
 
-/* Cards / tables */
+/* ---------------- Cards, tables ---------------- */
 .card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px;}
-.card h3{font-size:.95rem;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
-.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+.card h3{font-size:.95rem;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+.card h3 .spacer{flex:1;}
+.card .card-sub{font-size:.75rem;color:var(--text-muted);margin-bottom:14px;}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;}
 .toolbar .spacer{flex:1;}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px;margin-bottom:18px;}
 .kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;}
-.kpi .label{font-size:.7rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:700;}
-.kpi .value{font-size:1.6rem;font-weight:800;margin-top:6px;}
+.kpi .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:700;}
+.kpi .value{font-size:1.55rem;font-weight:800;margin-top:6px;line-height:1.15;}
 .kpi .hint{font-size:.72rem;color:var(--text-muted);margin-top:4px;}
+.kpi.hero .value{font-size:2.1rem;}
+.kpi.tap{cursor:pointer;} .kpi.tap:hover{border-color:var(--primary);}
 
 table{width:100%;border-collapse:collapse;font-size:.85rem;}
-th{text-align:left;padding:10px;background:#f8fafc;border-bottom:2px solid var(--border);font-size:.7rem;
+th{text-align:left;padding:10px;background:#f8fafc;border-bottom:2px solid var(--border);font-size:.68rem;
   text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);white-space:nowrap;}
+th.sortable{cursor:pointer;user-select:none;} th.sortable:hover{color:var(--primary);}
+th .arrow{opacity:.45;font-size:.6rem;}
 td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
 tbody tr:hover{background:#f8fafc;}
 .num-col{text-align:right;font-variant-numeric:tabular-nums;}
-.table-wrap{overflow:auto;max-height:65vh;border:1px solid var(--border);border-radius:8px;}
-.table-wrap table{font-size:.82rem;}
+.table-wrap{overflow:auto;max-height:64vh;border:1px solid var(--border);border-radius:8px;}
 .table-wrap th{position:sticky;top:0;z-index:2;}
-.empty{padding:40px;text-align:center;color:var(--text-muted);}
+.empty{padding:36px;text-align:center;color:var(--text-muted);}
+.sub-line{font-size:.7rem;color:var(--text-muted);}
 
-/* Controls */
+/* ---------------- Controls ---------------- */
 button,.btn{background:var(--primary);color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:.82rem;
   font-weight:600;cursor:pointer;transition:.15s;}
 button:hover{background:var(--primary-hover);}
@@ -78,47 +94,107 @@ button:disabled{opacity:.5;cursor:not-allowed;}
 input,select,textarea{padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:.85rem;
   background:#fff;color:var(--text-dark);}
 input:focus,select:focus,textarea:focus{outline:2px solid #bfdbfe;border-color:var(--primary);}
-label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-weight:700;color:var(--text-muted);
+input.bad{border-color:var(--danger);background:#fef2f2;}
+label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weight:700;color:var(--text-muted);
   text-transform:uppercase;letter-spacing:.4px;}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;}
+.grid-half{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;}
+.field-err{font-size:.7rem;color:var(--danger);font-weight:600;text-transform:none;letter-spacing:0;}
 
-.badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:.7rem;font-weight:700;}
+.badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:.7rem;font-weight:700;white-space:nowrap;}
 .b-green{background:#d1fae5;color:#065f46;} .b-red{background:#fee2e2;color:#991b1b;}
 .b-amber{background:#fef3c7;color:#92400e;} .b-blue{background:#dbeafe;color:#1e40af;}
-.b-gray{background:#e2e8f0;color:#475569;}
+.b-gray{background:#e2e8f0;color:#475569;} .b-violet{background:#ede9fe;color:#5b21b6;}
 
-/* Attendance grid */
-.att-grid{overflow:auto;max-height:66vh;border:1px solid var(--border);border-radius:8px;}
+/* ---------------- Charts ---------------- */
+.chart{position:relative;}
+.chart svg{display:block;width:100%;height:auto;overflow:visible;}
+.chart{min-height:150px;}
+.chart .gridline{stroke:var(--grid);stroke-width:1;}
+.chart .axis-text{font-size:11px;fill:var(--text-muted);font-family:var(--font-sans);}
+.chart .val-text{font-size:11px;fill:var(--text-dark);font-weight:700;font-family:var(--font-sans);}
+.chart .mark{transition:opacity .12s;}
+.chart .mark:hover{opacity:.82;}
+.legend-row{display:flex;gap:16px;flex-wrap:wrap;font-size:.75rem;color:var(--text-muted);margin-bottom:10px;}
+.legend-row i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
+.chart-tip{position:absolute;background:var(--text-dark);color:#fff;padding:7px 10px;border-radius:6px;
+  font-size:.74rem;pointer-events:none;opacity:0;transition:opacity .12s;white-space:nowrap;z-index:9;font-weight:600;}
+.chart-tip.on{opacity:1;}
+.chart-empty{padding:30px;text-align:center;color:var(--text-muted);font-size:.8rem;}
+
+/* ---------------- Action list ---------------- */
+.action{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--border);
+  border-radius:8px;margin-bottom:9px;cursor:pointer;transition:.15s;}
+.action:hover{border-color:var(--primary);background:#f8fafc;}
+.action .ico{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  font-size:.9rem;flex-shrink:0;}
+.action .txt{flex:1;}
+.action .txt b{display:block;font-size:.84rem;}
+.action .txt span{font-size:.73rem;color:var(--text-muted);}
+.action .go{color:var(--text-soft);font-size:1rem;}
+.all-clear{padding:24px;text-align:center;color:var(--success);font-weight:700;font-size:.85rem;}
+
+/* ---------------- Attendance grid ---------------- */
+.att-grid{overflow:auto;max-height:62vh;border:1px solid var(--border);border-radius:8px;}
 .att-grid table{border-collapse:separate;border-spacing:0;}
 .att-grid th,.att-grid td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:0;}
-.att-grid th{position:sticky;top:0;z-index:3;background:#f8fafc;padding:6px 4px;text-align:center;font-size:.62rem;min-width:34px;}
+.att-grid th{position:sticky;top:0;z-index:3;background:#f8fafc;padding:5px 3px;text-align:center;font-size:.6rem;min-width:34px;}
+.att-grid th.wo{color:var(--danger);} .att-grid th.hol{color:#5b21b6;}
+.att-grid th.day-h{cursor:pointer;} .att-grid th.day-h:hover{background:#e2e8f0;}
 .att-grid th.emp-h,.att-grid td.emp-c{position:sticky;left:0;z-index:2;background:#fff;text-align:left;
-  min-width:190px;padding:8px 10px;}
+  min-width:186px;padding:7px 10px;}
 .att-grid th.emp-h{z-index:4;background:#f8fafc;}
 .att-grid td.emp-c{font-size:.8rem;font-weight:600;}
-.att-cell{width:34px;height:32px;display:flex;align-items:center;justify-content:center;font-size:.7rem;
-  font-weight:700;cursor:pointer;user-select:none;}
+.att-grid td.emp-c button{float:right;margin-top:-2px;}
+.att-cell{width:34px;height:31px;display:flex;align-items:center;justify-content:center;font-size:.68rem;
+  font-weight:700;cursor:pointer;user-select:none;position:relative;}
 .att-cell:hover{outline:2px solid var(--primary);outline-offset:-2px;}
+.att-cell.edited::after{content:'';position:absolute;top:1px;right:1px;width:4px;height:4px;border-radius:50%;
+  background:var(--primary);}
+.att-cell.late::before{content:'';position:absolute;bottom:1px;left:1px;width:4px;height:4px;border-radius:50%;
+  background:var(--warning);}
 .s-P{background:#d1fae5;color:#065f46;} .s-A{background:#fee2e2;color:#991b1b;}
 .s-HD{background:#fef3c7;color:#92400e;} .s-L{background:#dbeafe;color:#1e40af;}
 .s-WO{background:#f1f5f9;color:#94a3b8;} .s-H{background:#ede9fe;color:#5b21b6;}
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--text-muted);margin-top:10px;}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--text-muted);margin-top:10px;align-items:center;}
 .legend span b{display:inline-block;width:18px;height:18px;border-radius:4px;text-align:center;line-height:18px;
   font-size:.6rem;margin-right:5px;vertical-align:middle;}
+.locked-note{background:#fef3c7;color:#92400e;padding:9px 12px;border-radius:7px;font-size:.78rem;
+  font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
 
-/* Modal */
+/* ---------------- Leave calendar ---------------- */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.cal .dow{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:700;
+  text-align:center;padding-bottom:4px;}
+.cal .day{border:1px solid var(--border);border-radius:7px;min-height:74px;padding:5px 6px;font-size:.72rem;}
+.cal .day.off{background:#f8fafc;color:var(--text-soft);}
+.cal .day.hol{background:#f5f3ff;}
+.cal .day .dnum{font-weight:800;color:var(--text-muted);font-size:.7rem;}
+.cal .day .who{background:#dbeafe;color:#1e40af;border-radius:4px;padding:1px 5px;margin-top:3px;
+  font-size:.66rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cal .day .hname{color:#5b21b6;font-size:.65rem;font-weight:700;margin-top:3px;}
+
+/* ---------------- Tabs ---------------- */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;}
+.tab{padding:9px 14px;font-size:.82rem;font-weight:600;color:var(--text-muted);cursor:pointer;
+  border-bottom:2px solid transparent;}
+.tab:hover{color:var(--text-dark);}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+
+/* ---------------- Modal ---------------- */
 .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;
   z-index:100;padding:20px;}
 .modal-bg.open{display:flex;}
-.modal{background:#fff;border-radius:12px;width:100%;max-width:760px;max-height:90vh;display:flex;flex-direction:column;}
-.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:820px;max-height:92vh;display:flex;flex-direction:column;}
+.modal.wide{max-width:1060px;}
+.modal-head{padding:15px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
 .modal-head h3{font-size:1rem;font-weight:700;}
 .modal-body{padding:20px;overflow-y:auto;}
-.modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;}
+.modal-foot{padding:13px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;}
 .x{background:none;color:var(--text-muted);font-size:1.3rem;line-height:1;padding:0 4px;}
 .x:hover{background:none;color:var(--text-dark);}
 
-/* Login */
+/* ---------------- Login ---------------- */
 .login-bg{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a,#1e3a8a);display:flex;align-items:center;
   justify-content:center;z-index:200;padding:20px;}
 .login-card{background:#fff;border-radius:14px;padding:32px;width:100%;max-width:420px;}
@@ -130,23 +206,21 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
 .err.show{display:block;}
 .hintbox{font-size:.72rem;color:var(--text-muted);margin-top:16px;line-height:1.6;border-top:1px solid var(--border);padding-top:14px;}
 
-/* Toast */
 #toast{position:fixed;bottom:22px;right:22px;background:var(--text-dark);color:#fff;padding:12px 18px;border-radius:8px;
-  font-size:.83rem;font-weight:600;z-index:300;opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;}
+  font-size:.83rem;font-weight:600;z-index:300;opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;
+  max-width:420px;}
 #toast.show{opacity:1;transform:translateY(0);}
 #toast.bad{background:var(--danger);} #toast.good{background:var(--success);}
-
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
   border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px;}
 @keyframes sp{to{transform:rotate(360deg);}}
 .demo-flag{background:var(--warning);color:#fff;padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:800;}
 
-/* Payslip print */
 @media print{
   body{display:block;height:auto;overflow:visible;}
   .sidebar,.topbar,.toolbar,.no-print{display:none !important;}
   .content{padding:0;overflow:visible;}
-  .card{border:none;}
+  .card{border:none;page-break-inside:avoid;}
 }
 .payslip{max-width:720px;margin:0 auto;font-size:.85rem;}
 .payslip h2{font-size:1.2rem;margin-bottom:2px;}
@@ -163,41 +237,40 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
 <div class="login-bg" id="login">
   <div class="login-card">
     <h1>HRMS <span style="color:var(--accent)">Lite</span></h1>
-    <p class="sub">Five modules. Google Sheets as the database.</p>
+    <p class="sub">Dashboard + five modules. Google Sheets as the database.</p>
     <div class="err" id="login-err"></div>
     <label class="field">Google Apps Script Web App URL
       <input id="in-api" type="url" placeholder="https://script.google.com/macros/s/..../exec">
     </label>
-    <label class="field">Email
-      <input id="in-email" type="email" value="admin@company.com" autocomplete="username">
-    </label>
-    <label class="field">Password
-      <input id="in-pass" type="password" value="admin123" autocomplete="current-password">
-    </label>
+    <label class="field">Email<input id="in-email" type="email" value="admin@company.com" autocomplete="username"></label>
+    <label class="field">Password<input id="in-pass" type="password" value="admin123" autocomplete="current-password"></label>
     <button id="btn-login">Sign in</button>
     <button class="ghost" id="btn-demo" style="width:100%;margin-top:10px;">Open demo (sample data, no setup)</button>
     <div class="hintbox">
       First run: open your Google Sheet &rarr; <b>Extensions &rarr; Apps Script</b>, paste <b>Code.gs</b>,
-      deploy as a Web app ("Execute as: Me", "Access: Anyone"), then paste the <code>/exec</code> URL above.
-      Default sign-in is <b>admin@company.com</b> / <b>admin123</b> &mdash; change it from Settings.
+      run <code>setup()</code>, deploy as a Web app, then paste the <code>/exec</code> URL above.
+      Default sign-in is <b>admin@company.com</b> / <b>admin123</b>.
     </div>
   </div>
 </div>
 
 <!-- ============================ SIDEBAR =========================== -->
 <div class="sidebar">
-  <div class="sidebar-header">HRMS <span>Lite</span><small id="side-company">5 Modules</small></div>
+  <div class="sidebar-header">HRMS <span>Lite</span><small id="side-company">Dashboard + 5 Modules</small></div>
   <div class="nav-items">
+    <div class="nav-item home active" data-view="dashboard" onclick="go('dashboard')">&#127968; Dashboard
+      <span class="dot" id="nav-alerts">0</span></div>
     <div class="nav-label">Modules</div>
-    <div class="nav-item active" data-view="employees" onclick="go('employees')">&#128101; Employees <span class="num">1</span></div>
+    <div class="nav-item" data-view="employees" onclick="go('employees')">&#128101; Employees <span class="num">1</span></div>
     <div class="nav-item" data-view="attendance" onclick="go('attendance')">&#9200; Attendance <span class="num">2</span></div>
-    <div class="nav-item" data-view="leave" onclick="go('leave')">&#127796; Leave <span class="num">3</span></div>
+    <div class="nav-item" data-view="leave" onclick="go('leave')">&#127796; Leave <span class="num">3</span>
+      <span class="dot" id="nav-leave">0</span></div>
     <div class="nav-item" data-view="payroll" onclick="go('payroll')">&#128176; Payroll <span class="num">4</span></div>
     <div class="nav-item" data-view="reports" onclick="go('reports')">&#128202; Reports <span class="num">5</span></div>
   </div>
   <div class="sidebar-footer">
     <div id="side-mode">Connected</div>
-    <div style="margin-top:6px;"><a href="#" onclick="openSettings();return false;" style="color:#94a3b8;">&#9881; Settings</a></div>
+    <div style="margin-top:6px;"><a href="#" onclick="openSettings();return false;">&#9881; Settings</a></div>
   </div>
 </div>
 
@@ -205,8 +278,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
 <div class="main">
   <div class="topbar">
     <div>
-      <h2 id="page-title">Employees</h2>
-      <div class="sub" id="page-sub">Employee master &mdash; the single source of truth</div>
+      <h2 id="page-title">Dashboard</h2>
+      <div class="sub" id="page-sub">Everything that needs you today</div>
     </div>
     <div class="userbox">
       <span class="demo-flag" id="demo-flag" style="display:none;">DEMO DATA</span>
@@ -221,8 +294,46 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
 
   <div class="content">
 
+    <!-- ---------------- DASHBOARD (home, not a module) ---------------- -->
+    <section class="view active" id="view-dashboard">
+      <div class="kpis" id="dash-kpis"></div>
+      <div class="grid-half">
+        <div class="card">
+          <h3>Attendance, last 14 days</h3>
+          <div class="card-sub">Present, approved leave and unpaid absence per working day</div>
+          <div class="legend-row" id="dash-att-legend"></div>
+          <div class="chart" id="dash-att-chart"></div>
+        </div>
+        <div class="card">
+          <h3>Needs your attention<span class="spacer"></span><span class="badge b-gray" id="dash-action-count">0</span></h3>
+          <div class="card-sub">Anything blocking a correct payroll run</div>
+          <div id="dash-actions"></div>
+        </div>
+        <div class="card">
+          <h3>Headcount by department</h3>
+          <div class="card-sub">Active employees and their monthly gross</div>
+          <div class="chart" id="dash-dept-chart"></div>
+        </div>
+        <div class="card">
+          <h3>Payroll cost, last 6 saved runs</h3>
+          <div class="card-sub">Net payout per month</div>
+          <div class="chart" id="dash-cost-chart"></div>
+        </div>
+        <div class="card">
+          <h3>Who is out today</h3>
+          <div class="card-sub" id="dash-today-date"></div>
+          <div id="dash-today"></div>
+        </div>
+        <div class="card">
+          <h3>Coming up in 30 days</h3>
+          <div class="card-sub">Birthdays and work anniversaries</div>
+          <div id="dash-upcoming"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ---------------- 1. EMPLOYEES ---------------- -->
-    <section class="view active" id="view-employees">
+    <section class="view" id="view-employees">
       <div class="kpis" id="emp-kpis"></div>
       <div class="card">
         <div class="toolbar">
@@ -231,6 +342,10 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
           <select id="emp-status" onchange="renderEmployees()">
             <option value="Active">Active only</option><option value="">All statuses</option>
             <option value="Inactive">Inactive only</option>
+          </select>
+          <select id="emp-quality" onchange="renderEmployees()">
+            <option value="">All records</option>
+            <option value="incomplete">Incomplete records only</option>
           </select>
           <span class="spacer"></span>
           <button class="ghost sm" onclick="exportEmployees()">&#8681; Export CSV</button>
@@ -243,52 +358,83 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
 
     <!-- ---------------- 2. ATTENDANCE ---------------- -->
     <section class="view" id="view-attendance">
+      <div id="att-lock"></div>
       <div class="card">
         <div class="toolbar">
-          <label class="field">Month<input type="month" id="att-month" onchange="renderAttendance()"></label>
+          <label class="field">Month<input type="month" id="att-month" onchange="onAttMonth()"></label>
           <span class="spacer"></span>
-          <button class="ghost sm adm" onclick="markAllPresent()">Mark month present</button>
+          <button class="ghost sm adm" onclick="markAllPresent()">Fill blank days</button>
+          <button class="ghost sm adm" onclick="openAttImport()">&#8679; Import device CSV</button>
           <button class="ghost sm" onclick="exportAttendance()">&#8681; Export CSV</button>
           <button class="adm" id="att-save" onclick="saveAttendance()" disabled>Save changes</button>
         </div>
         <div class="att-grid" id="att-grid"></div>
         <div class="legend">
           <span><b class="s-P">P</b>Present</span><span><b class="s-A">A</b>Absent (LOP)</span>
-          <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Approved leave</span>
+          <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Leave</span>
           <span><b class="s-WO">WO</b>Weekly off</span><span><b class="s-H">H</b>Holiday</span>
-          <span style="margin-left:auto;">Click a cell to change status.</span>
+          <span style="margin-left:auto;">Click a cell to cycle &middot; double-click for times &middot; click a date header to fill the column</span>
         </div>
       </div>
-      <div class="card"><h3>Month summary</h3><div class="table-wrap"><table id="att-summary"></table></div></div>
+      <div class="card">
+        <h3>Month summary</h3>
+        <div class="card-sub">Late marks and overtime come from the in/out times against the shift in Settings</div>
+        <div class="table-wrap"><table id="att-summary"></table></div>
+      </div>
     </section>
 
     <!-- ---------------- 3. LEAVE ---------------- -->
     <section class="view" id="view-leave">
       <div class="kpis" id="leave-kpis"></div>
-      <div class="card">
-        <div class="toolbar">
-          <select id="leave-status" onchange="renderLeave()">
-            <option value="Pending">Pending</option><option value="">All</option>
-            <option value="Approved">Approved</option><option value="Rejected">Rejected</option>
-          </select>
-          <input type="number" id="leave-year" style="width:110px;" onchange="renderLeave()">
-          <span class="spacer"></span>
-          <button onclick="openLeave()">+ Apply for leave</button>
-        </div>
-        <div class="table-wrap"><table id="leave-table"></table></div>
+      <div class="tabs">
+        <div class="tab active" data-tab="list" onclick="leaveTab('list')">Applications</div>
+        <div class="tab" data-tab="calendar" onclick="leaveTab('calendar')">Calendar</div>
+        <div class="tab" data-tab="balance" onclick="leaveTab('balance')">Balances</div>
       </div>
-      <div class="card"><h3>Leave balances</h3><div class="table-wrap"><table id="leave-balance"></table></div></div>
+      <div id="leave-pane-list">
+        <div class="card">
+          <div class="toolbar">
+            <select id="leave-status" onchange="renderLeave()">
+              <option value="Pending">Pending</option><option value="">All</option>
+              <option value="Approved">Approved</option><option value="Rejected">Rejected</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+            <input type="number" id="leave-year" style="width:110px;" onchange="renderLeave()">
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="exportLeave()">&#8681; Export CSV</button>
+            <button onclick="openLeave()">+ Apply for leave</button>
+          </div>
+          <div class="table-wrap"><table id="leave-table"></table></div>
+        </div>
+      </div>
+      <div id="leave-pane-calendar" style="display:none;">
+        <div class="card">
+          <div class="toolbar">
+            <label class="field">Month<input type="month" id="leave-month" onchange="renderLeaveCalendar()"></label>
+          </div>
+          <div class="cal" id="leave-cal"></div>
+        </div>
+      </div>
+      <div id="leave-pane-balance" style="display:none;">
+        <div class="card">
+          <h3>Leave balances</h3>
+          <div class="card-sub">Approved days against the annual quota set in Settings</div>
+          <div class="table-wrap"><table id="leave-balance"></table></div>
+        </div>
+      </div>
     </section>
 
     <!-- ---------------- 4. PAYROLL ---------------- -->
     <section class="view" id="view-payroll">
+      <div id="pay-state"></div>
       <div class="card">
         <div class="toolbar">
           <label class="field">Month<input type="month" id="pay-month" onchange="renderPayroll()"></label>
           <span class="spacer"></span>
-          <button class="ghost sm" onclick="exportPayroll()">&#8681; Bank / salary CSV</button>
+          <button class="ghost sm" onclick="exportPayroll()">&#8681; Bank CSV</button>
+          <button class="ghost sm" onclick="printAllPayslips()">&#128424; All payslips</button>
           <button class="ghost sm adm" id="pay-generate" onclick="generatePayroll()">&#9881; Generate from attendance</button>
-          <button class="adm" id="pay-save" onclick="savePayroll()" disabled>Save payroll run</button>
+          <button class="adm" id="pay-save" onclick="savePayroll()" disabled>Finalise run</button>
         </div>
         <div class="kpis" id="pay-kpis"></div>
         <div class="table-wrap"><table id="pay-table"></table></div>
@@ -300,22 +446,29 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
       <div class="card">
         <div class="toolbar">
           <label class="field">Month<input type="month" id="rep-month" onchange="renderReports()"></label>
+          <label class="field">Report
+            <select id="rep-kind" onchange="renderReports()">
+              <option value="register">Salary register</option>
+              <option value="statutory">PF / ESI statutory contributions</option>
+              <option value="ytd">Year-to-date per employee</option>
+              <option value="exceptions">Attendance exceptions</option>
+              <option value="movement">Joiners &amp; leavers</option>
+            </select>
+          </label>
           <span class="spacer"></span>
+          <button class="ghost sm" onclick="exportReport()">&#8681; Export CSV</button>
           <button class="ghost sm" onclick="window.print()">&#128424; Print</button>
         </div>
       </div>
       <div class="kpis" id="rep-kpis"></div>
-      <div class="grid2">
-        <div class="card"><h3>&#127970; Headcount by department</h3><table id="rep-dept"></table></div>
-        <div class="card"><h3>&#9200; Attendance summary</h3><table id="rep-att"></table></div>
-        <div class="card"><h3>&#127796; Leave summary (year)</h3><table id="rep-leave"></table></div>
-        <div class="card"><h3>&#128176; Payroll cost trend</h3><table id="rep-cost"></table></div>
-      </div>
       <div class="card">
-        <h3>&#128203; Salary register
-          <button class="ghost sm no-print" style="margin-left:auto;" onclick="exportRegister()">&#8681; Export</button>
-        </h3>
-        <div class="table-wrap"><table id="rep-register"></table></div>
+        <h3 id="rep-title">Salary register</h3>
+        <div class="card-sub" id="rep-note"></div>
+        <div class="table-wrap"><table id="rep-table"></table></div>
+      </div>
+      <div class="grid-half">
+        <div class="card"><h3>Headcount by department</h3><table id="rep-dept"></table></div>
+        <div class="card"><h3>Attendance summary</h3><table id="rep-att"></table></div>
       </div>
     </section>
 
@@ -324,7 +477,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
 
 <!-- ============================ MODALS ============================ -->
 <div class="modal-bg" id="modal">
-  <div class="modal">
+  <div class="modal" id="modal-box">
     <div class="modal-head"><h3 id="modal-title">Title</h3><button class="x" onclick="closeModal()">&times;</button></div>
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-foot" id="modal-foot"></div>
@@ -334,23 +487,24 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-wei
 
 <script>
 /* =================================================================
-   HRMS Lite - 5 modules, Google Sheets backend
-   1 Employees | 2 Attendance | 3 Leave | 4 Payroll | 5 Reports
+   HRMS Lite - Dashboard + 5 modules on Google Sheets
    ================================================================= */
 
 var S = {
-  api: '', demo: false, user: null, view: 'employees',
-  settings: {}, employees: [], attendance: [], leave: [], payroll: [],
-  attDirty: {}, payDraft: null, attVersion: 0
+  api: '', demo: false, user: null, view: 'dashboard',
+  settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [],
+  attDirty: {}, payDraft: null, attVersion: 0,
+  empSort: { col: 'emp_code', dir: 1 }
 };
 
 var STATUSES = ['P', 'A', 'HD', 'L', 'WO', 'H'];
 var TITLES = {
+  dashboard: ['Dashboard', 'Everything that needs you today'],
   employees: ['Employees', 'Employee master &mdash; the single source of truth'],
-  attendance: ['Attendance', 'Daily marking, monthly register and LOP'],
-  leave: ['Leave', 'Applications, approvals and balances'],
-  payroll: ['Payroll', 'Monthly salary run, statutory deductions and payslips'],
-  reports: ['Reports', 'Headcount, attendance, leave and salary registers']
+  attendance: ['Attendance', 'Daily marking, monthly register, late marks and LOP'],
+  leave: ['Leave', 'Applications, approvals, calendar and balances'],
+  payroll: ['Payroll', 'Monthly run, statutory deductions, payslips'],
+  reports: ['Reports', 'Registers, statutory returns and exceptions']
 };
 
 /* ---------------------------- helpers --------------------------- */
@@ -360,32 +514,45 @@ function esc(v) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
-function money(v) {
-  return num(v).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
-function cur() { return S.settings.currency === 'INR' || !S.settings.currency ? '₹' : S.settings.currency + ' '; }
+function money(v) { return num(v).toLocaleString('en-IN', { maximumFractionDigits: 0 }); }
+function cur() { return (!S.settings.currency || S.settings.currency === 'INR') ? '₹' : S.settings.currency + ' '; }
 function today() { return new Date().toISOString().slice(0, 10); }
 function thisMonth() { return new Date().toISOString().slice(0, 7); }
 function daysInMonth(ym) { var p = ym.split('-'); return new Date(+p[0], +p[1], 0).getDate(); }
 function dateStr(ym, d) { return ym + '-' + ('0' + d).slice(-2); }
 function weekdayOf(ym, d) { var p = ym.split('-'); return new Date(+p[0], +p[1] - 1, d).getDay(); }
+function addMonths(ym, n) {
+  var p = ym.split('-'), d = new Date(+p[0], +p[1] - 1 + n, 1);
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+}
+function monthLabel(ym) {
+  var p = ym.split('-');
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + " '" + p[0].slice(2);
+}
+var WEEKDAY_MAP = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 function isWeeklyOff(ym, d) {
-  var map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  var offs = String(S.settings.weekly_off || 'Sun').split(',').map(function (x) { return map[x.trim()]; });
+  var offs = String(S.settings.weekly_off || 'Sun').split(',')
+    .map(function (x) { return WEEKDAY_MAP[x.trim()]; });
   return offs.indexOf(weekdayOf(ym, d)) >= 0;
+}
+function holidayOn(iso) {
+  for (var i = 0; i < S.holidays.length; i++) {
+    if (String(S.holidays[i].date) === iso) return S.holidays[i];
+  }
+  return null;
 }
 function toast(msg, kind) {
   var t = el('toast');
   t.textContent = msg;
   t.className = 'show ' + (kind || '');
   clearTimeout(t._t);
-  t._t = setTimeout(function () { t.className = ''; }, 3200);
+  t._t = setTimeout(function () { t.className = ''; }, 3600);
 }
 function isAdmin() { return S.user && S.user.role === 'admin'; }
 function myCode() { return S.user ? String(S.user.emp_code || '') : ''; }
 function download(name, text) {
   var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8;' }));
+  a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8;' }));
   a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
@@ -410,18 +577,18 @@ function parseCSV(text) {
   if (field !== '' || row.length) { row.push(field); rows.push(row); }
   return rows.filter(function (r) { return r.join('').trim() !== ''; });
 }
+function minutesOf(hhmm) {
+  var m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/);
+  return m ? (+m[1]) * 60 + (+m[2]) : null;
+}
 
 /* ------------------------------ API ----------------------------- */
 function api(action, payload) {
   if (S.demo) return Promise.resolve(demoApi(action, payload || {}));
   var body = JSON.stringify({ action: action, payload: payload || {} });
   return fetch(S.api, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: body
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body
   }).then(function (r) { return r.json(); }).catch(function (netErr) {
-    // Some browsers block the cross-origin POST (extensions, strict privacy modes).
-    // Fall back to a JSONP GET, which Apps Script also answers.
     if (body.length > 6000) throw netErr;
     return jsonpCall(action, payload || {});
   }).then(function (j) {
@@ -429,96 +596,293 @@ function api(action, payload) {
     return j.data;
   });
 }
-
 function jsonpCall(action, payload) {
   return new Promise(function (resolve, reject) {
     var cb = 'hrms_cb_' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
     var script = document.createElement('script');
     var timer = setTimeout(function () { cleanup(); reject(new Error('The Apps Script URL did not respond.')); }, 30000);
     function cleanup() {
-      clearTimeout(timer);
-      delete window[cb];
+      clearTimeout(timer); delete window[cb];
       if (script.parentNode) script.parentNode.removeChild(script);
     }
     window[cb] = function (data) { cleanup(); resolve(data); };
-    script.onerror = function () { cleanup(); reject(new Error('Could not reach the Apps Script URL. Check that it is deployed with access "Anyone".')); };
-    script.src = S.api + (S.api.indexOf('?') >= 0 ? '&' : '?') +
-      'action=' + encodeURIComponent(action) +
-      '&callback=' + cb +
-      '&payload=' + encodeURIComponent(JSON.stringify(payload));
+    script.onerror = function () {
+      cleanup();
+      reject(new Error('Could not reach the Apps Script URL. Check it is deployed with access "Anyone".'));
+    };
+    script.src = S.api + (S.api.indexOf('?') >= 0 ? '&' : '?') + 'action=' + encodeURIComponent(action) +
+      '&callback=' + cb + '&payload=' + encodeURIComponent(JSON.stringify(payload));
     document.body.appendChild(script);
   });
 }
 
+/* =================================================================
+   CHARTS - inline SVG, no libraries
+   Palette validated with the dataviz colour checks (light surface).
+   ================================================================= */
+
+function roundedTop(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  if (h <= 0) return '';
+  return 'M' + x + ',' + (y + h) + 'V' + (y + r) +
+    'a' + r + ',' + r + ' 0 0 1 ' + r + ',' + -r +
+    'h' + (w - 2 * r) +
+    'a' + r + ',' + r + ' 0 0 1 ' + r + ',' + r +
+    'V' + (y + h) + 'Z';
+}
+function niceMax(v) {
+  if (v <= 0) return 1;
+  var mag = Math.pow(10, Math.floor(Math.log10(v)));
+  return Math.ceil(v / (mag / 2)) * (mag / 2);
+}
+function mountChart(id, svg) {
+  var host = el(id);
+  if (!host) return;
+  host.innerHTML = svg + '<div class="chart-tip"></div>';
+  var tip = host.querySelector('.chart-tip');
+  host.onmousemove = function (ev) {
+    var mark = ev.target.closest('[data-tip]');
+    if (!mark) { tip.className = 'chart-tip'; return; }
+    tip.innerHTML = mark.getAttribute('data-tip');
+    tip.className = 'chart-tip on';
+    var box = host.getBoundingClientRect();
+    var x = ev.clientX - box.left, y = ev.clientY - box.top;
+    tip.style.left = Math.max(0, Math.min(x + 12, box.width - tip.offsetWidth - 4)) + 'px';
+    tip.style.top = Math.max(0, y - tip.offsetHeight - 10) + 'px';
+  };
+  host.onmouseleave = function () { tip.className = 'chart-tip'; };
+}
+
+/* Stacked columns: rows = [{label, tipLabel, parts:[{key,value}]}] */
+function stackedColumnChart(id, rows, series) {
+  if (!rows.length) { el(id).innerHTML = '<div class="chart-empty">No data yet.</div>'; return; }
+  var W = 400, H = 190, padL = 22, padB = 22, padT = 10, padR = 4;
+  var plotW = W - padL - padR, plotH = H - padB - padT;
+  var max = niceMax(Math.max.apply(null, rows.map(function (r) {
+    return r.parts.reduce(function (s, p) { return s + p.value; }, 0);
+  })));
+  var bw = Math.min(22, plotW / rows.length - 5);
+  var step = plotW / rows.length;
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Stacked attendance by day">';
+  for (var g = 0; g <= 2; g++) {
+    var gy = padT + plotH - (plotH * g / 2);
+    svg += '<line class="gridline" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '"/>' +
+      '<text class="axis-text" x="' + (padL - 5) + '" y="' + (gy + 3) + '" text-anchor="end">' +
+      Math.round(max * g / 2) + '</text>';
+  }
+  rows.forEach(function (r, i) {
+    var x = padL + step * i + (step - bw) / 2;
+    var acc = 0;
+    var total = r.parts.reduce(function (s, p) { return s + p.value; }, 0);
+    var tip = '<b>' + esc(r.tipLabel || r.label) + '</b>' + r.parts.map(function (p) {
+      var s = series[p.key];
+      return '<br><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' +
+        s.color + ';margin-right:5px"></i>' + s.label + ': ' + p.value;
+    }).join('');
+    var stack = r.parts.filter(function (p) { return p.value > 0; });
+    stack.forEach(function (p, j) {
+      var h = plotH * p.value / max;
+      var y = padT + plotH - acc - h;
+      acc += h;
+      var isTop = j === stack.length - 1;
+      var gap = j === 0 ? 0 : 2;                      /* 2px surface gap between segments */
+      var hh = Math.max(1, h - gap);
+      svg += isTop
+        ? '<path class="mark" d="' + roundedTop(x, y, bw, hh, 4) + '" fill="' + series[p.key].color +
+          '" data-tip="' + esc(tip) + '"/>'
+        : '<rect class="mark" x="' + x + '" y="' + y + '" width="' + bw + '" height="' + hh +
+          '" fill="' + series[p.key].color + '" data-tip="' + esc(tip) + '"/>';
+    });
+    if (!total) {
+      svg += '<rect class="mark" x="' + x + '" y="' + (padT + plotH - 2) + '" width="' + bw +
+        '" height="2" fill="#e2e8f0" data-tip="' + esc(tip) + '"/>';
+    }
+    if (rows.length <= 16 || i % 2 === 0) {
+      svg += '<text class="axis-text" x="' + (x + bw / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' +
+        esc(r.label) + '</text>';
+    }
+  });
+  svg += '</svg>';
+  mountChart(id, svg);
+}
+
+/* Horizontal bars, single hue (sequential) with direct value labels */
+function barChart(id, rows) {
+  if (!rows.length) { el(id).innerHTML = '<div class="chart-empty">No data yet.</div>'; return; }
+  var rowH = 24, W = 400, H = rows.length * rowH + 8, labelW = 96, valW = 54;
+  var plotW = W - labelW - valW;
+  var max = Math.max.apply(null, rows.map(function (r) { return r.value; })) || 1;
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Headcount by department">';
+  rows.forEach(function (r, i) {
+    var y = i * rowH + 4, bh = 14;
+    var w = Math.max(2, plotW * r.value / max);
+    svg += '<text class="axis-text" x="0" y="' + (y + bh - 3) + '">' + esc(r.label) + '</text>' +
+      '<rect class="mark" x="' + labelW + '" y="' + y + '" width="' + (w - 4) + '" height="' + bh +
+      '" fill="var(--seq-450)" data-tip="' + esc('<b>' + r.label + '</b><br>' + r.tip) + '"/>' +
+      '<rect class="mark" x="' + (labelW + w - 4) + '" y="' + y + '" width="4" height="' + bh +
+      '" rx="2" fill="var(--seq-450)" data-tip="' + esc('<b>' + r.label + '</b><br>' + r.tip) + '"/>' +
+      '<text class="val-text" x="' + (labelW + w + 7) + '" y="' + (y + bh - 3) + '">' + esc(r.valueLabel) + '</text>';
+  });
+  svg += '</svg>';
+  mountChart(id, svg);
+}
+
+/* Columns, single hue, last value direct-labelled */
+function columnChart(id, rows) {
+  if (!rows.length) { el(id).innerHTML = '<div class="chart-empty">No saved payroll runs yet.</div>'; return; }
+  var W = 400, H = 190, padL = 40, padB = 22, padT = 16, padR = 6;
+  var plotW = W - padL - padR, plotH = H - padB - padT;
+  var max = niceMax(Math.max.apply(null, rows.map(function (r) { return r.value; })));
+  var bw = Math.min(38, plotW / rows.length - 10);
+  var step = plotW / rows.length;
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Payroll cost by month">';
+  for (var g = 0; g <= 2; g++) {
+    var gy = padT + plotH - (plotH * g / 2);
+    svg += '<line class="gridline" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '"/>' +
+      '<text class="axis-text" x="' + (padL - 6) + '" y="' + (gy + 3) + '" text-anchor="end">' +
+      shortMoney(max * g / 2) + '</text>';
+  }
+  rows.forEach(function (r, i) {
+    var x = padL + step * i + (step - bw) / 2;
+    var h = Math.max(2, plotH * r.value / max);
+    var y = padT + plotH - h;
+    svg += '<path class="mark" d="' + roundedTop(x, y, bw, h, 4) + '" fill="var(--seq-450)" data-tip="' +
+      esc('<b>' + r.label + '</b><br>' + r.tip) + '"/>' +
+      '<text class="axis-text" x="' + (x + bw / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' +
+      esc(r.label) + '</text>';
+    if (i === rows.length - 1) {
+      svg += '<text class="val-text" x="' + (x + bw / 2) + '" y="' + (y - 5) + '" text-anchor="middle">' +
+        esc(shortMoney(r.value)) + '</text>';
+    }
+  });
+  svg += '</svg>';
+  mountChart(id, svg);
+}
+function shortMoney(v) {
+  v = num(v);
+  if (v >= 1e7) return cur() + (v / 1e7).toFixed(1) + 'Cr';
+  if (v >= 1e5) return cur() + (v / 1e5).toFixed(1) + 'L';
+  if (v >= 1000) return cur() + Math.round(v / 1000) + 'k';
+  return cur() + Math.round(v);
+}
+</script>
+
+<script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v1';
+var DEMO_KEY = 'hrms_lite_demo_v2';
+
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
-  if (raw) { try { return JSON.parse(raw); } catch (e) { /* reseed below */ } }
+  if (raw) { try { return JSON.parse(raw); } catch (e) { /* reseed */ } }
   var db = {
     settings: {
-      company_name: 'Dynamic Engineers', company_address: 'Plot 14, Industrial Area',
-      currency: 'INR', pf_employee_pct: '12', pf_wage_ceiling: '15000',
-      esi_employee_pct: '0.75', esi_wage_ceiling: '21000', pt_amount: '200',
-      weekly_off: 'Sun', leave_types: 'Casual,Sick,Earned,Unpaid',
-      quota_casual: '12', quota_sick: '6', quota_earned: '15'
+      company_name: 'Dynamic Engineers', company_address: 'Plot 14, Industrial Area, Pune 411019',
+      currency: 'INR', pf_employee_pct: '12', pf_employer_pct: '13', pf_wage_ceiling: '15000',
+      esi_employee_pct: '0.75', esi_employer_pct: '3.25', esi_wage_ceiling: '21000',
+      pt_amount: '200', weekly_off: 'Sun', shift_start: '09:30', shift_end: '18:30',
+      grace_minutes: '15', ot_after_minutes: '30',
+      leave_types: 'Casual,Sick,Earned,Unpaid', quota_casual: '12', quota_sick: '6', quota_earned: '15'
     },
-    employees: [], attendance: [], leave: [], payroll: [],
+    employees: [], attendance: [], leave: [], payroll: [], holidays: [],
     users: [{ email: 'admin@company.com', role: 'admin', emp_code: '', active: 'yes' }]
   };
   var seed = [
-    ['Ramesh Kumar', 'Production', 'Plant Head', 42000, 16800, 8000],
-    ['Anita Sharma', 'Accounts', 'Accounts Manager', 30000, 12000, 5000],
-    ['Imran Sheikh', 'Production', 'Machine Operator', 14000, 5600, 2000],
-    ['Priya Nair', 'HR', 'HR Executive', 18000, 7200, 3000],
-    ['Sandeep Rao', 'Sales', 'Area Sales Manager', 26000, 10400, 6000],
-    ['Farah Khan', 'Quality', 'QA Inspector', 16000, 6400, 2500],
-    ['Vikram Singh', 'Stores', 'Store Keeper', 13000, 5200, 1800],
-    ['Meera Joshi', 'Accounts', 'Accounts Assistant', 12000, 4800, 1500]
+    ['Ramesh Kumar', 'Production', 'Plant Head', 42000, 16800, 8000, '1979-03-12', '2019-04-01'],
+    ['Anita Sharma', 'Accounts', 'Accounts Manager', 30000, 12000, 5000, '1986-11-27', '2021-07-15'],
+    ['Imran Sheikh', 'Production', 'Machine Operator', 14000, 5600, 2000, '1994-06-05', '2023-01-09'],
+    ['Priya Nair', 'HR', 'HR Executive', 18000, 7200, 3000, '1992-09-19', '2020-11-02'],
+    ['Sandeep Rao', 'Sales', 'Area Sales Manager', 26000, 10400, 6000, '1988-02-14', '2022-03-21'],
+    ['Farah Khan', 'Quality', 'QA Inspector', 16000, 6400, 2500, '1996-12-30', '2023-08-07'],
+    ['Vikram Singh', 'Stores', 'Store Keeper', 13000, 5200, 1800, '1990-05-23', '2021-02-15'],
+    ['Meera Joshi', 'Accounts', 'Accounts Assistant', 12000, 4800, 1500, '1998-10-08', '2024-06-03'],
+    ['Arjun Patel', 'Production', 'Shift Supervisor', 22000, 8800, 4000, '1985-07-17', '2020-01-20'],
+    ['Neha Verma', 'Sales', 'Sales Executive', 15000, 6000, 3500, '1995-04-02', '2023-11-13']
   ];
   seed.forEach(function (r, i) {
+    var gross = r[3] + r[4] + r[5];
     db.employees.push({
       emp_code: 'EMP' + ('000' + (i + 1)).slice(-4), name: r[0], department: r[1], designation: r[2],
-      email: r[0].split(' ')[0].toLowerCase() + '@company.com', phone: '98' + (10000000 + i * 137).toString().slice(0, 8),
-      doj: ['2021-04-01', '2022-07-15', '2023-01-09', '2020-11-02'][i % 4], status: 'Active',
-      basic: r[3], hra: r[4], special_allowance: r[5], other_allowance: 0,
-      pf_applicable: 'yes', esi_applicable: (r[3] + r[4] + r[5]) <= 21000 ? 'yes' : 'no',
-      tds_monthly: r[3] > 40000 ? 2500 : 0, pan: '', uan: '', esic_no: '',
-      bank_account: '', ifsc: '', manager: '', dob: '', gender: i % 2 ? 'F' : 'M',
-      address: '', notes: '', updated_at: today()
+      email: r[0].split(' ')[0].toLowerCase() + '@company.com',
+      phone: '9' + String(800000000 + i * 1234567).slice(0, 9),
+      doj: r[7], status: 'Active', basic: r[3], hra: r[4], special_allowance: r[5], other_allowance: 0,
+      pf_applicable: 'yes', esi_applicable: gross <= 21000 ? 'yes' : 'no',
+      tds_monthly: r[3] >= 30000 ? 2500 : 0,
+      pan: i % 4 === 3 ? '' : 'ABCDE' + (1000 + i) + 'F',
+      uan: i % 5 === 4 ? '' : '1001' + (10000000 + i * 37),
+      esic_no: '', bank_account: i % 3 === 2 ? '' : '5011' + (100000000 + i * 7919),
+      ifsc: i % 3 === 2 ? '' : 'HDFC0001234', manager: i === 0 ? '' : 'Ramesh Kumar',
+      dob: r[6], gender: i % 2 ? 'F' : 'M', address: '', notes: '', updated_at: today()
     });
   });
-  var ym = thisMonth(), dim = daysInMonth(ym);
-  db.employees.forEach(function (e, ei) {
-    for (var d = 1; d <= dim; d++) {
-      var st = 'P';
-      var wd = new Date(ym.split('-')[0], +ym.split('-')[1] - 1, d).getDay();
-      if (wd === 0) st = 'WO';
-      else if ((d + ei) % 17 === 0) st = 'A';
-      else if ((d + ei) % 23 === 0) st = 'HD';
-      db.attendance.push({
-        id: e.emp_code + '_' + dateStr(ym, d), date: dateStr(ym, d), emp_code: e.emp_code,
-        status: st, in_time: st === 'P' ? '09:30' : '', out_time: st === 'P' ? '18:30' : '',
-        hours: st === 'P' ? 9 : (st === 'HD' ? 4.5 : 0), remarks: '', updated_at: today()
-      });
-    }
-  });
-  db.leave = [
-    { id: 'LV1', emp_code: 'EMP0002', type: 'Casual', from_date: dateStr(ym, 12), to_date: dateStr(ym, 13), days: 2,
-      reason: 'Family function', status: 'Pending', applied_at: today(), decided_by: '', decided_at: '', decision_note: '' },
-    { id: 'LV2', emp_code: 'EMP0004', type: 'Sick', from_date: dateStr(ym, 5), to_date: dateStr(ym, 5), days: 1,
-      reason: 'Fever', status: 'Approved', applied_at: today(), decided_by: 'admin@company.com', decided_at: today(), decision_note: '' },
-    { id: 'LV3', emp_code: 'EMP0006', type: 'Earned', from_date: dateStr(ym, 20), to_date: dateStr(ym, 22), days: 3,
-      reason: 'Travel', status: 'Pending', applied_at: today(), decided_by: '', decided_at: '', decision_note: '' }
+
+  var ym = thisMonth();
+  db.holidays = [
+    { id: 'H1', date: dateStr(ym, 15), name: 'Company foundation day', optional: 'no' }
   ];
+
+  function seedMonth(m, full) {
+    var dim = daysInMonth(m);
+    var lastDay = (m === thisMonth()) ? new Date().getDate() : dim;
+    db.employees.forEach(function (e, ei) {
+      for (var d = 1; d <= (full ? dim : lastDay); d++) {
+        var iso = dateStr(m, d);
+        var wd = new Date(+m.split('-')[0], +m.split('-')[1] - 1, d).getDay();
+        var st = 'P', inT = '09:30', outT = '18:30';
+        if (wd === 0) { st = 'WO'; inT = ''; outT = ''; }
+        else if (db.holidays.some(function (h) { return h.date === iso; })) { st = 'H'; inT = ''; outT = ''; }
+        else if ((d * 3 + ei * 7) % 29 === 0) { st = 'A'; inT = ''; outT = ''; }
+        else if ((d * 5 + ei * 3) % 31 === 0) { st = 'HD'; inT = '09:30'; outT = '13:30'; }
+        else if ((d + ei) % 11 === 0) { inT = '09:52'; outT = '19:20'; }
+        db.attendance.push({
+          id: e.emp_code + '_' + iso, date: iso, emp_code: e.emp_code, status: st,
+          in_time: inT, out_time: outT,
+          hours: st === 'P' ? 9 : (st === 'HD' ? 4 : 0), remarks: '', updated_at: today()
+        });
+      }
+    });
+  }
+  [addMonths(ym, -3), addMonths(ym, -2), addMonths(ym, -1)].forEach(function (m) { seedMonth(m, true); });
+  seedMonth(ym, false);
+
+  db.leave = [
+    { id: 'LV1', emp_code: 'EMP0002', type: 'Casual', from_date: dateStr(ym, 12), to_date: dateStr(ym, 13),
+      days: 2, reason: 'Family function', status: 'Pending', applied_at: today(),
+      decided_by: '', decided_at: '', decision_note: '' },
+    { id: 'LV2', emp_code: 'EMP0004', type: 'Sick', from_date: dateStr(ym, 5), to_date: dateStr(ym, 5),
+      days: 1, reason: 'Fever', status: 'Approved', applied_at: today(),
+      decided_by: 'admin@company.com', decided_at: today(), decision_note: '' },
+    { id: 'LV3', emp_code: 'EMP0006', type: 'Earned', from_date: dateStr(ym, 20), to_date: dateStr(ym, 22),
+      days: 3, reason: 'Travel', status: 'Pending', applied_at: today(),
+      decided_by: '', decided_at: '', decision_note: '' },
+    { id: 'LV4', emp_code: 'EMP0009', type: 'Casual', from_date: dateStr(ym, 2), to_date: dateStr(ym, 2),
+      days: 1, reason: 'Personal work', status: 'Approved', applied_at: today(),
+      decided_by: 'admin@company.com', decided_at: today(), decision_note: '' }
+  ];
+  localStorage.setItem(DEMO_KEY, JSON.stringify(db));
+
+  /* saved payroll runs for the three closed months, so the trend chart has history */
+  var saveState = S.settings;
+  S.settings = db.settings; S.attendance = db.attendance; S.holidays = db.holidays;
+  S.attVersion++;
+  [addMonths(ym, -3), addMonths(ym, -2), addMonths(ym, -1)].forEach(function (m) {
+    db.employees.forEach(function (e) {
+      if (String(e.doj || '') > m + '-31') return;
+      var row = computePay(e, m, null);
+      row.status = 'Finalised';
+      db.payroll.push(row);
+    });
+  });
+  S.settings = saveState;
+  S.attendance = []; S.holidays = []; S.attVersion++;
   localStorage.setItem(DEMO_KEY, JSON.stringify(db));
   return db;
 }
 function demoSave(db) { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); }
 function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet === 'Users' ? 'email' : 'id'); }
-function demoList(db, sheet) {
-  return { Employees: db.employees, Attendance: db.attendance, Leave: db.leave, Payroll: db.payroll, Users: db.users }[sheet];
-}
+var SHEET_TO_LIST = {
+  Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
+  Payroll: 'payroll', Users: 'users', Holidays: 'holidays'
+};
 function demoApi(action, p) {
   var db = demoDb(), list, key, i;
   switch (action) {
@@ -526,10 +890,11 @@ function demoApi(action, p) {
       return { email: 'admin@company.com', role: 'admin', emp_code: '', token: 'demo' };
     case 'bootstrap':
       return { settings: db.settings, employees: db.employees, attendance: db.attendance,
-               leave: db.leave, payroll: db.payroll, users: db.users };
+               leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users };
     case 'save':
-      list = demoList(db, p.sheet); key = demoKey(p.sheet);
-      if (!p.row[key]) p.row[key] = p.sheet === 'Employees' ? nextDemoCode(db) : 'ID' + Date.now().toString(36);
+      list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
+      if (!p.row[key]) p.row[key] = p.sheet === 'Employees' ? nextDemoCode(db) : 'ID' + Date.now().toString(36) +
+        Math.floor(Math.random() * 1000);
       for (i = 0; i < list.length; i++) {
         if (String(list[i][key]) === String(p.row[key])) {
           list[i] = Object.assign({}, list[i], p.row); demoSave(db); return p.row;
@@ -540,9 +905,17 @@ function demoApi(action, p) {
       (p.rows || []).forEach(function (row) { demoApi('save', { sheet: p.sheet, row: row }); });
       return { saved: (p.rows || []).length };
     case 'remove':
-      list = demoList(db, p.sheet); key = demoKey(p.sheet);
-      db[p.sheet.toLowerCase()] = list.filter(function (r) { return String(r[key]) !== String(p.id); });
+      key = demoKey(p.sheet);
+      db[SHEET_TO_LIST[p.sheet]] = db[SHEET_TO_LIST[p.sheet]].filter(function (r) {
+        return String(r[key]) !== String(p.id);
+      });
       demoSave(db); return { removed: p.id };
+    case 'removeMany':
+      key = demoKey(p.sheet);
+      db[SHEET_TO_LIST[p.sheet]] = db[SHEET_TO_LIST[p.sheet]].filter(function (r) {
+        return (p.ids || []).map(String).indexOf(String(r[key])) < 0;
+      });
+      demoSave(db); return { removed: (p.ids || []).length };
     case 'saveSettings':
       Object.assign(db.settings, p.settings || {}); demoSave(db); return db.settings;
     case 'changePassword':
@@ -561,20 +934,15 @@ function nextDemoCode(db) {
 }
 
 /* ----------------------------- login ---------------------------- */
-function showLoginError(msg) {
-  var e = el('login-err'); e.textContent = msg; e.className = 'err show';
-}
+function showLoginError(msg) { var e = el('login-err'); e.textContent = msg; e.className = 'err show'; }
+
 el('btn-login').onclick = function () {
   var url = el('in-api').value.trim();
   if (!url) return showLoginError('Paste your Apps Script Web App URL, or use the demo button below.');
   S.api = url; S.demo = false;
   var btn = this; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Signing in...';
   api('login', { email: el('in-email').value.trim(), password: el('in-pass').value })
-    .then(function (user) {
-      S.user = user;
-      localStorage.setItem('hrms_lite_api', url);
-      return start();
-    })
+    .then(function (user) { S.user = user; localStorage.setItem('hrms_lite_api', url); return start(); })
     .catch(function (e) { showLoginError(e.message); })
     .then(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
 };
@@ -583,23 +951,19 @@ el('btn-demo').onclick = function () {
   S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
   start();
 };
-function logout() {
-  S.user = null;
-  localStorage.removeItem('hrms_lite_session');
-  location.reload();
-}
+function logout() { S.user = null; location.reload(); }
+
 function start() {
   el('login').style.display = 'none';
   el('demo-flag').style.display = S.demo ? 'inline-block' : 'none';
   el('side-mode').textContent = S.demo ? 'Demo mode (browser storage)' : 'Google Sheets connected';
   el('who').textContent = S.user.email;
   el('avatar').textContent = (S.user.email[0] || 'U').toUpperCase();
-  el('att-month').value = thisMonth();
-  el('pay-month').value = thisMonth();
-  el('rep-month').value = thisMonth();
+  ['att-month', 'pay-month', 'rep-month', 'leave-month'].forEach(function (id) { el(id).value = thisMonth(); });
   el('leave-year').value = new Date().getFullYear();
   return reload();
 }
+
 function reload() {
   return api('bootstrap').then(function (d) {
     S.settings = d.settings || {};
@@ -607,15 +971,16 @@ function reload() {
     S.attendance = d.attendance || [];
     S.leave = d.leave || [];
     S.payroll = d.payroll || [];
-    S.attDirty = {};
-    S.attVersion++;
-    el('side-company').textContent = S.settings.company_name || '5 Modules';
+    S.holidays = d.holidays || [];
+    S.attDirty = {}; S.payDraft = null; S.attVersion++;
+    el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
     document.querySelectorAll('.adm').forEach(function (n) { n.style.display = isAdmin() ? '' : 'none'; });
     renderAll();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
+
 function renderAll() {
-  renderEmployees(); renderAttendance(); renderLeave(); renderPayroll(); renderReports();
+  renderEmployees(); renderAttendance(); renderLeave(); renderPayroll(); renderReports(); renderDashboard();
 }
 
 /* --------------------------- navigation ------------------------- */
@@ -628,13 +993,15 @@ function go(view) {
   });
   el('page-title').textContent = TITLES[view][0];
   el('page-sub').innerHTML = TITLES[view][1];
+  el('content-scroll') && (el('content-scroll').scrollTop = 0);
 }
 
 /* ---------------------------- modal ----------------------------- */
-function showModal(title, bodyHtml, buttons) {
+function showModal(title, bodyHtml, buttons, wide) {
   el('modal-title').textContent = title;
   el('modal-body').innerHTML = bodyHtml;
   el('modal-foot').innerHTML = '';
+  el('modal-box').className = 'modal' + (wide ? ' wide' : '');
   (buttons || []).forEach(function (b) {
     var btn = document.createElement('button');
     btn.textContent = b.label;
@@ -657,11 +1024,240 @@ function empByCode(code) {
 }
 function empName(code) { var e = empByCode(code); return e ? e.name : code; }
 function visibleEmployees() {
-  if (isAdmin()) return S.employees;
-  return S.employees.filter(function (e) { return String(e.emp_code) === myCode(); });
+  return isAdmin() ? S.employees : S.employees.filter(function (e) { return String(e.emp_code) === myCode(); });
+}
+function activeEmployees() {
+  return visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; });
 }
 function grossOf(e) {
   return num(e.basic) + num(e.hra) + num(e.special_allowance) + num(e.other_allowance);
+}
+function kpi(label, value, hint, onClick, cls) {
+  return '<div class="kpi ' + (cls || '') + (onClick ? ' tap' : '') + '"' +
+    (onClick ? ' onclick="' + onClick + '"' : '') + '>' +
+    '<div class="label">' + esc(label) + '</div><div class="value">' + value + '</div>' +
+    '<div class="hint">' + esc(hint || '') + '</div></div>';
+}
+</script>
+
+<script>
+/* =================================================================
+   DASHBOARD  (home screen - not one of the five modules)
+   ================================================================= */
+
+var ATT_SERIES = {
+  P: { label: 'Present', color: 'var(--series-present)' },
+  L: { label: 'On leave', color: 'var(--series-leave)' },
+  A: { label: 'Absent', color: 'var(--series-absent)' }
+};
+
+function renderDashboard() {
+  if (!S.user) return;
+  var ym = thisMonth();
+  var actives = activeEmployees();
+  var todayIso = today();
+
+  /* --- KPI row --- */
+  var presentToday = 0, leaveToday = 0, absentToday = 0, unmarkedToday = 0;
+  actives.forEach(function (e) {
+    var st = statusOf(ym, e.emp_code, new Date().getDate());
+    if (st === 'P' || st === 'HD') presentToday++;
+    else if (st === 'L') leaveToday++;
+    else if (st === 'A') absentToday++;
+    else if (!st) unmarkedToday++;
+  });
+  var pending = S.leave.filter(function (l) { return l.status === 'Pending'; });
+  var lastRunMonth = Object.keys(S.payroll.reduce(function (m, r) { m[r.month] = 1; return m; }, {})).sort().pop();
+  var lastRunNet = S.payroll.filter(function (r) { return r.month === lastRunMonth; })
+    .reduce(function (s, r) { return s + num(r.net); }, 0);
+  var lopMonth = actives.reduce(function (s, e) { return s + attStats(ym, e.emp_code).lop; }, 0);
+  var monthlyCost = actives.reduce(function (s, e) { return s + grossOf(e); }, 0);
+  var isWeekend = isWeeklyOff(ym, new Date().getDate()) || !!holidayOn(todayIso);
+
+  el('dash-kpis').innerHTML =
+    kpi('Active headcount', actives.length, monthlyCost ? shortMoney(monthlyCost) + ' monthly gross' : '', "go('employees')", 'hero') +
+    kpi('Present today', isWeekend ? '&mdash;' : presentToday,
+        isWeekend ? 'non-working day' : (unmarkedToday ? unmarkedToday + ' not marked yet' : 'all marked'), "go('attendance')") +
+    kpi('Out today', isWeekend ? '&mdash;' : (leaveToday + absentToday),
+        isWeekend ? 'non-working day' : leaveToday + ' on leave, ' + absentToday + ' absent', "go('leave')") +
+    kpi('Pending approvals', pending.length, pending.length ? 'waiting on you' : 'nothing waiting', "go('leave')") +
+    kpi('LOP this month', lopMonth, 'days of unpaid absence', "go('attendance')") +
+    kpi('Last net payout', lastRunMonth ? shortMoney(lastRunNet) : '&mdash;',
+        lastRunMonth ? monthLabel(lastRunMonth) + ' run' : 'no payroll saved yet', "go('payroll')");
+
+  /* --- attendance, last 14 calendar days --- */
+  el('dash-att-legend').innerHTML = ['P', 'L', 'A'].map(function (k) {
+    return '<span><i style="background:' + ATT_SERIES[k].color + '"></i>' + ATT_SERIES[k].label + '</span>';
+  }).join('');
+  var days = [];
+  for (var back = 13; back >= 0; back--) {
+    var d = new Date(); d.setDate(d.getDate() - back);
+    var iso = d.toISOString().slice(0, 10);
+    var m = iso.slice(0, 7), dd = d.getDate();
+    if (isWeeklyOff(m, dd) || holidayOn(iso)) continue;
+    var counts = { P: 0, L: 0, A: 0 };
+    actives.forEach(function (e) {
+      var st = statusOf(m, e.emp_code, dd);
+      if (st === 'P' || st === 'HD') counts.P++;
+      else if (st === 'L') counts.L++;
+      else if (st === 'A') counts.A++;
+    });
+    days.push({
+      label: String(dd),
+      tipLabel: d.toDateString().slice(0, 10),
+      parts: [{ key: 'P', value: counts.P }, { key: 'L', value: counts.L }, { key: 'A', value: counts.A }]
+    });
+  }
+  stackedColumnChart('dash-att-chart', days, ATT_SERIES);
+
+  /* --- headcount by department --- */
+  var byDept = {};
+  actives.forEach(function (e) {
+    var d = e.department || 'Unassigned';
+    byDept[d] = byDept[d] || { n: 0, cost: 0 };
+    byDept[d].n++; byDept[d].cost += grossOf(e);
+  });
+  barChart('dash-dept-chart', Object.keys(byDept).sort(function (a, b) {
+    return byDept[b].n - byDept[a].n;
+  }).map(function (d) {
+    return { label: d, value: byDept[d].n, valueLabel: byDept[d].n,
+             tip: byDept[d].n + ' people &middot; ' + shortMoney(byDept[d].cost) + ' / month' };
+  }));
+
+  /* --- payroll cost trend --- */
+  var months = {};
+  S.payroll.forEach(function (r) {
+    var m = String(r.month);
+    months[m] = months[m] || { net: 0, gross: 0, n: 0 };
+    months[m].net += num(r.net); months[m].gross += num(r.gross); months[m].n++;
+  });
+  columnChart('dash-cost-chart', Object.keys(months).sort().slice(-6).map(function (m) {
+    return { label: monthLabel(m), value: months[m].net,
+             tip: months[m].n + ' paid &middot; gross ' + shortMoney(months[m].gross) +
+                  ' &middot; net ' + shortMoney(months[m].net) };
+  }));
+
+  renderDashActions();
+  renderDashToday(ym, actives, isWeekend);
+  renderDashUpcoming();
+}
+
+/* --- "needs your attention" --- */
+function renderDashActions() {
+  var ym = thisMonth(), items = [];
+  var pending = S.leave.filter(function (l) { return l.status === 'Pending'; });
+  if (pending.length) {
+    items.push({ icon: '&#127796;', bg: '#dbeafe', title: pending.length + ' leave application' +
+      (pending.length === 1 ? '' : 's') + ' waiting',
+      sub: pending.slice(0, 3).map(function (l) { return empName(l.emp_code); }).join(', ') +
+           (pending.length > 3 ? ' and more' : ''), go: "go('leave')" });
+  }
+  var unmarked = 0, unmarkedDays = {};
+  activeEmployees().forEach(function (e) {
+    var s = attStats(ym, e.emp_code, true);
+    unmarked += s.blank;
+    s.blankDays.forEach(function (d) { unmarkedDays[d] = 1; });
+  });
+  if (unmarked) {
+    items.push({ icon: '&#9200;', bg: '#fef3c7', title: unmarked + ' attendance day' +
+      (unmarked === 1 ? '' : 's') + ' not marked',
+      sub: 'Across ' + Object.keys(unmarkedDays).length + ' date(s) in ' + monthLabel(ym) +
+           ' - payroll will treat them as unpaid', go: "go('attendance')" });
+  }
+  var prev = addMonths(ym, -1);
+  if (!S.payroll.some(function (r) { return String(r.month) === prev; }) && S.employees.length) {
+    items.push({ icon: '&#128176;', bg: '#fee2e2', title: 'Payroll for ' + monthLabel(prev) + ' is not saved',
+      sub: 'Generate it from attendance and finalise the run', go: "go('payroll')" });
+  }
+  var incomplete = S.employees.filter(function (e) {
+    return String(e.status || 'Active') === 'Active' && missingFields(e).length;
+  });
+  if (incomplete.length) {
+    items.push({ icon: '&#128101;', bg: '#ede9fe', title: incomplete.length + ' employee record' +
+      (incomplete.length === 1 ? '' : 's') + ' incomplete',
+      sub: 'Missing PAN, UAN or bank details needed for payout and returns',
+      go: "go('employees');el('emp-quality').value='incomplete';renderEmployees()" });
+  }
+  el('dash-action-count').textContent = items.length;
+  el('nav-alerts').textContent = items.length;
+  el('nav-alerts').style.display = items.length ? 'inline-block' : 'none';
+  el('nav-leave').textContent = pending.length;
+  el('nav-leave').style.display = pending.length ? 'inline-block' : 'none';
+  el('dash-actions').innerHTML = items.length ? items.map(function (it) {
+    return '<div class="action" onclick="' + it.go + '">' +
+      '<div class="ico" style="background:' + it.bg + '">' + it.icon + '</div>' +
+      '<div class="txt"><b>' + it.title + '</b><span>' + esc(it.sub) + '</span></div>' +
+      '<div class="go">&rsaquo;</div></div>';
+  }).join('') : '<div class="all-clear">&#10003; Nothing pending. Payroll can run clean.</div>';
+}
+
+/* --- who is out today --- */
+function renderDashToday(ym, actives, isWeekend) {
+  var d = new Date().getDate();
+  el('dash-today-date').textContent = new Date().toDateString() +
+    (isWeekend ? ' - non-working day' : '');
+  if (isWeekend) {
+    var hol = holidayOn(today());
+    el('dash-today').innerHTML = '<div class="all-clear" style="color:var(--text-muted)">' +
+      (hol ? 'Holiday: ' + esc(hol.name) : 'Weekly off') + '</div>';
+    return;
+  }
+  var out = actives.map(function (e) {
+    return { e: e, st: statusOf(ym, e.emp_code, d) };
+  }).filter(function (x) { return x.st === 'L' || x.st === 'A' || x.st === 'HD'; });
+  el('dash-today').innerHTML = out.length ? out.map(function (x) {
+    var lv = S.leave.filter(function (l) {
+      return String(l.emp_code) === String(x.e.emp_code) && l.status === 'Approved' &&
+        String(l.from_date) <= today() && today() <= String(l.to_date);
+    })[0];
+    var badge = x.st === 'L' ? '<span class="badge b-blue">' + esc(lv ? lv.type + ' leave' : 'Leave') + '</span>'
+      : (x.st === 'HD' ? '<span class="badge b-amber">Half day</span>'
+      : '<span class="badge b-red">Absent (LOP)</span>');
+    return '<div class="action" style="cursor:default" onclick="employee360(\'' + esc(x.e.emp_code) + '\')">' +
+      '<div class="avatar" style="width:28px;height:28px;font-size:.7rem">' +
+      esc((x.e.name || '?')[0]) + '</div>' +
+      '<div class="txt"><b>' + esc(x.e.name) + '</b><span>' + esc(x.e.department || '') + '</span></div>' +
+      badge + '</div>';
+  }).join('') : '<div class="all-clear">&#10003; Full attendance today.</div>';
+}
+
+/* --- birthdays and work anniversaries --- */
+function renderDashUpcoming() {
+  var now = new Date(), items = [];
+  function daysUntil(md) {
+    if (!md) return null;
+    var p = String(md).split('-');
+    if (p.length < 3) return null;
+    var next = new Date(now.getFullYear(), +p[1] - 1, +p[2]);
+    if (next < new Date(now.getFullYear(), now.getMonth(), now.getDate())) next.setFullYear(now.getFullYear() + 1);
+    return Math.round((next - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+  }
+  activeEmployees().forEach(function (e) {
+    var b = daysUntil(e.dob);
+    if (b !== null && b <= 30) items.push({ d: b, who: e.name, what: 'Birthday', icon: '&#127874;', bg: '#fef3c7' });
+    var a = daysUntil(e.doj);
+    if (a !== null && a <= 30 && e.doj) {
+      var yrs = now.getFullYear() - (+String(e.doj).slice(0, 4)) + (a > 0 ? 1 : 0);
+      if (yrs > 0) items.push({ d: a, who: e.name, what: yrs + ' year' + (yrs === 1 ? '' : 's') + ' with the company',
+        icon: '&#127881;', bg: '#dbeafe' });
+    }
+  });
+  items.sort(function (x, y) { return x.d - y.d; });
+  el('dash-upcoming').innerHTML = items.length ? items.slice(0, 6).map(function (it) {
+    return '<div class="action" style="cursor:default">' +
+      '<div class="ico" style="background:' + it.bg + '">' + it.icon + '</div>' +
+      '<div class="txt"><b>' + esc(it.who) + '</b><span>' + esc(it.what) + '</span></div>' +
+      '<span class="badge b-gray">' + (it.d === 0 ? 'today' : 'in ' + it.d + 'd') + '</span></div>';
+  }).join('') : '<div class="all-clear" style="color:var(--text-muted)">Nothing in the next 30 days.</div>';
+}
+
+function missingFields(e) {
+  var miss = [];
+  if (!String(e.pan || '').trim()) miss.push('PAN');
+  if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes' && !String(e.uan || '').trim()) miss.push('UAN');
+  if (!String(e.bank_account || '').trim()) miss.push('bank a/c');
+  if (!String(e.ifsc || '').trim()) miss.push('IFSC');
+  return miss;
 }
 </script>
 
@@ -679,6 +1275,7 @@ var EMP_FIELDS = [
   ['designation', 'Designation', 'text'],
   ['doj', 'Date of joining', 'date'],
   ['status', 'Status', 'select:Active,Inactive'],
+  ['exit_date', 'Exit date (if left)', 'date'],
   ['basic', 'Basic', 'number'],
   ['hra', 'HRA', 'number'],
   ['special_allowance', 'Special allowance', 'number'],
@@ -700,15 +1297,26 @@ var EMP_FIELDS = [
 
 function filteredEmployees() {
   var q = el('emp-search').value.trim().toLowerCase();
-  var dept = el('emp-dept').value;
-  var status = el('emp-status').value;
-  return visibleEmployees().filter(function (e) {
+  var dept = el('emp-dept').value, status = el('emp-status').value, quality = el('emp-quality').value;
+  var rows = visibleEmployees().filter(function (e) {
     if (dept && e.department !== dept) return false;
     if (status && String(e.status || 'Active') !== status) return false;
+    if (quality === 'incomplete' && !missingFields(e).length) return false;
     if (!q) return true;
-    return [e.emp_code, e.name, e.email, e.designation, e.department]
+    return [e.emp_code, e.name, e.email, e.designation, e.department, e.phone]
       .join(' ').toLowerCase().indexOf(q) >= 0;
   });
+  var c = S.empSort.col, dir = S.empSort.dir;
+  return rows.sort(function (a, b) {
+    var av = c === 'gross' ? grossOf(a) : a[c], bv = c === 'gross' ? grossOf(b) : b[c];
+    if (typeof av === 'number' || typeof bv === 'number' || c === 'gross') return (num(av) - num(bv)) * dir;
+    return String(av || '').localeCompare(String(bv || '')) * dir;
+  });
+}
+
+function sortEmp(col) {
+  S.empSort = { col: col, dir: S.empSort.col === col ? -S.empSort.dir : 1 };
+  renderEmployees();
 }
 
 function renderEmployees() {
@@ -717,55 +1325,61 @@ function renderEmployees() {
   var depts = {};
   all.forEach(function (e) { if (e.department) depts[e.department] = 1; });
 
-  // department filter options
   var sel = el('emp-dept'), keep = sel.value;
   sel.innerHTML = '<option value="">All departments</option>' +
     Object.keys(depts).sort().map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('');
   sel.value = keep;
 
   var monthlyCost = active.reduce(function (s, e) { return s + grossOf(e); }, 0);
+  var incomplete = active.filter(function (e) { return missingFields(e).length; }).length;
   el('emp-kpis').innerHTML =
-    kpi('Total employees', all.length, all.length - active.length + ' inactive') +
+    kpi('Total employees', all.length, (all.length - active.length) + ' inactive') +
     kpi('Active', active.length, 'on the payroll') +
     kpi('Departments', Object.keys(depts).length, 'across the company') +
-    kpi('Monthly gross', cur() + money(monthlyCost), 'full-month cost at current CTC');
+    kpi('Monthly gross', cur() + money(monthlyCost), 'full-month cost at current CTC') +
+    kpi('Incomplete records', incomplete, incomplete ? 'missing statutory or bank details' : 'all records complete');
+
+  var cols = [['emp_code', 'Code'], ['name', 'Name'], ['department', 'Department'],
+              ['designation', 'Designation'], ['doj', 'Joined'], ['gross', 'Gross'], ['status', 'Status']];
+  var head = '<thead><tr>' + cols.map(function (c) {
+    var arrow = S.empSort.col === c[0] ? (S.empSort.dir > 0 ? ' &#9650;' : ' &#9660;') : '';
+    return '<th class="sortable' + (c[0] === 'gross' ? ' num-col' : '') + '" onclick="sortEmp(\'' + c[0] + '\')">' +
+      c[1] + '<span class="arrow">' + arrow + '</span></th>';
+  }).join('') + '<th>Record</th>' + (isAdmin() ? '<th></th>' : '') + '</tr></thead>';
 
   var rows = filteredEmployees();
-  var head = '<thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th>' +
-    '<th>Joined</th><th class="num-col">Gross</th><th>Status</th>' +
-    (isAdmin() ? '<th></th>' : '') + '</tr></thead>';
   var body = rows.map(function (e) {
     var st = String(e.status || 'Active');
+    var miss = missingFields(e);
     return '<tr>' +
       '<td><b>' + esc(e.emp_code) + '</b></td>' +
-      '<td>' + esc(e.name) + '<div style="font-size:.72rem;color:var(--text-muted)">' + esc(e.email || '') + '</div></td>' +
+      '<td><a href="#" onclick="employee360(\'' + esc(e.emp_code) + '\');return false;" ' +
+        'style="color:var(--primary);font-weight:600;text-decoration:none">' + esc(e.name) + '</a>' +
+        '<div class="sub-line">' + esc(e.email || '') + '</div></td>' +
       '<td>' + esc(e.department || '-') + '</td>' +
       '<td>' + esc(e.designation || '-') + '</td>' +
       '<td>' + esc(e.doj || '-') + '</td>' +
       '<td class="num-col">' + cur() + money(grossOf(e)) + '</td>' +
       '<td><span class="badge ' + (st === 'Active' ? 'b-green' : 'b-gray') + '">' + esc(st) + '</span></td>' +
+      '<td>' + (miss.length
+        ? '<span class="badge b-amber" title="' + esc(miss.join(', ')) + '">' + miss.length + ' missing</span>'
+        : '<span class="badge b-green">complete</span>') + '</td>' +
       (isAdmin() ? '<td style="white-space:nowrap">' +
         '<button class="ghost sm" onclick="openEmployee(\'' + esc(e.emp_code) + '\')">Edit</button> ' +
         '<button class="ghost sm" onclick="deleteEmployee(\'' + esc(e.emp_code) + '\')">Delete</button></td>' : '') +
       '</tr>';
   }).join('');
   el('emp-table').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="8" class="empty">No employees match this filter.</td></tr>') + '</tbody>';
-}
-
-function kpi(label, value, hint) {
-  return '<div class="kpi"><div class="label">' + esc(label) + '</div>' +
-    '<div class="value">' + value + '</div>' +
-    '<div class="hint">' + esc(hint || '') + '</div></div>';
+    '<tr><td colspan="9" class="empty">No employees match this filter.</td></tr>') + '</tbody>';
 }
 
 function fieldInput(f, value) {
   var name = f[0], label = f[1], type = f[2], readonly = f[3];
   var html;
   if (type.indexOf('select:') === 0) {
-    var opts = type.slice(7).split(',');
-    html = '<select data-f="' + name + '">' + opts.map(function (o) {
-      return '<option value="' + esc(o) + '"' + (String(value || '') === o ? ' selected' : '') + '>' + esc(o || '-') + '</option>';
+    html = '<select data-f="' + name + '">' + type.slice(7).split(',').map(function (o) {
+      return '<option value="' + esc(o) + '"' + (String(value || '') === o ? ' selected' : '') + '>' +
+        esc(o || '-') + '</option>';
     }).join('') + '</select>';
   } else {
     html = '<input data-f="' + name + '" type="' + type + '" value="' + esc(value === undefined ? '' : value) + '"' +
@@ -774,39 +1388,65 @@ function fieldInput(f, value) {
   return '<label class="field">' + esc(label) + html + '</label>';
 }
 
-function openEmployee(code) {
-  var e = code ? empByCode(code) : { status: 'Active', pf_applicable: 'yes', esi_applicable: 'yes', doj: today() };
-  if (!e) return;
-  var body = '<div class="grid2">' + EMP_FIELDS.map(function (f) {
-    if (f[0] === 'emp_code' && !code) return '';
-    return fieldInput(f, e[f[0]]);
-  }).join('') + '</div>' +
-    '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted)">' +
-    'Gross salary = Basic + HRA + Special + Other. Payroll prorates these by paid days.</p>';
-  showModal(code ? 'Edit ' + e.name : 'Add employee', body, [
-    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
-    { label: 'Save employee', onClick: function () { saveEmployee(code); } }
-  ]);
-}
-
 function collectFields() {
   var out = {};
   el('modal-body').querySelectorAll('[data-f]').forEach(function (n) { out[n.dataset.f] = n.value; });
   return out;
 }
 
+function openEmployee(code) {
+  var e = code ? empByCode(code) : { status: 'Active', pf_applicable: 'yes', esi_applicable: 'yes', doj: today() };
+  if (!e) return;
+  var body = '<div id="emp-errors"></div><div class="grid2">' + EMP_FIELDS.map(function (f) {
+    return (f[0] === 'emp_code' && !code) ? '' : fieldInput(f, e[f[0]]);
+  }).join('') + '</div>' +
+    '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted)">' +
+    'Gross = Basic + HRA + Special + Other; payroll prorates these by paid days. ' +
+    'PAN and bank details are needed for TDS and the bank transfer file.</p>';
+  showModal(code ? 'Edit ' + e.name : 'Add employee', body, [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Save employee', onClick: function () { saveEmployee(code); } }
+  ]);
+}
+
+function validateEmployee(row, code) {
+  var errs = [];
+  if (!String(row.name || '').trim()) errs.push('Name is required.');
+  var email = String(row.email || '').trim().toLowerCase();
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errs.push('Email does not look valid.');
+  if (email && S.employees.some(function (x) {
+    return String(x.email || '').trim().toLowerCase() === email && String(x.emp_code) !== String(code);
+  })) errs.push('Another employee already uses that email.');
+  var pan = String(row.pan || '').trim().toUpperCase();
+  if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) errs.push('PAN must look like ABCDE1234F.');
+  if (row.doj && row.dob && String(row.doj) <= String(row.dob)) errs.push('Date of joining must be after date of birth.');
+  if (row.doj && String(row.doj) > today()) errs.push('Date of joining is in the future.');
+  if (num(row.basic) <= 0) errs.push('Basic salary must be more than zero.');
+  var gross = num(row.basic) + num(row.hra) + num(row.special_allowance) + num(row.other_allowance);
+  if (String(row.esi_applicable).toLowerCase() === 'yes' && gross > num(S.settings.esi_wage_ceiling || 21000)) {
+    errs.push('ESI is marked applicable but gross ' + cur() + money(gross) + ' is above the ' +
+      cur() + money(S.settings.esi_wage_ceiling || 21000) + ' ceiling.');
+  }
+  return errs;
+}
+
 function saveEmployee(code) {
   var row = collectFields();
   if (code) row.emp_code = code;
-  if (!row.name) return toast('Name is required', 'bad');
+  if (row.pan) row.pan = String(row.pan).trim().toUpperCase();
+  var errs = validateEmployee(row, code);
+  if (errs.length) {
+    el('emp-errors').innerHTML = '<div class="err show"><b>Fix these first:</b><br>' +
+      errs.map(esc).join('<br>') + '</div>';
+    el('modal-body').scrollTop = 0;
+    return;
+  }
   row.updated_at = today();
   api('save', { sheet: 'Employees', row: row }).then(function (saved) {
     var existing = empByCode(saved.emp_code);
     if (existing) Object.assign(existing, row);
     else S.employees.push(Object.assign({}, row, { emp_code: saved.emp_code }));
-    closeModal();
-    toast('Employee saved', 'good');
-    renderAll();
+    closeModal(); toast('Employee saved', 'good'); renderAll();
   }).catch(function (err) { toast(err.message, 'bad'); });
 }
 
@@ -814,8 +1454,8 @@ function deleteEmployee(code) {
   var e = empByCode(code);
   if (!e) return;
   showModal('Delete employee', '<p>Remove <b>' + esc(e.name) + ' (' + esc(code) + ')</b> from the master?<br><br>' +
-    'Their attendance, leave and payroll rows stay in the sheet for audit. ' +
-    'To stop paying someone but keep the history visible, set their status to <b>Inactive</b> instead.</p>', [
+    'Their attendance, leave and payroll rows stay in the sheet for audit. To stop paying someone but keep ' +
+    'history visible, set their status to <b>Inactive</b> instead.</p>', [
     { label: 'Cancel', cls: 'ghost', onClick: closeModal },
     { label: 'Delete', cls: 'danger', onClick: function () {
       api('remove', { sheet: 'Employees', id: code }).then(function () {
@@ -824,6 +1464,68 @@ function deleteEmployee(code) {
       }).catch(function (err) { toast(err.message, 'bad'); });
     } }
   ]);
+}
+
+/* --- 360 view: profile + attendance + leave + payslips --- */
+function employee360(code) {
+  var e = empByCode(code);
+  if (!e) return;
+  var ym = thisMonth(), s = attStats(ym, code);
+  var miss = missingFields(e);
+  var leaves = S.leave.filter(function (l) { return String(l.emp_code) === String(code); })
+    .sort(function (a, b) { return String(b.from_date).localeCompare(String(a.from_date)); }).slice(0, 8);
+  var slips = S.payroll.filter(function (p) { return String(p.emp_code) === String(code); })
+    .sort(function (a, b) { return String(b.month).localeCompare(String(a.month)); }).slice(0, 8);
+
+  var body =
+    '<div class="grid-half">' +
+      '<div><h3 style="margin-bottom:10px">Profile</h3><table><tbody>' +
+        row2('Code', e.emp_code) + row2('Department', e.department) + row2('Designation', e.designation) +
+        row2('Reports to', e.manager) + row2('Joined', e.doj) + row2('Email', e.email) +
+        row2('Phone', e.phone) + row2('PAN', e.pan || '—') + row2('UAN', e.uan || '—') +
+        row2('Bank', (e.bank_account || '—') + (e.ifsc ? ' / ' + e.ifsc : '')) +
+      '</tbody></table>' +
+      (miss.length ? '<div class="locked-note">&#9888; Missing: ' + esc(miss.join(', ')) + '</div>' : '') +
+      '</div>' +
+      '<div><h3 style="margin-bottom:10px">Salary structure</h3><table><tbody>' +
+        row2('Basic', cur() + money(e.basic)) + row2('HRA', cur() + money(e.hra)) +
+        row2('Special allowance', cur() + money(e.special_allowance)) +
+        row2('Other allowance', cur() + money(e.other_allowance)) +
+        '<tr><td><b>Monthly gross</b></td><td class="num-col"><b>' + cur() + money(grossOf(e)) + '</b></td></tr>' +
+        row2('PF applicable', e.pf_applicable) + row2('ESI applicable', e.esi_applicable) +
+        row2('TDS per month', cur() + money(e.tds_monthly)) +
+      '</tbody></table></div>' +
+    '</div>' +
+    '<h3 style="margin:18px 0 8px">Attendance, ' + monthLabel(ym) + '</h3>' +
+    '<div class="kpis" style="margin-bottom:8px">' +
+      kpi('Present', s.P, '') + kpi('Absent', s.A, 'LOP days') + kpi('Leave', s.L, '') +
+      kpi('Late marks', s.late, 'after grace') + kpi('Paid days', s.paid, 'of ' + s.total) +
+    '</div>' +
+    '<div class="grid-half">' +
+      '<div><h3 style="margin:10px 0 8px">Recent leave</h3><table><tbody>' +
+        (leaves.map(function (l) {
+          return '<tr><td>' + esc(l.type) + '</td><td>' + esc(l.from_date) + ' &rarr; ' + esc(l.to_date) +
+            '</td><td class="num-col">' + esc(l.days) + 'd</td><td><span class="badge ' +
+            (l.status === 'Approved' ? 'b-green' : l.status === 'Rejected' ? 'b-red' :
+             l.status === 'Cancelled' ? 'b-gray' : 'b-amber') + '">' + esc(l.status) + '</span></td></tr>';
+        }).join('') || '<tr><td class="empty">No leave taken.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div><h3 style="margin:10px 0 8px">Payslips</h3><table><tbody>' +
+        (slips.map(function (p) {
+          return '<tr><td>' + esc(monthLabel(p.month)) + '</td><td class="num-col">' + cur() + money(p.net) +
+            '</td><td><button class="ghost sm" onclick="payslip(\'' + esc(code) + '\',\'' + esc(p.month) +
+            '\')">Open</button></td></tr>';
+        }).join('') || '<tr><td class="empty">No payslips yet.</td></tr>') +
+      '</tbody></table></div>' +
+    '</div>';
+  showModal(e.name + ' - ' + (e.designation || 'Employee'), body,
+    isAdmin() ? [{ label: 'Close', cls: 'ghost', onClick: closeModal },
+                 { label: 'Edit record', onClick: function () { openEmployee(code); } }]
+              : [{ label: 'Close', cls: 'ghost', onClick: closeModal }], true);
+}
+function row2(a, b) {
+  return '<tr><td style="color:var(--text-muted)">' + esc(a) + '</td><td class="num-col">' +
+    esc(b === undefined || b === '' ? '—' : b) + '</td></tr>';
 }
 
 function exportEmployees() {
@@ -840,7 +1542,7 @@ function openImport() {
     '<code style="font-size:.7rem;display:block;background:#f1f5f9;padding:10px;border-radius:6px;line-height:1.7">' +
     cols.join(', ') + '</code>' +
     '<p style="margin:14px 0 8px;font-size:.8rem">Rows with an existing <b>emp_code</b> update that employee; ' +
-    'rows without one are added with a new code.</p>' +
+    'rows without one are added with a new code. Rows are validated before anything is written.</p>' +
     '<input type="file" id="imp-file" accept=".csv,text/csv">' +
     '<div id="imp-status" style="margin-top:12px;font-size:.8rem;color:var(--text-muted)"></div>', [
       { label: 'Download template', cls: 'ghost', onClick: function () { download('employee-template.csv', toCSV(cols, [])); } },
@@ -854,14 +1556,24 @@ function openImport() {
       var rows = parseCSV(reader.result);
       if (rows.length < 2) return toast('CSV has no data rows', 'bad');
       var headers = rows[0].map(function (h) { return h.trim(); });
-      var payload = rows.slice(1).map(function (r) {
+      var payload = [], problems = [];
+      rows.slice(1).forEach(function (r, i) {
         var obj = {};
-        headers.forEach(function (h, i) { if (cols.indexOf(h) >= 0) obj[h] = r[i]; });
+        headers.forEach(function (h, c) { if (cols.indexOf(h) >= 0) obj[h] = r[c]; });
+        if (!obj.name) return;
         obj.updated_at = today();
-        return obj;
-      }).filter(function (o) { return o.name; });
-      if (!payload.length) return toast('No rows with a "name" column', 'bad');
-      el('imp-status').textContent = 'Importing ' + payload.length + ' employees...';
+        var errs = validateEmployee(obj, obj.emp_code);
+        if (errs.length) problems.push('Row ' + (i + 2) + ': ' + errs[0]);
+        else payload.push(obj);
+      });
+      if (problems.length) {
+        el('imp-status').innerHTML = '<div class="err show">' + problems.slice(0, 8).map(esc).join('<br>') +
+          (problems.length > 8 ? '<br>and ' + (problems.length - 8) + ' more' : '') + '</div>' +
+          (payload.length ? payload.length + ' valid row(s) can still be imported.' : '');
+        if (!payload.length) return;
+      }
+      if (!payload.length) return toast('No valid rows found', 'bad');
+      el('imp-status').innerHTML += '<br>Importing ' + payload.length + ' employees...';
       api('saveMany', { sheet: 'Employees', rows: payload }).then(function () {
         closeModal(); toast(payload.length + ' employees imported', 'good'); reload();
       }).catch(function (e) { toast(e.message, 'bad'); });
@@ -869,7 +1581,9 @@ function openImport() {
     reader.readAsText(file);
   };
 }
+</script>
 
+<script>
 /* =================================================================
    MODULE 2 - ATTENDANCE
    ================================================================= */
@@ -884,40 +1598,119 @@ function attMap(ym) {
   return map;
 }
 
-function statusOf(ym, code, d) {
-  var key = code + '_' + dateStr(ym, d);
-  if (S.attDirty[key]) return S.attDirty[key].status;
-  var rec = attMap(ym)[key];
-  if (rec && rec.status) return rec.status;
-  return isWeeklyOff(ym, d) ? 'WO' : '';
+/* Default status for an unmarked day: holiday, weekly off, or blank. */
+function defaultStatus(ym, d) {
+  var iso = dateStr(ym, d);
+  if (holidayOn(iso)) return 'H';
+  if (isWeeklyOff(ym, d)) return 'WO';
+  return '';
 }
+function recordFor(ym, code, d) {
+  var key = code + '_' + dateStr(ym, d);
+  return S.attDirty[key] || attMap(ym)[key] || null;
+}
+function statusOf(ym, code, d) {
+  var rec = recordFor(ym, code, d);
+  return (rec && rec.status) ? rec.status : defaultStatus(ym, d);
+}
+
+/* A month is locked once its payroll run has been finalised. */
+function monthLocked(ym) {
+  return S.payroll.some(function (p) { return String(p.month) === ym && p.status === 'Finalised'; });
+}
+function canEditAtt(ym) { return isAdmin() && !monthLocked(ym); }
+
+function shiftCfg() {
+  return {
+    start: minutesOf(S.settings.shift_start || '09:30'),
+    end: minutesOf(S.settings.shift_end || '18:30'),
+    grace: num(S.settings.grace_minutes || 15),
+    otAfter: num(S.settings.ot_after_minutes || 30)
+  };
+}
+function lateMinutes(rec) {
+  var cfg = shiftCfg(), inM = minutesOf(rec && rec.in_time);
+  if (inM === null || cfg.start === null) return 0;
+  return Math.max(0, inM - cfg.start - cfg.grace);
+}
+function otMinutes(rec) {
+  var cfg = shiftCfg(), outM = minutesOf(rec && rec.out_time);
+  if (outM === null || cfg.end === null) return 0;
+  var over = outM - cfg.end;
+  return over > cfg.otAfter ? over : 0;
+}
+
+function attStats(ym, code) {
+  var dim = daysInMonth(ym);
+  /* In the running month, days that have not happened yet are not "missing". */
+  var upTo = ym === thisMonth() ? new Date().getDate() : dim;
+  var s = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0, blankDays: [], future: 0, late: 0, ot: 0 };
+  for (var d = 1; d <= dim; d++) {
+    var rec = recordFor(ym, code, d);
+    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
+    if (st && s[st] !== undefined) s[st]++;
+    else if (d <= upTo) { s.blank++; s.blankDays.push(dateStr(ym, d)); }
+    else s.future++;
+    if (st === 'P' || st === 'HD') {
+      if (lateMinutes(rec)) s.late++;
+      s.ot += otMinutes(rec);
+    }
+  }
+  s.total = dim;
+  /* An unmarked day that has already passed is unpaid until someone marks it. */
+  s.lop = s.A + s.HD * 0.5 + s.blank;
+  s.paid = dim - s.lop;
+  return s;
+}
+
+function onAttMonth() { S.attDirty = {}; el('att-save').disabled = true; renderAttendance(); }
 
 function renderAttendance() {
   var ym = el('att-month').value || thisMonth();
   var dim = daysInMonth(ym);
-  var emps = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; });
-  var map = attMap(ym);
+  var emps = activeEmployees();
+  var locked = monthLocked(ym);
+  var editable = canEditAtt(ym);
+
+  el('att-lock').innerHTML = locked
+    ? '<div class="locked-note">&#128274; ' + monthLabel(ym) + ' is locked because its payroll run is finalised. ' +
+      'Reopen the run in Payroll to edit attendance.' +
+      (isAdmin() ? ' <button class="ghost sm" style="margin-left:auto" onclick="go(\'payroll\');el(\'pay-month\').value=\'' +
+        ym + '\';renderPayroll()">Go to payroll</button>' : '') + '</div>'
+    : '';
 
   var head = '<tr><th class="emp-h">Employee</th>';
   for (var d = 1; d <= dim; d++) {
-    head += '<th' + (isWeeklyOff(ym, d) ? ' style="color:var(--danger)"' : '') + '>' + d + '</th>';
+    var iso = dateStr(ym, d), hol = holidayOn(iso);
+    var cls = hol ? 'hol' : (isWeeklyOff(ym, d) ? 'wo' : '');
+    var dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][weekdayOf(ym, d)];
+    head += '<th class="' + cls + (editable ? ' day-h' : '') + '" title="' +
+      esc(dow + (hol ? ' - ' + hol.name : '')) + '"' +
+      (editable ? ' onclick="fillColumn(' + d + ')"' : '') + '>' + d +
+      '<div style="font-weight:400;opacity:.6">' + dow[0] + '</div></th>';
   }
-  head += '<th style="min-width:60px">Paid</th></tr>';
+  head += '<th style="min-width:54px">Paid</th></tr>';
 
   var body = emps.map(function (e) {
-    var row = '<td class="emp-c">' + esc(e.name) +
-      '<div style="font-size:.68rem;color:var(--text-muted)">' + esc(e.emp_code) + '</div></td>';
-    var lop = 0;
+    var row = '<td class="emp-c">' +
+      (editable ? '<button class="ghost sm" onclick="fillRow(\'' + esc(e.emp_code) + '\')" title="Fill this row">&#9636;</button>' : '') +
+      '<a href="#" onclick="employee360(\'' + esc(e.emp_code) + '\');return false;" style="color:inherit;text-decoration:none">' +
+      esc(e.name) + '</a><div class="sub-line">' + esc(e.emp_code) + '</div></td>';
+    var s = attStats(ym, e.emp_code);
     for (var d = 1; d <= dim; d++) {
       var key = e.emp_code + '_' + dateStr(ym, d);
-      var st = S.attDirty[key] ? S.attDirty[key].status : ((map[key] && map[key].status) || (isWeeklyOff(ym, d) ? 'WO' : ''));
-      if (st === 'A') lop += 1;
-      if (st === 'HD') lop += 0.5;
-      row += '<td><div class="att-cell s-' + esc(st) + '"' +
-        (isAdmin() ? ' onclick="cycleCell(\'' + esc(e.emp_code) + '\',' + d + ')"' : '') +
+      var rec = recordFor(ym, e.emp_code, d);
+      var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
+      var late = (st === 'P' || st === 'HD') && lateMinutes(rec);
+      var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + rec.in_time + '-' + (rec.out_time || '?') : '') +
+        (late ? ' (late ' + late + 'm)' : '') + (rec && rec.remarks ? ' ' + rec.remarks : '');
+      row += '<td><div class="att-cell s-' + esc(st) + (S.attDirty[key] ? ' edited' : '') +
+        (late ? ' late' : '') + '" title="' + esc(tip) + '"' +
+        (editable ? ' onclick="cycleCell(\'' + esc(e.emp_code) + '\',' + d + ')"' +
+                    ' ondblclick="openCell(\'' + esc(e.emp_code) + '\',' + d + ')"' : '') +
         ' id="c_' + esc(key) + '">' + esc(st) + '</div></td>';
     }
-    row += '<td class="num-col" style="padding:0 8px"><b>' + (dim - lop) + '</b></td>';
+    row += '<td class="num-col" style="padding:0 8px"><b>' + s.paid + '</b></td>';
     return '<tr>' + row + '</tr>';
   }).join('');
 
@@ -925,50 +1718,155 @@ function renderAttendance() {
     ? '<table><thead>' + head + '</thead><tbody>' + body + '</tbody></table>'
     : '<div class="empty">Add employees first (module 1).</div>';
 
-  renderAttSummary(ym, emps, map);
+  renderAttSummary(ym, emps);
+  markAttDirty(false);
+}
+
+function markAttDirty(enable) {
+  var n = Object.keys(S.attDirty).length;
+  var btn = el('att-save');
+  btn.disabled = !n;
+  btn.textContent = n ? 'Save ' + n + ' change' + (n === 1 ? '' : 's') : 'Save changes';
+}
+
+function setCell(ym, code, d, patch) {
+  var key = code + '_' + dateStr(ym, d);
+  var base = S.attDirty[key] || attMap(ym)[key] || {
+    id: key, date: dateStr(ym, d), emp_code: code, status: '', in_time: '', out_time: '',
+    hours: 0, remarks: ''
+  };
+  var next = Object.assign({}, base, patch, { id: key, date: dateStr(ym, d), emp_code: code, updated_at: today() });
+  next.hours = next.status === 'P' ? 9 : (next.status === 'HD' ? 4.5 : 0);
+  if (minutesOf(next.in_time) !== null && minutesOf(next.out_time) !== null) {
+    next.hours = Math.round((minutesOf(next.out_time) - minutesOf(next.in_time)) / 6) / 10;
+  }
+  S.attDirty[key] = next;
+  return next;
 }
 
 function cycleCell(code, d) {
   var ym = el('att-month').value || thisMonth();
-  var key = code + '_' + dateStr(ym, d);
-  var current = S.attDirty[key] ? S.attDirty[key].status : ((attMap(ym)[key] && attMap(ym)[key].status) || (isWeeklyOff(ym, d) ? 'WO' : ''));
+  if (!canEditAtt(ym)) return;
+  var current = statusOf(ym, code, d);
   var next = STATUSES[(STATUSES.indexOf(current) + 1) % STATUSES.length];
-  S.attDirty[key] = {
-    id: key, date: dateStr(ym, d), emp_code: code, status: next,
-    in_time: next === 'P' ? '09:30' : '', out_time: next === 'P' ? '18:30' : '',
-    hours: next === 'P' ? 9 : (next === 'HD' ? 4.5 : 0), remarks: '', updated_at: today()
-  };
+  var cfg = S.settings;
+  setCell(ym, code, d, {
+    status: next,
+    in_time: next === 'P' || next === 'HD' ? (cfg.shift_start || '09:30') : '',
+    out_time: next === 'P' ? (cfg.shift_end || '18:30') : (next === 'HD' ? '13:30' : '')
+  });
+  refreshCell(ym, code, d);
+  markAttDirty(true);
+  renderAttSummary(ym, activeEmployees());
+}
+
+function refreshCell(ym, code, d) {
+  var key = code + '_' + dateStr(ym, d);
   var cell = el('c_' + key);
-  if (cell) { cell.className = 'att-cell s-' + next; cell.textContent = next; }
-  el('att-save').disabled = false;
-  el('att-save').textContent = 'Save ' + Object.keys(S.attDirty).length + ' change' + (Object.keys(S.attDirty).length === 1 ? '' : 's');
+  if (!cell) return;
+  var rec = recordFor(ym, code, d);
+  var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
+  var late = (st === 'P' || st === 'HD') && lateMinutes(rec);
+  cell.className = 'att-cell s-' + st + (S.attDirty[key] ? ' edited' : '') + (late ? ' late' : '');
+  cell.textContent = st;
+}
+
+/* Click a date header: set the whole column. */
+function fillColumn(d) {
+  var ym = el('att-month').value || thisMonth();
+  if (!canEditAtt(ym)) return;
+  var iso = dateStr(ym, d);
+  var opts = STATUSES.map(function (s) {
+    return '<button class="ghost" style="margin:4px" onclick="applyFill(\'column\',' + d + ',\'' + s + '\')">' +
+      s + ' &mdash; ' + statusName(s) + '</button>';
+  }).join('');
+  showModal('Set every employee for ' + iso,
+    '<p style="margin-bottom:12px">Applies to all ' + activeEmployees().length +
+    ' active employees on this date. Nothing is written until you press Save on the register.</p>' + opts,
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal }]);
+}
+/* Row button: set a whole employee-month. */
+function fillRow(code) {
+  var ym = el('att-month').value || thisMonth();
+  if (!canEditAtt(ym)) return;
+  var opts = STATUSES.map(function (s) {
+    return '<button class="ghost" style="margin:4px" onclick="applyFill(\'row\',\'' + esc(code) + '\',\'' + s + '\')">' +
+      s + ' &mdash; ' + statusName(s) + '</button>';
+  }).join('');
+  showModal('Set the whole month for ' + empName(code),
+    '<p style="margin-bottom:12px">Weekly offs and holidays are left alone. ' +
+    'Nothing is written until you press Save on the register.</p>' + opts,
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal }]);
+}
+function statusName(s) {
+  return { P: 'Present', A: 'Absent (LOP)', HD: 'Half day', L: 'Leave', WO: 'Weekly off', H: 'Holiday' }[s] || s;
+}
+function applyFill(kind, target, status) {
+  var ym = el('att-month').value || thisMonth();
+  var dim = daysInMonth(ym);
+  var inT = status === 'P' || status === 'HD' ? (S.settings.shift_start || '09:30') : '';
+  var outT = status === 'P' ? (S.settings.shift_end || '18:30') : (status === 'HD' ? '13:30' : '');
+  var n = 0;
+  if (kind === 'column') {
+    activeEmployees().forEach(function (e) {
+      setCell(ym, e.emp_code, target, { status: status, in_time: inT, out_time: outT }); n++;
+    });
+  } else {
+    for (var d = 1; d <= dim; d++) {
+      if (defaultStatus(ym, d)) continue;           /* keep weekly offs and holidays */
+      setCell(ym, target, d, { status: status, in_time: inT, out_time: outT }); n++;
+    }
+  }
+  closeModal();
+  renderAttendance();
+  markAttDirty(true);
+  toast(n + ' day' + (n === 1 ? '' : 's') + ' set to ' + status + ' - press Save to write it');
+}
+
+/* Double-click a cell: edit times and remarks. */
+function openCell(code, d) {
+  var ym = el('att-month').value || thisMonth();
+  if (!canEditAtt(ym)) return;
+  var rec = recordFor(ym, code, d) || {};
+  var st = statusOf(ym, code, d);
+  showModal(empName(code) + ' - ' + dateStr(ym, d),
+    '<div class="grid2">' +
+      '<label class="field">Status<select data-f="status">' + STATUSES.map(function (s) {
+        return '<option value="' + s + '"' + (s === st ? ' selected' : '') + '>' + s + ' - ' + statusName(s) + '</option>';
+      }).join('') + '</select></label>' +
+      '<label class="field">In time<input data-f="in_time" type="time" value="' + esc(rec.in_time || '') + '"></label>' +
+      '<label class="field">Out time<input data-f="out_time" type="time" value="' + esc(rec.out_time || '') + '"></label>' +
+      '<label class="field">Remarks<input data-f="remarks" type="text" value="' + esc(rec.remarks || '') + '"></label>' +
+    '</div>' +
+    '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Shift is ' +
+    esc(S.settings.shift_start || '09:30') + ' to ' + esc(S.settings.shift_end || '18:30') +
+    ' with ' + esc(S.settings.grace_minutes || 15) + ' minutes grace. Late marks and overtime are derived from these times.</p>',
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
+     { label: 'Apply', onClick: function () {
+       setCell(ym, code, d, collectFields());
+       closeModal(); renderAttendance(); markAttDirty(true);
+     } }]);
 }
 
 function markAllPresent() {
   var ym = el('att-month').value || thisMonth();
+  if (!canEditAtt(ym)) return toast('This month is locked by a finalised payroll run', 'bad');
   var dim = daysInMonth(ym);
-  var map = attMap(ym);
+  var lastDay = ym === thisMonth() ? new Date().getDate() : dim;
   var count = 0;
-  visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; })
-    .forEach(function (e) {
-      for (var d = 1; d <= dim; d++) {
-        var key = e.emp_code + '_' + dateStr(ym, d);
-        if (map[key] && map[key].status) continue;
-        if (S.attDirty[key]) continue;
-        var st = isWeeklyOff(ym, d) ? 'WO' : 'P';
-        S.attDirty[key] = {
-          id: key, date: dateStr(ym, d), emp_code: e.emp_code, status: st,
-          in_time: st === 'P' ? '09:30' : '', out_time: st === 'P' ? '18:30' : '',
-          hours: st === 'P' ? 9 : 0, remarks: '', updated_at: today()
-        };
-        count++;
-      }
-    });
-  if (!count) return toast('Every day is already marked');
-  el('att-save').disabled = false;
-  el('att-save').textContent = 'Save ' + Object.keys(S.attDirty).length + ' change' + (Object.keys(S.attDirty).length === 1 ? '' : 's');
+  activeEmployees().forEach(function (e) {
+    for (var d = 1; d <= lastDay; d++) {
+      if (statusOf(ym, e.emp_code, d)) continue;       /* already marked, weekly off or holiday */
+      setCell(ym, e.emp_code, d, {
+        status: 'P', in_time: S.settings.shift_start || '09:30', out_time: S.settings.shift_end || '18:30'
+      });
+      count++;
+    }
+  });
+  if (!count) return toast('Every working day up to today is already marked');
   renderAttendance();
-  toast(count + ' blank days filled - review, then Save');
+  markAttDirty(true);
+  toast(count + ' blank day' + (count === 1 ? '' : 's') + ' set to Present - review, then Save');
 }
 
 function saveAttendance() {
@@ -977,53 +1875,121 @@ function saveAttendance() {
   var btn = el('att-save');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...';
   api('saveMany', { sheet: 'Attendance', rows: rows }).then(function () {
-    rows.forEach(function (r) {
-      var found = false;
-      for (var i = 0; i < S.attendance.length; i++) {
-        if (S.attendance[i].id === r.id) { S.attendance[i] = r; found = true; break; }
-      }
-      if (!found) S.attendance.push(r);
-    });
+    mergeAttendance(rows);
     S.attDirty = {};
-    S.attVersion++;
-    btn.textContent = 'Save changes';
     toast(rows.length + (rows.length === 1 ? ' attendance day saved' : ' attendance days saved'), 'good');
-    renderAttendance(); renderReports();
+    renderAttendance(); renderReports(); renderDashboard(); renderPayroll();
   }).catch(function (e) {
-    btn.disabled = false; btn.textContent = 'Save changes'; toast(e.message, 'bad');
+    markAttDirty(true); toast(e.message, 'bad');
   });
 }
 
-function attStats(ym, code) {
-  var dim = daysInMonth(ym);
-  var map = attMap(ym);
-  var s = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0 };
-  for (var d = 1; d <= dim; d++) {
-    var key = code + '_' + dateStr(ym, d);
-    var st = S.attDirty[key] ? S.attDirty[key].status : ((map[key] && map[key].status) || (isWeeklyOff(ym, d) ? 'WO' : ''));
-    if (st && s[st] !== undefined) s[st]++; else s.blank++;
-  }
-  s.total = dim;
-  s.lop = s.A + s.HD * 0.5;
-  s.paid = dim - s.lop;
-  return s;
+function mergeAttendance(rows) {
+  var index = {};
+  S.attendance.forEach(function (a, i) { index[a.id] = i; });
+  rows.forEach(function (r) {
+    if (index[r.id] !== undefined) S.attendance[index[r.id]] = r;
+    else { index[r.id] = S.attendance.length; S.attendance.push(r); }
+  });
+  S.attVersion++;
 }
 
-function renderAttSummary(ym, emps, map) {
+function renderAttSummary(ym, emps) {
   var head = '<thead><tr><th>Employee</th><th class="num-col">Present</th><th class="num-col">Absent</th>' +
     '<th class="num-col">Half day</th><th class="num-col">Leave</th><th class="num-col">Weekly off</th>' +
-    '<th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">LOP</th>' +
-    '<th class="num-col">Paid days</th></tr></thead>';
+    '<th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">Late</th>' +
+    '<th class="num-col">OT hrs</th><th class="num-col">LOP</th><th class="num-col">Paid days</th></tr></thead>';
   var body = emps.map(function (e) {
     var s = attStats(ym, e.emp_code);
     return '<tr><td>' + esc(e.name) + '</td>' +
-      ['P', 'A', 'HD', 'L', 'WO', 'H', 'blank'].map(function (k) {
-        return '<td class="num-col">' + s[k] + '</td>';
-      }).join('') +
+      ['P', 'A', 'HD', 'L', 'WO', 'H'].map(function (k) { return '<td class="num-col">' + s[k] + '</td>'; }).join('') +
+      '<td class="num-col">' + (s.blank ? '<span class="badge b-amber">' + s.blank + '</span>' : 0) + '</td>' +
+      '<td class="num-col">' + (s.late ? '<span class="badge b-amber">' + s.late + '</span>' : 0) + '</td>' +
+      '<td class="num-col">' + (s.ot / 60).toFixed(1) + '</td>' +
       '<td class="num-col">' + s.lop + '</td><td class="num-col"><b>' + s.paid + '</b></td></tr>';
   }).join('');
   el('att-summary').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="10" class="empty">Nothing to summarise.</td></tr>') + '</tbody>';
+    '<tr><td colspan="12" class="empty">Nothing to summarise.</td></tr>') + '</tbody>';
+}
+
+/* Biometric / device CSV import: date, emp_code, in, out (header names are matched loosely) */
+function openAttImport() {
+  var ym = el('att-month').value || thisMonth();
+  if (!canEditAtt(ym)) return toast('This month is locked by a finalised payroll run', 'bad');
+  showModal('Import attendance from a device CSV',
+    '<p style="margin-bottom:10px">The file needs a header row containing a date column, an employee column, ' +
+    'and optionally in/out times. These header names are recognised:</p>' +
+    '<code style="font-size:.7rem;display:block;background:#f1f5f9;padding:10px;border-radius:6px;line-height:1.8">' +
+    'date / att_date / punch_date &middot; emp_code / employee_code / empcode / id<br>' +
+    'in_time / in / punch_in &middot; out_time / out / punch_out &middot; status (optional)</code>' +
+    '<p style="margin:12px 0 8px;font-size:.8rem">If no status column is present, a row with an in-time counts as ' +
+    '<b>Present</b>. Imported rows land as unsaved changes so you can review them before writing.</p>' +
+    '<input type="file" id="att-file" accept=".csv,text/csv">' +
+    '<div id="att-imp-status" style="margin-top:12px;font-size:.8rem;color:var(--text-muted)"></div>',
+    [{ label: 'Close', cls: 'ghost', onClick: closeModal }]);
+  el('att-file').onchange = function () {
+    var file = this.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try { importAttendanceCsv(reader.result, ym); }
+      catch (err) { el('att-imp-status').innerHTML = '<div class="err show">' + esc(err.message) + '</div>'; }
+    };
+    reader.readAsText(file);
+  };
+}
+
+function importAttendanceCsv(text, ym) {
+  var rows = parseCSV(text);
+  if (rows.length < 2) throw new Error('The file has no data rows.');
+  var headers = rows[0].map(function (h) { return h.trim().toLowerCase().replace(/\s+/g, '_'); });
+  var find = function (names) {
+    for (var i = 0; i < names.length; i++) {
+      var ix = headers.indexOf(names[i]);
+      if (ix >= 0) return ix;
+    }
+    return -1;
+  };
+  var iDate = find(['date', 'att_date', 'punch_date', 'attendance_date']);
+  var iCode = find(['emp_code', 'employee_code', 'empcode', 'code', 'id', 'employee_id']);
+  var iIn = find(['in_time', 'in', 'punch_in', 'intime', 'first_in']);
+  var iOut = find(['out_time', 'out', 'punch_out', 'outtime', 'last_out']);
+  var iStat = find(['status', 'att_status']);
+  if (iDate < 0) throw new Error('No date column found. Add a header called "date".');
+  if (iCode < 0) throw new Error('No employee column found. Add a header called "emp_code".');
+
+  var applied = 0, skipped = [], known = {};
+  S.employees.forEach(function (e) { known[String(e.emp_code).toUpperCase()] = e.emp_code; });
+
+  rows.slice(1).forEach(function (r, n) {
+    var iso = normalizeDate(r[iDate]);
+    var code = known[String(r[iCode] || '').trim().toUpperCase()];
+    if (!iso) { skipped.push('Row ' + (n + 2) + ': unreadable date "' + r[iDate] + '"'); return; }
+    if (!code) { skipped.push('Row ' + (n + 2) + ': unknown employee "' + r[iCode] + '"'); return; }
+    if (iso.slice(0, 7) !== ym) { skipped.push('Row ' + (n + 2) + ': ' + iso + ' is outside ' + ym); return; }
+    var inT = iIn >= 0 ? String(r[iIn] || '').trim() : '';
+    var outT = iOut >= 0 ? String(r[iOut] || '').trim() : '';
+    var st = iStat >= 0 ? String(r[iStat] || '').trim().toUpperCase() : '';
+    if (STATUSES.indexOf(st) < 0) st = inT ? 'P' : 'A';
+    setCell(ym, code, +iso.slice(8), { status: st, in_time: inT, out_time: outT, remarks: 'device import' });
+    applied++;
+  });
+
+  el('att-imp-status').innerHTML =
+    '<b>' + applied + ' row(s) staged.</b> Review the register, then press Save.' +
+    (skipped.length ? '<div class="err show" style="margin-top:10px">' +
+      skipped.slice(0, 6).map(esc).join('<br>') +
+      (skipped.length > 6 ? '<br>and ' + (skipped.length - 6) + ' more' : '') + '</div>' : '');
+  if (applied) { renderAttendance(); markAttDirty(true); }
+}
+
+function normalizeDate(v) {
+  var s = String(v || '').trim();
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);          /* dd/mm/yyyy */
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return null;
 }
 
 function exportAttendance() {
@@ -1031,15 +1997,14 @@ function exportAttendance() {
   var dim = daysInMonth(ym);
   var cols = ['emp_code', 'name'];
   for (var d = 1; d <= dim; d++) cols.push(String(d));
-  cols.push('LOP', 'paid_days');
-  var rows = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; })
-    .map(function (e) {
-      var r = [e.emp_code, e.name];
-      for (var d = 1; d <= dim; d++) r.push(statusOf(ym, e.emp_code, d));
-      var s = attStats(ym, e.emp_code);
-      r.push(s.lop, s.paid);
-      return r;
-    });
+  cols.push('late_marks', 'ot_hours', 'LOP', 'paid_days');
+  var rows = activeEmployees().map(function (e) {
+    var r = [e.emp_code, e.name];
+    for (var d = 1; d <= dim; d++) r.push(statusOf(ym, e.emp_code, d));
+    var s = attStats(ym, e.emp_code);
+    r.push(s.late, (s.ot / 60).toFixed(1), s.lop, s.paid);
+    return r;
+  });
   download('attendance-' + ym + '.csv', toCSV(cols, rows));
 }
 </script>
@@ -1061,13 +2026,31 @@ function workingDaysBetween(from, to) {
   var a = new Date(from), b = new Date(to), n = 0;
   if (isNaN(a) || isNaN(b) || b < a) return 0;
   for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
-    var ym = d.toISOString().slice(0, 7);
-    if (!isWeeklyOff(ym, d.getDate())) n++;
+    var iso = d.toISOString().slice(0, 10);
+    if (isWeeklyOff(iso.slice(0, 7), d.getDate())) continue;
+    if (holidayOn(iso)) continue;
+    n++;
   }
   return n;
 }
 function visibleLeave() {
   return isAdmin() ? S.leave : S.leave.filter(function (l) { return String(l.emp_code) === myCode(); });
+}
+function takenDays(code, type, year) {
+  return S.leave.filter(function (l) {
+    return String(l.emp_code) === String(code) && l.type === type && l.status === 'Approved' &&
+      String(l.from_date).slice(0, 4) === String(year);
+  }).reduce(function (s, l) { return s + num(l.days); }, 0);
+}
+
+function leaveTab(tab) {
+  ['list', 'calendar', 'balance'].forEach(function (t) {
+    el('leave-pane-' + t).style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#view-leave .tab').forEach(function (n) {
+    n.classList.toggle('active', n.dataset.tab === tab);
+  });
+  if (tab === 'calendar') renderLeaveCalendar();
 }
 
 function renderLeave() {
@@ -1081,55 +2064,56 @@ function renderLeave() {
   });
 
   el('leave-kpis').innerHTML =
-    kpi('Pending approvals', pending.length, 'waiting on HR') +
+    kpi('Pending approvals', pending.length, pending.length ? 'waiting on HR' : 'nothing waiting') +
     kpi('Approved days', approved.reduce(function (s, l) { return s + num(l.days); }, 0), 'in ' + year) +
-    kpi('On leave today', onLeaveToday.length, onLeaveToday.map(function (l) { return empName(l.emp_code); }).join(', ') || 'everyone at work') +
+    kpi('On leave today', onLeaveToday.length,
+        onLeaveToday.map(function (l) { return empName(l.emp_code); }).join(', ') || 'everyone at work') +
     kpi('Applications', all.length, 'filed in ' + year);
 
   var rows = all.filter(function (l) { return !status || l.status === status; })
     .sort(function (a, b) { return String(b.from_date).localeCompare(String(a.from_date)); });
 
   var head = '<thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th class="num-col">Days</th>' +
-    '<th>Reason</th><th>Status</th><th></th></tr></thead>';
+    '<th>Reason</th><th>Status</th><th>Decided by</th><th></th></tr></thead>';
   var body = rows.map(function (l) {
-    var cls = l.status === 'Approved' ? 'b-green' : (l.status === 'Rejected' ? 'b-red' : 'b-amber');
+    var cls = l.status === 'Approved' ? 'b-green' : l.status === 'Rejected' ? 'b-red'
+      : l.status === 'Cancelled' ? 'b-gray' : 'b-amber';
     var actions = '';
     if (isAdmin() && l.status === 'Pending') {
       actions = '<button class="ok sm" onclick="decideLeave(\'' + esc(l.id) + '\',\'Approved\')">Approve</button> ' +
         '<button class="danger sm" onclick="decideLeave(\'' + esc(l.id) + '\',\'Rejected\')">Reject</button>';
+    } else if (isAdmin() && l.status === 'Approved') {
+      actions = '<button class="ghost sm" onclick="cancelLeave(\'' + esc(l.id) + '\')">Cancel</button>';
     } else if (isAdmin()) {
       actions = '<button class="ghost sm" onclick="deleteLeave(\'' + esc(l.id) + '\')">Delete</button>';
     }
-    return '<tr><td>' + esc(empName(l.emp_code)) + '<div style="font-size:.7rem;color:var(--text-muted)">' +
-      esc(l.emp_code) + '</div></td>' +
+    return '<tr><td>' + esc(empName(l.emp_code)) + '<div class="sub-line">' + esc(l.emp_code) + '</div></td>' +
       '<td>' + esc(l.type) + '</td><td>' + esc(l.from_date) + '</td><td>' + esc(l.to_date) + '</td>' +
       '<td class="num-col">' + esc(l.days) + '</td><td>' + esc(l.reason || '-') + '</td>' +
       '<td><span class="badge ' + cls + '">' + esc(l.status) + '</span></td>' +
+      '<td class="sub-line">' + esc(l.decided_by || '-') + '</td>' +
       '<td style="white-space:nowrap">' + actions + '</td></tr>';
   }).join('');
   el('leave-table').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="8" class="empty">No leave applications for this filter.</td></tr>') + '</tbody>';
+    '<tr><td colspan="9" class="empty">No leave applications for this filter.</td></tr>') + '</tbody>';
 
   renderLeaveBalance(year);
+  if (el('leave-pane-calendar').style.display !== 'none') renderLeaveCalendar();
 }
 
 function renderLeaveBalance(year) {
   var types = leaveTypes();
-  var emps = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  var emps = activeEmployees();
   var head = '<thead><tr><th>Employee</th>' + types.map(function (t) {
-    return '<th class="num-col">' + esc(t) + '<div style="font-weight:400;text-transform:none">quota ' +
-      (quotaFor(t) || '-') + '</div></th>';
+    return '<th class="num-col">' + esc(t) +
+      '<div style="font-weight:400;text-transform:none">quota ' + (quotaFor(t) || '—') + '</div></th>';
   }).join('') + '<th class="num-col">Total taken</th></tr></thead>';
   var body = emps.map(function (e) {
     var total = 0;
     var cells = types.map(function (t) {
-      var taken = S.leave.filter(function (l) {
-        return String(l.emp_code) === String(e.emp_code) && l.type === t &&
-          l.status === 'Approved' && String(l.from_date).slice(0, 4) === year;
-      }).reduce(function (s, l) { return s + num(l.days); }, 0);
+      var taken = takenDays(e.emp_code, t, year);
       total += taken;
-      var q = quotaFor(t);
-      var bal = q ? (q - taken) : null;
+      var q = quotaFor(t), bal = q ? q - taken : null;
       return '<td class="num-col">' + taken + (bal !== null ?
         ' <span class="badge ' + (bal < 0 ? 'b-red' : 'b-blue') + '">' + bal + ' left</span>' : '') + '</td>';
     }).join('');
@@ -1139,34 +2123,88 @@ function renderLeaveBalance(year) {
     '<tr><td colspan="6" class="empty">No active employees.</td></tr>') + '</tbody>';
 }
 
+function renderLeaveCalendar() {
+  var ym = el('leave-month').value || thisMonth();
+  var dim = daysInMonth(ym);
+  var firstDow = weekdayOf(ym, 1);
+  var html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    .map(function (d) { return '<div class="dow">' + d + '</div>'; }).join('');
+  for (var b = 0; b < firstDow; b++) html += '<div></div>';
+  for (var d = 1; d <= dim; d++) {
+    var iso = dateStr(ym, d), hol = holidayOn(iso), off = isWeeklyOff(ym, d);
+    var who = visibleLeave().filter(function (l) {
+      return l.status === 'Approved' && String(l.from_date) <= iso && iso <= String(l.to_date);
+    });
+    html += '<div class="day' + (off ? ' off' : '') + (hol ? ' hol' : '') + '">' +
+      '<div class="dnum">' + d + '</div>' +
+      (hol ? '<div class="hname">' + esc(hol.name) + '</div>' : '') +
+      who.slice(0, 3).map(function (l) {
+        return '<div class="who" title="' + esc(empName(l.emp_code) + ' - ' + l.type) + '">' +
+          esc(empName(l.emp_code).split(' ')[0]) + '</div>';
+      }).join('') +
+      (who.length > 3 ? '<div class="sub-line">+' + (who.length - 3) + ' more</div>' : '') +
+      '</div>';
+  }
+  el('leave-cal').innerHTML = html;
+}
+
 function openLeave() {
-  var emps = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; });
-  var body = '<div class="grid2">' +
-    '<label class="field">Employee<select data-f="emp_code">' + emps.map(function (e) {
+  var emps = activeEmployees();
+  if (!emps.length) return toast('Add an employee first', 'bad');
+  var body = '<div id="leave-warn"></div><div class="grid2">' +
+    '<label class="field">Employee<select data-f="emp_code" onchange="checkLeave()">' + emps.map(function (e) {
       return '<option value="' + esc(e.emp_code) + '"' + (e.emp_code === myCode() ? ' selected' : '') + '>' +
         esc(e.name) + ' (' + esc(e.emp_code) + ')</option>';
     }).join('') + '</select></label>' +
-    '<label class="field">Leave type<select data-f="type">' + leaveTypes().map(function (t) {
+    '<label class="field">Leave type<select data-f="type" onchange="checkLeave()">' + leaveTypes().map(function (t) {
       return '<option>' + esc(t) + '</option>';
     }).join('') + '</select></label>' +
-    '<label class="field">From<input data-f="from_date" type="date" value="' + today() + '" onchange="updateLeaveDays()"></label>' +
-    '<label class="field">To<input data-f="to_date" type="date" value="' + today() + '" onchange="updateLeaveDays()"></label>' +
-    '<label class="field">Days<input data-f="days" type="number" step="0.5" value="1"></label>' +
+    '<label class="field">From<input data-f="from_date" type="date" value="' + today() + '" onchange="checkLeave(true)"></label>' +
+    '<label class="field">To<input data-f="to_date" type="date" value="' + today() + '" onchange="checkLeave(true)"></label>' +
+    '<label class="field">Days<input data-f="days" type="number" step="0.5" min="0.5" value="1" onchange="checkLeave()"></label>' +
     '<label class="field">Reason<input data-f="reason" type="text" placeholder="Short reason"></label>' +
-    '</div><p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Days exclude weekly offs (' +
-    esc(S.settings.weekly_off || 'Sun') + '). Edit the number for a half day.</p>';
+    '</div><p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Days skip weekly offs (' +
+    esc(S.settings.weekly_off || 'Sun') + ') and holidays. Set 0.5 for a half day.</p>';
   showModal('Apply for leave', body, [
     { label: 'Cancel', cls: 'ghost', onClick: closeModal },
     { label: 'Submit application', onClick: submitLeave }
   ]);
-  updateLeaveDays();
+  checkLeave(true);
 }
 
-function updateLeaveDays() {
+/* Live validation: recompute days, warn on overlap and on exceeding quota. */
+function checkLeave(recompute) {
   var b = el('modal-body');
+  var code = b.querySelector('[data-f="emp_code"]').value;
+  var type = b.querySelector('[data-f="type"]').value;
   var from = b.querySelector('[data-f="from_date"]').value;
   var to = b.querySelector('[data-f="to_date"]').value;
-  b.querySelector('[data-f="days"]').value = workingDaysBetween(from, to);
+  var daysInput = b.querySelector('[data-f="days"]');
+  if (recompute) daysInput.value = workingDaysBetween(from, to);
+  var days = num(daysInput.value);
+  var warns = [];
+  if (to < from) warns.push('"To" is before "From".');
+  if (!days) warns.push('That range has no working days in it.');
+  var year = String(from).slice(0, 4);
+  var q = quotaFor(type);
+  if (q) {
+    var taken = takenDays(code, type, year);
+    if (taken + days > q) {
+      warns.push(type + ' balance for ' + year + ' is ' + (q - taken) + ' day(s); this asks for ' + days +
+        '. It can still be approved - the extra shows as a negative balance.');
+    }
+  }
+  var clash = S.leave.filter(function (l) {
+    return String(l.emp_code) === String(code) && ['Approved', 'Pending'].indexOf(l.status) >= 0 &&
+      String(l.from_date) <= to && from <= String(l.to_date);
+  });
+  if (clash.length) {
+    warns.push('Overlaps an existing ' + clash[0].status.toLowerCase() + ' application (' +
+      clash[0].from_date + ' to ' + clash[0].to_date + ').');
+  }
+  el('leave-warn').innerHTML = warns.length
+    ? '<div class="err show" style="background:#fef3c7;color:#92400e">' + warns.map(esc).join('<br>') + '</div>' : '';
+  return warns;
 }
 
 function submitLeave() {
@@ -1175,13 +2213,19 @@ function submitLeave() {
   if (!row.from_date || !row.to_date) return toast('Pick both dates', 'bad');
   if (row.to_date < row.from_date) return toast('"To" cannot be before "From"', 'bad');
   if (num(row.days) <= 0) return toast('Days must be more than zero', 'bad');
+  var clash = S.leave.filter(function (l) {
+    return String(l.emp_code) === String(row.emp_code) && ['Approved', 'Pending'].indexOf(l.status) >= 0 &&
+      String(l.from_date) <= row.to_date && row.from_date <= String(l.to_date);
+  });
+  if (clash.length) return toast('That range overlaps an existing application - change the dates first', 'bad');
   row.days = num(row.days);
-  row.status = isAdmin() ? 'Pending' : 'Pending';
+  row.status = 'Pending';
   row.applied_at = today();
   row.decided_by = ''; row.decided_at = ''; row.decision_note = '';
   api('save', { sheet: 'Leave', row: row }).then(function (saved) {
     S.leave.push(Object.assign({}, row, { id: saved.id }));
-    closeModal(); toast('Leave application submitted', 'good'); renderLeave();
+    closeModal(); toast('Leave application submitted', 'good');
+    renderLeave(); renderDashboard();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
@@ -1189,238 +2233,391 @@ function decideLeave(id, decision) {
   var l = null;
   S.leave.forEach(function (x) { if (String(x.id) === String(id)) l = x; });
   if (!l) return;
-  var row = Object.assign({}, l, {
-    status: decision, decided_by: S.user.email, decided_at: today()
-  });
+  if (decision === 'Approved' && monthLocked(String(l.from_date).slice(0, 7))) {
+    return toast('Payroll for ' + monthLabel(String(l.from_date).slice(0, 7)) +
+      ' is finalised. Reopen that run before approving leave inside it.', 'bad');
+  }
+  var row = Object.assign({}, l, { status: decision, decided_by: S.user.email, decided_at: today() });
   api('save', { sheet: 'Leave', row: row }).then(function () {
     Object.assign(l, row);
-    if (decision === 'Approved') return markLeaveOnAttendance(row);
+    if (decision === 'Approved') return writeLeaveToAttendance(row, 'L');
   }).then(function () {
     toast('Leave ' + decision.toLowerCase(), 'good');
-    renderLeave(); renderAttendance(); renderReports();
+    renderLeave(); renderAttendance(); renderReports(); renderDashboard();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
-/* Approved leave also shows up on the attendance register as "L". */
-function markLeaveOnAttendance(l) {
+function cancelLeave(id) {
+  var l = null;
+  S.leave.forEach(function (x) { if (String(x.id) === String(id)) l = x; });
+  if (!l) return;
+  if (monthLocked(String(l.from_date).slice(0, 7))) {
+    return toast('That month’s payroll is finalised - reopen the run first', 'bad');
+  }
+  showModal('Cancel approved leave',
+    '<p>Cancel <b>' + esc(l.days) + ' day(s) of ' + esc(l.type) + '</b> for <b>' + esc(empName(l.emp_code)) +
+    '</b> (' + esc(l.from_date) + ' to ' + esc(l.to_date) + ')?</p>' +
+    '<p style="margin-top:10px">Those days go back to <b>unmarked</b> on the attendance register, so mark them ' +
+    'Present or Absent before the next payroll run.</p>', [
+    { label: 'Keep it', cls: 'ghost', onClick: closeModal },
+    { label: 'Cancel the leave', cls: 'danger', onClick: function () {
+      var row = Object.assign({}, l, { status: 'Cancelled', decided_by: S.user.email, decided_at: today() });
+      api('save', { sheet: 'Leave', row: row }).then(function () {
+        Object.assign(l, row);
+        return writeLeaveToAttendance(row, '');
+      }).then(function () {
+        closeModal(); toast('Leave cancelled', 'good');
+        renderLeave(); renderAttendance(); renderDashboard();
+      }).catch(function (e) { toast(e.message, 'bad'); });
+    } }
+  ]);
+}
+
+/* Approved leave writes "L" onto the register; cancelling clears those days. */
+function writeLeaveToAttendance(l, status) {
   var rows = [];
   var a = new Date(l.from_date), b = new Date(l.to_date);
   for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
     var iso = d.toISOString().slice(0, 10);
-    if (isWeeklyOff(iso.slice(0, 7), d.getDate())) continue;
+    var ym = iso.slice(0, 7);
+    if (isWeeklyOff(ym, d.getDate()) || holidayOn(iso)) continue;
+    var existing = attMap(ym)[l.emp_code + '_' + iso];
+    if (!status && existing && existing.status !== 'L') continue;   /* leave someone else's marking alone */
     rows.push({
-      id: l.emp_code + '_' + iso, date: iso, emp_code: l.emp_code, status: 'L',
-      in_time: '', out_time: '', hours: 0, remarks: l.type + ' leave', updated_at: today()
+      id: l.emp_code + '_' + iso, date: iso, emp_code: l.emp_code, status: status,
+      in_time: '', out_time: '', hours: 0,
+      remarks: status ? l.type + ' leave' : '', updated_at: today()
     });
   }
   if (!rows.length) return Promise.resolve();
-  return api('saveMany', { sheet: 'Attendance', rows: rows }).then(function () {
-    rows.forEach(function (r) {
-      var found = false;
-      for (var i = 0; i < S.attendance.length; i++) {
-        if (S.attendance[i].id === r.id) { S.attendance[i] = r; found = true; break; }
-      }
-      if (!found) S.attendance.push(r);
-    });
-    S.attVersion++;
-  });
+  return api('saveMany', { sheet: 'Attendance', rows: rows }).then(function () { mergeAttendance(rows); });
 }
 
 function deleteLeave(id) {
   api('remove', { sheet: 'Leave', id: id }).then(function () {
     S.leave = S.leave.filter(function (l) { return String(l.id) !== String(id); });
-    toast('Application deleted', 'good'); renderLeave();
+    toast('Application deleted', 'good'); renderLeave(); renderDashboard();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
+function exportLeave() {
+  var cols = ['emp_code', 'name', 'type', 'from_date', 'to_date', 'days', 'reason', 'status',
+              'applied_at', 'decided_by', 'decided_at'];
+  download('leave.csv', toCSV(cols, visibleLeave().map(function (l) {
+    return cols.map(function (c) { return c === 'name' ? empName(l.emp_code) : l[c]; });
+  })));
+}
+</script>
+
+<script>
 /* =================================================================
    MODULE 4 - PAYROLL
    ================================================================= */
 
-function computePay(e, ym, overrides) {
+function computePay(e, ym, prev) {
   var s = attStats(ym, e.emp_code);
   var factor = s.total ? s.paid / s.total : 0;
   var basic = num(e.basic) * factor;
   var hra = num(e.hra) * factor;
   var special = num(e.special_allowance) * factor;
   var other = num(e.other_allowance) * factor;
-  var gross = basic + hra + special + other;
+  var arrears = prev && prev.arrears !== undefined ? num(prev.arrears) : 0;
+  var bonus = prev && prev.bonus !== undefined ? num(prev.bonus) : 0;
+  var gross = basic + hra + special + other + arrears + bonus;
 
-  var pf = 0;
+  var pfWage = 0, pf = 0, pfEmployer = 0;
   if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
-    var ceiling = num(S.settings.pf_wage_ceiling || 15000) * factor;
-    pf = Math.min(basic, ceiling) * num(S.settings.pf_employee_pct || 12) / 100;
+    pfWage = Math.min(basic, num(S.settings.pf_wage_ceiling || 15000) * factor);
+    pf = pfWage * num(S.settings.pf_employee_pct || 12) / 100;
+    pfEmployer = pfWage * num(S.settings.pf_employer_pct || 13) / 100;
   }
-  var esi = 0;
+  var esi = 0, esiEmployer = 0;
   if (String(e.esi_applicable || 'no').toLowerCase() === 'yes' &&
       grossOf(e) <= num(S.settings.esi_wage_ceiling || 21000)) {
     esi = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
+    esiEmployer = gross * num(S.settings.esi_employer_pct || 3.25) / 100;
   }
   var pt = gross > 0 ? num(S.settings.pt_amount || 0) : 0;
-  var tds = num(e.tds_monthly) * (gross > 0 ? 1 : 0);
-  var otherDed = overrides && overrides.other_deduction !== undefined ? num(overrides.other_deduction) : 0;
+  var tds = gross > 0 ? num(e.tds_monthly) : 0;
+  var otherDed = prev && prev.other_deduction !== undefined ? num(prev.other_deduction) : 0;
   var totalDed = pf + esi + pt + tds + otherDed;
+  var r = Math.round;
 
-  var r = function (v) { return Math.round(v); };
   return {
     id: ym + '_' + e.emp_code, month: ym, emp_code: e.emp_code,
     total_days: s.total, lop_days: s.lop, paid_days: s.paid,
     basic: r(basic), hra: r(hra), special_allowance: r(special), other_allowance: r(other),
-    gross: r(gross), pf: r(pf), esi: r(esi), pt: r(pt), tds: r(tds),
-    other_deduction: r(otherDed), total_deduction: r(totalDed), net: r(gross - totalDed),
+    arrears: r(arrears), bonus: r(bonus), gross: r(gross),
+    pf: r(pf), esi: r(esi), pt: r(pt), tds: r(tds), other_deduction: r(otherDed),
+    total_deduction: r(totalDed), net: r(gross - totalDed),
+    pf_employer: r(pfEmployer), esi_employer: r(esiEmployer),
+    ctc: r(gross + pfEmployer + esiEmployer),
     status: 'Draft', generated_at: today(), generated_by: S.user ? S.user.email : ''
   };
 }
 
-function savedRunFor(ym) {
-  return S.payroll.filter(function (p) { return String(p.month) === ym; });
+function savedRunFor(ym) { return S.payroll.filter(function (p) { return String(p.month) === ym; }); }
+function runFinalised(ym) {
+  var r = savedRunFor(ym);
+  return r.length > 0 && r.every(function (x) { return x.status === 'Finalised'; });
+}
+function currentRun(ym) {
+  if (S.payDraft && S.payDraft.month === ym) return { rows: S.payDraft.rows, draft: true };
+  return { rows: savedRunFor(ym), draft: false };
 }
 
 function renderPayroll() {
   var ym = el('pay-month').value || thisMonth();
-  var saved = savedRunFor(ym);
-  var rows = (S.payDraft && S.payDraft.month === ym) ? S.payDraft.rows : saved;
+  var run = currentRun(ym);
+  var rows = run.rows;
   if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+  var finalised = runFinalised(ym) && !run.draft;
 
-  var isDraft = !!(S.payDraft && S.payDraft.month === ym);
-  el('pay-save').disabled = !isDraft;
-  el('pay-save').textContent = isDraft ? 'Save payroll run (' + rows.length + ')' : 'Save payroll run';
+  /* run state banner */
+  var unmarked = activeEmployees().reduce(function (s, e) { return s + attStats(ym, e.emp_code).blank; }, 0);
+  var banner = '';
+  if (finalised) {
+    banner = '<div class="locked-note">&#128274; ' + monthLabel(ym) + ' payroll is finalised and the attendance ' +
+      'register for that month is locked.' + (isAdmin() ?
+      ' <button class="ghost sm" style="margin-left:auto" onclick="reopenRun()">Reopen run</button>' : '') + '</div>';
+  } else if (run.draft) {
+    banner = '<div class="locked-note" style="background:#dbeafe;color:#1e40af">&#9998; Draft run - nothing is ' +
+      'written to the sheet until you press <b>Finalise run</b>.</div>';
+  } else if (unmarked && isAdmin()) {
+    banner = '<div class="locked-note">&#9888; ' + unmarked + ' attendance day(s) in ' + monthLabel(ym) +
+      ' are still unmarked and will be paid as LOP. ' +
+      '<button class="ghost sm" style="margin-left:auto" onclick="go(\'attendance\');el(\'att-month\').value=\'' +
+      ym + '\';onAttMonth()">Fix attendance</button></div>';
+  }
+  el('pay-state').innerHTML = banner;
+  el('pay-save').disabled = !run.draft;
+  el('pay-save').textContent = run.draft ? 'Finalise run (' + rows.length + ')' : 'Finalise run';
+  el('pay-generate').textContent = finalised ? '⚙ Regenerate (reopens run)' : '⚙ Generate from attendance';
 
   var totals = rows.reduce(function (t, r) {
-    t.gross += num(r.gross); t.ded += num(r.total_deduction); t.net += num(r.net); return t;
-  }, { gross: 0, ded: 0, net: 0 });
+    t.gross += num(r.gross); t.ded += num(r.total_deduction); t.net += num(r.net);
+    t.ctc += num(r.ctc || r.gross); return t;
+  }, { gross: 0, ded: 0, net: 0, ctc: 0 });
+
+  /* variance against the previous month's saved run */
+  var prevRun = savedRunFor(addMonths(ym, -1));
+  var prevNet = prevRun.reduce(function (s, r) { return s + num(r.net); }, 0);
+  var delta = prevNet ? totals.net - prevNet : 0;
 
   el('pay-kpis').innerHTML =
-    kpi('Employees paid', rows.length, isDraft ? 'draft - not saved yet' : (saved.length ? 'saved run' : 'nothing generated')) +
+    kpi('Employees paid', rows.length, run.draft ? 'draft, not saved' : (rows.length ? 'saved run' : 'nothing generated')) +
     kpi('Gross payout', cur() + money(totals.gross), 'after LOP proration') +
     kpi('Deductions', cur() + money(totals.ded), 'PF + ESI + PT + TDS + other') +
-    kpi('Net payable', cur() + money(totals.net), 'transfer this to the bank');
+    kpi('Net payable', cur() + money(totals.net), 'transfer this to the bank') +
+    kpi('Cost to company', cur() + money(totals.ctc), 'including employer PF and ESI') +
+    kpi('vs ' + monthLabel(addMonths(ym, -1)), prevNet
+        ? (delta >= 0 ? '+' : '−') + money(Math.abs(delta))
+        : '&mdash;', prevNet ? 'change in net payout' : 'no run to compare');
 
-  var head = '<thead><tr><th>Employee</th><th class="num-col">Paid days</th><th class="num-col">LOP</th>' +
+  var editable = run.draft && isAdmin();
+  var head = '<thead><tr><th>Employee</th><th class="num-col">Paid</th><th class="num-col">LOP</th>' +
     '<th class="num-col">Basic</th><th class="num-col">HRA</th><th class="num-col">Allow.</th>' +
-    '<th class="num-col">Gross</th><th class="num-col">PF</th><th class="num-col">ESI</th>' +
-    '<th class="num-col">PT</th><th class="num-col">TDS</th><th class="num-col">Other ded.</th>' +
-    '<th class="num-col">Net pay</th><th></th></tr></thead>';
+    '<th class="num-col">Arrears</th><th class="num-col">Bonus</th><th class="num-col">Gross</th>' +
+    '<th class="num-col">PF</th><th class="num-col">ESI</th><th class="num-col">PT</th><th class="num-col">TDS</th>' +
+    '<th class="num-col">Other ded.</th><th class="num-col">Net pay</th><th class="num-col">Change</th>' +
+    '<th></th></tr></thead>';
+  var prevById = {};
+  prevRun.forEach(function (r) { prevById[r.emp_code] = r; });
+
   var body = rows.map(function (r, i) {
+    var p = prevById[r.emp_code];
+    var d = p ? num(r.net) - num(p.net) : null;
+    var chg = d === null ? '<span class="sub-line">new</span>'
+      : (Math.abs(d) < 1 ? '<span class="sub-line">&mdash;</span>'
+      : '<span class="badge ' + (d > 0 ? 'b-green' : 'b-amber') + '">' + (d > 0 ? '+' : '−') +
+        money(Math.abs(d)) + '</span>');
+    var cell = function (field) {
+      return editable
+        ? '<input type="number" value="' + num(r[field]) + '" style="width:80px;text-align:right" ' +
+          'onchange="editPayField(' + i + ',\'' + field + '\',this.value)">'
+        : money(r[field]);
+    };
     return '<tr>' +
-      '<td>' + esc(empName(r.emp_code)) + '<div style="font-size:.7rem;color:var(--text-muted)">' + esc(r.emp_code) + '</div></td>' +
-      '<td class="num-col">' + r.paid_days + '</td><td class="num-col">' + r.lop_days + '</td>' +
+      '<td>' + esc(empName(r.emp_code)) + '<div class="sub-line">' + esc(r.emp_code) + '</div></td>' +
+      '<td class="num-col">' + r.paid_days + '</td>' +
+      '<td class="num-col">' + (num(r.lop_days) ? '<span class="badge b-amber">' + r.lop_days + '</span>' : 0) + '</td>' +
       '<td class="num-col">' + money(r.basic) + '</td><td class="num-col">' + money(r.hra) + '</td>' +
       '<td class="num-col">' + money(num(r.special_allowance) + num(r.other_allowance)) + '</td>' +
+      '<td class="num-col">' + cell('arrears') + '</td>' +
+      '<td class="num-col">' + cell('bonus') + '</td>' +
       '<td class="num-col"><b>' + money(r.gross) + '</b></td>' +
       '<td class="num-col">' + money(r.pf) + '</td><td class="num-col">' + money(r.esi) + '</td>' +
       '<td class="num-col">' + money(r.pt) + '</td><td class="num-col">' + money(r.tds) + '</td>' +
-      '<td class="num-col">' + (isDraft && isAdmin()
-        ? '<input type="number" value="' + num(r.other_deduction) + '" style="width:85px;text-align:right" ' +
-          'onchange="editOtherDed(' + i + ',this.value)">'
-        : money(r.other_deduction)) + '</td>' +
+      '<td class="num-col">' + cell('other_deduction') + '</td>' +
       '<td class="num-col"><b>' + cur() + money(r.net) + '</b></td>' +
-      '<td><button class="ghost sm" onclick="payslip(\'' + esc(r.emp_code) + '\',\'' + esc(r.month) + '\')">Payslip</button></td>' +
-      '</tr>';
+      '<td class="num-col">' + chg + '</td>' +
+      '<td><button class="ghost sm" onclick="payslip(\'' + esc(r.emp_code) + '\',\'' + esc(r.month) +
+        '\')">Payslip</button></td></tr>';
   }).join('');
+
   el('pay-table').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="14" class="empty">No payroll for ' + esc(ym) +
-    '. Click "Generate from attendance" to build it.</td></tr>') + '</tbody>';
+    '<tr><td colspan="17" class="empty">No payroll for ' + esc(monthLabel(ym)) +
+    '. Press "Generate from attendance" to build it.</td></tr>') + '</tbody>';
 }
 
 function generatePayroll() {
   var ym = el('pay-month').value || thisMonth();
-  var emps = S.employees.filter(function (e) { return String(e.status || 'Active') === 'Active'; });
-  if (!emps.length) return toast('No active employees to pay', 'bad');
+  var emps = S.employees.filter(function (e) {
+    return String(e.status || 'Active') === 'Active' && (!e.doj || String(e.doj) <= ym + '-31');
+  });
+  if (!emps.length) return toast('No active employees to pay for this month', 'bad');
   var existing = {};
   savedRunFor(ym).forEach(function (r) { existing[r.emp_code] = r; });
-  S.payDraft = {
-    month: ym,
-    rows: emps.map(function (e) { return computePay(e, ym, existing[e.emp_code]); })
-  };
+  S.payDraft = { month: ym, rows: emps.map(function (e) { return computePay(e, ym, existing[e.emp_code]); }) };
   renderPayroll();
-  toast('Draft payroll generated for ' + emps.length + ' employees - review, then Save');
+  var unmarked = activeEmployees().reduce(function (s, e) { return s + attStats(ym, e.emp_code).blank; }, 0);
+  toast('Draft built for ' + emps.length + ' employees' +
+    (unmarked ? ' - ' + unmarked + ' unmarked day(s) counted as LOP' : '') + '. Review, then finalise.');
 }
 
-function editOtherDed(index, value) {
+function editPayField(index, field, value) {
   var row = S.payDraft.rows[index];
   var e = empByCode(row.emp_code);
-  S.payDraft.rows[index] = computePay(e, row.month, { other_deduction: value });
+  var overrides = {
+    arrears: row.arrears, bonus: row.bonus, other_deduction: row.other_deduction
+  };
+  overrides[field] = num(value);
+  S.payDraft.rows[index] = computePay(e, row.month, overrides);
   renderPayroll();
 }
 
 function savePayroll() {
   if (!S.payDraft) return;
+  var ym = S.payDraft.month;
   var rows = S.payDraft.rows.map(function (r) { return Object.assign({}, r, { status: 'Finalised' }); });
-  var btn = el('pay-save');
-  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...';
-  api('saveMany', { sheet: 'Payroll', rows: rows }).then(function () {
-    rows.forEach(function (r) {
-      var found = false;
-      for (var i = 0; i < S.payroll.length; i++) {
-        if (S.payroll[i].id === r.id) { S.payroll[i] = r; found = true; break; }
-      }
-      if (!found) S.payroll.push(r);
-    });
-    S.payDraft = null;
-    toast('Payroll saved to the sheet', 'good');
-    renderPayroll(); renderReports();
-  }).catch(function (e) {
-    btn.disabled = false; btn.textContent = 'Save payroll run'; toast(e.message, 'bad');
-  });
-}
-
-function payslip(code, ym) {
-  var rows = (S.payDraft && S.payDraft.month === ym) ? S.payDraft.rows : savedRunFor(ym);
-  var r = null;
-  rows.forEach(function (x) { if (String(x.emp_code) === String(code)) r = x; });
-  if (!r) return toast('No payroll row for this employee', 'bad');
-  var e = empByCode(code) || {};
-  var line = function (a, b) {
-    return '<tr><td>' + esc(a) + '</td><td class="num-col">' + cur() + money(b) + '</td></tr>';
-  };
-  var html =
-    '<div class="payslip" id="payslip-print">' +
-      '<div class="ps-head"><h2>' + esc(S.settings.company_name || 'Company') + '</h2>' +
-        '<div style="font-size:.78rem;color:var(--text-muted)">' + esc(S.settings.company_address || '') + '</div>' +
-        '<div style="margin-top:8px;font-weight:700">Payslip for ' + esc(ym) + '</div></div>' +
-      '<table><tbody>' +
-        '<tr><td><b>Employee</b></td><td>' + esc(e.name || code) + '</td>' +
-            '<td><b>Code</b></td><td>' + esc(code) + '</td></tr>' +
-        '<tr><td><b>Designation</b></td><td>' + esc(e.designation || '-') + '</td>' +
-            '<td><b>Department</b></td><td>' + esc(e.department || '-') + '</td></tr>' +
-        '<tr><td><b>Paid days</b></td><td>' + r.paid_days + ' / ' + r.total_days + '</td>' +
-            '<td><b>LOP days</b></td><td>' + r.lop_days + '</td></tr>' +
-        '<tr><td><b>PAN</b></td><td>' + esc(e.pan || '-') + '</td>' +
-            '<td><b>UAN</b></td><td>' + esc(e.uan || '-') + '</td></tr>' +
-      '</tbody></table>' +
-      '<div class="grid2">' +
-        '<table><thead><tr><th>Earnings</th><th class="num-col">Amount</th></tr></thead><tbody>' +
-          line('Basic', r.basic) + line('HRA', r.hra) +
-          line('Special allowance', r.special_allowance) + line('Other allowance', r.other_allowance) +
-          '<tr><td><b>Gross earnings</b></td><td class="num-col"><b>' + cur() + money(r.gross) + '</b></td></tr>' +
-        '</tbody></table>' +
-        '<table><thead><tr><th>Deductions</th><th class="num-col">Amount</th></tr></thead><tbody>' +
-          line('Provident fund', r.pf) + line('ESI', r.esi) +
-          line('Professional tax', r.pt) + line('TDS', r.tds) + line('Other', r.other_deduction) +
-          '<tr><td><b>Total deductions</b></td><td class="num-col"><b>' + cur() + money(r.total_deduction) + '</b></td></tr>' +
-        '</tbody></table>' +
-      '</div>' +
-      '<div class="ps-net"><span>Net pay</span><span>' + cur() + money(r.net) + '</span></div>' +
-      '<p style="margin-top:14px;font-size:.7rem;color:var(--text-muted)">' +
-      'System generated payslip. ' + (r.status === 'Draft' ? 'DRAFT - payroll not finalised.' : '') + '</p>' +
-    '</div>';
-  showModal('Payslip', html, [
-    { label: 'Close', cls: 'ghost', onClick: closeModal },
-    { label: 'Print', onClick: printPayslip }
+  showModal('Finalise ' + monthLabel(ym) + ' payroll',
+    '<p>This writes <b>' + rows.length + ' payslip rows</b> to the sheet and <b>locks the attendance register</b> ' +
+    'for ' + esc(monthLabel(ym)) + ' so the numbers cannot drift after payout.</p>' +
+    '<p style="margin-top:10px">Net payable: <b>' + cur() +
+    money(rows.reduce(function (s, r) { return s + num(r.net); }, 0)) + '</b></p>' +
+    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">You can reopen the run later if something ' +
+    'needs correcting.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Finalise', onClick: function () { closeModal(); writePayroll(rows); } }
   ]);
 }
 
-function printPayslip() {
+function writePayroll(rows) {
+  var btn = el('pay-save');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...';
+  api('saveMany', { sheet: 'Payroll', rows: rows }).then(function () {
+    var index = {};
+    S.payroll.forEach(function (p, i) { index[p.id] = i; });
+    rows.forEach(function (r) {
+      if (index[r.id] !== undefined) S.payroll[index[r.id]] = r;
+      else { index[r.id] = S.payroll.length; S.payroll.push(r); }
+    });
+    S.payDraft = null;
+    toast('Payroll finalised and written to the sheet', 'good');
+    renderPayroll(); renderReports(); renderDashboard(); renderAttendance();
+  }).catch(function (e) {
+    el('pay-save').disabled = false; el('pay-save').textContent = 'Finalise run'; toast(e.message, 'bad');
+  });
+}
+
+function reopenRun() {
+  var ym = el('pay-month').value || thisMonth();
+  showModal('Reopen ' + monthLabel(ym) + ' payroll',
+    '<p>The saved rows stay as they are, but the run goes back to <b>Draft</b> and the attendance register ' +
+    'for ' + esc(monthLabel(ym)) + ' becomes editable again.</p>' +
+    '<p style="margin-top:10px">Regenerate and finalise again after you correct the attendance.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Reopen', cls: 'danger', onClick: function () {
+      var rows = savedRunFor(ym).map(function (r) { return Object.assign({}, r, { status: 'Draft' }); });
+      api('saveMany', { sheet: 'Payroll', rows: rows }).then(function () {
+        rows.forEach(function (r) {
+          for (var i = 0; i < S.payroll.length; i++) if (S.payroll[i].id === r.id) S.payroll[i] = r;
+        });
+        closeModal(); toast('Run reopened - attendance is editable again', 'good');
+        renderPayroll(); renderAttendance(); renderDashboard();
+      }).catch(function (e) { toast(e.message, 'bad'); });
+    } }
+  ]);
+}
+
+/* ------------------------------ payslips ------------------------ */
+function payslipHtml(r, e) {
+  var line = function (a, b) {
+    return '<tr><td>' + esc(a) + '</td><td class="num-col">' + cur() + money(b) + '</td></tr>';
+  };
+  return '<div class="payslip">' +
+    '<div class="ps-head"><h2>' + esc(S.settings.company_name || 'Company') + '</h2>' +
+      '<div style="font-size:.78rem;color:#64748b">' + esc(S.settings.company_address || '') + '</div>' +
+      '<div style="margin-top:8px;font-weight:700">Payslip for ' + esc(monthLabel(r.month)) + '</div>' +
+      (r.status === 'Draft' ? '<div style="color:#b45309;font-weight:700;font-size:.75rem">DRAFT - NOT FINALISED</div>' : '') +
+    '</div>' +
+    '<table><tbody>' +
+      '<tr><td><b>Employee</b></td><td>' + esc(e.name || r.emp_code) + '</td>' +
+        '<td><b>Code</b></td><td>' + esc(r.emp_code) + '</td></tr>' +
+      '<tr><td><b>Designation</b></td><td>' + esc(e.designation || '-') + '</td>' +
+        '<td><b>Department</b></td><td>' + esc(e.department || '-') + '</td></tr>' +
+      '<tr><td><b>Paid days</b></td><td>' + r.paid_days + ' / ' + r.total_days + '</td>' +
+        '<td><b>LOP days</b></td><td>' + r.lop_days + '</td></tr>' +
+      '<tr><td><b>PAN</b></td><td>' + esc(e.pan || '-') + '</td>' +
+        '<td><b>UAN</b></td><td>' + esc(e.uan || '-') + '</td></tr>' +
+      '<tr><td><b>Bank</b></td><td>' + esc(e.bank_account || '-') + '</td>' +
+        '<td><b>IFSC</b></td><td>' + esc(e.ifsc || '-') + '</td></tr>' +
+    '</tbody></table>' +
+    '<div class="grid2">' +
+      '<table><thead><tr><th>Earnings</th><th class="num-col">Amount</th></tr></thead><tbody>' +
+        line('Basic', r.basic) + line('HRA', r.hra) + line('Special allowance', r.special_allowance) +
+        line('Other allowance', r.other_allowance) +
+        (num(r.arrears) ? line('Arrears', r.arrears) : '') +
+        (num(r.bonus) ? line('Bonus', r.bonus) : '') +
+        '<tr><td><b>Gross earnings</b></td><td class="num-col"><b>' + cur() + money(r.gross) + '</b></td></tr>' +
+      '</tbody></table>' +
+      '<table><thead><tr><th>Deductions</th><th class="num-col">Amount</th></tr></thead><tbody>' +
+        line('Provident fund', r.pf) + line('ESI', r.esi) + line('Professional tax', r.pt) +
+        line('TDS', r.tds) + line('Other', r.other_deduction) +
+        '<tr><td><b>Total deductions</b></td><td class="num-col"><b>' + cur() + money(r.total_deduction) + '</b></td></tr>' +
+      '</tbody></table>' +
+    '</div>' +
+    '<div class="ps-net"><span>Net pay</span><span>' + cur() + money(r.net) + '</span></div>' +
+    '<p style="margin-top:12px;font-size:.7rem;color:#64748b">Employer contributions this month: PF ' +
+      cur() + money(r.pf_employer) + ', ESI ' + cur() + money(r.esi_employer) +
+      '. Cost to company ' + cur() + money(r.ctc) + '. System generated - no signature required.</p>' +
+  '</div>';
+}
+
+function payslip(code, ym) {
+  var rows = currentRun(ym).rows;
+  var r = null;
+  rows.forEach(function (x) { if (String(x.emp_code) === String(code)) r = x; });
+  if (!r) return toast('No payroll row for this employee in ' + monthLabel(ym), 'bad');
+  var e = empByCode(code) || {};
+  showModal('Payslip', '<div id="payslip-print">' + payslipHtml(r, e) + '</div>', [
+    { label: 'Close', cls: 'ghost', onClick: closeModal },
+    { label: 'Print', onClick: function () { printHtml('Payslip', el('payslip-print').innerHTML); } }
+  ]);
+}
+
+function printAllPayslips() {
+  var ym = el('pay-month').value || thisMonth();
+  var rows = currentRun(ym).rows;
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+  if (!rows.length) return toast('Nothing to print for ' + monthLabel(ym), 'bad');
+  printHtml('Payslips ' + ym, rows.map(function (r) {
+    return '<div style="page-break-after:always">' + payslipHtml(r, empByCode(r.emp_code) || {}) + '</div>';
+  }).join(''));
+}
+
+function printHtml(title, inner) {
   var w = window.open('', '_blank');
-  w.document.write('<html><head><title>Payslip</title><style>' +
+  if (!w) return toast('Allow pop-ups to print', 'bad');
+  w.document.write('<html><head><title>' + esc(title) + '</title><style>' +
     'body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}' +
     'table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px}' +
     'td,th{padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:left}' +
     '.num-col{text-align:right}.grid2{display:flex;gap:18px}.grid2>table{flex:1}' +
     '.ps-head{text-align:center;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px}' +
     '.ps-net{background:#f1f5f9;padding:12px;border-radius:8px;display:flex;justify-content:space-between;font-weight:800}' +
-    '</style></head><body>' + el('payslip-print').innerHTML + '</body></html>');
+    '.payslip{max-width:720px;margin:0 auto}' +
+    '</style></head><body>' + inner + '</body></html>');
   w.document.close();
   w.focus();
   w.print();
@@ -1428,8 +2625,8 @@ function printPayslip() {
 
 function exportPayroll() {
   var ym = el('pay-month').value || thisMonth();
-  var rows = (S.payDraft && S.payDraft.month === ym) ? S.payDraft.rows : savedRunFor(ym);
-  if (!rows.length) return toast('Nothing to export for ' + ym, 'bad');
+  var rows = currentRun(ym).rows;
+  if (!rows.length) return toast('Nothing to export for ' + monthLabel(ym), 'bad');
   var cols = ['emp_code', 'name', 'bank_account', 'ifsc', 'paid_days', 'lop_days', 'gross',
               'pf', 'esi', 'pt', 'tds', 'other_deduction', 'total_deduction', 'net'];
   download('payroll-' + ym + '.csv', toCSV(cols, rows.map(function (r) {
@@ -1449,26 +2646,183 @@ function exportPayroll() {
    MODULE 5 - REPORTS
    ================================================================= */
 
+var LAST_REPORT = { name: 'report', cols: [], rows: [] };
+
+function registerRows(ym) {
+  var saved = savedRunFor(ym);
+  if (saved.length) return saved;
+  return activeEmployees().filter(function (e) { return !e.doj || String(e.doj) <= ym + '-31'; })
+    .map(function (e) { return computePay(e, ym, null); });
+}
+
 function renderReports() {
   var ym = el('rep-month').value || thisMonth();
+  var kind = el('rep-kind').value;
+  var spec = { register: reportRegister, statutory: reportStatutory, ytd: reportYtd,
+               exceptions: reportExceptions, movement: reportMovement }[kind](ym);
+
+  LAST_REPORT = { name: kind + '-' + ym, cols: spec.cols, rows: spec.rows };
+  el('rep-title').textContent = spec.title;
+  el('rep-note').textContent = spec.note;
+  el('rep-kpis').innerHTML = spec.kpis || '';
+
+  var alignRight = spec.numFrom === undefined ? 2 : spec.numFrom;
+  var head = '<thead><tr>' + spec.cols.map(function (c, i) {
+    return '<th' + (i >= alignRight ? ' class="num-col"' : '') + '>' + esc(c) + '</th>';
+  }).join('') + '</tr></thead>';
+  var body = spec.rows.map(function (r) {
+    return '<tr>' + r.map(function (v, i) {
+      return '<td' + (i >= alignRight ? ' class="num-col"' : '') + '>' + (spec.raw ? v : esc(v)) + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+  var foot = spec.total ? '<tr style="background:#f8fafc;font-weight:800">' + spec.total.map(function (v, i) {
+    return '<td' + (i >= alignRight ? ' class="num-col"' : '') + '>' + esc(v) + '</td>';
+  }).join('') + '</tr>' : '';
+  el('rep-table').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="' + spec.cols.length + '" class="empty">Nothing to show for ' +
+    esc(monthLabel(ym)) + '.</td></tr>') + foot + '</tbody>';
+
+  renderReportSideTables(ym);
+}
+
+function reportRegister(ym) {
+  var rows = registerRows(ym);
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+  var t = { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, ded: 0, net: 0 };
+  var out = rows.map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    t.gross += num(r.gross); t.pf += num(r.pf); t.esi += num(r.esi); t.pt += num(r.pt);
+    t.tds += num(r.tds); t.ded += num(r.total_deduction); t.net += num(r.net);
+    return [r.emp_code, e.name || '', e.department || '-', r.paid_days, money(r.gross), money(r.pf),
+            money(r.esi), money(r.pt), money(r.tds), money(r.total_deduction), money(r.net)];
+  });
+  return {
+    title: 'Salary register - ' + monthLabel(ym),
+    note: savedRunFor(ym).length ? 'From the saved payroll run.'
+      : 'Live preview from the attendance register - this month has not been finalised yet.',
+    cols: ['Code', 'Name', 'Department', 'Paid days', 'Gross', 'PF', 'ESI', 'PT', 'TDS', 'Deductions', 'Net'],
+    numFrom: 3, rows: out,
+    total: ['Total', '', '', '', money(t.gross), money(t.pf), money(t.esi), money(t.pt), money(t.tds),
+            money(t.ded), money(t.net)],
+    kpis: kpi('Employees', rows.length, '') + kpi('Gross', cur() + money(t.gross), '') +
+          kpi('Deductions', cur() + money(t.ded), '') + kpi('Net payable', cur() + money(t.net), '')
+  };
+}
+
+function reportStatutory(ym) {
+  var rows = registerRows(ym).filter(function (r) { return num(r.pf) || num(r.esi); });
+  var t = { pfE: 0, pfR: 0, esiE: 0, esiR: 0, pt: 0, tds: 0 };
+  var out = rows.map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    t.pfE += num(r.pf); t.pfR += num(r.pf_employer); t.esiE += num(r.esi);
+    t.esiR += num(r.esi_employer); t.pt += num(r.pt); t.tds += num(r.tds);
+    return [r.emp_code, e.name || '', e.uan || '—', e.esic_no || '—', money(r.basic), money(r.pf),
+            money(r.pf_employer), money(r.esi), money(r.esi_employer), money(r.pt), money(r.tds)];
+  });
+  return {
+    title: 'PF / ESI statutory contributions - ' + monthLabel(ym),
+    note: 'Employee and employer shares at ' + (S.settings.pf_employee_pct || 12) + '% / ' +
+      (S.settings.pf_employer_pct || 13) + '% PF and ' + (S.settings.esi_employee_pct || 0.75) + '% / ' +
+      (S.settings.esi_employer_pct || 3.25) + '% ESI. Rows with a blank UAN or ESIC number need fixing before filing.',
+    cols: ['Code', 'Name', 'UAN', 'ESIC no.', 'PF wage', 'PF employee', 'PF employer',
+           'ESI employee', 'ESI employer', 'PT', 'TDS'],
+    numFrom: 4, rows: out,
+    total: ['Total', '', '', '', '', money(t.pfE), money(t.pfR), money(t.esiE), money(t.esiR),
+            money(t.pt), money(t.tds)],
+    kpis: kpi('PF challan', cur() + money(t.pfE + t.pfR), 'employee + employer') +
+          kpi('ESI challan', cur() + money(t.esiE + t.esiR), 'employee + employer') +
+          kpi('Professional tax', cur() + money(t.pt), 'to be remitted') +
+          kpi('TDS', cur() + money(t.tds), 'deducted at source')
+  };
+}
+
+function reportYtd(ym) {
   var year = ym.slice(0, 4);
-  var emps = visibleEmployees();
-  var active = emps.filter(function (e) { return String(e.status || 'Active') === 'Active'; });
-  var run = savedRunFor(ym);
+  var byEmp = {};
+  S.payroll.filter(function (r) { return String(r.month).slice(0, 4) === year; }).forEach(function (r) {
+    var k = r.emp_code;
+    byEmp[k] = byEmp[k] || { months: 0, gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0, lop: 0 };
+    byEmp[k].months++; byEmp[k].gross += num(r.gross); byEmp[k].pf += num(r.pf);
+    byEmp[k].esi += num(r.esi); byEmp[k].pt += num(r.pt); byEmp[k].tds += num(r.tds);
+    byEmp[k].net += num(r.net); byEmp[k].lop += num(r.lop_days);
+  });
+  var codes = Object.keys(byEmp);
+  if (!isAdmin()) codes = codes.filter(function (c) { return c === myCode(); });
+  var t = { gross: 0, tds: 0, net: 0 };
+  var out = codes.map(function (c) {
+    var v = byEmp[c], e = empByCode(c) || {};
+    t.gross += v.gross; t.tds += v.tds; t.net += v.net;
+    return [c, e.name || '', v.months, v.lop, money(v.gross), money(v.pf), money(v.esi),
+            money(v.pt), money(v.tds), money(v.net)];
+  });
+  return {
+    title: 'Year to date ' + year + ' (per employee)',
+    note: 'Totals across every finalised payroll run in ' + year + '. This is the base for Form 16 and full-year TDS.',
+    cols: ['Code', 'Name', 'Months paid', 'LOP days', 'Gross', 'PF', 'ESI', 'PT', 'TDS', 'Net paid'],
+    numFrom: 2, rows: out,
+    total: ['Total', '', '', '', money(t.gross), '', '', '', money(t.tds), money(t.net)],
+    kpis: kpi('Employees paid', codes.length, 'in ' + year) +
+          kpi('Gross paid', cur() + money(t.gross), 'year to date') +
+          kpi('TDS deducted', cur() + money(t.tds), 'year to date') +
+          kpi('Net paid', cur() + money(t.net), 'year to date')
+  };
+}
 
-  var lop = active.reduce(function (s, e) { return s + attStats(ym, e.emp_code).lop; }, 0);
-  var netCost = run.reduce(function (s, r) { return s + num(r.net); }, 0);
-  var pendingLeave = S.leave.filter(function (l) { return l.status === 'Pending'; }).length;
+function reportExceptions(ym) {
+  var out = [], flagged = 0;
+  activeEmployees().forEach(function (e) {
+    var s = attStats(ym, e.emp_code);
+    var issues = [];
+    if (s.blank) issues.push(s.blank + ' unmarked day(s)');
+    if (s.A >= 3) issues.push(s.A + ' absences');
+    if (s.late >= 3) issues.push(s.late + ' late marks');
+    if (s.ot >= 600) issues.push((s.ot / 60).toFixed(1) + ' OT hours');
+    if (!issues.length) return;
+    flagged++;
+    out.push([e.emp_code, e.name, e.department || '-', s.blank, s.A, s.late,
+              (s.ot / 60).toFixed(1), s.lop, issues.join('; ')]);
+  });
+  return {
+    title: 'Attendance exceptions - ' + monthLabel(ym),
+    note: 'Employees with unmarked days, three or more absences or late marks, or ten or more overtime hours. ' +
+      'Clear these before running payroll.',
+    cols: ['Code', 'Name', 'Department', 'Unmarked', 'Absent', 'Late', 'OT hrs', 'LOP', 'Why flagged'],
+    numFrom: 3, rows: out,
+    kpis: kpi('Flagged employees', flagged, flagged ? 'need review' : 'clean month') +
+          kpi('Total unmarked days', out.reduce(function (s, r) { return s + r[3]; }, 0), 'paid as LOP if left') +
+          kpi('Total absences', out.reduce(function (s, r) { return s + r[4]; }, 0), 'unpaid days') +
+          kpi('Late marks', out.reduce(function (s, r) { return s + r[5]; }, 0),
+              'after ' + (S.settings.grace_minutes || 15) + ' min grace')
+  };
+}
 
-  el('rep-kpis').innerHTML =
-    kpi('Active headcount', active.length, 'as on ' + today()) +
-    kpi('LOP days', lop, 'in ' + ym) +
-    kpi('Net payout', run.length ? cur() + money(netCost) : '-', run.length ? 'saved run for ' + ym : 'payroll not saved yet') +
-    kpi('Pending leave', pendingLeave, 'applications awaiting approval');
+function reportMovement(ym) {
+  var joiners = S.employees.filter(function (e) { return String(e.doj || '').slice(0, 7) === ym; });
+  var leavers = S.employees.filter(function (e) { return String(e.exit_date || '').slice(0, 7) === ym; });
+  var out = joiners.map(function (e) {
+    return ['Joined', e.emp_code, e.name, e.department || '-', e.designation || '-', e.doj,
+            cur() + money(grossOf(e))];
+  }).concat(leavers.map(function (e) {
+    return ['Left', e.emp_code, e.name, e.department || '-', e.designation || '-', e.exit_date,
+            cur() + money(grossOf(e))];
+  }));
+  var active = activeEmployees().length;
+  return {
+    title: 'Joiners and leavers - ' + monthLabel(ym),
+    note: 'Joiners come from the date of joining; leavers from the exit date on the employee record.',
+    cols: ['Movement', 'Code', 'Name', 'Department', 'Designation', 'Date', 'Monthly gross'],
+    numFrom: 6, rows: out,
+    kpis: kpi('Joiners', joiners.length, 'in ' + monthLabel(ym)) +
+          kpi('Leavers', leavers.length, 'in ' + monthLabel(ym)) +
+          kpi('Net change', (joiners.length - leavers.length >= 0 ? '+' : '') + (joiners.length - leavers.length), 'headcount') +
+          kpi('Active headcount', active, 'today')
+  };
+}
 
-  /* headcount by department */
+function renderReportSideTables(ym) {
+  var actives = activeEmployees();
   var byDept = {};
-  active.forEach(function (e) {
+  actives.forEach(function (e) {
     var d = e.department || 'Unassigned';
     byDept[d] = byDept[d] || { n: 0, cost: 0 };
     byDept[d].n++; byDept[d].cost += grossOf(e);
@@ -1478,111 +2832,36 @@ function renderReports() {
     (Object.keys(byDept).sort().map(function (d) {
       return '<tr><td>' + esc(d) + '</td><td class="num-col">' + byDept[d].n + '</td>' +
         '<td class="num-col">' + cur() + money(byDept[d].cost) + '</td>' +
-        '<td class="num-col">' + Math.round(byDept[d].n * 100 / (active.length || 1)) + '%</td></tr>';
+        '<td class="num-col">' + Math.round(byDept[d].n * 100 / (actives.length || 1)) + '%</td></tr>';
     }).join('') || '<tr><td colspan="4" class="empty">No active employees.</td></tr>') + '</tbody>';
 
-  /* attendance summary for the month */
   var agg = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0 };
-  active.forEach(function (e) {
+  actives.forEach(function (e) {
     var s = attStats(ym, e.emp_code);
     Object.keys(agg).forEach(function (k) { agg[k] += s[k]; });
   });
-  var totalMarked = agg.P + agg.A + agg.HD + agg.L;
-  var labels = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'Leave', WO: 'Weekly off', H: 'Holiday', blank: 'Not marked' };
-  el('rep-att').innerHTML = '<thead><tr><th>Status</th><th class="num-col">Days</th><th class="num-col">Of marked</th></tr></thead><tbody>' +
+  var marked = agg.P + agg.A + agg.HD + agg.L;
+  var labels = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'Leave', WO: 'Weekly off',
+                 H: 'Holiday', blank: 'Not marked' };
+  el('rep-att').innerHTML = '<thead><tr><th>Status</th><th class="num-col">Days</th>' +
+    '<th class="num-col">Of marked</th></tr></thead><tbody>' +
     Object.keys(labels).map(function (k) {
+      var share = marked && ['P', 'A', 'HD', 'L'].indexOf(k) >= 0
+        ? Math.round(agg[k] * 100 / marked) + '%' : '—';
       return '<tr><td>' + labels[k] + '</td><td class="num-col">' + agg[k] + '</td>' +
-        '<td class="num-col">' + (totalMarked && k !== 'WO' && k !== 'H' && k !== 'blank'
-          ? Math.round(agg[k] * 100 / totalMarked) + '%' : '-') + '</td></tr>';
+        '<td class="num-col">' + share + '</td></tr>';
     }).join('') + '</tbody>';
-
-  /* leave summary for the year */
-  var byType = {};
-  leaveTypes().forEach(function (t) { byType[t] = { applied: 0, approved: 0, days: 0 }; });
-  S.leave.filter(function (l) { return String(l.from_date).slice(0, 4) === year; }).forEach(function (l) {
-    var t = l.type || 'Other';
-    byType[t] = byType[t] || { applied: 0, approved: 0, days: 0 };
-    byType[t].applied++;
-    if (l.status === 'Approved') { byType[t].approved++; byType[t].days += num(l.days); }
-  });
-  el('rep-leave').innerHTML = '<thead><tr><th>Type</th><th class="num-col">Applied</th>' +
-    '<th class="num-col">Approved</th><th class="num-col">Days taken</th></tr></thead><tbody>' +
-    Object.keys(byType).map(function (t) {
-      return '<tr><td>' + esc(t) + '</td><td class="num-col">' + byType[t].applied + '</td>' +
-        '<td class="num-col">' + byType[t].approved + '</td>' +
-        '<td class="num-col">' + byType[t].days + '</td></tr>';
-    }).join('') + '</tbody>';
-
-  /* payroll cost trend across saved runs */
-  var months = {};
-  S.payroll.forEach(function (r) {
-    var m = String(r.month);
-    months[m] = months[m] || { n: 0, gross: 0, ded: 0, net: 0 };
-    months[m].n++; months[m].gross += num(r.gross);
-    months[m].ded += num(r.total_deduction); months[m].net += num(r.net);
-  });
-  var keys = Object.keys(months).sort().slice(-6);
-  el('rep-cost').innerHTML = '<thead><tr><th>Month</th><th class="num-col">Paid</th><th class="num-col">Gross</th>' +
-    '<th class="num-col">Deductions</th><th class="num-col">Net</th></tr></thead><tbody>' +
-    (keys.map(function (m) {
-      return '<tr><td>' + esc(m) + '</td><td class="num-col">' + months[m].n + '</td>' +
-        '<td class="num-col">' + cur() + money(months[m].gross) + '</td>' +
-        '<td class="num-col">' + cur() + money(months[m].ded) + '</td>' +
-        '<td class="num-col"><b>' + cur() + money(months[m].net) + '</b></td></tr>';
-    }).join('') || '<tr><td colspan="5" class="empty">No saved payroll runs yet.</td></tr>') + '</tbody>';
-
-  renderRegister(ym);
 }
 
-function registerRows(ym) {
-  var run = savedRunFor(ym);
-  if (run.length) return run;
-  return visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; })
-    .map(function (e) { return computePay(e, ym, null); });
+function exportReport() {
+  if (!LAST_REPORT.rows.length) return toast('Nothing to export', 'bad');
+  download(LAST_REPORT.name + '.csv', toCSV(LAST_REPORT.cols, LAST_REPORT.rows));
 }
+</script>
 
-function renderRegister(ym) {
-  var rows = registerRows(ym);
-  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
-  var head = '<thead><tr><th>Code</th><th>Name</th><th>Department</th><th class="num-col">Paid days</th>' +
-    '<th class="num-col">Gross</th><th class="num-col">PF</th><th class="num-col">ESI</th>' +
-    '<th class="num-col">PT</th><th class="num-col">TDS</th><th class="num-col">Net</th></tr></thead>';
-  var totals = { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0 };
-  var body = rows.map(function (r) {
-    var e = empByCode(r.emp_code) || {};
-    ['gross', 'pf', 'esi', 'pt', 'tds', 'net'].forEach(function (k) { totals[k] += num(r[k]); });
-    return '<tr><td>' + esc(r.emp_code) + '</td><td>' + esc(e.name || '') + '</td>' +
-      '<td>' + esc(e.department || '-') + '</td><td class="num-col">' + r.paid_days + '</td>' +
-      '<td class="num-col">' + money(r.gross) + '</td><td class="num-col">' + money(r.pf) + '</td>' +
-      '<td class="num-col">' + money(r.esi) + '</td><td class="num-col">' + money(r.pt) + '</td>' +
-      '<td class="num-col">' + money(r.tds) + '</td>' +
-      '<td class="num-col"><b>' + money(r.net) + '</b></td></tr>';
-  }).join('');
-  var foot = rows.length ? '<tr style="background:#f8fafc;font-weight:800"><td colspan="4">Total</td>' +
-    ['gross', 'pf', 'esi', 'pt', 'tds', 'net'].map(function (k) {
-      return '<td class="num-col">' + cur() + money(totals[k]) + '</td>';
-    }).join('') + '</tr>' : '';
-  el('rep-register').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="10" class="empty">Nothing to show for ' + esc(ym) + '.</td></tr>') + foot + '</tbody>';
-}
-
-function exportRegister() {
-  var ym = el('rep-month').value || thisMonth();
-  var cols = ['emp_code', 'name', 'department', 'paid_days', 'lop_days', 'basic', 'hra',
-              'special_allowance', 'other_allowance', 'gross', 'pf', 'esi', 'pt', 'tds',
-              'other_deduction', 'total_deduction', 'net'];
-  download('salary-register-' + ym + '.csv', toCSV(cols, registerRows(ym).map(function (r) {
-    var e = empByCode(r.emp_code) || {};
-    return cols.map(function (c) {
-      if (c === 'name') return e.name || '';
-      if (c === 'department') return e.department || '';
-      return r[c];
-    });
-  })));
-}
-
+<script>
 /* =================================================================
-   SETTINGS (configuration, not a module)
+   SETTINGS  (configuration - deliberately not a sixth module)
    ================================================================= */
 
 var SETTING_FIELDS = [
@@ -1590,9 +2869,15 @@ var SETTING_FIELDS = [
   ['company_address', 'Company address', 'text'],
   ['currency', 'Currency', 'select:INR,USD,AED,GBP,EUR'],
   ['weekly_off', 'Weekly off (comma separated)', 'text'],
+  ['shift_start', 'Shift start', 'time'],
+  ['shift_end', 'Shift end', 'time'],
+  ['grace_minutes', 'Late grace (minutes)', 'number'],
+  ['ot_after_minutes', 'Overtime counts after (minutes)', 'number'],
   ['pf_employee_pct', 'PF employee %', 'number'],
+  ['pf_employer_pct', 'PF employer %', 'number'],
   ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
   ['esi_employee_pct', 'ESI employee %', 'number'],
+  ['esi_employer_pct', 'ESI employer %', 'number'],
   ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
   ['pt_amount', 'Professional tax / month', 'number'],
   ['leave_types', 'Leave types (comma separated)', 'text'],
@@ -1602,29 +2887,95 @@ var SETTING_FIELDS = [
 ];
 
 function openSettings() {
-  var body = '<div class="grid2">' + SETTING_FIELDS.map(function (f) {
-    return fieldInput(f, S.settings[f[0]]);
-  }).join('') + '</div>' +
-    '<h3 style="margin:22px 0 10px;font-size:.9rem">Change your password</h3>' +
-    '<div class="grid2">' +
-      '<label class="field">Current password<input id="pw-old" type="password"></label>' +
-      '<label class="field">New password<input id="pw-new" type="password"></label>' +
+  var body =
+    '<div class="tabs">' +
+      '<div class="tab active" data-stab="general" onclick="settingsTab(\'general\')">Company &amp; payroll</div>' +
+      '<div class="tab" data-stab="holidays" onclick="settingsTab(\'holidays\')">Holiday calendar</div>' +
+      '<div class="tab" data-stab="account" onclick="settingsTab(\'account\')">Your account</div>' +
     '</div>' +
-    '<button class="ghost sm" style="margin-top:10px" onclick="changePassword()">Update password</button>' +
-    '<p style="margin-top:18px;font-size:.75rem;color:var(--text-muted)">' +
-    'Statutory rates apply to every payroll run from now on. Runs already saved are not recalculated.</p>';
+    '<div id="stab-general"><div class="grid2">' +
+      SETTING_FIELDS.map(function (f) { return fieldInput(f, S.settings[f[0]]); }).join('') +
+    '</div>' +
+    '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted)">Rates apply to every payroll run from ' +
+    'now on. Runs already finalised keep the numbers they were saved with.</p></div>' +
+    '<div id="stab-holidays" style="display:none">' +
+      '<div class="toolbar"><span class="spacer"></span>' +
+      '<button class="ghost sm" onclick="addHolidayRow()">+ Add holiday</button></div>' +
+      '<table id="hol-table"></table>' +
+      '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Holidays show as <b>H</b> on the ' +
+      'attendance register, are paid, and are skipped when leave days are counted.</p>' +
+    '</div>' +
+    '<div id="stab-account" style="display:none">' +
+      '<div class="grid2">' +
+        '<label class="field">Current password<input id="pw-old" type="password"></label>' +
+        '<label class="field">New password<input id="pw-new" type="password"></label>' +
+      '</div>' +
+      '<button class="ghost sm" style="margin-top:12px" onclick="changePassword()">Update password</button>' +
+      '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted)">Signed in as ' + esc(S.user.email) +
+      ' (' + esc(S.user.role) + '). Add more users by adding rows to the <b>Users</b> tab of the sheet.</p>' +
+    '</div>';
   showModal('Settings', body, [
-    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Close', cls: 'ghost', onClick: closeModal },
     { label: 'Save settings', onClick: saveSettingsForm }
-  ]);
+  ], true);
+  renderHolidays();
+}
+
+function settingsTab(tab) {
+  ['general', 'holidays', 'account'].forEach(function (t) {
+    el('stab-' + t).style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#modal .tab').forEach(function (n) {
+    n.classList.toggle('active', n.dataset.stab === tab);
+  });
+}
+
+function renderHolidays() {
+  var rows = S.holidays.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+  el('hol-table').innerHTML =
+    '<thead><tr><th>Date</th><th>Name</th><th></th></tr></thead><tbody>' +
+    (rows.map(function (h) {
+      return '<tr><td>' + esc(h.date) + '</td><td>' + esc(h.name) + '</td>' +
+        '<td class="num-col"><button class="ghost sm" onclick="removeHoliday(\'' + esc(h.id) +
+        '\')">Remove</button></td></tr>';
+    }).join('') || '<tr><td colspan="3" class="empty">No holidays yet.</td></tr>') + '</tbody>';
+}
+
+function addHolidayRow() {
+  var year = new Date().getFullYear();
+  el('hol-table').insertAdjacentHTML('beforeend',
+    '<tbody id="hol-new"><tr><td><input id="hol-date" type="date" value="' + year + '-01-26' + '"></td>' +
+    '<td><input id="hol-name" placeholder="Republic Day"></td>' +
+    '<td class="num-col"><button class="ok sm" onclick="saveHoliday()">Add</button></td></tr></tbody>');
+  el('hol-date').focus();
+}
+
+function saveHoliday() {
+  var date = el('hol-date').value, name = el('hol-name').value.trim();
+  if (!date || !name) return toast('Pick a date and give the holiday a name', 'bad');
+  if (holidayOn(date)) return toast('There is already a holiday on that date', 'bad');
+  api('save', { sheet: 'Holidays', row: { date: date, name: name, optional: 'no' } }).then(function (saved) {
+    S.holidays.push({ id: saved.id, date: date, name: name, optional: 'no' });
+    S.attVersion++;
+    renderHolidays(); toast('Holiday added', 'good'); renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+function removeHoliday(id) {
+  api('remove', { sheet: 'Holidays', id: id }).then(function () {
+    S.holidays = S.holidays.filter(function (h) { return String(h.id) !== String(id); });
+    S.attVersion++;
+    renderHolidays(); toast('Holiday removed', 'good'); renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 function saveSettingsForm() {
   var values = {};
-  el('modal-body').querySelectorAll('[data-f]').forEach(function (n) { values[n.dataset.f] = n.value; });
+  el('stab-general').querySelectorAll('[data-f]').forEach(function (n) { values[n.dataset.f] = n.value; });
   api('saveSettings', { settings: values }).then(function (settings) {
     S.settings = settings || values;
-    el('side-company').textContent = S.settings.company_name || '5 Modules';
+    S.attVersion++;
+    el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
     closeModal(); toast('Settings saved', 'good'); renderAll();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
@@ -1632,6 +2983,7 @@ function saveSettingsForm() {
 function changePassword() {
   var oldPw = el('pw-old').value, newPw = el('pw-new').value;
   if (!oldPw || !newPw) return toast('Fill both password boxes', 'bad');
+  if (newPw.length < 6) return toast('New password must be at least 6 characters', 'bad');
   if (S.demo) return toast('Passwords are not stored in demo mode');
   api('changePassword', { email: S.user.email, oldPassword: oldPw, newPassword: newPw })
     .then(function () { el('pw-old').value = ''; el('pw-new').value = ''; toast('Password updated', 'good'); })
@@ -1642,8 +2994,9 @@ function changePassword() {
 (function init() {
   var saved = localStorage.getItem('hrms_lite_api');
   if (saved) el('in-api').value = saved;
-  el('in-pass').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') el('btn-login').click();
+  el('in-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-login').click(); });
+  window.addEventListener('resize', function () {
+    if (S.user && S.view === 'dashboard') renderDashboard();
   });
 })();
 </script>

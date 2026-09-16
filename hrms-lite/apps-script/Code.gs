@@ -14,15 +14,17 @@ var SHEETS = {
                'doj', 'status', 'basic', 'hra', 'special_allowance', 'other_allowance',
                'pf_applicable', 'esi_applicable', 'tds_monthly', 'pan', 'uan', 'esic_no',
                'bank_account', 'ifsc', 'manager', 'dob', 'gender', 'address', 'notes',
-               'updated_at'],
+               'updated_at', 'exit_date'],
   Attendance: ['id', 'date', 'emp_code', 'status', 'in_time', 'out_time', 'hours',
                'remarks', 'updated_at'],
+  Holidays:   ['id', 'date', 'name', 'optional'],
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
                'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note'],
   Payroll:    ['id', 'month', 'emp_code', 'total_days', 'lop_days', 'paid_days',
                'basic', 'hra', 'special_allowance', 'other_allowance', 'gross',
                'pf', 'esi', 'pt', 'tds', 'other_deduction', 'total_deduction', 'net',
-               'status', 'generated_at', 'generated_by']
+               'status', 'generated_at', 'generated_by',
+               'arrears', 'bonus', 'pf_employer', 'esi_employer', 'ctc']
 };
 
 var DEFAULT_SETTINGS = {
@@ -30,11 +32,17 @@ var DEFAULT_SETTINGS = {
   company_address: '',
   currency: 'INR',
   pf_employee_pct: '12',
+  pf_employer_pct: '13',
   pf_wage_ceiling: '15000',
   esi_employee_pct: '0.75',
+  esi_employer_pct: '3.25',
   esi_wage_ceiling: '21000',
   pt_amount: '200',
   weekly_off: 'Sun',
+  shift_start: '09:30',
+  shift_end: '18:30',
+  grace_minutes: '15',
+  ot_after_minutes: '30',
   leave_types: 'Casual,Sick,Earned,Unpaid',
   quota_casual: '12',
   quota_sick: '6',
@@ -95,6 +103,7 @@ function route(action, p) {
 /* ------------------------------------------------------------------ */
 
 function setup() {
+  // Creates every tab, seeds Settings and the first admin user. Safe to re-run.
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var created = [];
   Object.keys(SHEETS).forEach(function (name) {
@@ -184,6 +193,7 @@ function bootstrap() {
     attendance: readSheet('Attendance'),
     leave:      readSheet('Leave'),
     payroll:    readSheet('Payroll'),
+    holidays:   readSheet('Holidays'),
     users:      readSheet('Users').map(function (u) {
       return { email: u.email, role: u.role, emp_code: u.emp_code, active: u.active };
     })
