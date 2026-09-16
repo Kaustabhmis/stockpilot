@@ -14,7 +14,7 @@ var SHEETS = {
                'doj', 'status', 'basic', 'hra', 'special_allowance', 'other_allowance',
                'pf_applicable', 'esi_applicable', 'tds_monthly', 'pan', 'uan', 'esic_no',
                'bank_account', 'ifsc', 'manager', 'dob', 'gender', 'address', 'notes',
-               'updated_at', 'exit_date', 'device_id'],
+               'updated_at', 'exit_date', 'device_id', 'company'],
   Attendance: ['id', 'date', 'emp_code', 'status', 'in_time', 'out_time', 'hours',
                'remarks', 'updated_at'],
   Holidays:   ['id', 'date', 'name', 'optional'],
@@ -59,6 +59,8 @@ var DEFAULT_SETTINGS = {
   sql_user: '',
   sync_last_pull: '',
   sync_last_push: '',
+  keep_punch_log: 'yes',
+  punch_log_days: '90',
   leave_types: 'Casual,Sick,Earned,Unpaid',
   quota_casual: '12',
   quota_sick: '6',
@@ -290,9 +292,74 @@ function upsert(name, row) {
   return row;
 }
 
+/**
+ * Bulk upsert: read the tab once, merge in memory, write it back in one call.
+ * Doing this row by row is O(n^2) and times out on a real import (500
+ * employees, or a month of biometric punches).
+ */
 function upsertMany(name, rows) {
-  (rows || []).forEach(function (r) { upsert(name, r); });
-  return { saved: (rows || []).length };
+  rows = rows || [];
+  if (!rows.length) return { saved: 0 };
+  var headers = SHEETS[name], key = keyColumn(name);
+  var sh = sheet(name);
+  var existing = indexed(name);
+  var values = existing.map(function (x) {
+    return headers.map(function (h) { return x.data[h] === undefined ? '' : x.data[h]; });
+  });
+  var byKey = {};
+  existing.forEach(function (x, i) { byKey[String(x.data[key])] = i; });
+
+  rows.forEach(function (row) {
+    if (name === 'Employees' && !String(row.emp_code || '').trim()) {
+      throw new Error('Employee code is required - it is entered by you, not generated.');
+    }
+    if (!row[key]) row[key] = newId();
+    var k = String(row[key]);
+    var at = byKey[k];
+    if (at === undefined) {
+      byKey[k] = values.length;
+      values.push(headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
+    } else {
+      var prev = values[at];
+      values[at] = headers.map(function (h, c) { return row[h] === undefined ? prev[c] : row[h]; });
+    }
+  });
+
+  var lastRow = sh.getLastRow();
+  if (values.length) sh.getRange(2, 1, values.length, headers.length).setValues(values);
+  if (lastRow > values.length + 1) {
+    sh.getRange(values.length + 2, 1, lastRow - values.length - 1, headers.length).clearContent();
+  }
+  return { saved: rows.length, total: values.length };
+}
+
+/** Append-only, for the raw punch log - never keyed, never rewritten. */
+function appendMany(name, rows) {
+  rows = rows || [];
+  if (!rows.length) return { added: 0 };
+  var headers = SHEETS[name], sh = sheet(name);
+  var lines = rows.map(function (r) {
+    return headers.map(function (h) { return r[h] === undefined ? '' : r[h]; });
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, lines.length, headers.length).setValues(lines);
+  return { added: lines.length };
+}
+
+/** Keep the audit log from growing without bound. */
+function trimPunches() {
+  var days = parseInt(settingsMap().punch_log_days || '90', 10);
+  if (!days) return 0;
+  var sh = sheet('Punches');
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  var cut = Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var stamps = sh.getRange(2, 2, last - 1, 1).getValues();   /* punch_time column */
+  var drop = 0;
+  while (drop < stamps.length && String(stamps[drop][0]).slice(0, 10) < cut) drop++;
+  if (drop > 0) sh.deleteRows(2, drop);                       /* rows are appended in time order */
+  return drop;
 }
 
 function appendRow(name, row) {
@@ -609,7 +676,10 @@ function applyPunches(punches, source) {
     });
   });
 
-  if (rawRows.length) upsertMany('Punches', rawRows);
+  if (rawRows.length && String(st.keep_punch_log || 'yes').toLowerCase() === 'yes') {
+    appendMany('Punches', rawRows);
+    trimPunches();
+  }
   if (rows.length) upsertMany('Attendance', rows);
 
   return {

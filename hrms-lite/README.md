@@ -100,14 +100,35 @@ browser. The UI only ever shows whether each one is set.
 
 ## Importing data by hand
 
-Settings → **Import data** takes **.csv and .xlsx** (the Excel reader is built in, so the file still
-works offline with no library). Four shapes:
+Settings → **Import data** takes **.csv, .xlsx and legacy .xls** — including the real files eSSL
+prints. Both readers are built in (a zip/XML reader for .xlsx, an OLE/BIFF8 reader for .xls), so
+there is no library and the page still works offline. The file type is detected from its contents,
+not its extension, so an export mislabelled `.xls` still opens.
 
-- **Biometric punch log** — a device export: employee or device id plus a punch time
+Leave the type on **Detect automatically** and it works out which of these it is:
+
+- **eSSL "Log Records (Employee Wise)" report** — the .xls eSSL prints, with `Company` /
+  `Department` / `Employee  CODE : Name` headings above each block of punches. Every sheet in the
+  workbook is read (the real export runs to 15 sheets).
+- **eSSL employee list** — `EmployeeCode`, `EmployeeName`, `DeviceCode`, `Company`, `Department`,
+  `Status`, `DOJ`, `DOR` are mapped automatically. eSSL's placeholder dates (`1900-01-02`,
+  `3000-01-01`) are dropped, `Working`/`Resigned` become Active/Inactive, and `Default` is treated
+  as blank.
+- **Biometric punch log** — a flat device export: employee or device id plus a punch time
 - **Attendance, one row per day** — `emp_code, date, status, in_time, out_time, remarks`
 - **Attendance, month grid** — one row per employee, one column per day, exactly what the Attendance
   module exports
 - **Employee master** — adds or updates employees; every row needs its employee code
+
+### The daily routine, until the API or SQL link is live
+
+1. Print the **Log Records (Employee Wise)** report from eSSL for the period you want.
+2. HRMS Lite → Settings → **Import data** → pick the file → check the preview → **Import**.
+3. Open **Reports → Attendance exceptions** and clear the flagged days.
+
+Re-importing the same period is safe: a day is keyed by employee + date, so it overwrites rather
+than duplicating. Days protected by approved leave or a finalised payroll run are listed as skipped
+instead of being overwritten.
 
 Each import shows a **preview of the exact rows that will be written**, plus every problem row
 (unknown employee, unreadable date, a day protected by leave or a locked payroll). Nothing is
@@ -206,6 +227,10 @@ cancelled either. **Reopen run** unlocks it when a correction is genuinely neede
 ## Notes and limits
 
 - **Concurrency**: writes take an Apps Script lock, so two people saving at once is safe.
+- **Bulk writes**: imports read the tab once, merge in memory and write back in a single call. Row
+  by row would be O(n²) and would time out on a 500-employee master or a month of punches.
+- **Punch log hygiene**: raw punches land on the `Punches` tab through the agent path and are
+  trimmed to `punch_log_days` (default 90) on each import.
 - **Scale**: comfortable to a few hundred employees. Google Sheets allows 10M cells and
   Apps Script caps a request at 6 minutes — attendance is the biggest tab (one row per
   employee per day, about 3,000 rows a year for 10 people).

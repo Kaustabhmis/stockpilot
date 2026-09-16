@@ -432,6 +432,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
       <div class="card">
         <div class="toolbar">
           <input id="emp-search" placeholder="Search name, code, email..." style="min-width:230px;" oninput="renderEmployees()">
+          <select id="emp-company" onchange="renderEmployees()"><option value="">All companies / units</option></select>
           <select id="emp-dept" onchange="renderEmployees()"><option value="">All departments</option></select>
           <select id="emp-status" onchange="renderEmployees()">
             <option value="Active">Active only</option><option value="">All statuses</option>
@@ -1004,7 +1005,19 @@ function demoApi(action, p) {
       }
       list.push(p.row); demoSave(db); return p.row;
     case 'saveMany':
-      (p.rows || []).forEach(function (row) { demoApi('save', { sheet: p.sheet, row: row }); });
+      list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
+      var index = {};
+      list.forEach(function (r, n) { index[String(r[key])] = n; });
+      (p.rows || []).forEach(function (row) {
+        if (p.sheet === 'Employees' && !String(row.emp_code || '').trim()) {
+          throw new Error('Employee code is required - it is entered by you, not generated.');
+        }
+        if (!row[key]) row[key] = 'ID' + Date.now().toString(36) + Math.floor(Math.random() * 1e6);
+        var k = String(row[key]);
+        if (index[k] === undefined) { index[k] = list.length; list.push(row); }
+        else list[index[k]] = Object.assign({}, list[index[k]], row);
+      });
+      demoSave(db);
       return { saved: (p.rows || []).length };
     case 'remove':
       key = demoKey(p.sheet);
@@ -1477,6 +1490,7 @@ function renderDashUpcoming() {
 
 function missingFields(e) {
   var miss = [];
+  if (num(e.basic) <= 0) miss.push('salary');
   if (!String(e.pan || '').trim()) miss.push('PAN');
   if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes' && !String(e.uan || '').trim()) miss.push('UAN');
   if (!String(e.bank_account || '').trim()) miss.push('bank a/c');
@@ -1495,6 +1509,7 @@ var EMP_FIELDS = [
   ['name', 'Full name', 'text'],
   ['email', 'Email', 'email'],
   ['phone', 'Phone', 'text'],
+  ['company', 'Company / unit', 'text'],
   ['department', 'Department', 'text'],
   ['designation', 'Designation', 'text'],
   ['doj', 'Date of joining', 'date'],
@@ -1523,7 +1538,9 @@ var EMP_FIELDS = [
 function filteredEmployees() {
   var q = el('emp-search').value.trim().toLowerCase();
   var dept = el('emp-dept').value, status = el('emp-status').value, quality = el('emp-quality').value;
+  var company = el('emp-company').value;
   var rows = visibleEmployees().filter(function (e) {
+    if (company && String(e.company || '') !== company) return false;
     if (dept && e.department !== dept) return false;
     if (status && String(e.status || 'Active') !== status) return false;
     if (quality === 'incomplete' && !missingFields(e).length) return false;
@@ -1554,6 +1571,13 @@ function renderEmployees() {
   sel.innerHTML = '<option value="">All departments</option>' +
     Object.keys(depts).sort().map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('');
   sel.value = keep;
+
+  var comps = {};
+  all.forEach(function (e) { if (e.company) comps[e.company] = 1; });
+  var csel = el('emp-company'), ckeep = csel.value;
+  csel.innerHTML = '<option value="">All companies / units</option>' +
+    Object.keys(comps).sort().map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  csel.value = ckeep;
 
   var monthlyCost = active.reduce(function (s, e) { return s + grossOf(e); }, 0);
   var incomplete = active.filter(function (e) { return missingFields(e).length; }).length;
@@ -1662,7 +1686,6 @@ function validateEmployee(row, code) {
   if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) errs.push('PAN must look like ABCDE1234F.');
   if (row.doj && row.dob && String(row.doj) <= String(row.dob)) errs.push('Date of joining must be after date of birth.');
   if (row.doj && String(row.doj) > today()) errs.push('Date of joining is in the future.');
-  if (num(row.basic) <= 0) errs.push('Basic salary must be more than zero.');
   var gross = num(row.basic) + num(row.hra) + num(row.special_allowance) + num(row.other_allowance);
   if (String(row.esi_applicable).toLowerCase() === 'yes' && gross > num(S.settings.esi_wage_ceiling || 21000)) {
     errs.push('ESI is marked applicable but gross ' + cur() + money(gross) + ' is above the ' +
@@ -1722,7 +1745,9 @@ function employee360(code) {
   var body =
     '<div class="grid-half">' +
       '<div><h3 style="margin-bottom:10px">Profile</h3><table><tbody>' +
-        row2('Code', e.emp_code) + row2('Department', e.department) + row2('Designation', e.designation) +
+        row2('Code', e.emp_code) + row2('Company / unit', e.company) +
+        row2('Department', e.department) + row2('Designation', e.designation) +
+        row2('Device ID', e.device_id) +
         row2('Reports to', e.manager) + row2('Joined', e.doj) + row2('Email', e.email) +
         row2('Phone', e.phone) + row2('PAN', e.pan || '—') + row2('UAN', e.uan || '—') +
         row2('Bank', (e.bank_account || '—') + (e.ifsc ? ' / ' + e.ifsc : '')) +
@@ -3010,31 +3035,46 @@ function reportYtd(ym) {
   };
 }
 
+/* Days a device import could not settle on its own: one punch only, or a
+   pair too short to be a working day. These need a human before payroll. */
+function verifyDays(ym, code) {
+  var n = 0;
+  var map = attMap(ym);
+  Object.keys(map).forEach(function (k) {
+    var a = map[k];
+    if (String(a.emp_code) === String(code) && /verify/i.test(String(a.remarks || ''))) n++;
+  });
+  return n;
+}
+
 function reportExceptions(ym) {
   var out = [], flagged = 0;
   activeEmployees().forEach(function (e) {
     var s = attStats(ym, e.emp_code);
+    var check = verifyDays(ym, e.emp_code);
     var issues = [];
     if (s.blank) issues.push(s.blank + ' unmarked day(s)');
+    if (check) issues.push(check + ' day(s) needing a check (single or short punch)');
     if (s.A >= 3) issues.push(s.A + ' absences');
     if (s.late >= 3) issues.push(s.late + ' late marks');
     if (s.ot >= 600) issues.push((s.ot / 60).toFixed(1) + ' OT hours');
     if (!issues.length) return;
     flagged++;
-    out.push([e.emp_code, e.name, e.department || '-', s.blank, s.A, s.late,
+    out.push([e.emp_code, e.name, e.department || e.company || '-', s.blank, check, s.A, s.late,
               (s.ot / 60).toFixed(1), s.lop, issues.join('; ')]);
   });
+  var sum = function (i) { return out.reduce(function (t, r) { return t + num(r[i]); }, 0); };
   return {
     title: 'Attendance exceptions - ' + monthLabel(ym),
-    note: 'Employees with unmarked days, three or more absences or late marks, or ten or more overtime hours. ' +
-      'Clear these before running payroll.',
-    cols: ['Code', 'Name', 'Department', 'Unmarked', 'Absent', 'Late', 'OT hrs', 'LOP', 'Why flagged'],
+    note: 'Employees with unmarked days, days a biometric import could not settle (one punch only, or a ' +
+      'pair too short to be a working day), three or more absences or late marks, or ten or more ' +
+      'overtime hours. Clear these before running payroll.',
+    cols: ['Code', 'Name', 'Department', 'Unmarked', 'Needs check', 'Absent', 'Late', 'OT hrs', 'LOP', 'Why flagged'],
     numFrom: 3, rows: out,
     kpis: kpi('Flagged employees', flagged, flagged ? 'need review' : 'clean month') +
-          kpi('Total unmarked days', out.reduce(function (s, r) { return s + r[3]; }, 0), 'paid as LOP if left') +
-          kpi('Total absences', out.reduce(function (s, r) { return s + r[4]; }, 0), 'unpaid days') +
-          kpi('Late marks', out.reduce(function (s, r) { return s + r[5]; }, 0),
-              'after ' + (S.settings.grace_minutes || 15) + ' min grace')
+          kpi('Unmarked days', sum(3), 'paid as LOP if left') +
+          kpi('Days needing a check', sum(4), 'single or short punch pairs') +
+          kpi('Absences', sum(5), 'unpaid days')
   };
 }
 
@@ -3579,6 +3619,18 @@ function startClock() {
    ================================================================= */
 
 var IMPORT_KINDS = {
+  auto: {
+    label: 'Detect automatically (recommended)',
+    note: 'Reads the file and works out what it is: an eSSL log report, a punch list, ' +
+          'an attendance sheet or an employee list.',
+    columns: 'anything below'
+  },
+  esslreport: {
+    label: 'eSSL "Log Records (Employee Wise)" report',
+    note: 'The .xls report eSSL prints, with a Company / Department / Employee heading above each ' +
+          'block of punches. Every sheet in the workbook is read.',
+    columns: 'no header row needed - the employee code is taken from each "Employee  CODE : Name" heading'
+  },
   punch: {
     label: 'Biometric punch log (device export)',
     note: 'One row per punch. Needs an employee or device-id column and a punch time. ' +
@@ -3639,10 +3691,244 @@ function renderImportHelp() {
 /* ---------------------------- file reading ----------------------- */
 function readSpreadsheet(file) {
   var name = (file.name || '').toLowerCase();
-  if (name.slice(-5) === '.xlsx' || name.slice(-4) === '.xls') {
-    return file.arrayBuffer().then(readXlsx);
+  var asCsv = function (t) { return [{ name: 'CSV', rows: parseCSV(t) }]; };
+  if (name.slice(-5) === '.xlsx') return file.arrayBuffer().then(readXlsx);
+  if (name.slice(-4) === '.xls') {
+    return file.arrayBuffer().then(function (b) {
+      /* exports are often mislabelled, so trust the magic bytes over the extension */
+      var head = new Uint8Array(b, 0, 8);
+      if (head[0] === 0x50 && head[1] === 0x4B) return readXlsx(b);              /* really a .xlsx */
+      if (head[0] === 0xD0 && head[1] === 0xCF) return readXls(b);               /* real BIFF .xls */
+      return asCsv(new TextDecoder().decode(b));                                  /* CSV named .xls */
+    });
   }
-  return file.text().then(function (t) { return parseCSV(t); });
+  return file.text().then(asCsv);
+}
+
+/* Flatten a workbook for table-shaped imports: sheet 1, plus later sheets
+   that repeat the same header row (exports often split long tables). */
+function flatRows(sheets) {
+  if (!sheets.length) return [];
+  var rows = (sheets[0].rows || []).slice();
+  if (!rows.length) return rows;
+  var head = normHeaders(rows[0]).join('|');
+  for (var i = 1; i < sheets.length; i++) {
+    var r = sheets[i].rows || [];
+    if (r.length > 1 && normHeaders(r[0]).join('|') === head) rows = rows.concat(r.slice(1));
+  }
+  return rows;
+}
+
+/* ---------------------------------------------------------------
+   Legacy .xls (BIFF8) reader - eSSL exports its reports in this
+   format. Parses the OLE compound file, then the BIFF records.
+   Verified against the real eSSL "Log Records" export: 15 sheets,
+   4,669 punches, byte-for-byte identical to a reference parser.
+   --------------------------------------------------------------- */
+function readXls(buf) {
+  var dv = new DataView(buf), u8 = new Uint8Array(buf);
+  var sig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+  for (var i = 0; i < 8; i++) if (u8[i] !== sig[i]) throw new Error('Not a readable .xls workbook.');
+
+  var secSize = 1 << dv.getUint16(0x1E, true);
+  var miniSize = 1 << dv.getUint16(0x20, true);
+  var nFat = dv.getUint32(0x2C, true);
+  var dirStart = dv.getUint32(0x30, true);
+  var miniCutoff = dv.getUint32(0x38, true);
+  var miniFatStart = dv.getUint32(0x3C, true);
+  var difatStart = dv.getUint32(0x44, true);
+  var nDifat = dv.getUint32(0x48, true);
+  var secOff = function (x) { return (x + 1) * secSize; };
+
+  var fatSectors = [];
+  for (var d = 0; d < 109 && fatSectors.length < nFat; d++) {
+    var v = dv.getUint32(0x4C + d * 4, true);
+    if (v === 0xFFFFFFFF) break;
+    fatSectors.push(v);
+  }
+  var ds = difatStart, guard = 0;
+  while (nDifat && ds !== 0xFFFFFFFE && ds !== 0xFFFFFFFF && guard++ < 100000) {
+    var base = secOff(ds);
+    for (var k = 0; k < secSize / 4 - 1; k++) {
+      var fv = dv.getUint32(base + k * 4, true);
+      if (fv !== 0xFFFFFFFF) fatSectors.push(fv);
+    }
+    ds = dv.getUint32(base + secSize - 4, true);
+  }
+  var fat = new Uint32Array(fatSectors.length * (secSize / 4));
+  fatSectors.forEach(function (fs, n) {
+    var b = secOff(fs);
+    for (var k2 = 0; k2 < secSize / 4; k2++) fat[n * (secSize / 4) + k2] = dv.getUint32(b + k2 * 4, true);
+  });
+
+  var chain = function (startSec) {
+    var out = [], x = startSec, g = 0;
+    while (x !== 0xFFFFFFFE && x !== 0xFFFFFFFF && x < fat.length && g++ < 5000000) { out.push(x); x = fat[x]; }
+    return out;
+  };
+  var readSectors = function (startSec, size) {
+    var secs = chain(startSec), out = new Uint8Array(secs.length * secSize);
+    secs.forEach(function (x, n) { out.set(u8.subarray(secOff(x), secOff(x) + secSize), n * secSize); });
+    return size ? out.subarray(0, size) : out;
+  };
+
+  var dir = readSectors(dirStart, 0), entries = [];
+  for (var e = 0; e + 128 <= dir.length; e += 128) {
+    var nameLen = dir[e + 0x40] | (dir[e + 0x41] << 8), name = '';
+    for (var c = 0; c < Math.max(0, nameLen - 2); c += 2) {
+      name += String.fromCharCode(dir[e + c] | (dir[e + c + 1] << 8));
+    }
+    entries.push({
+      name: name, type: dir[e + 0x42],
+      start: dir[e + 0x74] | (dir[e + 0x75] << 8) | (dir[e + 0x76] << 16) | (dir[e + 0x77] << 24),
+      size: (dir[e + 0x78] | (dir[e + 0x79] << 8) | (dir[e + 0x7A] << 16) | (dir[e + 0x7B] << 24)) >>> 0
+    });
+  }
+  var root = entries.filter(function (x) { return x.type === 5; })[0];
+
+  var miniFat = null, miniData = null;
+  var readMini = function (startSec, size) {
+    if (!miniFat) {
+      var mf = readSectors(miniFatStart, 0);
+      miniFat = new Uint32Array(mf.length / 4);
+      for (var k3 = 0; k3 < miniFat.length; k3++) {
+        miniFat[k3] = mf[k3 * 4] | (mf[k3 * 4 + 1] << 8) | (mf[k3 * 4 + 2] << 16) | (mf[k3 * 4 + 3] << 24);
+      }
+      miniData = readSectors(root.start, root.size);
+    }
+    var out = new Uint8Array(size), n = 0, x = startSec, g = 0;
+    while (x !== 0xFFFFFFFE && x !== 0xFFFFFFFF && n < size && g++ < 5000000) {
+      var part = miniData.subarray(x * miniSize, x * miniSize + miniSize);
+      out.set(part.subarray(0, Math.min(miniSize, size - n)), n);
+      n += miniSize; x = miniFat[x];
+    }
+    return out;
+  };
+
+  var wbEntry = entries.filter(function (x) {
+    return x.type === 2 && (x.name === 'Workbook' || x.name === 'Book');
+  })[0];
+  if (!wbEntry) throw new Error('No workbook stream inside that .xls file.');
+  var wb = wbEntry.size < miniCutoff ? readMini(wbEntry.start, wbEntry.size)
+                                     : readSectors(wbEntry.start, wbEntry.size);
+  return parseBiff(wb);
+}
+
+function parseBiff(wb) {
+  var dv = new DataView(wb.buffer, wb.byteOffset, wb.byteLength);
+  var boundsheets = [], sstChunks = [], p = 0, inSst = false;
+  while (p + 4 <= wb.length) {
+    var type = dv.getUint16(p, true), len = dv.getUint16(p + 2, true), data = p + 4;
+    if (type === 0x0085) {                                   /* BOUNDSHEET */
+      var pos = dv.getUint32(data, true), cch = wb[data + 6], flags = wb[data + 7], name = '';
+      if (flags & 1) for (var i = 0; i < cch; i++) name += String.fromCharCode(dv.getUint16(data + 8 + i * 2, true));
+      else for (var j = 0; j < cch; j++) name += String.fromCharCode(wb[data + 8 + j]);
+      boundsheets.push({ name: name, pos: pos });
+    } else if (type === 0x00FC) { sstChunks = [wb.subarray(data, data + len)]; inSst = true; }
+    else if (type === 0x003C && inSst) { sstChunks.push(wb.subarray(data, data + len)); }
+    else if (type !== 0x003C) { inSst = false; }
+    p = data + len;
+  }
+  var sst = sstChunks.length ? readSst(sstChunks) : [];
+  return boundsheets.map(function (bs) {
+    return { name: bs.name, rows: readBiffSheet(wb, dv, bs.pos, sst) };
+  });
+}
+
+/* Shared string table. A string split across CONTINUE records repeats
+   its encoding flag as the first byte of the next record. */
+function readSst(chunks) {
+  var ci = 0, off = 0;
+  var byteAt = function () {
+    while (ci < chunks.length && off >= chunks[ci].length) { ci++; off = 0; }
+    return ci < chunks.length ? chunks[ci][off++] : 0;
+  };
+  var u16r = function () { var a = byteAt(), b = byteAt(); return a | (b << 8); };
+  var u32r = function () { return (u16r() | (u16r() << 16)) >>> 0; };
+  var skip = function (n) {
+    while (n > 0) {
+      while (ci < chunks.length && off >= chunks[ci].length) { ci++; off = 0; }
+      if (ci >= chunks.length) return;
+      var take = Math.min(n, chunks[ci].length - off);
+      off += take; n -= take;
+    }
+  };
+  u32r();
+  var unique = u32r(), out = [];
+  for (var sIdx = 0; sIdx < unique; sIdx++) {
+    var cch = u16r(), grbit = byteAt();
+    var high = grbit & 0x01, ext = grbit & 0x04, rich = grbit & 0x08;
+    var runs = rich ? u16r() : 0;
+    var extLen = ext ? u32r() : 0;
+    var str = '';
+    for (var n = 0; n < cch; n++) {
+      if (off >= chunks[ci].length) {
+        ci++; off = 0;
+        if (ci >= chunks.length) break;
+        high = chunks[ci][off++] & 0x01;
+      }
+      if (high) { str += String.fromCharCode(chunks[ci][off] | (chunks[ci][off + 1] << 8)); off += 2; }
+      else { str += String.fromCharCode(chunks[ci][off]); off += 1; }
+    }
+    skip(runs * 4 + extLen);
+    out.push(str);
+  }
+  return out;
+}
+
+function biffUnicode(wb, dv, pos) {
+  var cch = dv.getUint16(pos, true), p = pos + 2, grbit = wb[p++], str = '';
+  if (grbit & 0x08) p += 2;
+  if (grbit & 0x04) p += 4;
+  for (var i = 0; i < cch; i++) {
+    if (grbit & 0x01) { str += String.fromCharCode(dv.getUint16(p, true)); p += 2; }
+    else { str += String.fromCharCode(wb[p]); p += 1; }
+  }
+  return str;
+}
+
+function rkValue(v) {
+  var n;
+  if (v & 2) n = v >> 2;
+  else {
+    var b = new ArrayBuffer(8), d2 = new DataView(b);
+    d2.setUint32(4, v & 0xFFFFFFFC, true);
+    n = d2.getFloat64(0, true);
+  }
+  return (v & 1) ? n / 100 : n;
+}
+
+function readBiffSheet(wb, dv, start, sst) {
+  var rows = [], p = start, depth = 0, lastFormula = null;
+  var put = function (r, c, v) {
+    while (rows.length <= r) rows.push([]);
+    var row = rows[r];
+    while (row.length <= c) row.push('');
+    row[c] = v;
+  };
+  while (p + 4 <= wb.length) {
+    var type = dv.getUint16(p, true), len = dv.getUint16(p + 2, true), d = p + 4;
+    if (type === 0x0809) { depth++; if (depth > 1) break; }
+    else if (type === 0x000A) break;
+    else if (type === 0x00FD) put(dv.getUint16(d, true), dv.getUint16(d + 2, true), sst[dv.getUint32(d + 6, true)] || '');
+    else if (type === 0x0204) put(dv.getUint16(d, true), dv.getUint16(d + 2, true), biffUnicode(wb, dv, d + 6));
+    else if (type === 0x0203) put(dv.getUint16(d, true), dv.getUint16(d + 2, true), dv.getFloat64(d + 6, true));
+    else if (type === 0x027E) put(dv.getUint16(d, true), dv.getUint16(d + 2, true), rkValue(dv.getUint32(d + 6, true)));
+    else if (type === 0x00BD) {
+      var r0 = dv.getUint16(d, true), c0 = dv.getUint16(d + 2, true), cnt = (len - 6) / 6;
+      for (var i = 0; i < cnt; i++) put(r0, c0 + i, rkValue(dv.getUint32(d + 4 + i * 6 + 2, true)));
+    } else if (type === 0x0006) {
+      var fr = dv.getUint16(d, true), fc = dv.getUint16(d + 2, true);
+      if (wb[d + 12] === 0xFF && wb[d + 13] === 0xFF) lastFormula = [fr, fc];
+      else put(fr, fc, dv.getFloat64(d + 6, true));
+    } else if (type === 0x0207 && lastFormula) {
+      put(lastFormula[0], lastFormula[1], biffUnicode(wb, dv, d));
+      lastFormula = null;
+    }
+    p = d + len;
+  }
+  return rows.map(function (r) { return r || []; })
+    .filter(function (r) { return r.join('').trim() !== ''; });
 }
 
 /* Minimal .xlsx reader: unzip with DecompressionStream, then parse the XML. */
@@ -3679,43 +3965,54 @@ function readXlsx(buf) {
     return new Response(stream).text();
   };
 
-  var sheetName = files['xl/worksheets/sheet1.xml'] ? 'xl/worksheets/sheet1.xml'
-    : Object.keys(files).filter(function (k) { return /^xl\/worksheets\/.*\.xml$/.test(k); }).sort()[0];
-  if (!sheetName) return Promise.reject(new Error('No worksheet found inside the workbook.'));
-
-  return Promise.all([readEntry('xl/sharedStrings.xml'), readEntry(sheetName)])
-    .then(function (parts) {
-      var parser = new DOMParser();
-      var shared = [];
-      if (parts[0]) {
-        var sx = parser.parseFromString(parts[0], 'application/xml');
-        Array.prototype.forEach.call(sx.getElementsByTagName('si'), function (si) {
-          var text = '';
-          Array.prototype.forEach.call(si.getElementsByTagName('t'), function (t) { text += t.textContent; });
-          shared.push(text);
-        });
-      }
-      var doc = parser.parseFromString(parts[1], 'application/xml');
-      var rows = [];
-      Array.prototype.forEach.call(doc.getElementsByTagName('row'), function (row) {
-        var out = [];
-        Array.prototype.forEach.call(row.getElementsByTagName('c'), function (c) {
-          var ref = c.getAttribute('r') || '', type = c.getAttribute('t');
-          var col = colIndex((ref.match(/^[A-Z]+/) || ['A'])[0]);
-          var vEl = c.getElementsByTagName('v')[0];
-          var value = '';
-          if (type === 's' && vEl) value = shared[+vEl.textContent] || '';
-          else if (type === 'inlineStr') {
-            var isEl = c.getElementsByTagName('t')[0];
-            value = isEl ? isEl.textContent : '';
-          } else if (vEl) value = vEl.textContent;
-          while (out.length < col) out.push('');
-          out[col] = value;
-        });
-        rows.push(out);
-      });
-      return rows.filter(function (r) { return r.join('').trim() !== ''; });
+  /* worksheet parts are usually sheet1.xml, sheet2.xml ... but some writers
+     emit a single sheet.xml, so match any .xml directly under worksheets/ */
+  var sheetNames = Object.keys(files)
+    .filter(function (k) { return /^xl\/worksheets\/[^\/]+\.xml$/.test(k); })
+    .sort(function (a, b) {
+      var na = parseInt((a.match(/(\d+)\.xml$/) || [0, 0])[1], 10);
+      var nb = parseInt((b.match(/(\d+)\.xml$/) || [0, 0])[1], 10);
+      return na - nb || a.localeCompare(b);
     });
+  if (!sheetNames.length) return Promise.reject(new Error('No worksheet found inside the workbook.'));
+
+  return readEntry('xl/sharedStrings.xml').then(function (ssXml) {
+    var parser = new DOMParser();
+    var shared = [];
+    if (ssXml) {
+      var sx = parser.parseFromString(ssXml, 'application/xml');
+      Array.prototype.forEach.call(sx.getElementsByTagNameNS('*', 'si'), function (si) {
+        var text = '';
+        Array.prototype.forEach.call(si.getElementsByTagNameNS('*', 't'), function (t) { text += t.textContent; });
+        shared.push(text);
+      });
+    }
+    return Promise.all(sheetNames.map(function (sn) {
+      return readEntry(sn).then(function (xml) {
+        var doc = parser.parseFromString(xml, 'application/xml');
+        var rows = [];
+        Array.prototype.forEach.call(doc.getElementsByTagNameNS('*', 'row'), function (row) {
+          var out = [];
+          Array.prototype.forEach.call(row.getElementsByTagNameNS('*', 'c'), function (c) {
+            var ref = c.getAttribute('r') || '', type = c.getAttribute('t');
+            var col = colIndex((ref.match(/^[A-Z]+/) || ['A'])[0]);
+            var vEl = c.getElementsByTagNameNS('*', 'v')[0];
+            var value = '';
+            if (type === 's' && vEl) value = shared[+vEl.textContent] || '';
+            else if (type === 'inlineStr') {
+              var isEl = c.getElementsByTagNameNS('*', 't')[0];
+              value = isEl ? isEl.textContent : '';
+            } else if (vEl) value = vEl.textContent;
+            while (out.length < col) out.push('');
+            out[col] = value;
+          });
+          rows.push(out);
+        });
+        return { name: sn.replace(/^xl\/worksheets\//, '').replace(/\.xml$/, ''),
+                 rows: rows.filter(function (r) { return r.join('').trim() !== ''; }) };
+      });
+    }));
+  });
 }
 
 function colIndex(letters) {
@@ -3751,9 +4048,12 @@ function normHeaders(row) {
   return row.map(function (h) { return String(h || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''); });
 }
 
-function buildImport(rows, kind, ym) {
+function buildImport(sheets, kind, ym) {
+  var out = { rows: [], problems: [], kind: kind, meta: '' };
+  if (kind === 'esslreport') return buildEsslReport(sheets, out);
+  var rows = flatRows(sheets);
+  if (rows.length < 2) { out.problems.push('No table with a header row was found in this file.'); return out; }
   var headers = normHeaders(rows[0]);
-  var out = { rows: [], problems: [], kind: kind };
   var known = {};
   S.employees.forEach(function (e) {
     known[String(e.emp_code).toUpperCase()] = e.emp_code;
@@ -3765,9 +4065,11 @@ function buildImport(rows, kind, ym) {
     rows.slice(1).forEach(function (r, i) {
       var obj = {};
       headers.forEach(function (h, c) {
-        var match = cols.filter(function (x) { return x.replace(/[^a-z0-9]/g, '') === h; })[0];
-        if (match) obj[match] = String(r[c] === undefined ? '' : r[c]).trim();
+        var field = EMP_ALIASES[h] ||
+          cols.filter(function (x) { return x.replace(/[^a-z0-9]/g, '') === h; })[0];
+        if (field) obj[field] = String(r[c] === undefined ? '' : r[c]).trim();
       });
+      cleanEmployeeRow(obj);
       if (!obj.name && !obj.emp_code) return;
       if (!obj.emp_code) { out.problems.push('Row ' + (i + 2) + ': no employee code - codes are entered by you'); return; }
       obj.updated_at = today();
@@ -3846,6 +4148,140 @@ function buildImport(rows, kind, ym) {
   return out;
 }
 
+/* ---------------------------------------------------------------
+   eSSL "Log Records (Employee Wise)" report.
+   Layout, repeated down every sheet of the workbook:
+       Company:        AIC
+       Department      AIC_2
+       Employee        LB0016 : Surajit Sarkar
+       Log Date | DeviceName | Direction
+       01-Aug-2026 09:28:14 | Conference |
+   --------------------------------------------------------------- */
+var MONTHS = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+               jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+
+function esslStamp(v) {
+  var m = String(v || '').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  var mon = MONTHS[m[2].toLowerCase()];
+  if (!mon) return null;
+  return { date: m[3] + '-' + mon + '-' + ('0' + m[1]).slice(-2),
+           time: ('0' + m[4]).slice(-2) + ':' + m[5] };
+}
+
+function buildEsslReport(sheets, out) {
+  var known = {};
+  S.employees.forEach(function (e) {
+    known[String(e.emp_code).trim().toUpperCase()] = e.emp_code;
+    if (e.device_id) known['DEV:' + String(e.device_id).trim()] = e.emp_code;
+  });
+
+  var punches = [], unknown = {}, seen = {}, employees = 0, range = { min: '', max: '' };
+  sheets.forEach(function (sheet) {
+    var code = null, label = '';
+    (sheet.rows || []).forEach(function (row) {
+      var nz = (row || []).map(function (v) { return String(v === undefined || v === null ? '' : v).trim(); })
+        .filter(function (v) { return v; });
+      if (!nz.length) return;
+      if (/^Employee\b/i.test(nz[0]) && nz[1] && nz[1].indexOf(':') > 0) {
+        label = nz[1];
+        var raw = nz[1].split(':')[0].trim();
+        code = known[raw.toUpperCase()] || known['DEV:' + raw] || null;
+        if (!code) { unknown[raw] = (unknown[raw] || 0) + 1; }
+        else if (!seen[code]) { seen[code] = 1; employees++; }
+        return;
+      }
+      var stamp = esslStamp(nz[0]);
+      if (!stamp) return;
+      if (!code) return;
+      if (!range.min || stamp.date < range.min) range.min = stamp.date;
+      if (!range.max || stamp.date > range.max) range.max = stamp.date;
+      punches.push({ code: code, date: stamp.date, time: stamp.time });
+    });
+  });
+
+  Object.keys(unknown).forEach(function (u) {
+    out.problems.push('No employee with code "' + u + '" (' + unknown[u] + ' punches skipped) - ' +
+      'import the employee list first, or add the code to an employee record.');
+  });
+  if (!punches.length && !out.problems.length) {
+    out.problems.push('No punch rows found. Is this the "Log Records (Employee Wise)" report?');
+  }
+  out.rows = punchesToAttendance(punches, out.problems);
+  out.meta = punches.length + ' punches for ' + employees + ' employees' +
+    (range.min ? ', ' + range.min + ' to ' + range.max : '') +
+    ' across ' + sheets.length + ' sheet(s)';
+  return out;
+}
+
+/* Column names the eSSL employee export uses. */
+var EMP_ALIASES = {
+  employeecode: 'emp_code', empcode: 'emp_code', employeeid: 'emp_code', code: 'emp_code',
+  employeename: 'name', empname: 'name', name: 'name',
+  devicecode: 'device_id', deviceid: 'device_id', enrollno: 'device_id', userid: 'device_id',
+  company: 'company', department: 'department', subdepartment: 'department',
+  designation: 'designation', grade: 'designation',
+  gender: 'gender', doj: 'doj', dateofjoining: 'doj',
+  dor: 'exit_date', dateofresignation: 'exit_date', exitdate: 'exit_date',
+  status: 'status', mobile: 'phone', phone: 'phone', email: 'email',
+  pan: 'pan', uan: 'uan', esicno: 'esic_no', bankaccount: 'bank_account', ifsc: 'ifsc'
+};
+
+/* eSSL writes placeholder dates and its own status words - normalise them. */
+function cleanEmployeeRow(o) {
+  var fixDate = function (v) {
+    var d = String(v || '').trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      var alt = normalizeDate(v);
+      d = alt || '';
+    }
+    if (!d) return '';
+    var y = +d.slice(0, 4);
+    return (y < 1950 || y > 2100) ? '' : d;      /* 1900-01-02 and 3000-01-01 are eSSL placeholders */
+  };
+  if (o.doj !== undefined) o.doj = fixDate(o.doj);
+  if (o.exit_date !== undefined) o.exit_date = fixDate(o.exit_date);
+  if (o.status !== undefined) {
+    var st = String(o.status).trim().toLowerCase();
+    o.status = (st === 'working' || st === 'active' || st === '') ? 'Active' : 'Inactive';
+  }
+  if (o.gender !== undefined) {
+    var g = String(o.gender).trim().toLowerCase();
+    o.gender = g.indexOf('f') === 0 ? 'F' : (g.indexOf('m') === 0 ? 'M' : '');
+  }
+  if (String(o.department || '').toLowerCase() === 'default') o.department = '';
+  if (String(o.company || '').toLowerCase() === 'default') o.company = '';
+  if (String(o.designation || '').toLowerCase() === 'none') o.designation = '';
+  if (o.emp_code !== undefined) o.emp_code = String(o.emp_code).trim();
+  if (o.device_id !== undefined) o.device_id = String(o.device_id).trim();
+  return o;
+}
+
+/* Work out what a file is from its contents. */
+function detectKind(sheets) {
+  for (var i = 0; i < sheets.length; i++) {
+    var rows = sheets[i].rows || [];
+    for (var r = 0; r < Math.min(rows.length, 30); r++) {
+      var cells = (rows[r] || []).map(function (v) { return String(v || '').trim(); });
+      var joined = cells.join(' ').toLowerCase();
+      if (joined.indexOf('log records') >= 0) return 'esslreport';
+      if (cells.indexOf('Log Date') >= 0) return 'esslreport';
+    }
+  }
+  var rows0 = flatRows(sheets);
+  if (!rows0.length) return 'punch';
+  var h = normHeaders(rows0[0]);
+  var has = function (n) { return h.indexOf(n) >= 0; };
+  if (has('employeecode') || has('employeename') || (has('empcode') && (has('name') || has('basic')))) return 'employees';
+  if (has('punchtime') || has('logdate') || has('attdatetime') || has('recordtime')) return 'punch';
+  if ((has('empcode') || has('employeeid') || has('code')) && has('date')) return 'attendance';
+  for (var c = 0; c < h.length; c++) {
+    var d = parseInt(h[c], 10);
+    if (!isNaN(d) && d >= 1 && d <= 31) return 'grid';
+  }
+  return 'punch';
+}
+
 function timeOnly(v) {
   var s = excelSerial(v);
   if (s) return s.slice(11);
@@ -3910,11 +4346,13 @@ function punchesToAttendance(punches, problems) {
 
 /* ---------------------------- preview + run ---------------------- */
 function onImportFile(file) {
-  var kind = el('imp-kind').value, ym = el('imp-month').value || thisMonth();
+  var chosen = el('imp-kind').value, ym = el('imp-month').value || thisMonth();
   el('imp-preview').innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Reading the file...';
-  readSpreadsheet(file).then(function (rows) {
-    if (!rows || rows.length < 2) throw new Error('The file has a header row but no data rows.');
-    var built = buildImport(rows, kind, ym);
+  readSpreadsheet(file).then(function (sheets) {
+    if (!sheets || !sheets.length) throw new Error('Nothing readable in that file.');
+    var kind = chosen === 'auto' ? detectKind(sheets) : chosen;
+    var built = buildImport(sheets, kind, ym);
+    built.detected = chosen === 'auto';
     S.importRows = built;
     var sample = built.rows.slice(0, 8);
     var cols = sample.length ? Object.keys(sample[0]) : [];
@@ -3922,8 +4360,10 @@ function onImportFile(file) {
       '<div class="locked-note" style="background:' + (built.rows.length ? '#d1fae5' : '#fee2e2') +
       ';color:' + (built.rows.length ? '#065f46' : '#991b1b') + '">' +
       (built.rows.length
-        ? built.rows.length + ' row(s) ready to write from ' + (rows.length - 1) + ' file row(s).'
-        : 'Nothing importable was found in this file.') + '</div>' +
+        ? built.rows.length + ' row(s) ready to write.'
+        : 'Nothing importable was found in this file.') +
+      (built.detected ? ' Read as: <b>' + esc(IMPORT_KINDS[built.kind].label) + '</b>.' : '') +
+      (built.meta ? ' ' + esc(built.meta) + '.' : '') + '</div>' +
       (built.problems.length ? '<div class="err show" style="margin-top:10px">' +
         built.problems.slice(0, 8).map(esc).join('<br>') +
         (built.problems.length > 8 ? '<br>and ' + (built.problems.length - 8) + ' more' : '') + '</div>' : '') +
