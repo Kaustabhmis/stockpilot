@@ -445,6 +445,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <span class="spacer"></span>
           <button class="ghost sm" onclick="exportEmployees()">&#8681; Export CSV</button>
           <button class="ghost sm adm" onclick="openImport()">&#8679; Import CSV</button>
+          <button class="ghost sm adm" onclick="openBulk()">Bulk action</button>
           <button class="adm" onclick="openEmployee()">+ Add employee</button>
         </div>
         <div class="table-wrap"><table id="emp-table"></table></div>
@@ -1793,6 +1794,82 @@ function employee360(code) {
 function row2(a, b) {
   return '<tr><td style="color:var(--text-muted)">' + esc(a) + '</td><td class="num-col">' +
     esc(b === undefined || b === '' ? '—' : b) + '</td></tr>';
+}
+
+/* Act on everything the current filter shows - used to clear out the units
+   you do not keep in this system. */
+function openBulk() {
+  var rows = filteredEmployees();
+  if (!rows.length) return toast('The current filter shows nobody', 'bad');
+  var paid = {};
+  S.payroll.forEach(function (p) { paid[p.emp_code] = 1; });
+  var withHistory = rows.filter(function (e) { return paid[e.emp_code]; });
+  var deletable = rows.filter(function (e) { return !paid[e.emp_code]; });
+  var where = [];
+  if (el('emp-company').value) where.push('company "' + el('emp-company').value + '"');
+  if (el('emp-dept').value) where.push('department "' + el('emp-dept').value + '"');
+  if (el('emp-status').value) where.push('status ' + el('emp-status').value);
+  if (el('emp-search').value.trim()) where.push('search "' + el('emp-search').value.trim() + '"');
+  if (el('emp-quality').value) where.push('incomplete records');
+
+  showModal('Bulk action on ' + rows.length + ' employee(s)',
+    '<p style="line-height:1.7">This acts on <b>exactly what the list is showing now</b>' +
+    (where.length ? ' (' + esc(where.join(', ')) + ')' : ' (no filter - every employee)') + '.</p>' +
+    '<div class="table-wrap" style="max-height:200px;margin:12px 0"><table><thead><tr><th>Code</th>' +
+    '<th>Name</th><th>Company</th><th>Department</th><th>Payroll history</th></tr></thead><tbody>' +
+    rows.slice(0, 200).map(function (e) {
+      return '<tr><td>' + esc(e.emp_code) + '</td><td>' + esc(e.name) + '</td><td>' +
+        esc(e.company || '-') + '</td><td>' + esc(e.department || '-') + '</td><td>' +
+        (paid[e.emp_code] ? '<span class="badge b-amber">has payslips</span>'
+                          : '<span class="sub-line">none</span>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    (rows.length > 200 ? '<div class="sub-line">Showing the first 200 of ' + rows.length + '.</div>' : '') +
+    '<div class="locked-note" style="background:#f1f5f9;color:var(--text-dark);align-items:flex-start">' +
+    '<div>&#9432;</div><div style="font-weight:500;line-height:1.6">' +
+    '<b>Mark inactive</b> keeps the record and its history but takes them off the payroll and out of the ' +
+    'attendance register - this is the reversible option.<br>' +
+    '<b>Delete</b> removes the employee rows for good. ' +
+    (withHistory.length
+      ? '<b>' + withHistory.length + '</b> of these have payslips and will be <b>kept</b> (deleting them ' +
+        'would break your payroll audit trail) - mark those inactive instead.'
+      : 'None of these have payslips, so all ' + rows.length + ' can be deleted.') +
+    '</div></div>' +
+    '<label class="field" style="margin-top:14px">To delete, type <b>DELETE</b> here' +
+      '<input id="bulk-confirm" placeholder="DELETE" autocomplete="off"></label>',
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
+     { label: 'Mark inactive (' + rows.length + ')', cls: 'ghost', onClick: function () { runBulk('inactive', rows); } },
+     { label: 'Delete (' + deletable.length + ')', cls: 'danger', onClick: function () {
+        if (el('bulk-confirm').value.trim().toUpperCase() !== 'DELETE') {
+          return toast('Type DELETE in the box to confirm', 'bad');
+        }
+        runBulk('delete', deletable);
+     } }], true);
+}
+
+function runBulk(mode, rows) {
+  if (!rows.length) return toast('Nothing to do', 'bad');
+  var done = function (msg) {
+    closeModal(); toast(msg, 'good'); renderAll();
+  };
+  if (mode === 'inactive') {
+    var updates = rows.map(function (e) {
+      return Object.assign({}, e, { status: 'Inactive', updated_at: today() });
+    });
+    return api('saveMany', { sheet: 'Employees', rows: updates }).then(function () {
+      updates.forEach(function (u) {
+        var e = empByCode(u.emp_code);
+        if (e) e.status = 'Inactive';
+      });
+      done(updates.length + ' employee(s) marked inactive');
+    }).catch(function (e) { toast(e.message, 'bad'); });
+  }
+  var ids = rows.map(function (e) { return e.emp_code; });
+  api('removeMany', { sheet: 'Employees', ids: ids }).then(function () {
+    var drop = {};
+    ids.forEach(function (i) { drop[String(i)] = 1; });
+    S.employees = S.employees.filter(function (e) { return !drop[String(e.emp_code)]; });
+    done(ids.length + ' employee(s) deleted');
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 function exportEmployees() {
@@ -4184,26 +4261,37 @@ function buildEsslReport(sheets, out) {
         .filter(function (v) { return v; });
       if (!nz.length) return;
       if (/^Employee\b/i.test(nz[0]) && nz[1] && nz[1].indexOf(':') > 0) {
-        label = nz[1];
-        var raw = nz[1].split(':')[0].trim();
-        code = known[raw.toUpperCase()] || known['DEV:' + raw] || null;
-        if (!code) { unknown[raw] = (unknown[raw] || 0) + 1; }
-        else if (!seen[code]) { seen[code] = 1; employees++; }
+        label = nz[1].split(':')[0].trim();
+        code = known[label.toUpperCase()] || known['DEV:' + label] || null;
+        if (!code && unknown[label] === undefined) unknown[label] = 0;
+        if (code && !seen[code]) { seen[code] = 1; employees++; }
         return;
       }
       var stamp = esslStamp(nz[0]);
       if (!stamp) return;
-      if (!code) return;
+      if (!code) {
+        if (label) unknown[label]++;          /* count the punches lost, not the headings */
+        return;
+      }
       if (!range.min || stamp.date < range.min) range.min = stamp.date;
       if (!range.max || stamp.date > range.max) range.max = stamp.date;
       punches.push({ code: code, date: stamp.date, time: stamp.time });
     });
   });
 
-  Object.keys(unknown).forEach(function (u) {
-    out.problems.push('No employee with code "' + u + '" (' + unknown[u] + ' punches skipped) - ' +
-      'import the employee list first, or add the code to an employee record.');
-  });
+  var unknownCodes = Object.keys(unknown);
+  if (unknownCodes.length) {
+    var lost = unknownCodes.reduce(function (t, u) { return t + unknown[u]; }, 0);
+    if (unknownCodes.length <= 5) {
+      unknownCodes.forEach(function (u) {
+        out.problems.push('No employee with code "' + u + '" - ' + unknown[u] + ' punches skipped.');
+      });
+    } else {
+      out.problems.push(unknownCodes.length + ' employee codes in this report are not in your master (' +
+        lost + ' punches skipped): ' + unknownCodes.slice(0, 8).join(', ') + ' and ' +
+        (unknownCodes.length - 8) + ' more. That is expected if you only keep some units here.');
+    }
+  }
   if (!punches.length && !out.problems.length) {
     out.problems.push('No punch rows found. Is this the "Log Records (Employee Wise)" report?');
   }
@@ -4219,8 +4307,8 @@ var EMP_ALIASES = {
   employeecode: 'emp_code', empcode: 'emp_code', employeeid: 'emp_code', code: 'emp_code',
   employeename: 'name', empname: 'name', name: 'name',
   devicecode: 'device_id', deviceid: 'device_id', enrollno: 'device_id', userid: 'device_id',
-  company: 'company', department: 'department', subdepartment: 'department',
-  designation: 'designation', grade: 'designation',
+  company: 'company', department: 'department',
+  designation: 'designation',
   gender: 'gender', doj: 'doj', dateofjoining: 'doj',
   dor: 'exit_date', dateofresignation: 'exit_date', exitdate: 'exit_date',
   status: 'status', mobile: 'phone', phone: 'phone', email: 'email',
@@ -4249,6 +4337,10 @@ function cleanEmployeeRow(o) {
     var g = String(o.gender).trim().toLowerCase();
     o.gender = g.indexOf('f') === 0 ? 'F' : (g.indexOf('m') === 0 ? 'M' : '');
   }
+  ['department', 'company', 'designation', 'device_id', 'email', 'phone'].forEach(function (f) {
+    var v = String(o[f] === undefined ? '' : o[f]).trim();
+    if (/^(none|null|na|n\/a|-)$/i.test(v)) o[f] = '';
+  });
   if (String(o.department || '').toLowerCase() === 'default') o.department = '';
   if (String(o.company || '').toLowerCase() === 'default') o.company = '';
   if (String(o.designation || '').toLowerCase() === 'none') o.designation = '';
@@ -4345,6 +4437,59 @@ function punchesToAttendance(punches, problems) {
 }
 
 /* ---------------------------- preview + run ---------------------- */
+/* Which company/unit values to keep when importing an employee master.
+   Remembered in Settings so the daily import always lands the same set. */
+function importCompanyFilter() {
+  return String(S.settings.import_companies || '').split(',')
+    .map(function (x) { return x.trim(); }).filter(Boolean);
+}
+
+function companyCounts(rows) {
+  var c = {};
+  rows.forEach(function (r) {
+    var k = String(r.company || '').trim() || '(no company)';
+    c[k] = (c[k] || 0) + 1;
+  });
+  return c;
+}
+
+function companyPicker(built) {
+  var counts = companyCounts(built.allRows);
+  var names = Object.keys(counts).sort();
+  if (names.length < 2) return '';
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">' +
+    '<div style="font-weight:700;font-size:.8rem;margin-bottom:8px">Import only these companies / units ' +
+    '<a href="#" onclick="pickCompanies(1);return false;" style="font-weight:600;margin-left:8px">all</a> &middot; ' +
+    '<a href="#" onclick="pickCompanies(0);return false;" style="font-weight:600">none</a></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px">' +
+    names.map(function (n) {
+      return '<label style="display:flex;align-items:center;gap:7px;font-size:.82rem;cursor:pointer">' +
+        '<input type="checkbox" class="imp-co" value="' + esc(n) + '"' +
+        (built.companies.indexOf(n) >= 0 ? ' checked' : '') + ' onchange="applyCompanyFilter()" ' +
+        'style="width:auto"> ' + esc(n) +
+        ' <span class="sub-line">(' + counts[n] + ')</span></label>';
+    }).join('') + '</div>' +
+    '<div class="sub-line" style="margin-top:8px">Unticked units are skipped entirely. ' +
+    'Your choice is saved, so the next import keeps the same set.</div></div>';
+}
+
+function pickCompanies(on) {
+  document.querySelectorAll('.imp-co').forEach(function (n) { n.checked = !!on; });
+  applyCompanyFilter();
+}
+
+function applyCompanyFilter() {
+  var built = S.importRows;
+  if (!built || !built.allRows) return;
+  var picked = [];
+  document.querySelectorAll('.imp-co:checked').forEach(function (n) { picked.push(n.value); });
+  built.companies = picked;
+  built.rows = built.allRows.filter(function (r) {
+    return picked.indexOf(String(r.company || '').trim() || '(no company)') >= 0;
+  });
+  renderImportPreview(built);
+}
+
 function onImportFile(file) {
   var chosen = el('imp-kind').value, ym = el('imp-month').value || thisMonth();
   el('imp-preview').innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Reading the file...';
@@ -4353,14 +4498,37 @@ function onImportFile(file) {
     var kind = chosen === 'auto' ? detectKind(sheets) : chosen;
     var built = buildImport(sheets, kind, ym);
     built.detected = chosen === 'auto';
+    if (kind === 'employees') {
+      built.allRows = built.rows.slice();
+      var remembered = importCompanyFilter();
+      var present = Object.keys(companyCounts(built.allRows));
+      built.companies = remembered.length
+        ? present.filter(function (n) { return remembered.indexOf(n) >= 0; })
+        : present;
+      if (!built.companies.length) built.companies = present;
+      built.rows = built.allRows.filter(function (r) {
+        return built.companies.indexOf(String(r.company || '').trim() || '(no company)') >= 0;
+      });
+    }
     S.importRows = built;
+    renderImportPreview(built);
+  }).catch(function (e) {
+    el('imp-preview').innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
+    el('imp-go').disabled = true;
+  });
+}
+
+function renderImportPreview(built) {
     var sample = built.rows.slice(0, 8);
     var cols = sample.length ? Object.keys(sample[0]) : [];
     el('imp-preview').innerHTML =
+      (built.allRows ? companyPicker(built) : '') +
       '<div class="locked-note" style="background:' + (built.rows.length ? '#d1fae5' : '#fee2e2') +
       ';color:' + (built.rows.length ? '#065f46' : '#991b1b') + '">' +
       (built.rows.length
-        ? built.rows.length + ' row(s) ready to write.'
+        ? built.rows.length + ' row(s) ready to write.' +
+          (built.allRows && built.allRows.length > built.rows.length
+            ? ' ' + (built.allRows.length - built.rows.length) + ' row(s) skipped by the unit filter.' : '')
         : 'Nothing importable was found in this file.') +
       (built.detected ? ' Read as: <b>' + esc(IMPORT_KINDS[built.kind].label) + '</b>.' : '') +
       (built.meta ? ' ' + esc(built.meta) + '.' : '') + '</div>' +
@@ -4375,10 +4543,6 @@ function onImportFile(file) {
         '<div class="sub-line" style="margin-top:6px">Showing the first ' + sample.length + ' of ' +
         built.rows.length + ' rows.</div>' : '');
     el('imp-go').disabled = !built.rows.length;
-  }).catch(function (e) {
-    el('imp-preview').innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
-    el('imp-go').disabled = true;
-  });
 }
 
 function runImport() {
@@ -4388,6 +4552,11 @@ function runImport() {
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Importing...';
   var sheet = built.kind === 'employees' ? 'Employees' : 'Attendance';
   api('saveMany', { sheet: sheet, rows: built.rows }).then(function () {
+    if (built.companies && built.companies.length) {
+      return api('saveSettings', { settings: { import_companies: built.companies.join(',') } })
+        .then(function (st) { S.settings = st || S.settings; });
+    }
+  }).then(function () {
     toast(built.rows.length + ' row(s) imported', 'good');
     closeModal();
     reload();

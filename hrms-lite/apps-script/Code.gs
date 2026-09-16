@@ -59,6 +59,7 @@ var DEFAULT_SETTINGS = {
   sql_user: '',
   sync_last_pull: '',
   sync_last_push: '',
+  import_companies: '',
   keep_punch_log: 'yes',
   punch_log_days: '90',
   leave_types: 'Casual,Sick,Earned,Unpaid',

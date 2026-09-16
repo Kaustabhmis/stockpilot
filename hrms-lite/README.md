@@ -120,6 +120,22 @@ Leave the type on **Detect automatically** and it works out which of these it is
   module exports
 - **Employee master** — adds or updates employees; every row needs its employee code
 
+### Loading only some units
+
+The eSSL master covers every contractor unit. When you import an employee list, the preview shows a
+**tick box per company/unit with a count** — untick the ones this system should not carry, and only
+the ticked ones are written. The choice is saved (`import_companies` in Settings), so tomorrow's
+import preselects the same units.
+
+Punches for people who are not in your master are skipped and summarised in one line rather than
+listed row by row, since that is expected once you only keep some units.
+
+To clear out units that were already loaded: filter the employee list (company, department, status,
+search) and use **Bulk action**. *Mark inactive* keeps the record and its history but takes them off
+payroll and the register; *Delete* removes them for good and needs you to type DELETE. Employees who
+already have payslips are excluded from deletion — deleting them would break the payroll audit
+trail, so mark those inactive instead.
+
 ### The daily routine, until the API or SQL link is live
 
 1. Print the **Log Records (Employee Wise)** report from eSSL for the period you want.
