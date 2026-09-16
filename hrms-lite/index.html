@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HRMS Lite &mdash; 5 Module HR &amp; Payroll</title>
+<style>
+:root{
+  --primary:#2563eb; --primary-hover:#1d4ed8; --accent:#0ea5e9;
+  --success:#10b981; --warning:#f59e0b; --danger:#ef4444;
+  --bg-main:#f1f5f9; --bg-card:#ffffff; --border:#e2e8f0;
+  --text-dark:#0f172a; --text-muted:#64748b;
+  --sidebar-bg:#0f172a; --sidebar-text:#94a3b8; --sidebar-active:#1e293b;
+  --font-sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--font-sans);}
+body{background:var(--bg-main);color:var(--text-dark);display:flex;height:100vh;overflow:hidden;font-size:14px;}
+
+/* Sidebar */
+.sidebar{width:250px;background:var(--sidebar-bg);color:#fff;display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-header{padding:20px;font-size:1.25rem;font-weight:800;border-bottom:1px solid rgba(255,255,255,.06);}
+.sidebar-header span{color:var(--accent);}
+.sidebar-header small{display:block;font-size:.65rem;font-weight:600;letter-spacing:1px;color:#475569;margin-top:4px;text-transform:uppercase;}
+.nav-items{flex:1;padding:14px 0;overflow-y:auto;}
+.nav-label{font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:#475569;padding:6px 20px 8px;font-weight:700;}
+.nav-item{padding:11px 20px;display:flex;align-items:center;gap:12px;color:var(--sidebar-text);cursor:pointer;
+  border-left:3px solid transparent;font-size:.9rem;font-weight:500;transition:.15s;}
+.nav-item:hover{background:rgba(255,255,255,.05);color:#fff;}
+.nav-item.active{background:var(--sidebar-active);color:#fff;border-left-color:var(--primary);}
+.nav-item .num{margin-left:auto;font-size:.65rem;color:#475569;font-weight:700;}
+.sidebar-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.06);font-size:.72rem;color:#475569;}
+
+/* Layout */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{background:var(--bg-card);padding:12px 26px;display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);flex-shrink:0;}
+.topbar h2{font-size:1.1rem;font-weight:700;}
+.topbar .sub{font-size:.75rem;color:var(--text-muted);font-weight:500;margin-top:2px;}
+.userbox{display:flex;align-items:center;gap:12px;}
+.avatar{width:32px;height:32px;background:var(--primary);border-radius:50%;display:flex;align-items:center;
+  justify-content:center;color:#fff;font-weight:700;font-size:.8rem;}
+.content{flex:1;overflow-y:auto;padding:24px 26px 60px;}
+.view{display:none;}
+.view.active{display:block;}
+
+/* Cards / tables */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px;}
+.card h3{font-size:.95rem;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+.toolbar .spacer{flex:1;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px;}
+.kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.kpi .label{font-size:.7rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:700;}
+.kpi .value{font-size:1.6rem;font-weight:800;margin-top:6px;}
+.kpi .hint{font-size:.72rem;color:var(--text-muted);margin-top:4px;}
+
+table{width:100%;border-collapse:collapse;font-size:.85rem;}
+th{text-align:left;padding:10px;background:#f8fafc;border-bottom:2px solid var(--border);font-size:.7rem;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);white-space:nowrap;}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tbody tr:hover{background:#f8fafc;}
+.num-col{text-align:right;font-variant-numeric:tabular-nums;}
+.table-wrap{overflow:auto;max-height:65vh;border:1px solid var(--border);border-radius:8px;}
+.table-wrap table{font-size:.82rem;}
+.table-wrap th{position:sticky;top:0;z-index:2;}
+.empty{padding:40px;text-align:center;color:var(--text-muted);}
+
+/* Controls */
+button,.btn{background:var(--primary);color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:.82rem;
+  font-weight:600;cursor:pointer;transition:.15s;}
+button:hover{background:var(--primary-hover);}
+button.ghost{background:#fff;color:var(--text-dark);border:1px solid var(--border);}
+button.ghost:hover{background:#f1f5f9;}
+button.danger{background:var(--danger);} button.danger:hover{background:#dc2626;}
+button.ok{background:var(--success);} button.ok:hover{background:#059669;}
+button.sm{padding:5px 9px;font-size:.75rem;}
+button:disabled{opacity:.5;cursor:not-allowed;}
+input,select,textarea{padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:.85rem;
+  background:#fff;color:var(--text-dark);}
+input:focus,select:focus,textarea:focus{outline:2px solid #bfdbfe;border-color:var(--primary);}
+label.field{display:flex;flex-direction:column;gap:5px;font-size:.72rem;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.4px;}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;}
+
+.badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:.7rem;font-weight:700;}
+.b-green{background:#d1fae5;color:#065f46;} .b-red{background:#fee2e2;color:#991b1b;}
+.b-amber{background:#fef3c7;color:#92400e;} .b-blue{background:#dbeafe;color:#1e40af;}
+.b-gray{background:#e2e8f0;color:#475569;}
+
+/* Attendance grid */
+.att-grid{overflow:auto;max-height:66vh;border:1px solid var(--border);border-radius:8px;}
+.att-grid table{border-collapse:separate;border-spacing:0;}
+.att-grid th,.att-grid td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:0;}
+.att-grid th{position:sticky;top:0;z-index:3;background:#f8fafc;padding:6px 4px;text-align:center;font-size:.62rem;min-width:34px;}
+.att-grid th.emp-h,.att-grid td.emp-c{position:sticky;left:0;z-index:2;background:#fff;text-align:left;
+  min-width:190px;padding:8px 10px;}
+.att-grid th.emp-h{z-index:4;background:#f8fafc;}
+.att-grid td.emp-c{font-size:.8rem;font-weight:600;}
+.att-cell{width:34px;height:32px;display:flex;align-items:center;justify-content:center;font-size:.7rem;
+  font-weight:700;cursor:pointer;user-select:none;}
+.att-cell:hover{outline:2px solid var(--primary);outline-offset:-2px;}
+.s-P{background:#d1fae5;color:#065f46;} .s-A{background:#fee2e2;color:#991b1b;}
+.s-HD{background:#fef3c7;color:#92400e;} .s-L{background:#dbeafe;color:#1e40af;}
+.s-WO{background:#f1f5f9;color:#94a3b8;} .s-H{background:#ede9fe;color:#5b21b6;}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--text-muted);margin-top:10px;}
+.legend span b{display:inline-block;width:18px;height:18px;border-radius:4px;text-align:center;line-height:18px;
+  font-size:.6rem;margin-right:5px;vertical-align:middle;}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;
+  z-index:100;padding:20px;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:760px;max-height:90vh;display:flex;flex-direction:column;}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.modal-head h3{font-size:1rem;font-weight:700;}
+.modal-body{padding:20px;overflow-y:auto;}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;}
+.x{background:none;color:var(--text-muted);font-size:1.3rem;line-height:1;padding:0 4px;}
+.x:hover{background:none;color:var(--text-dark);}
+
+/* Login */
+.login-bg{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a,#1e3a8a);display:flex;align-items:center;
+  justify-content:center;z-index:200;padding:20px;}
+.login-card{background:#fff;border-radius:14px;padding:32px;width:100%;max-width:420px;}
+.login-card h1{font-size:1.4rem;font-weight:800;margin-bottom:4px;}
+.login-card p.sub{color:var(--text-muted);font-size:.82rem;margin-bottom:22px;}
+.login-card label.field{margin-bottom:14px;}
+.login-card button{width:100%;padding:11px;font-size:.9rem;}
+.err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:7px;font-size:.8rem;margin-bottom:14px;display:none;}
+.err.show{display:block;}
+.hintbox{font-size:.72rem;color:var(--text-muted);margin-top:16px;line-height:1.6;border-top:1px solid var(--border);padding-top:14px;}
+
+/* Toast */
+#toast{position:fixed;bottom:22px;right:22px;background:var(--text-dark);color:#fff;padding:12px 18px;border-radius:8px;
+  font-size:.83rem;font-weight:600;z-index:300;opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;}
+#toast.show{opacity:1;transform:translateY(0);}
+#toast.bad{background:var(--danger);} #toast.good{background:var(--success);}
+
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+  border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px;}
+@keyframes sp{to{transform:rotate(360deg);}}
+.demo-flag{background:var(--warning);color:#fff;padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:800;}
+
+/* Payslip print */
+@media print{
+  body{display:block;height:auto;overflow:visible;}
+  .sidebar,.topbar,.toolbar,.no-print{display:none !important;}
+  .content{padding:0;overflow:visible;}
+  .card{border:none;}
+}
+.payslip{max-width:720px;margin:0 auto;font-size:.85rem;}
+.payslip h2{font-size:1.2rem;margin-bottom:2px;}
+.payslip .ps-head{text-align:center;border-bottom:2px solid var(--text-dark);padding-bottom:12px;margin-bottom:16px;}
+.payslip table{margin-bottom:14px;}
+.payslip td{padding:6px 8px;}
+.ps-net{background:#f1f5f9;padding:12px;border-radius:8px;display:flex;justify-content:space-between;
+  font-weight:800;font-size:1rem;}
+</style>
+</head>
+<body>
+
+<!-- ============================ LOGIN ============================ -->
+<div class="login-bg" id="login">
+  <div class="login-card">
+    <h1>HRMS <span style="color:var(--accent)">Lite</span></h1>
+    <p class="sub">Five modules. Google Sheets as the database.</p>
+    <div class="err" id="login-err"></div>
+    <label class="field">Google Apps Script Web App URL
+      <input id="in-api" type="url" placeholder="https://script.google.com/macros/s/..../exec">
+    </label>
+    <label class="field">Email
+      <input id="in-email" type="email" value="admin@company.com" autocomplete="username">
+    </label>
+    <label class="field">Password
+      <input id="in-pass" type="password" value="admin123" autocomplete="current-password">
+    </label>
+    <button id="btn-login">Sign in</button>
+    <button class="ghost" id="btn-demo" style="width:100%;margin-top:10px;">Open demo (sample data, no setup)</button>
+    <div class="hintbox">
+      First run: open your Google Sheet &rarr; <b>Extensions &rarr; Apps Script</b>, paste <b>Code.gs</b>,
+      deploy as a Web app ("Execute as: Me", "Access: Anyone"), then paste the <code>/exec</code> URL above.
+      Default sign-in is <b>admin@company.com</b> / <b>admin123</b> &mdash; change it from Settings.
+    </div>
+  </div>
+</div>
+
+<!-- ============================ SIDEBAR =========================== -->
+<div class="sidebar">
+  <div class="sidebar-header">HRMS <span>Lite</span><small id="side-company">5 Modules</small></div>
+  <div class="nav-items">
+    <div class="nav-label">Modules</div>
+    <div class="nav-item active" data-view="employees" onclick="go('employees')">&#128101; Employees <span class="num">1</span></div>
+    <div class="nav-item" data-view="attendance" onclick="go('attendance')">&#9200; Attendance <span class="num">2</span></div>
+    <div class="nav-item" data-view="leave" onclick="go('leave')">&#127796; Leave <span class="num">3</span></div>
+    <div class="nav-item" data-view="payroll" onclick="go('payroll')">&#128176; Payroll <span class="num">4</span></div>
+    <div class="nav-item" data-view="reports" onclick="go('reports')">&#128202; Reports <span class="num">5</span></div>
+  </div>
+  <div class="sidebar-footer">
+    <div id="side-mode">Connected</div>
+    <div style="margin-top:6px;"><a href="#" onclick="openSettings();return false;" style="color:#94a3b8;">&#9881; Settings</a></div>
+  </div>
+</div>
+
+<!-- ============================ MAIN ============================== -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <h2 id="page-title">Employees</h2>
+      <div class="sub" id="page-sub">Employee master &mdash; the single source of truth</div>
+    </div>
+    <div class="userbox">
+      <span class="demo-flag" id="demo-flag" style="display:none;">DEMO DATA</span>
+      <button class="ghost sm" onclick="reload()">&#8635; Refresh</button>
+      <div class="avatar" id="avatar">A</div>
+      <div style="font-size:.8rem;">
+        <div style="font-weight:700;" id="who">admin</div>
+        <a href="#" onclick="logout();return false;" style="color:var(--text-muted);font-size:.72rem;">Sign out</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ---------------- 1. EMPLOYEES ---------------- -->
+    <section class="view active" id="view-employees">
+      <div class="kpis" id="emp-kpis"></div>
+      <div class="card">
+        <div class="toolbar">
+          <input id="emp-search" placeholder="Search name, code, email..." style="min-width:230px;" oninput="renderEmployees()">
+          <select id="emp-dept" onchange="renderEmployees()"><option value="">All departments</option></select>
+          <select id="emp-status" onchange="renderEmployees()">
+            <option value="Active">Active only</option><option value="">All statuses</option>
+            <option value="Inactive">Inactive only</option>
+          </select>
+          <span class="spacer"></span>
+          <button class="ghost sm" onclick="exportEmployees()">&#8681; Export CSV</button>
+          <button class="ghost sm adm" onclick="openImport()">&#8679; Import CSV</button>
+          <button class="adm" onclick="openEmployee()">+ Add employee</button>
+        </div>
+        <div class="table-wrap"><table id="emp-table"></table></div>
+      </div>
+    </section>
+
+    <!-- ---------------- 2. ATTENDANCE ---------------- -->
+    <section class="view" id="view-attendance">
+      <div class="card">
+        <div class="toolbar">
+          <label class="field">Month<input type="month" id="att-month" onchange="renderAttendance()"></label>
+          <span class="spacer"></span>
+          <button class="ghost sm adm" onclick="markAllPresent()">Mark month present</button>
+          <button class="ghost sm" onclick="exportAttendance()">&#8681; Export CSV</button>
+          <button class="adm" id="att-save" onclick="saveAttendance()" disabled>Save changes</button>
+        </div>
+        <div class="att-grid" id="att-grid"></div>
+        <div class="legend">
+          <span><b class="s-P">P</b>Present</span><span><b class="s-A">A</b>Absent (LOP)</span>
+          <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Approved leave</span>
+          <span><b class="s-WO">WO</b>Weekly off</span><span><b class="s-H">H</b>Holiday</span>
+          <span style="margin-left:auto;">Click a cell to change status.</span>
+        </div>
+      </div>
+      <div class="card"><h3>Month summary</h3><div class="table-wrap"><table id="att-summary"></table></div></div>
+    </section>
+
+    <!-- ---------------- 3. LEAVE ---------------- -->
+    <section class="view" id="view-leave">
+      <div class="kpis" id="leave-kpis"></div>
+      <div class="card">
+        <div class="toolbar">
+          <select id="leave-status" onchange="renderLeave()">
+            <option value="Pending">Pending</option><option value="">All</option>
+            <option value="Approved">Approved</option><option value="Rejected">Rejected</option>
+          </select>
+          <input type="number" id="leave-year" style="width:110px;" onchange="renderLeave()">
+          <span class="spacer"></span>
+          <button onclick="openLeave()">+ Apply for leave</button>
+        </div>
+        <div class="table-wrap"><table id="leave-table"></table></div>
+      </div>
+      <div class="card"><h3>Leave balances</h3><div class="table-wrap"><table id="leave-balance"></table></div></div>
+    </section>
+
+    <!-- ---------------- 4. PAYROLL ---------------- -->
+    <section class="view" id="view-payroll">
+      <div class="card">
+        <div class="toolbar">
+          <label class="field">Month<input type="month" id="pay-month" onchange="renderPayroll()"></label>
+          <span class="spacer"></span>
+          <button class="ghost sm" onclick="exportPayroll()">&#8681; Bank / salary CSV</button>
+          <button class="ghost sm adm" id="pay-generate" onclick="generatePayroll()">&#9881; Generate from attendance</button>
+          <button class="adm" id="pay-save" onclick="savePayroll()" disabled>Save payroll run</button>
+        </div>
+        <div class="kpis" id="pay-kpis"></div>
+        <div class="table-wrap"><table id="pay-table"></table></div>
+      </div>
+    </section>
+
+    <!-- ---------------- 5. REPORTS ---------------- -->
+    <section class="view" id="view-reports">
+      <div class="card">
+        <div class="toolbar">
+          <label class="field">Month<input type="month" id="rep-month" onchange="renderReports()"></label>
+          <span class="spacer"></span>
+          <button class="ghost sm" onclick="window.print()">&#128424; Print</button>
+        </div>
+      </div>
+      <div class="kpis" id="rep-kpis"></div>
+      <div class="grid2">
+        <div class="card"><h3>&#127970; Headcount by department</h3><table id="rep-dept"></table></div>
+        <div class="card"><h3>&#9200; Attendance summary</h3><table id="rep-att"></table></div>
+        <div class="card"><h3>&#127796; Leave summary (year)</h3><table id="rep-leave"></table></div>
+        <div class="card"><h3>&#128176; Payroll cost trend</h3><table id="rep-cost"></table></div>
+      </div>
+      <div class="card">
+        <h3>&#128203; Salary register
+          <button class="ghost sm no-print" style="margin-left:auto;" onclick="exportRegister()">&#8681; Export</button>
+        </h3>
+        <div class="table-wrap"><table id="rep-register"></table></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ============================ MODALS ============================ -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modal-title">Title</h3><button class="x" onclick="closeModal()">&times;</button></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* =================================================================
+   HRMS Lite - 5 modules, Google Sheets backend
+   1 Employees | 2 Attendance | 3 Leave | 4 Payroll | 5 Reports
+   ================================================================= */
+
+var S = {
+  api: '', demo: false, user: null, view: 'employees',
+  settings: {}, employees: [], attendance: [], leave: [], payroll: [],
+  attDirty: {}, payDraft: null, attVersion: 0
+};
+
+var STATUSES = ['P', 'A', 'HD', 'L', 'WO', 'H'];
+var TITLES = {
+  employees: ['Employees', 'Employee master &mdash; the single source of truth'],
+  attendance: ['Attendance', 'Daily marking, monthly register and LOP'],
+  leave: ['Leave', 'Applications, approvals and balances'],
+  payroll: ['Payroll', 'Monthly salary run, statutory deductions and payslips'],
+  reports: ['Reports', 'Headcount, attendance, leave and salary registers']
+};
+
+/* ---------------------------- helpers --------------------------- */
+function el(id) { return document.getElementById(id); }
+function esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function money(v) {
+  return num(v).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function cur() { return S.settings.currency === 'INR' || !S.settings.currency ? '₹' : S.settings.currency + ' '; }
+function today() { return new Date().toISOString().slice(0, 10); }
+function thisMonth() { return new Date().toISOString().slice(0, 7); }
+function daysInMonth(ym) { var p = ym.split('-'); return new Date(+p[0], +p[1], 0).getDate(); }
+function dateStr(ym, d) { return ym + '-' + ('0' + d).slice(-2); }
+function weekdayOf(ym, d) { var p = ym.split('-'); return new Date(+p[0], +p[1] - 1, d).getDay(); }
+function isWeeklyOff(ym, d) {
+  var map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  var offs = String(S.settings.weekly_off || 'Sun').split(',').map(function (x) { return map[x.trim()]; });
+  return offs.indexOf(weekdayOf(ym, d)) >= 0;
+}
+function toast(msg, kind) {
+  var t = el('toast');
+  t.textContent = msg;
+  t.className = 'show ' + (kind || '');
+  clearTimeout(t._t);
+  t._t = setTimeout(function () { t.className = ''; }, 3200);
+}
+function isAdmin() { return S.user && S.user.role === 'admin'; }
+function myCode() { return S.user ? String(S.user.emp_code || '') : ''; }
+function download(name, text) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8;' }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function toCSV(headers, rows) {
+  var q = function (v) { return '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"'; };
+  return [headers.map(q).join(',')].concat(rows.map(function (r) { return r.map(q).join(','); })).join('\r\n');
+}
+function parseCSV(text) {
+  var rows = [], row = [], field = '', inQ = false;
+  for (var i = 0; i < text.length; i++) {
+    var c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (c !== '\r') field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(function (r) { return r.join('').trim() !== ''; });
+}
+
+/* ------------------------------ API ----------------------------- */
+function api(action, payload) {
+  if (S.demo) return Promise.resolve(demoApi(action, payload || {}));
+  var body = JSON.stringify({ action: action, payload: payload || {} });
+  return fetch(S.api, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: body
+  }).then(function (r) { return r.json(); }).catch(function (netErr) {
+    // Some browsers block the cross-origin POST (extensions, strict privacy modes).
+    // Fall back to a JSONP GET, which Apps Script also answers.
+    if (body.length > 6000) throw netErr;
+    return jsonpCall(action, payload || {});
+  }).then(function (j) {
+    if (!j.ok) throw new Error(j.error || 'Request failed');
+    return j.data;
+  });
+}
+
+function jsonpCall(action, payload) {
+  return new Promise(function (resolve, reject) {
+    var cb = 'hrms_cb_' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+    var script = document.createElement('script');
+    var timer = setTimeout(function () { cleanup(); reject(new Error('The Apps Script URL did not respond.')); }, 30000);
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cb];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cb] = function (data) { cleanup(); resolve(data); };
+    script.onerror = function () { cleanup(); reject(new Error('Could not reach the Apps Script URL. Check that it is deployed with access "Anyone".')); };
+    script.src = S.api + (S.api.indexOf('?') >= 0 ? '&' : '?') +
+      'action=' + encodeURIComponent(action) +
+      '&callback=' + cb +
+      '&payload=' + encodeURIComponent(JSON.stringify(payload));
+    document.body.appendChild(script);
+  });
+}
+
+/* ------------------------- demo data store ---------------------- */
+var DEMO_KEY = 'hrms_lite_demo_v1';
+function demoDb() {
+  var raw = localStorage.getItem(DEMO_KEY);
+  if (raw) { try { return JSON.parse(raw); } catch (e) { /* reseed below */ } }
+  var db = {
+    settings: {
+      company_name: 'Dynamic Engineers', company_address: 'Plot 14, Industrial Area',
+      currency: 'INR', pf_employee_pct: '12', pf_wage_ceiling: '15000',
+      esi_employee_pct: '0.75', esi_wage_ceiling: '21000', pt_amount: '200',
+      weekly_off: 'Sun', leave_types: 'Casual,Sick,Earned,Unpaid',
+      quota_casual: '12', quota_sick: '6', quota_earned: '15'
+    },
+    employees: [], attendance: [], leave: [], payroll: [],
+    users: [{ email: 'admin@company.com', role: 'admin', emp_code: '', active: 'yes' }]
+  };
+  var seed = [
+    ['Ramesh Kumar', 'Production', 'Plant Head', 42000, 16800, 8000],
+    ['Anita Sharma', 'Accounts', 'Accounts Manager', 30000, 12000, 5000],
+    ['Imran Sheikh', 'Production', 'Machine Operator', 14000, 5600, 2000],
+    ['Priya Nair', 'HR', 'HR Executive', 18000, 7200, 3000],
+    ['Sandeep Rao', 'Sales', 'Area Sales Manager', 26000, 10400, 6000],
+    ['Farah Khan', 'Quality', 'QA Inspector', 16000, 6400, 2500],
+    ['Vikram Singh', 'Stores', 'Store Keeper', 13000, 5200, 1800],
+    ['Meera Joshi', 'Accounts', 'Accounts Assistant', 12000, 4800, 1500]
+  ];
+  seed.forEach(function (r, i) {
+    db.employees.push({
+      emp_code: 'EMP' + ('000' + (i + 1)).slice(-4), name: r[0], department: r[1], designation: r[2],
+      email: r[0].split(' ')[0].toLowerCase() + '@company.com', phone: '98' + (10000000 + i * 137).toString().slice(0, 8),
+      doj: ['2021-04-01', '2022-07-15', '2023-01-09', '2020-11-02'][i % 4], status: 'Active',
+      basic: r[3], hra: r[4], special_allowance: r[5], other_allowance: 0,
+      pf_applicable: 'yes', esi_applicable: (r[3] + r[4] + r[5]) <= 21000 ? 'yes' : 'no',
+      tds_monthly: r[3] > 40000 ? 2500 : 0, pan: '', uan: '', esic_no: '',
+      bank_account: '', ifsc: '', manager: '', dob: '', gender: i % 2 ? 'F' : 'M',
+      address: '', notes: '', updated_at: today()
+    });
+  });
+  var ym = thisMonth(), dim = daysInMonth(ym);
+  db.employees.forEach(function (e, ei) {
+    for (var d = 1; d <= dim; d++) {
+      var st = 'P';
+      var wd = new Date(ym.split('-')[0], +ym.split('-')[1] - 1, d).getDay();
+      if (wd === 0) st = 'WO';
+      else if ((d + ei) % 17 === 0) st = 'A';
+      else if ((d + ei) % 23 === 0) st = 'HD';
+      db.attendance.push({
+        id: e.emp_code + '_' + dateStr(ym, d), date: dateStr(ym, d), emp_code: e.emp_code,
+        status: st, in_time: st === 'P' ? '09:30' : '', out_time: st === 'P' ? '18:30' : '',
+        hours: st === 'P' ? 9 : (st === 'HD' ? 4.5 : 0), remarks: '', updated_at: today()
+      });
+    }
+  });
+  db.leave = [
+    { id: 'LV1', emp_code: 'EMP0002', type: 'Casual', from_date: dateStr(ym, 12), to_date: dateStr(ym, 13), days: 2,
+      reason: 'Family function', status: 'Pending', applied_at: today(), decided_by: '', decided_at: '', decision_note: '' },
+    { id: 'LV2', emp_code: 'EMP0004', type: 'Sick', from_date: dateStr(ym, 5), to_date: dateStr(ym, 5), days: 1,
+      reason: 'Fever', status: 'Approved', applied_at: today(), decided_by: 'admin@company.com', decided_at: today(), decision_note: '' },
+    { id: 'LV3', emp_code: 'EMP0006', type: 'Earned', from_date: dateStr(ym, 20), to_date: dateStr(ym, 22), days: 3,
+      reason: 'Travel', status: 'Pending', applied_at: today(), decided_by: '', decided_at: '', decision_note: '' }
+  ];
+  localStorage.setItem(DEMO_KEY, JSON.stringify(db));
+  return db;
+}
+function demoSave(db) { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); }
+function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet === 'Users' ? 'email' : 'id'); }
+function demoList(db, sheet) {
+  return { Employees: db.employees, Attendance: db.attendance, Leave: db.leave, Payroll: db.payroll, Users: db.users }[sheet];
+}
+function demoApi(action, p) {
+  var db = demoDb(), list, key, i;
+  switch (action) {
+    case 'login':
+      return { email: 'admin@company.com', role: 'admin', emp_code: '', token: 'demo' };
+    case 'bootstrap':
+      return { settings: db.settings, employees: db.employees, attendance: db.attendance,
+               leave: db.leave, payroll: db.payroll, users: db.users };
+    case 'save':
+      list = demoList(db, p.sheet); key = demoKey(p.sheet);
+      if (!p.row[key]) p.row[key] = p.sheet === 'Employees' ? nextDemoCode(db) : 'ID' + Date.now().toString(36);
+      for (i = 0; i < list.length; i++) {
+        if (String(list[i][key]) === String(p.row[key])) {
+          list[i] = Object.assign({}, list[i], p.row); demoSave(db); return p.row;
+        }
+      }
+      list.push(p.row); demoSave(db); return p.row;
+    case 'saveMany':
+      (p.rows || []).forEach(function (row) { demoApi('save', { sheet: p.sheet, row: row }); });
+      return { saved: (p.rows || []).length };
+    case 'remove':
+      list = demoList(db, p.sheet); key = demoKey(p.sheet);
+      db[p.sheet.toLowerCase()] = list.filter(function (r) { return String(r[key]) !== String(p.id); });
+      demoSave(db); return { removed: p.id };
+    case 'saveSettings':
+      Object.assign(db.settings, p.settings || {}); demoSave(db); return db.settings;
+    case 'changePassword':
+      return { changed: true };
+    default:
+      return {};
+  }
+}
+function nextDemoCode(db) {
+  var max = 0;
+  db.employees.forEach(function (e) {
+    var m = String(e.emp_code || '').match(/(\d+)\s*$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return 'EMP' + ('000' + (max + 1)).slice(-4);
+}
+
+/* ----------------------------- login ---------------------------- */
+function showLoginError(msg) {
+  var e = el('login-err'); e.textContent = msg; e.className = 'err show';
+}
+el('btn-login').onclick = function () {
+  var url = el('in-api').value.trim();
+  if (!url) return showLoginError('Paste your Apps Script Web App URL, or use the demo button below.');
+  S.api = url; S.demo = false;
+  var btn = this; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Signing in...';
+  api('login', { email: el('in-email').value.trim(), password: el('in-pass').value })
+    .then(function (user) {
+      S.user = user;
+      localStorage.setItem('hrms_lite_api', url);
+      return start();
+    })
+    .catch(function (e) { showLoginError(e.message); })
+    .then(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
+};
+el('btn-demo').onclick = function () {
+  S.demo = true;
+  S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
+  start();
+};
+function logout() {
+  S.user = null;
+  localStorage.removeItem('hrms_lite_session');
+  location.reload();
+}
+function start() {
+  el('login').style.display = 'none';
+  el('demo-flag').style.display = S.demo ? 'inline-block' : 'none';
+  el('side-mode').textContent = S.demo ? 'Demo mode (browser storage)' : 'Google Sheets connected';
+  el('who').textContent = S.user.email;
+  el('avatar').textContent = (S.user.email[0] || 'U').toUpperCase();
+  el('att-month').value = thisMonth();
+  el('pay-month').value = thisMonth();
+  el('rep-month').value = thisMonth();
+  el('leave-year').value = new Date().getFullYear();
+  return reload();
+}
+function reload() {
+  return api('bootstrap').then(function (d) {
+    S.settings = d.settings || {};
+    S.employees = d.employees || [];
+    S.attendance = d.attendance || [];
+    S.leave = d.leave || [];
+    S.payroll = d.payroll || [];
+    S.attDirty = {};
+    S.attVersion++;
+    el('side-company').textContent = S.settings.company_name || '5 Modules';
+    document.querySelectorAll('.adm').forEach(function (n) { n.style.display = isAdmin() ? '' : 'none'; });
+    renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+function renderAll() {
+  renderEmployees(); renderAttendance(); renderLeave(); renderPayroll(); renderReports();
+}
+
+/* --------------------------- navigation ------------------------- */
+function go(view) {
+  S.view = view;
+  document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+  el('view-' + view).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(function (n) {
+    n.classList.toggle('active', n.dataset.view === view);
+  });
+  el('page-title').textContent = TITLES[view][0];
+  el('page-sub').innerHTML = TITLES[view][1];
+}
+
+/* ---------------------------- modal ----------------------------- */
+function showModal(title, bodyHtml, buttons) {
+  el('modal-title').textContent = title;
+  el('modal-body').innerHTML = bodyHtml;
+  el('modal-foot').innerHTML = '';
+  (buttons || []).forEach(function (b) {
+    var btn = document.createElement('button');
+    btn.textContent = b.label;
+    btn.className = b.cls || '';
+    btn.onclick = b.onClick;
+    el('modal-foot').appendChild(btn);
+  });
+  el('modal').classList.add('open');
+}
+function closeModal() { el('modal').classList.remove('open'); }
+el('modal').onclick = function (e) { if (e.target === this) closeModal(); };
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+
+/* -------------------------- lookups ----------------------------- */
+function empByCode(code) {
+  for (var i = 0; i < S.employees.length; i++) {
+    if (String(S.employees[i].emp_code) === String(code)) return S.employees[i];
+  }
+  return null;
+}
+function empName(code) { var e = empByCode(code); return e ? e.name : code; }
+function visibleEmployees() {
+  if (isAdmin()) return S.employees;
+  return S.employees.filter(function (e) { return String(e.emp_code) === myCode(); });
+}
+function grossOf(e) {
+  return num(e.basic) + num(e.hra) + num(e.special_allowance) + num(e.other_allowance);
+}
+</script>
+
+<script>
+/* =================================================================
+   MODULE 1 - EMPLOYEES
+   ================================================================= */
+
+var EMP_FIELDS = [
+  ['emp_code', 'Employee code', 'text', true],
+  ['name', 'Full name', 'text'],
+  ['email', 'Email', 'email'],
+  ['phone', 'Phone', 'text'],
+  ['department', 'Department', 'text'],
+  ['designation', 'Designation', 'text'],
+  ['doj', 'Date of joining', 'date'],
+  ['status', 'Status', 'select:Active,Inactive'],
+  ['basic', 'Basic', 'number'],
+  ['hra', 'HRA', 'number'],
+  ['special_allowance', 'Special allowance', 'number'],
+  ['other_allowance', 'Other allowance', 'number'],
+  ['pf_applicable', 'PF applicable', 'select:yes,no'],
+  ['esi_applicable', 'ESI applicable', 'select:yes,no'],
+  ['tds_monthly', 'TDS per month', 'number'],
+  ['pan', 'PAN', 'text'],
+  ['uan', 'UAN', 'text'],
+  ['esic_no', 'ESIC number', 'text'],
+  ['bank_account', 'Bank account', 'text'],
+  ['ifsc', 'IFSC', 'text'],
+  ['manager', 'Reporting manager', 'text'],
+  ['dob', 'Date of birth', 'date'],
+  ['gender', 'Gender', 'select:,M,F,Other'],
+  ['address', 'Address', 'text'],
+  ['notes', 'Notes', 'text']
+];
+
+function filteredEmployees() {
+  var q = el('emp-search').value.trim().toLowerCase();
+  var dept = el('emp-dept').value;
+  var status = el('emp-status').value;
+  return visibleEmployees().filter(function (e) {
+    if (dept && e.department !== dept) return false;
+    if (status && String(e.status || 'Active') !== status) return false;
+    if (!q) return true;
+    return [e.emp_code, e.name, e.email, e.designation, e.department]
+      .join(' ').toLowerCase().indexOf(q) >= 0;
+  });
+}
+
+function renderEmployees() {
+  var all = visibleEmployees();
+  var active = all.filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  var depts = {};
+  all.forEach(function (e) { if (e.department) depts[e.department] = 1; });
+
+  // department filter options
+  var sel = el('emp-dept'), keep = sel.value;
+  sel.innerHTML = '<option value="">All departments</option>' +
+    Object.keys(depts).sort().map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('');
+  sel.value = keep;
+
+  var monthlyCost = active.reduce(function (s, e) { return s + grossOf(e); }, 0);
+  el('emp-kpis').innerHTML =
+    kpi('Total employees', all.length, all.length - active.length + ' inactive') +
+    kpi('Active', active.length, 'on the payroll') +
+    kpi('Departments', Object.keys(depts).length, 'across the company') +
+    kpi('Monthly gross', cur() + money(monthlyCost), 'full-month cost at current CTC');
+
+  var rows = filteredEmployees();
+  var head = '<thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th>' +
+    '<th>Joined</th><th class="num-col">Gross</th><th>Status</th>' +
+    (isAdmin() ? '<th></th>' : '') + '</tr></thead>';
+  var body = rows.map(function (e) {
+    var st = String(e.status || 'Active');
+    return '<tr>' +
+      '<td><b>' + esc(e.emp_code) + '</b></td>' +
+      '<td>' + esc(e.name) + '<div style="font-size:.72rem;color:var(--text-muted)">' + esc(e.email || '') + '</div></td>' +
+      '<td>' + esc(e.department || '-') + '</td>' +
+      '<td>' + esc(e.designation || '-') + '</td>' +
+      '<td>' + esc(e.doj || '-') + '</td>' +
+      '<td class="num-col">' + cur() + money(grossOf(e)) + '</td>' +
+      '<td><span class="badge ' + (st === 'Active' ? 'b-green' : 'b-gray') + '">' + esc(st) + '</span></td>' +
+      (isAdmin() ? '<td style="white-space:nowrap">' +
+        '<button class="ghost sm" onclick="openEmployee(\'' + esc(e.emp_code) + '\')">Edit</button> ' +
+        '<button class="ghost sm" onclick="deleteEmployee(\'' + esc(e.emp_code) + '\')">Delete</button></td>' : '') +
+      '</tr>';
+  }).join('');
+  el('emp-table').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="8" class="empty">No employees match this filter.</td></tr>') + '</tbody>';
+}
+
+function kpi(label, value, hint) {
+  return '<div class="kpi"><div class="label">' + esc(label) + '</div>' +
+    '<div class="value">' + value + '</div>' +
+    '<div class="hint">' + esc(hint || '') + '</div></div>';
+}
+
+function fieldInput(f, value) {
+  var name = f[0], label = f[1], type = f[2], readonly = f[3];
+  var html;
+  if (type.indexOf('select:') === 0) {
+    var opts = type.slice(7).split(',');
+    html = '<select data-f="' + name + '">' + opts.map(function (o) {
+      return '<option value="' + esc(o) + '"' + (String(value || '') === o ? ' selected' : '') + '>' + esc(o || '-') + '</option>';
+    }).join('') + '</select>';
+  } else {
+    html = '<input data-f="' + name + '" type="' + type + '" value="' + esc(value === undefined ? '' : value) + '"' +
+      (readonly ? ' readonly style="background:#f1f5f9"' : '') + '>';
+  }
+  return '<label class="field">' + esc(label) + html + '</label>';
+}
+
+function openEmployee(code) {
+  var e = code ? empByCode(code) : { status: 'Active', pf_applicable: 'yes', esi_applicable: 'yes', doj: today() };
+  if (!e) return;
+  var body = '<div class="grid2">' + EMP_FIELDS.map(function (f) {
+    if (f[0] === 'emp_code' && !code) return '';
+    return fieldInput(f, e[f[0]]);
+  }).join('') + '</div>' +
+    '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted)">' +
+    'Gross salary = Basic + HRA + Special + Other. Payroll prorates these by paid days.</p>';
+  showModal(code ? 'Edit ' + e.name : 'Add employee', body, [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Save employee', onClick: function () { saveEmployee(code); } }
+  ]);
+}
+
+function collectFields() {
+  var out = {};
+  el('modal-body').querySelectorAll('[data-f]').forEach(function (n) { out[n.dataset.f] = n.value; });
+  return out;
+}
+
+function saveEmployee(code) {
+  var row = collectFields();
+  if (code) row.emp_code = code;
+  if (!row.name) return toast('Name is required', 'bad');
+  row.updated_at = today();
+  api('save', { sheet: 'Employees', row: row }).then(function (saved) {
+    var existing = empByCode(saved.emp_code);
+    if (existing) Object.assign(existing, row);
+    else S.employees.push(Object.assign({}, row, { emp_code: saved.emp_code }));
+    closeModal();
+    toast('Employee saved', 'good');
+    renderAll();
+  }).catch(function (err) { toast(err.message, 'bad'); });
+}
+
+function deleteEmployee(code) {
+  var e = empByCode(code);
+  if (!e) return;
+  showModal('Delete employee', '<p>Remove <b>' + esc(e.name) + ' (' + esc(code) + ')</b> from the master?<br><br>' +
+    'Their attendance, leave and payroll rows stay in the sheet for audit. ' +
+    'To stop paying someone but keep the history visible, set their status to <b>Inactive</b> instead.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Delete', cls: 'danger', onClick: function () {
+      api('remove', { sheet: 'Employees', id: code }).then(function () {
+        S.employees = S.employees.filter(function (x) { return x.emp_code !== code; });
+        closeModal(); toast('Employee deleted', 'good'); renderAll();
+      }).catch(function (err) { toast(err.message, 'bad'); });
+    } }
+  ]);
+}
+
+function exportEmployees() {
+  var cols = EMP_FIELDS.map(function (f) { return f[0]; });
+  download('employees.csv', toCSV(cols, filteredEmployees().map(function (e) {
+    return cols.map(function (c) { return e[c]; });
+  })));
+}
+
+function openImport() {
+  var cols = EMP_FIELDS.map(function (f) { return f[0]; });
+  showModal('Import employees from CSV',
+    '<p style="margin-bottom:12px">Upload a CSV whose first row is a header. Recognised columns:</p>' +
+    '<code style="font-size:.7rem;display:block;background:#f1f5f9;padding:10px;border-radius:6px;line-height:1.7">' +
+    cols.join(', ') + '</code>' +
+    '<p style="margin:14px 0 8px;font-size:.8rem">Rows with an existing <b>emp_code</b> update that employee; ' +
+    'rows without one are added with a new code.</p>' +
+    '<input type="file" id="imp-file" accept=".csv,text/csv">' +
+    '<div id="imp-status" style="margin-top:12px;font-size:.8rem;color:var(--text-muted)"></div>', [
+      { label: 'Download template', cls: 'ghost', onClick: function () { download('employee-template.csv', toCSV(cols, [])); } },
+      { label: 'Close', cls: 'ghost', onClick: closeModal }
+    ]);
+  el('imp-file').onchange = function () {
+    var file = this.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var rows = parseCSV(reader.result);
+      if (rows.length < 2) return toast('CSV has no data rows', 'bad');
+      var headers = rows[0].map(function (h) { return h.trim(); });
+      var payload = rows.slice(1).map(function (r) {
+        var obj = {};
+        headers.forEach(function (h, i) { if (cols.indexOf(h) >= 0) obj[h] = r[i]; });
+        obj.updated_at = today();
+        return obj;
+      }).filter(function (o) { return o.name; });
+      if (!payload.length) return toast('No rows with a "name" column', 'bad');
+      el('imp-status').textContent = 'Importing ' + payload.length + ' employees...';
+      api('saveMany', { sheet: 'Employees', rows: payload }).then(function () {
+        closeModal(); toast(payload.length + ' employees imported', 'good'); reload();
+      }).catch(function (e) { toast(e.message, 'bad'); });
+    };
+    reader.readAsText(file);
+  };
+}
+
+/* =================================================================
+   MODULE 2 - ATTENDANCE
+   ================================================================= */
+
+function attMap(ym) {
+  if (S._amYm === ym && S._amV === S.attVersion) return S._am;
+  var map = {};
+  S.attendance.forEach(function (a) {
+    if (String(a.date).slice(0, 7) === ym) map[a.emp_code + '_' + a.date] = a;
+  });
+  S._amYm = ym; S._amV = S.attVersion; S._am = map;
+  return map;
+}
+
+function statusOf(ym, code, d) {
+  var key = code + '_' + dateStr(ym, d);
+  if (S.attDirty[key]) return S.attDirty[key].status;
+  var rec = attMap(ym)[key];
+  if (rec && rec.status) return rec.status;
+  return isWeeklyOff(ym, d) ? 'WO' : '';
+}
+
+function renderAttendance() {
+  var ym = el('att-month').value || thisMonth();
+  var dim = daysInMonth(ym);
+  var emps = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  var map = attMap(ym);
+
+  var head = '<tr><th class="emp-h">Employee</th>';
+  for (var d = 1; d <= dim; d++) {
+    head += '<th' + (isWeeklyOff(ym, d) ? ' style="color:var(--danger)"' : '') + '>' + d + '</th>';
+  }
+  head += '<th style="min-width:60px">Paid</th></tr>';
+
+  var body = emps.map(function (e) {
+    var row = '<td class="emp-c">' + esc(e.name) +
+      '<div style="font-size:.68rem;color:var(--text-muted)">' + esc(e.emp_code) + '</div></td>';
+    var lop = 0;
+    for (var d = 1; d <= dim; d++) {
+      var key = e.emp_code + '_' + dateStr(ym, d);
+      var st = S.attDirty[key] ? S.attDirty[key].status : ((map[key] && map[key].status) || (isWeeklyOff(ym, d) ? 'WO' : ''));
+      if (st === 'A') lop += 1;
+      if (st === 'HD') lop += 0.5;
+      row += '<td><div class="att-cell s-' + esc(st) + '"' +
+        (isAdmin() ? ' onclick="cycleCell(\'' + esc(e.emp_code) + '\',' + d + ')"' : '') +
+        ' id="c_' + esc(key) + '">' + esc(st) + '</div></td>';
+    }
+    row += '<td class="num-col" style="padding:0 8px"><b>' + (dim - lop) + '</b></td>';
+    return '<tr>' + row + '</tr>';
+  }).join('');
+
+  el('att-grid').innerHTML = emps.length
+    ? '<table><thead>' + head + '</thead><tbody>' + body + '</tbody></table>'
+    : '<div class="empty">Add employees first (module 1).</div>';
+
+  renderAttSummary(ym, emps, map);
+}
+
+function cycleCell(code, d) {
+  var ym = el('att-month').value || thisMonth();
+  var key = code + '_' + dateStr(ym, d);
+  var current = S.attDirty[key] ? S.attDirty[key].status : ((attMap(ym)[key] && attMap(ym)[key].status) || (isWeeklyOff(ym, d) ? 'WO' : ''));
+  var next = STATUSES[(STATUSES.indexOf(current) + 1) % STATUSES.length];
+  S.attDirty[key] = {
+    id: key, date: dateStr(ym, d), emp_code: code, status: next,
+    in_time: next === 'P' ? '09:30' : '', out_time: next === 'P' ? '18:30' : '',
+    hours: next === 'P' ? 9 : (next === 'HD' ? 4.5 : 0), remarks: '', updated_at: today()
+  };
+  var cell = el('c_' + key);
+  if (cell) { cell.className = 'att-cell s-' + next; cell.textContent = next; }
+  el('att-save').disabled = false;
+  el('att-save').textContent = 'Save ' + Object.keys(S.attDirty).length + ' change' + (Object.keys(S.attDirty).length === 1 ? '' : 's');
+}
+
+function markAllPresent() {
+  var ym = el('att-month').value || thisMonth();
+  var dim = daysInMonth(ym);
+  var map = attMap(ym);
+  var count = 0;
+  visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; })
+    .forEach(function (e) {
+      for (var d = 1; d <= dim; d++) {
+        var key = e.emp_code + '_' + dateStr(ym, d);
+        if (map[key] && map[key].status) continue;
+        if (S.attDirty[key]) continue;
+        var st = isWeeklyOff(ym, d) ? 'WO' : 'P';
+        S.attDirty[key] = {
+          id: key, date: dateStr(ym, d), emp_code: e.emp_code, status: st,
+          in_time: st === 'P' ? '09:30' : '', out_time: st === 'P' ? '18:30' : '',
+          hours: st === 'P' ? 9 : 0, remarks: '', updated_at: today()
+        };
+        count++;
+      }
+    });
+  if (!count) return toast('Every day is already marked');
+  el('att-save').disabled = false;
+  el('att-save').textContent = 'Save ' + Object.keys(S.attDirty).length + ' change' + (Object.keys(S.attDirty).length === 1 ? '' : 's');
+  renderAttendance();
+  toast(count + ' blank days filled - review, then Save');
+}
+
+function saveAttendance() {
+  var rows = Object.keys(S.attDirty).map(function (k) { return S.attDirty[k]; });
+  if (!rows.length) return;
+  var btn = el('att-save');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...';
+  api('saveMany', { sheet: 'Attendance', rows: rows }).then(function () {
+    rows.forEach(function (r) {
+      var found = false;
+      for (var i = 0; i < S.attendance.length; i++) {
+        if (S.attendance[i].id === r.id) { S.attendance[i] = r; found = true; break; }
+      }
+      if (!found) S.attendance.push(r);
+    });
+    S.attDirty = {};
+    S.attVersion++;
+    btn.textContent = 'Save changes';
+    toast(rows.length + (rows.length === 1 ? ' attendance day saved' : ' attendance days saved'), 'good');
+    renderAttendance(); renderReports();
+  }).catch(function (e) {
+    btn.disabled = false; btn.textContent = 'Save changes'; toast(e.message, 'bad');
+  });
+}
+
+function attStats(ym, code) {
+  var dim = daysInMonth(ym);
+  var map = attMap(ym);
+  var s = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0 };
+  for (var d = 1; d <= dim; d++) {
+    var key = code + '_' + dateStr(ym, d);
+    var st = S.attDirty[key] ? S.attDirty[key].status : ((map[key] && map[key].status) || (isWeeklyOff(ym, d) ? 'WO' : ''));
+    if (st && s[st] !== undefined) s[st]++; else s.blank++;
+  }
+  s.total = dim;
+  s.lop = s.A + s.HD * 0.5;
+  s.paid = dim - s.lop;
+  return s;
+}
+
+function renderAttSummary(ym, emps, map) {
+  var head = '<thead><tr><th>Employee</th><th class="num-col">Present</th><th class="num-col">Absent</th>' +
+    '<th class="num-col">Half day</th><th class="num-col">Leave</th><th class="num-col">Weekly off</th>' +
+    '<th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">LOP</th>' +
+    '<th class="num-col">Paid days</th></tr></thead>';
+  var body = emps.map(function (e) {
+    var s = attStats(ym, e.emp_code);
+    return '<tr><td>' + esc(e.name) + '</td>' +
+      ['P', 'A', 'HD', 'L', 'WO', 'H', 'blank'].map(function (k) {
+        return '<td class="num-col">' + s[k] + '</td>';
+      }).join('') +
+      '<td class="num-col">' + s.lop + '</td><td class="num-col"><b>' + s.paid + '</b></td></tr>';
+  }).join('');
+  el('att-summary').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="10" class="empty">Nothing to summarise.</td></tr>') + '</tbody>';
+}
+
+function exportAttendance() {
+  var ym = el('att-month').value || thisMonth();
+  var dim = daysInMonth(ym);
+  var cols = ['emp_code', 'name'];
+  for (var d = 1; d <= dim; d++) cols.push(String(d));
+  cols.push('LOP', 'paid_days');
+  var rows = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; })
+    .map(function (e) {
+      var r = [e.emp_code, e.name];
+      for (var d = 1; d <= dim; d++) r.push(statusOf(ym, e.emp_code, d));
+      var s = attStats(ym, e.emp_code);
+      r.push(s.lop, s.paid);
+      return r;
+    });
+  download('attendance-' + ym + '.csv', toCSV(cols, rows));
+}
+</script>
+
+<script>
+/* =================================================================
+   MODULE 3 - LEAVE
+   ================================================================= */
+
+function leaveTypes() {
+  return String(S.settings.leave_types || 'Casual,Sick,Earned,Unpaid').split(',')
+    .map(function (t) { return t.trim(); }).filter(Boolean);
+}
+function quotaFor(type) {
+  var v = S.settings['quota_' + String(type).toLowerCase()];
+  return v === undefined || v === '' ? 0 : num(v);
+}
+function workingDaysBetween(from, to) {
+  var a = new Date(from), b = new Date(to), n = 0;
+  if (isNaN(a) || isNaN(b) || b < a) return 0;
+  for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+    var ym = d.toISOString().slice(0, 7);
+    if (!isWeeklyOff(ym, d.getDate())) n++;
+  }
+  return n;
+}
+function visibleLeave() {
+  return isAdmin() ? S.leave : S.leave.filter(function (l) { return String(l.emp_code) === myCode(); });
+}
+
+function renderLeave() {
+  var year = String(el('leave-year').value || new Date().getFullYear());
+  var status = el('leave-status').value;
+  var all = visibleLeave().filter(function (l) { return String(l.from_date).slice(0, 4) === year; });
+  var pending = all.filter(function (l) { return l.status === 'Pending'; });
+  var approved = all.filter(function (l) { return l.status === 'Approved'; });
+  var onLeaveToday = approved.filter(function (l) {
+    return String(l.from_date) <= today() && today() <= String(l.to_date);
+  });
+
+  el('leave-kpis').innerHTML =
+    kpi('Pending approvals', pending.length, 'waiting on HR') +
+    kpi('Approved days', approved.reduce(function (s, l) { return s + num(l.days); }, 0), 'in ' + year) +
+    kpi('On leave today', onLeaveToday.length, onLeaveToday.map(function (l) { return empName(l.emp_code); }).join(', ') || 'everyone at work') +
+    kpi('Applications', all.length, 'filed in ' + year);
+
+  var rows = all.filter(function (l) { return !status || l.status === status; })
+    .sort(function (a, b) { return String(b.from_date).localeCompare(String(a.from_date)); });
+
+  var head = '<thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th class="num-col">Days</th>' +
+    '<th>Reason</th><th>Status</th><th></th></tr></thead>';
+  var body = rows.map(function (l) {
+    var cls = l.status === 'Approved' ? 'b-green' : (l.status === 'Rejected' ? 'b-red' : 'b-amber');
+    var actions = '';
+    if (isAdmin() && l.status === 'Pending') {
+      actions = '<button class="ok sm" onclick="decideLeave(\'' + esc(l.id) + '\',\'Approved\')">Approve</button> ' +
+        '<button class="danger sm" onclick="decideLeave(\'' + esc(l.id) + '\',\'Rejected\')">Reject</button>';
+    } else if (isAdmin()) {
+      actions = '<button class="ghost sm" onclick="deleteLeave(\'' + esc(l.id) + '\')">Delete</button>';
+    }
+    return '<tr><td>' + esc(empName(l.emp_code)) + '<div style="font-size:.7rem;color:var(--text-muted)">' +
+      esc(l.emp_code) + '</div></td>' +
+      '<td>' + esc(l.type) + '</td><td>' + esc(l.from_date) + '</td><td>' + esc(l.to_date) + '</td>' +
+      '<td class="num-col">' + esc(l.days) + '</td><td>' + esc(l.reason || '-') + '</td>' +
+      '<td><span class="badge ' + cls + '">' + esc(l.status) + '</span></td>' +
+      '<td style="white-space:nowrap">' + actions + '</td></tr>';
+  }).join('');
+  el('leave-table').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="8" class="empty">No leave applications for this filter.</td></tr>') + '</tbody>';
+
+  renderLeaveBalance(year);
+}
+
+function renderLeaveBalance(year) {
+  var types = leaveTypes();
+  var emps = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  var head = '<thead><tr><th>Employee</th>' + types.map(function (t) {
+    return '<th class="num-col">' + esc(t) + '<div style="font-weight:400;text-transform:none">quota ' +
+      (quotaFor(t) || '-') + '</div></th>';
+  }).join('') + '<th class="num-col">Total taken</th></tr></thead>';
+  var body = emps.map(function (e) {
+    var total = 0;
+    var cells = types.map(function (t) {
+      var taken = S.leave.filter(function (l) {
+        return String(l.emp_code) === String(e.emp_code) && l.type === t &&
+          l.status === 'Approved' && String(l.from_date).slice(0, 4) === year;
+      }).reduce(function (s, l) { return s + num(l.days); }, 0);
+      total += taken;
+      var q = quotaFor(t);
+      var bal = q ? (q - taken) : null;
+      return '<td class="num-col">' + taken + (bal !== null ?
+        ' <span class="badge ' + (bal < 0 ? 'b-red' : 'b-blue') + '">' + bal + ' left</span>' : '') + '</td>';
+    }).join('');
+    return '<tr><td>' + esc(e.name) + '</td>' + cells + '<td class="num-col"><b>' + total + '</b></td></tr>';
+  }).join('');
+  el('leave-balance').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="6" class="empty">No active employees.</td></tr>') + '</tbody>';
+}
+
+function openLeave() {
+  var emps = visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  var body = '<div class="grid2">' +
+    '<label class="field">Employee<select data-f="emp_code">' + emps.map(function (e) {
+      return '<option value="' + esc(e.emp_code) + '"' + (e.emp_code === myCode() ? ' selected' : '') + '>' +
+        esc(e.name) + ' (' + esc(e.emp_code) + ')</option>';
+    }).join('') + '</select></label>' +
+    '<label class="field">Leave type<select data-f="type">' + leaveTypes().map(function (t) {
+      return '<option>' + esc(t) + '</option>';
+    }).join('') + '</select></label>' +
+    '<label class="field">From<input data-f="from_date" type="date" value="' + today() + '" onchange="updateLeaveDays()"></label>' +
+    '<label class="field">To<input data-f="to_date" type="date" value="' + today() + '" onchange="updateLeaveDays()"></label>' +
+    '<label class="field">Days<input data-f="days" type="number" step="0.5" value="1"></label>' +
+    '<label class="field">Reason<input data-f="reason" type="text" placeholder="Short reason"></label>' +
+    '</div><p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Days exclude weekly offs (' +
+    esc(S.settings.weekly_off || 'Sun') + '). Edit the number for a half day.</p>';
+  showModal('Apply for leave', body, [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Submit application', onClick: submitLeave }
+  ]);
+  updateLeaveDays();
+}
+
+function updateLeaveDays() {
+  var b = el('modal-body');
+  var from = b.querySelector('[data-f="from_date"]').value;
+  var to = b.querySelector('[data-f="to_date"]').value;
+  b.querySelector('[data-f="days"]').value = workingDaysBetween(from, to);
+}
+
+function submitLeave() {
+  var row = collectFields();
+  if (!row.emp_code) return toast('Pick an employee', 'bad');
+  if (!row.from_date || !row.to_date) return toast('Pick both dates', 'bad');
+  if (row.to_date < row.from_date) return toast('"To" cannot be before "From"', 'bad');
+  if (num(row.days) <= 0) return toast('Days must be more than zero', 'bad');
+  row.days = num(row.days);
+  row.status = isAdmin() ? 'Pending' : 'Pending';
+  row.applied_at = today();
+  row.decided_by = ''; row.decided_at = ''; row.decision_note = '';
+  api('save', { sheet: 'Leave', row: row }).then(function (saved) {
+    S.leave.push(Object.assign({}, row, { id: saved.id }));
+    closeModal(); toast('Leave application submitted', 'good'); renderLeave();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+function decideLeave(id, decision) {
+  var l = null;
+  S.leave.forEach(function (x) { if (String(x.id) === String(id)) l = x; });
+  if (!l) return;
+  var row = Object.assign({}, l, {
+    status: decision, decided_by: S.user.email, decided_at: today()
+  });
+  api('save', { sheet: 'Leave', row: row }).then(function () {
+    Object.assign(l, row);
+    if (decision === 'Approved') return markLeaveOnAttendance(row);
+  }).then(function () {
+    toast('Leave ' + decision.toLowerCase(), 'good');
+    renderLeave(); renderAttendance(); renderReports();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* Approved leave also shows up on the attendance register as "L". */
+function markLeaveOnAttendance(l) {
+  var rows = [];
+  var a = new Date(l.from_date), b = new Date(l.to_date);
+  for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+    var iso = d.toISOString().slice(0, 10);
+    if (isWeeklyOff(iso.slice(0, 7), d.getDate())) continue;
+    rows.push({
+      id: l.emp_code + '_' + iso, date: iso, emp_code: l.emp_code, status: 'L',
+      in_time: '', out_time: '', hours: 0, remarks: l.type + ' leave', updated_at: today()
+    });
+  }
+  if (!rows.length) return Promise.resolve();
+  return api('saveMany', { sheet: 'Attendance', rows: rows }).then(function () {
+    rows.forEach(function (r) {
+      var found = false;
+      for (var i = 0; i < S.attendance.length; i++) {
+        if (S.attendance[i].id === r.id) { S.attendance[i] = r; found = true; break; }
+      }
+      if (!found) S.attendance.push(r);
+    });
+    S.attVersion++;
+  });
+}
+
+function deleteLeave(id) {
+  api('remove', { sheet: 'Leave', id: id }).then(function () {
+    S.leave = S.leave.filter(function (l) { return String(l.id) !== String(id); });
+    toast('Application deleted', 'good'); renderLeave();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* =================================================================
+   MODULE 4 - PAYROLL
+   ================================================================= */
+
+function computePay(e, ym, overrides) {
+  var s = attStats(ym, e.emp_code);
+  var factor = s.total ? s.paid / s.total : 0;
+  var basic = num(e.basic) * factor;
+  var hra = num(e.hra) * factor;
+  var special = num(e.special_allowance) * factor;
+  var other = num(e.other_allowance) * factor;
+  var gross = basic + hra + special + other;
+
+  var pf = 0;
+  if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
+    var ceiling = num(S.settings.pf_wage_ceiling || 15000) * factor;
+    pf = Math.min(basic, ceiling) * num(S.settings.pf_employee_pct || 12) / 100;
+  }
+  var esi = 0;
+  if (String(e.esi_applicable || 'no').toLowerCase() === 'yes' &&
+      grossOf(e) <= num(S.settings.esi_wage_ceiling || 21000)) {
+    esi = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
+  }
+  var pt = gross > 0 ? num(S.settings.pt_amount || 0) : 0;
+  var tds = num(e.tds_monthly) * (gross > 0 ? 1 : 0);
+  var otherDed = overrides && overrides.other_deduction !== undefined ? num(overrides.other_deduction) : 0;
+  var totalDed = pf + esi + pt + tds + otherDed;
+
+  var r = function (v) { return Math.round(v); };
+  return {
+    id: ym + '_' + e.emp_code, month: ym, emp_code: e.emp_code,
+    total_days: s.total, lop_days: s.lop, paid_days: s.paid,
+    basic: r(basic), hra: r(hra), special_allowance: r(special), other_allowance: r(other),
+    gross: r(gross), pf: r(pf), esi: r(esi), pt: r(pt), tds: r(tds),
+    other_deduction: r(otherDed), total_deduction: r(totalDed), net: r(gross - totalDed),
+    status: 'Draft', generated_at: today(), generated_by: S.user ? S.user.email : ''
+  };
+}
+
+function savedRunFor(ym) {
+  return S.payroll.filter(function (p) { return String(p.month) === ym; });
+}
+
+function renderPayroll() {
+  var ym = el('pay-month').value || thisMonth();
+  var saved = savedRunFor(ym);
+  var rows = (S.payDraft && S.payDraft.month === ym) ? S.payDraft.rows : saved;
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+
+  var isDraft = !!(S.payDraft && S.payDraft.month === ym);
+  el('pay-save').disabled = !isDraft;
+  el('pay-save').textContent = isDraft ? 'Save payroll run (' + rows.length + ')' : 'Save payroll run';
+
+  var totals = rows.reduce(function (t, r) {
+    t.gross += num(r.gross); t.ded += num(r.total_deduction); t.net += num(r.net); return t;
+  }, { gross: 0, ded: 0, net: 0 });
+
+  el('pay-kpis').innerHTML =
+    kpi('Employees paid', rows.length, isDraft ? 'draft - not saved yet' : (saved.length ? 'saved run' : 'nothing generated')) +
+    kpi('Gross payout', cur() + money(totals.gross), 'after LOP proration') +
+    kpi('Deductions', cur() + money(totals.ded), 'PF + ESI + PT + TDS + other') +
+    kpi('Net payable', cur() + money(totals.net), 'transfer this to the bank');
+
+  var head = '<thead><tr><th>Employee</th><th class="num-col">Paid days</th><th class="num-col">LOP</th>' +
+    '<th class="num-col">Basic</th><th class="num-col">HRA</th><th class="num-col">Allow.</th>' +
+    '<th class="num-col">Gross</th><th class="num-col">PF</th><th class="num-col">ESI</th>' +
+    '<th class="num-col">PT</th><th class="num-col">TDS</th><th class="num-col">Other ded.</th>' +
+    '<th class="num-col">Net pay</th><th></th></tr></thead>';
+  var body = rows.map(function (r, i) {
+    return '<tr>' +
+      '<td>' + esc(empName(r.emp_code)) + '<div style="font-size:.7rem;color:var(--text-muted)">' + esc(r.emp_code) + '</div></td>' +
+      '<td class="num-col">' + r.paid_days + '</td><td class="num-col">' + r.lop_days + '</td>' +
+      '<td class="num-col">' + money(r.basic) + '</td><td class="num-col">' + money(r.hra) + '</td>' +
+      '<td class="num-col">' + money(num(r.special_allowance) + num(r.other_allowance)) + '</td>' +
+      '<td class="num-col"><b>' + money(r.gross) + '</b></td>' +
+      '<td class="num-col">' + money(r.pf) + '</td><td class="num-col">' + money(r.esi) + '</td>' +
+      '<td class="num-col">' + money(r.pt) + '</td><td class="num-col">' + money(r.tds) + '</td>' +
+      '<td class="num-col">' + (isDraft && isAdmin()
+        ? '<input type="number" value="' + num(r.other_deduction) + '" style="width:85px;text-align:right" ' +
+          'onchange="editOtherDed(' + i + ',this.value)">'
+        : money(r.other_deduction)) + '</td>' +
+      '<td class="num-col"><b>' + cur() + money(r.net) + '</b></td>' +
+      '<td><button class="ghost sm" onclick="payslip(\'' + esc(r.emp_code) + '\',\'' + esc(r.month) + '\')">Payslip</button></td>' +
+      '</tr>';
+  }).join('');
+  el('pay-table').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="14" class="empty">No payroll for ' + esc(ym) +
+    '. Click "Generate from attendance" to build it.</td></tr>') + '</tbody>';
+}
+
+function generatePayroll() {
+  var ym = el('pay-month').value || thisMonth();
+  var emps = S.employees.filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  if (!emps.length) return toast('No active employees to pay', 'bad');
+  var existing = {};
+  savedRunFor(ym).forEach(function (r) { existing[r.emp_code] = r; });
+  S.payDraft = {
+    month: ym,
+    rows: emps.map(function (e) { return computePay(e, ym, existing[e.emp_code]); })
+  };
+  renderPayroll();
+  toast('Draft payroll generated for ' + emps.length + ' employees - review, then Save');
+}
+
+function editOtherDed(index, value) {
+  var row = S.payDraft.rows[index];
+  var e = empByCode(row.emp_code);
+  S.payDraft.rows[index] = computePay(e, row.month, { other_deduction: value });
+  renderPayroll();
+}
+
+function savePayroll() {
+  if (!S.payDraft) return;
+  var rows = S.payDraft.rows.map(function (r) { return Object.assign({}, r, { status: 'Finalised' }); });
+  var btn = el('pay-save');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...';
+  api('saveMany', { sheet: 'Payroll', rows: rows }).then(function () {
+    rows.forEach(function (r) {
+      var found = false;
+      for (var i = 0; i < S.payroll.length; i++) {
+        if (S.payroll[i].id === r.id) { S.payroll[i] = r; found = true; break; }
+      }
+      if (!found) S.payroll.push(r);
+    });
+    S.payDraft = null;
+    toast('Payroll saved to the sheet', 'good');
+    renderPayroll(); renderReports();
+  }).catch(function (e) {
+    btn.disabled = false; btn.textContent = 'Save payroll run'; toast(e.message, 'bad');
+  });
+}
+
+function payslip(code, ym) {
+  var rows = (S.payDraft && S.payDraft.month === ym) ? S.payDraft.rows : savedRunFor(ym);
+  var r = null;
+  rows.forEach(function (x) { if (String(x.emp_code) === String(code)) r = x; });
+  if (!r) return toast('No payroll row for this employee', 'bad');
+  var e = empByCode(code) || {};
+  var line = function (a, b) {
+    return '<tr><td>' + esc(a) + '</td><td class="num-col">' + cur() + money(b) + '</td></tr>';
+  };
+  var html =
+    '<div class="payslip" id="payslip-print">' +
+      '<div class="ps-head"><h2>' + esc(S.settings.company_name || 'Company') + '</h2>' +
+        '<div style="font-size:.78rem;color:var(--text-muted)">' + esc(S.settings.company_address || '') + '</div>' +
+        '<div style="margin-top:8px;font-weight:700">Payslip for ' + esc(ym) + '</div></div>' +
+      '<table><tbody>' +
+        '<tr><td><b>Employee</b></td><td>' + esc(e.name || code) + '</td>' +
+            '<td><b>Code</b></td><td>' + esc(code) + '</td></tr>' +
+        '<tr><td><b>Designation</b></td><td>' + esc(e.designation || '-') + '</td>' +
+            '<td><b>Department</b></td><td>' + esc(e.department || '-') + '</td></tr>' +
+        '<tr><td><b>Paid days</b></td><td>' + r.paid_days + ' / ' + r.total_days + '</td>' +
+            '<td><b>LOP days</b></td><td>' + r.lop_days + '</td></tr>' +
+        '<tr><td><b>PAN</b></td><td>' + esc(e.pan || '-') + '</td>' +
+            '<td><b>UAN</b></td><td>' + esc(e.uan || '-') + '</td></tr>' +
+      '</tbody></table>' +
+      '<div class="grid2">' +
+        '<table><thead><tr><th>Earnings</th><th class="num-col">Amount</th></tr></thead><tbody>' +
+          line('Basic', r.basic) + line('HRA', r.hra) +
+          line('Special allowance', r.special_allowance) + line('Other allowance', r.other_allowance) +
+          '<tr><td><b>Gross earnings</b></td><td class="num-col"><b>' + cur() + money(r.gross) + '</b></td></tr>' +
+        '</tbody></table>' +
+        '<table><thead><tr><th>Deductions</th><th class="num-col">Amount</th></tr></thead><tbody>' +
+          line('Provident fund', r.pf) + line('ESI', r.esi) +
+          line('Professional tax', r.pt) + line('TDS', r.tds) + line('Other', r.other_deduction) +
+          '<tr><td><b>Total deductions</b></td><td class="num-col"><b>' + cur() + money(r.total_deduction) + '</b></td></tr>' +
+        '</tbody></table>' +
+      '</div>' +
+      '<div class="ps-net"><span>Net pay</span><span>' + cur() + money(r.net) + '</span></div>' +
+      '<p style="margin-top:14px;font-size:.7rem;color:var(--text-muted)">' +
+      'System generated payslip. ' + (r.status === 'Draft' ? 'DRAFT - payroll not finalised.' : '') + '</p>' +
+    '</div>';
+  showModal('Payslip', html, [
+    { label: 'Close', cls: 'ghost', onClick: closeModal },
+    { label: 'Print', onClick: printPayslip }
+  ]);
+}
+
+function printPayslip() {
+  var w = window.open('', '_blank');
+  w.document.write('<html><head><title>Payslip</title><style>' +
+    'body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px}' +
+    'td,th{padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:left}' +
+    '.num-col{text-align:right}.grid2{display:flex;gap:18px}.grid2>table{flex:1}' +
+    '.ps-head{text-align:center;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px}' +
+    '.ps-net{background:#f1f5f9;padding:12px;border-radius:8px;display:flex;justify-content:space-between;font-weight:800}' +
+    '</style></head><body>' + el('payslip-print').innerHTML + '</body></html>');
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+function exportPayroll() {
+  var ym = el('pay-month').value || thisMonth();
+  var rows = (S.payDraft && S.payDraft.month === ym) ? S.payDraft.rows : savedRunFor(ym);
+  if (!rows.length) return toast('Nothing to export for ' + ym, 'bad');
+  var cols = ['emp_code', 'name', 'bank_account', 'ifsc', 'paid_days', 'lop_days', 'gross',
+              'pf', 'esi', 'pt', 'tds', 'other_deduction', 'total_deduction', 'net'];
+  download('payroll-' + ym + '.csv', toCSV(cols, rows.map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    return cols.map(function (c) {
+      if (c === 'name') return e.name || '';
+      if (c === 'bank_account') return e.bank_account || '';
+      if (c === 'ifsc') return e.ifsc || '';
+      return r[c];
+    });
+  })));
+}
+</script>
+
+<script>
+/* =================================================================
+   MODULE 5 - REPORTS
+   ================================================================= */
+
+function renderReports() {
+  var ym = el('rep-month').value || thisMonth();
+  var year = ym.slice(0, 4);
+  var emps = visibleEmployees();
+  var active = emps.filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  var run = savedRunFor(ym);
+
+  var lop = active.reduce(function (s, e) { return s + attStats(ym, e.emp_code).lop; }, 0);
+  var netCost = run.reduce(function (s, r) { return s + num(r.net); }, 0);
+  var pendingLeave = S.leave.filter(function (l) { return l.status === 'Pending'; }).length;
+
+  el('rep-kpis').innerHTML =
+    kpi('Active headcount', active.length, 'as on ' + today()) +
+    kpi('LOP days', lop, 'in ' + ym) +
+    kpi('Net payout', run.length ? cur() + money(netCost) : '-', run.length ? 'saved run for ' + ym : 'payroll not saved yet') +
+    kpi('Pending leave', pendingLeave, 'applications awaiting approval');
+
+  /* headcount by department */
+  var byDept = {};
+  active.forEach(function (e) {
+    var d = e.department || 'Unassigned';
+    byDept[d] = byDept[d] || { n: 0, cost: 0 };
+    byDept[d].n++; byDept[d].cost += grossOf(e);
+  });
+  el('rep-dept').innerHTML = '<thead><tr><th>Department</th><th class="num-col">People</th>' +
+    '<th class="num-col">Monthly gross</th><th class="num-col">Share</th></tr></thead><tbody>' +
+    (Object.keys(byDept).sort().map(function (d) {
+      return '<tr><td>' + esc(d) + '</td><td class="num-col">' + byDept[d].n + '</td>' +
+        '<td class="num-col">' + cur() + money(byDept[d].cost) + '</td>' +
+        '<td class="num-col">' + Math.round(byDept[d].n * 100 / (active.length || 1)) + '%</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="empty">No active employees.</td></tr>') + '</tbody>';
+
+  /* attendance summary for the month */
+  var agg = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0 };
+  active.forEach(function (e) {
+    var s = attStats(ym, e.emp_code);
+    Object.keys(agg).forEach(function (k) { agg[k] += s[k]; });
+  });
+  var totalMarked = agg.P + agg.A + agg.HD + agg.L;
+  var labels = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'Leave', WO: 'Weekly off', H: 'Holiday', blank: 'Not marked' };
+  el('rep-att').innerHTML = '<thead><tr><th>Status</th><th class="num-col">Days</th><th class="num-col">Of marked</th></tr></thead><tbody>' +
+    Object.keys(labels).map(function (k) {
+      return '<tr><td>' + labels[k] + '</td><td class="num-col">' + agg[k] + '</td>' +
+        '<td class="num-col">' + (totalMarked && k !== 'WO' && k !== 'H' && k !== 'blank'
+          ? Math.round(agg[k] * 100 / totalMarked) + '%' : '-') + '</td></tr>';
+    }).join('') + '</tbody>';
+
+  /* leave summary for the year */
+  var byType = {};
+  leaveTypes().forEach(function (t) { byType[t] = { applied: 0, approved: 0, days: 0 }; });
+  S.leave.filter(function (l) { return String(l.from_date).slice(0, 4) === year; }).forEach(function (l) {
+    var t = l.type || 'Other';
+    byType[t] = byType[t] || { applied: 0, approved: 0, days: 0 };
+    byType[t].applied++;
+    if (l.status === 'Approved') { byType[t].approved++; byType[t].days += num(l.days); }
+  });
+  el('rep-leave').innerHTML = '<thead><tr><th>Type</th><th class="num-col">Applied</th>' +
+    '<th class="num-col">Approved</th><th class="num-col">Days taken</th></tr></thead><tbody>' +
+    Object.keys(byType).map(function (t) {
+      return '<tr><td>' + esc(t) + '</td><td class="num-col">' + byType[t].applied + '</td>' +
+        '<td class="num-col">' + byType[t].approved + '</td>' +
+        '<td class="num-col">' + byType[t].days + '</td></tr>';
+    }).join('') + '</tbody>';
+
+  /* payroll cost trend across saved runs */
+  var months = {};
+  S.payroll.forEach(function (r) {
+    var m = String(r.month);
+    months[m] = months[m] || { n: 0, gross: 0, ded: 0, net: 0 };
+    months[m].n++; months[m].gross += num(r.gross);
+    months[m].ded += num(r.total_deduction); months[m].net += num(r.net);
+  });
+  var keys = Object.keys(months).sort().slice(-6);
+  el('rep-cost').innerHTML = '<thead><tr><th>Month</th><th class="num-col">Paid</th><th class="num-col">Gross</th>' +
+    '<th class="num-col">Deductions</th><th class="num-col">Net</th></tr></thead><tbody>' +
+    (keys.map(function (m) {
+      return '<tr><td>' + esc(m) + '</td><td class="num-col">' + months[m].n + '</td>' +
+        '<td class="num-col">' + cur() + money(months[m].gross) + '</td>' +
+        '<td class="num-col">' + cur() + money(months[m].ded) + '</td>' +
+        '<td class="num-col"><b>' + cur() + money(months[m].net) + '</b></td></tr>';
+    }).join('') || '<tr><td colspan="5" class="empty">No saved payroll runs yet.</td></tr>') + '</tbody>';
+
+  renderRegister(ym);
+}
+
+function registerRows(ym) {
+  var run = savedRunFor(ym);
+  if (run.length) return run;
+  return visibleEmployees().filter(function (e) { return String(e.status || 'Active') === 'Active'; })
+    .map(function (e) { return computePay(e, ym, null); });
+}
+
+function renderRegister(ym) {
+  var rows = registerRows(ym);
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+  var head = '<thead><tr><th>Code</th><th>Name</th><th>Department</th><th class="num-col">Paid days</th>' +
+    '<th class="num-col">Gross</th><th class="num-col">PF</th><th class="num-col">ESI</th>' +
+    '<th class="num-col">PT</th><th class="num-col">TDS</th><th class="num-col">Net</th></tr></thead>';
+  var totals = { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0 };
+  var body = rows.map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    ['gross', 'pf', 'esi', 'pt', 'tds', 'net'].forEach(function (k) { totals[k] += num(r[k]); });
+    return '<tr><td>' + esc(r.emp_code) + '</td><td>' + esc(e.name || '') + '</td>' +
+      '<td>' + esc(e.department || '-') + '</td><td class="num-col">' + r.paid_days + '</td>' +
+      '<td class="num-col">' + money(r.gross) + '</td><td class="num-col">' + money(r.pf) + '</td>' +
+      '<td class="num-col">' + money(r.esi) + '</td><td class="num-col">' + money(r.pt) + '</td>' +
+      '<td class="num-col">' + money(r.tds) + '</td>' +
+      '<td class="num-col"><b>' + money(r.net) + '</b></td></tr>';
+  }).join('');
+  var foot = rows.length ? '<tr style="background:#f8fafc;font-weight:800"><td colspan="4">Total</td>' +
+    ['gross', 'pf', 'esi', 'pt', 'tds', 'net'].map(function (k) {
+      return '<td class="num-col">' + cur() + money(totals[k]) + '</td>';
+    }).join('') + '</tr>' : '';
+  el('rep-register').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="10" class="empty">Nothing to show for ' + esc(ym) + '.</td></tr>') + foot + '</tbody>';
+}
+
+function exportRegister() {
+  var ym = el('rep-month').value || thisMonth();
+  var cols = ['emp_code', 'name', 'department', 'paid_days', 'lop_days', 'basic', 'hra',
+              'special_allowance', 'other_allowance', 'gross', 'pf', 'esi', 'pt', 'tds',
+              'other_deduction', 'total_deduction', 'net'];
+  download('salary-register-' + ym + '.csv', toCSV(cols, registerRows(ym).map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    return cols.map(function (c) {
+      if (c === 'name') return e.name || '';
+      if (c === 'department') return e.department || '';
+      return r[c];
+    });
+  })));
+}
+
+/* =================================================================
+   SETTINGS (configuration, not a module)
+   ================================================================= */
+
+var SETTING_FIELDS = [
+  ['company_name', 'Company name', 'text'],
+  ['company_address', 'Company address', 'text'],
+  ['currency', 'Currency', 'select:INR,USD,AED,GBP,EUR'],
+  ['weekly_off', 'Weekly off (comma separated)', 'text'],
+  ['pf_employee_pct', 'PF employee %', 'number'],
+  ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
+  ['esi_employee_pct', 'ESI employee %', 'number'],
+  ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
+  ['pt_amount', 'Professional tax / month', 'number'],
+  ['leave_types', 'Leave types (comma separated)', 'text'],
+  ['quota_casual', 'Casual leave quota / year', 'number'],
+  ['quota_sick', 'Sick leave quota / year', 'number'],
+  ['quota_earned', 'Earned leave quota / year', 'number']
+];
+
+function openSettings() {
+  var body = '<div class="grid2">' + SETTING_FIELDS.map(function (f) {
+    return fieldInput(f, S.settings[f[0]]);
+  }).join('') + '</div>' +
+    '<h3 style="margin:22px 0 10px;font-size:.9rem">Change your password</h3>' +
+    '<div class="grid2">' +
+      '<label class="field">Current password<input id="pw-old" type="password"></label>' +
+      '<label class="field">New password<input id="pw-new" type="password"></label>' +
+    '</div>' +
+    '<button class="ghost sm" style="margin-top:10px" onclick="changePassword()">Update password</button>' +
+    '<p style="margin-top:18px;font-size:.75rem;color:var(--text-muted)">' +
+    'Statutory rates apply to every payroll run from now on. Runs already saved are not recalculated.</p>';
+  showModal('Settings', body, [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Save settings', onClick: saveSettingsForm }
+  ]);
+}
+
+function saveSettingsForm() {
+  var values = {};
+  el('modal-body').querySelectorAll('[data-f]').forEach(function (n) { values[n.dataset.f] = n.value; });
+  api('saveSettings', { settings: values }).then(function (settings) {
+    S.settings = settings || values;
+    el('side-company').textContent = S.settings.company_name || '5 Modules';
+    closeModal(); toast('Settings saved', 'good'); renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+function changePassword() {
+  var oldPw = el('pw-old').value, newPw = el('pw-new').value;
+  if (!oldPw || !newPw) return toast('Fill both password boxes', 'bad');
+  if (S.demo) return toast('Passwords are not stored in demo mode');
+  api('changePassword', { email: S.user.email, oldPassword: oldPw, newPassword: newPw })
+    .then(function () { el('pw-old').value = ''; el('pw-new').value = ''; toast('Password updated', 'good'); })
+    .catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* ------------------------------ init ---------------------------- */
+(function init() {
+  var saved = localStorage.getItem('hrms_lite_api');
+  if (saved) el('in-api').value = saved;
+  el('in-pass').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') el('btn-login').click();
+  });
+})();
+</script>
+</body>
+</html>
