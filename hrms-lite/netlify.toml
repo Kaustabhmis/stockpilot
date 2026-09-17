@@ -8,10 +8,26 @@
 
 [build]
   publish = "site"
-  command = "mkdir -p site && cp index.html site/index.html"
+  command = """
+    mkdir -p site/app
+    cp index.html manifest.webmanifest sw.js site/
+    cp -r app/icons site/app/
+  """
 
 # The app is one file and it changes when HR pushes a fix. Never let a browser
 # serve staff a stale copy.
+# The service worker must never be cached, or a phone keeps yesterday's app.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
 [[headers]]
   for = "/index.html"
   [headers.values]

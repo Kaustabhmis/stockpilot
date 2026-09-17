@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>HRMS Lite &mdash; Dashboard + 5 Modules</title>
+<!-- Installed-app plumbing: an Android phone can add this to the home screen
+     and run it full screen, which is what the punch app is. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="app/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="app/icons/icon-512.png">
 <style>
 :root{
   --primary:#2563eb; --primary-hover:#1d4ed8; --accent:#0ea5e9;
@@ -152,6 +161,9 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
   text-align:center;padding:5px 2px;border-top:1.5px solid var(--border);
   font-variant-numeric:tabular-nums;}
 .att-grid tfoot td.emp-c{text-align:left;z-index:3;background:#f8fafc;}
+.login-stay{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--text-muted);
+  margin:2px 0 10px;cursor:pointer;}
+.login-stay input{width:16px;height:16px;accent-color:var(--primary);cursor:pointer;}
 .att-cell.open::after{content:'';position:absolute;top:1px;right:1px;width:4px;height:4px;
   border-radius:50%;background:var(--danger);}
 
@@ -407,6 +419,9 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <input id="in-pass" type="password" placeholder="Your password" autocomplete="current-password">
           <button type="button" class="login-show" id="pw-toggle" onclick="togglePassword()">Show</button>
         </div>
+        <label class="login-stay">
+          <input type="checkbox" id="in-stay"> Keep me signed in on this phone
+        </label>
         <a href="#" class="login-forgot" onclick="forgotPassword();return false;">Forgot password?</a>
         <button class="signin" id="btn-login">Sign in</button>
 
@@ -796,6 +811,25 @@ var TITLES = {
   reports: ['Reports', 'Registers, statutory returns and exceptions']
 };
 
+/* ---------------------- installed app ---------------------------- */
+/* True when launched from the home screen rather than a browser tab. The
+   punch screen leans on this to put itself first. */
+var INSTALLED = (function () {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true;
+  } catch (e) { return false; }
+})();
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {
+      /* No service worker is not an error - the app runs the same without
+         one, it just will not open offline. */
+    });
+  });
+}
+
 /* ---------------------------- helpers --------------------------- */
 function el(id) { return document.getElementById(id); }
 function esc(v) {
@@ -1030,6 +1064,7 @@ function api(action, payload) {
 function sessionEnded(msg) {
   if (S.signingOut) return;
   S.signingOut = true;
+  forgetSession();
   alert(msg);
   location.reload();
 }
@@ -1637,6 +1672,24 @@ function brandTap() {
   el('in-api').focus();
 }
 
+/* A session kept on the device, for the phone app. Opt-in: on a shared office
+   machine you want the sign-in every time, but a worker punching in and out on
+   their own phone should not type a password twice a day. The token still
+   carries its own expiry, so this lengthens nothing - it only saves retyping
+   inside the window the server already allows. */
+var SESSION_KEY = 'hrms_lite_session';
+
+function rememberSession(user) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch (e) { /* private mode */ }
+}
+function forgetSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* private mode */ }
+}
+function savedSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); }
+  catch (e) { return null; }
+}
+
 el('btn-login').onclick = function () {
   var url = configuredUrl();
   if (!url) {
@@ -1645,11 +1698,29 @@ el('btn-login').onclick = function () {
   }
   S.api = url; S.demo = false;
   var btn = this; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Signing in...';
+  var stay = el('in-stay') && el('in-stay').checked;
   api('login', { email: el('in-email').value.trim(), password: el('in-pass').value })
-    .then(function (user) { S.user = user; localStorage.setItem('hrms_lite_api', url); return start(); })
+    .then(function (user) {
+      S.user = user;
+      localStorage.setItem('hrms_lite_api', url);
+      if (stay) rememberSession(user); else forgetSession();
+      return start();
+    })
     .catch(function (e) { showLoginError(e.message); })
     .then(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
 };
+
+/* Come back to a remembered session on open. If the server has since expired
+   or disabled it, api() clears it and drops us back here - nothing to check
+   for up front. */
+function resumeSession() {
+  var url = configuredUrl(), saved = savedSession();
+  if (!url || !saved || !saved.token) return false;
+  S.api = url; S.demo = false; S.user = saved;
+  if (el('in-stay')) el('in-stay').checked = true;
+  start();
+  return true;
+}
 el('btn-demo').onclick = function () {
   S.demo = true;
   S.user = { email: 'demo@company.com', role: 'owner', emp_code: '' };
@@ -1673,7 +1744,7 @@ function demoRole() {
   go('dashboard');
   reload();
 }
-function logout() { S.user = null; location.reload(); }
+function logout() { S.user = null; forgetSession(); location.reload(); }
 
 function start() {
   el('login').style.display = 'none';
@@ -5807,6 +5878,10 @@ function startClock() {
   window.addEventListener('resize', function () {
     if (S.user && S.view === 'dashboard') renderDashboard();
   });
+
+  /* Opened from the home screen with a session still good: go straight in.
+     Somebody punching in at the gate should not meet a login screen. */
+  resumeSession();
 })();
 </script>
 <script>

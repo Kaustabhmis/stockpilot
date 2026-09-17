@@ -493,10 +493,17 @@ automatically. A template for each shape is one click away.
 ```
 hrms-lite/
 ├── index.html                       the whole front end — one file, no build step, no npm
+├── manifest.webmanifest             makes it installable on a phone
+├── sw.js                            service worker: opens offline, never caches the workspace
+├── netlify.toml                     static hosting config and headers
 ├── apps-script/Code.gs              the backend, runs inside your Google Sheet
+├── app/icons/                       the app icon, drawn by app/make-icons.py
+├── app/android/                     Android project — a WebView wrapper, builds to an APK
 ├── tools/essl-sync.js               biometric sync agent for your office LAN
 ├── tools/essl-sync.config.example.json
 └── README.md
+
+.github/workflows/android-apk.yml    builds the APK on GitHub, no local Android SDK needed
 ```
 
 ## Try it in 10 seconds
@@ -571,6 +578,53 @@ var BRAND = { name: 'BISCS', suffix: 'OS',
 ```
 
 Change those five strings and the whole app follows; no other edit is needed.
+
+## On a phone: the punch app
+
+Two routes, and the first needs no build at all.
+
+### 1. Install it from the browser (works today)
+
+The app is a **PWA**, so an Android phone can install it: open the site in Chrome, then
+**⋮ → Install app** (older phones say *Add to Home screen*). It gets the clock icon, opens full
+screen with no browser bar, and behaves like any other app.
+
+- **Geofenced punching works**, because the site is HTTPS. Chrome asks for location the first
+  time and the fence is still checked on the server, not in the phone.
+- **It opens without a signal.** A service worker caches the app itself; anything to do with the
+  workspace always goes to the network, so a punch is never answered from a cache and a payslip is
+  never stale. With no signal the app opens and says the punch could not be sent, rather than
+  showing a dead page.
+- **"Keep me signed in on this phone"** on the login screen. Without it, somebody punching in and
+  out types a password twice a day. It is opt-in, so a shared office machine can leave it off, and
+  it lengthens nothing — the session still carries the server's own expiry.
+
+For most factories this is the whole answer: no Play Store, no signing, no install files to pass
+around. Send the link.
+
+### 2. A real APK
+
+`hrms-lite/app/android/` is a complete Android project — a WebView wrapper around the same site,
+with the two things a WebView does not do by itself: it asks Android for the location permission
+up front, and it passes that permission through to the page when it calls `navigator.geolocation`.
+Miss either and the punch screen just says it cannot find you.
+
+It also handles the back button, pull-to-refresh, and keeps links to other sites out of the app.
+
+**Building it needs no Android Studio.** `.github/workflows/android-apk.yml` builds it on GitHub's
+runners, which already carry the Android SDK:
+
+1. GitHub → **Actions** → *Build the Android APK* → **Run workflow**
+2. When it finishes, download **biscs-os-apk** from the run's Artifacts
+3. Put the `.apk` on the phones (WhatsApp, a cable, or a link). Android will ask them to allow
+   installing from that source, once.
+
+The site it opens is one line — `site_url` in `app/src/main/res/values/strings.xml` — or set a
+repository variable named `SITE_URL` and the workflow substitutes it at build time.
+
+The APK is signed with a debug key, which is fine for handing phones an app directly. It is **not**
+enough for the Play Store: that needs a release keystore, which you generate once and add as
+repository secrets.
 
 ### Putting it on Netlify
 
