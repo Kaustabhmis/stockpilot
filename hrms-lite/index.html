@@ -106,6 +106,20 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .b-amber{background:#fef3c7;color:#92400e;} .b-blue{background:#dbeafe;color:#1e40af;}
 .b-gray{background:#e2e8f0;color:#475569;} .b-violet{background:#ede9fe;color:#5b21b6;}
 
+/* ---------------- Punch card ---------------- */
+.punch{display:flex;gap:18px;align-items:center;flex-wrap:wrap;}
+.punch-clock{font-size:2.2rem;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1;}
+.punch-state{flex:1;min-width:210px;}
+.punch-times{display:flex;gap:18px;margin-top:8px;flex-wrap:wrap;}
+.punch-times div{font-size:.75rem;color:var(--text-muted);}
+.punch-times b{display:block;font-size:1rem;color:var(--text-dark);font-variant-numeric:tabular-nums;}
+.punch-btn{padding:14px 26px;font-size:1rem;border-radius:10px;}
+.punch-btn.out{background:var(--danger);} .punch-btn.out:hover{background:#dc2626;}
+.punch-open{background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:.8rem;
+  font-weight:600;margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.att-cell.open::after{content:'';position:absolute;top:1px;right:1px;width:4px;height:4px;
+  border-radius:50%;background:var(--danger);}
+
 /* ---------------- Company calendar ---------------- */
 .cal-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
 .cal-nav{display:flex;align-items:center;gap:8px;}
@@ -415,6 +429,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
     <!-- ---------------- DASHBOARD (home, not a module) ---------------- -->
     <section class="view active" id="view-dashboard">
+      <div class="card" id="punch-card" style="display:none"></div>
       <div class="card" style="padding:14px 18px;margin-bottom:16px;">
         <div class="toolbar" style="margin-bottom:0;align-items:center;">
           <div class="clock">
@@ -690,7 +705,7 @@ var S = {
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
   shifts: [], leaveTypes: [], leaveVersion: 0,
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
-  requestTypes: [], requests: [],
+  requestTypes: [], requests: [], punch: null,
   attDirty: {}, payDraft: null, attVersion: 0,
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -1074,7 +1089,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v8';
+var DEMO_KEY = 'hrms_lite_demo_v9';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1087,6 +1102,7 @@ function demoDb() {
       pt_amount: '200', weekly_off: 'Sun', shift_start: '09:30', shift_end: '18:30',
       grace_minutes: '15', ot_after_minutes: '30', full_day_hours: '8', half_day_hours: '4',
       saturday_policy: 'working', default_shift: 'General', late_marks_per_halfday: '3',
+      web_punch_enabled: 'yes', punch_out_mandatory: 'yes',
       ot_pay_enabled: 'no', ot_rate_multiplier: '1', ot_max_hours_month: '60',
       sandwich_rule: 'no', excess_leave_unpaid: 'yes', leave_after_days: '0',
       payroll_basis: 'calendar', payroll_rounding: '1',
@@ -1586,6 +1602,7 @@ function renderDashboard() {
   }));
 
   renderCalendar();
+  renderPunchCard();
   renderDashActions();
   renderDashToday(iso, nonWorking);
   renderDashUpcoming();
@@ -2345,7 +2362,8 @@ function attStats(ym, code) {
   var upTo = ym === thisMonth() ? new Date().getDate() : dim;
   var unpaid = unpaidLeaveMap();
   var s = { P: 0, A: 0, HD: 0, L: 0, OD: 0, CO: 0, WO: 0, H: 0, blank: 0, blankDays: [],
-            future: 0, late: 0, ot: 0, unpaidLeave: 0, working: 0 };
+            future: 0, late: 0, ot: 0, unpaidLeave: 0, working: 0,
+            incomplete: 0, incompleteDays: [] };
   for (var d = 1; d <= dim; d++) {
     var iso = dateStr(ym, d);
     var rec = recordFor(ym, code, d);
@@ -2358,6 +2376,11 @@ function attStats(ym, code) {
     if (st === 'P' || st === 'HD') {
       if (lateMinutes(rec, code)) s.late++;
       s.ot += otMinutes(rec, code);
+      /* punched in but never out, on a day that has passed */
+      if (rec && rec.in_time && !rec.out_time && iso < today()) {
+        s.incomplete++;
+        s.incompleteDays.push(iso);
+      }
     }
     /* OD is duty away from the office and CO is an earned day off - both paid,
        neither is LOP. */
@@ -2368,7 +2391,10 @@ function attStats(ym, code) {
   s.lateDeduction = per > 0 ? Math.floor(s.late / per) * 0.5 : 0;
   /* An unmarked day that has already passed is unpaid until someone marks it.
      Leave of an unpaid type - or beyond quota - is unpaid too. */
-  s.lop = s.A + s.HD * 0.5 + s.blank + s.unpaidLeave + s.lateDeduction;
+  /* With punch-out mandatory, an unclosed day is not a paid day until it is fixed. */
+  var mandatory = String(S.settings.punch_out_mandatory || 'yes').toLowerCase() === 'yes';
+  s.lop = s.A + s.HD * 0.5 + s.blank + s.unpaidLeave + s.lateDeduction +
+          (mandatory ? s.incomplete : 0);
   s.paid = dim - s.lop;
   return s;
 }
@@ -2412,10 +2438,12 @@ function renderAttendance() {
       var rec = recordFor(ym, e.emp_code, d);
       var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
       var late = (st === 'P' || st === 'HD') && lateMinutes(rec, e.emp_code);
+      var open = rec && rec.in_time && !rec.out_time && dateStr(ym, d) < today();
       var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + rec.in_time + '-' + (rec.out_time || '?') : '') +
-        (late ? ' (late ' + late + 'm)' : '') + (rec && rec.remarks ? ' ' + rec.remarks : '');
+        (late ? ' (late ' + late + 'm)' : '') + (open ? ' - never punched out' : '') +
+        (rec && rec.remarks ? ' ' + rec.remarks : '');
       row += '<td><div class="att-cell s-' + esc(st) + (S.attDirty[key] ? ' edited' : '') +
-        (late ? ' late' : '') + '" title="' + esc(tip) + '"' +
+        (late ? ' late' : '') + (open ? ' open' : '') + '" title="' + esc(tip) + '"' +
         (editable ? ' onclick="cycleCell(\'' + esc(e.emp_code) + '\',' + d + ')"' +
                     ' ondblclick="openCell(\'' + esc(e.emp_code) + '\',' + d + ')"' : '') +
         ' id="c_' + esc(key) + '">' + esc(st) + '</div></td>';
@@ -3630,6 +3658,7 @@ function reportExceptions(ym) {
     var issues = [];
     if (s.blank) issues.push(s.blank + ' unmarked day(s)');
     if (check) issues.push(check + ' day(s) needing a check (single or short punch)');
+    if (s.incomplete) issues.push(s.incomplete + ' day(s) punched in but never out');
     if (s.A >= 3) issues.push(s.A + ' absences');
     if (s.late >= 3) issues.push(s.late + ' late marks');
     if (s.ot >= 600) issues.push((s.ot / 60).toFixed(1) + ' OT hours');
@@ -3733,6 +3762,8 @@ var SETTING_GROUPS = [
 
 /* Rules that are not per shift or per leave type. Every one is applied. */
 var ATTENDANCE_RULES = [
+  ['web_punch_enabled', 'Let staff punch from the app', 'select:yes,no'],
+  ['punch_out_mandatory', 'Punch out is mandatory', 'select:yes,no'],
   ['default_shift', 'Default shift for new staff', 'text'],
   ['late_marks_per_halfday', 'Late marks that cost half a day (0 = off)', 'number'],
   ['ot_pay_enabled', 'Pay overtime', 'select:no,yes'],
@@ -3987,6 +4018,9 @@ function shiftsPane() {
       return fieldInput(f, S.settings[f[0]]);
     }).join('') + '</div>' +
     '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted);line-height:1.7">' +
+    '<b>Punch out mandatory:</b> a day punched in but never punched out is not a paid day. It stays ' +
+    'flagged on the register and counts as LOP until someone closes it - by a swipe request, or by ' +
+    'editing the day. Turn it off and an open day is paid as present.<br>' +
     '<b>Late marks:</b> every N late arrivals cost half a day of pay - set 0 to switch the rule off.<br>' +
     '<b>Overtime:</b> minutes past the shift end (beyond the shift\u2019s OT threshold) are counted ' +
     'always, but only paid when "Pay overtime" is yes. The rate is the hourly rate from the monthly ' +
@@ -6761,6 +6795,192 @@ function requestsPane() {
     'out, which payroll picks up as an incentive that month.<br>' +
     '<b>none</b> &mdash; recorded and approved, but the register is left alone.' +
     '</div></div>';
+}
+</script>
+
+<script>
+/* =================================================================
+   EMPLOYEE SIDE - punch in and punch out
+   The time is taken from the backend, not the browser clock, and a
+   day is only a paid day once it has both punches.
+   ================================================================= */
+
+function punchEmployee() {
+  var code = myCode();
+  if (code) return empByCode(code);
+  /* an admin who is also on the payroll can punch for themselves */
+  var byEmail = null;
+  S.employees.forEach(function (e) {
+    if (e.email && S.user && String(e.email).toLowerCase() === String(S.user.email).toLowerCase()) byEmail = e;
+  });
+  return byEmail;
+}
+
+function loadPunchState() {
+  var e = punchEmployee();
+  if (!e) { S.punch = null; return Promise.resolve(null); }
+  if (S.demo) { S.punch = demoPunchState(e.emp_code); return Promise.resolve(S.punch); }
+  return api('punchState', { emp_code: e.emp_code })
+    .then(function (st) { S.punch = st; return st; })
+    .catch(function () { S.punch = null; return null; });
+}
+
+function renderPunchCard() {
+  var host = el('punch-card');
+  if (!host || !S.user) return;
+  var e = punchEmployee();
+  var enabled = String(S.settings.web_punch_enabled || 'yes').toLowerCase() === 'yes';
+  if (!e || !enabled) { host.style.display = 'none'; return; }
+  host.style.display = '';
+  if (!S.punch) {
+    host.innerHTML = '<div class="sub-line">Checking your punch status...</div>';
+    loadPunchState().then(function () { renderPunchCard(); });
+    return;
+  }
+
+  var st = S.punch;
+  var inT = st.in_time, outT = st.out_time;
+  var stage = !inT ? 'ready' : (!outT ? 'in' : 'done');
+  var worked = '';
+  if (inT && outT) {
+    var mins = minutesOf(outT) - minutesOf(inT);
+    worked = Math.floor(mins / 60) + 'h ' + ('0' + (mins % 60)).slice(-2) + 'm';
+  } else if (inT) {
+    var now = new Date();
+    var live = (now.getHours() * 60 + now.getMinutes()) - minutesOf(inT);
+    if (live > 0) worked = Math.floor(live / 60) + 'h ' + ('0' + (live % 60)).slice(-2) + 'm so far';
+  }
+  var late = inT ? lateMinutes({ in_time: inT }, e.emp_code) : 0;
+
+  host.innerHTML =
+    '<div class="punch">' +
+      '<div class="punch-state">' +
+        '<h3>' + esc(e.name.split(' ')[0]) + ', ' +
+          (stage === 'ready' ? 'good morning' : stage === 'in' ? 'you are punched in' : 'day closed') + '</h3>' +
+        '<div class="card-sub">' + esc(st.date) + ' &middot; ' + esc(shiftFor(e.emp_code).name || 'shift') +
+          ' ' + esc(shiftFor(e.emp_code).start_time || '') + '-' + esc(shiftFor(e.emp_code).end_time || '') +
+        '</div>' +
+        '<div class="punch-times">' +
+          '<div>In<b>' + (inT ? esc(inT) : '--:--') + '</b></div>' +
+          '<div>Out<b>' + (outT ? esc(outT) : '--:--') + '</b></div>' +
+          '<div>Worked<b>' + (worked || '--') + '</b></div>' +
+          (late ? '<div>Late by<b style="color:var(--warning)">' + late + 'm</b></div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;align-items:center">' +
+        (stage === 'ready'
+          ? '<button class="punch-btn" onclick="doPunch(\'in\')">Punch in</button>'
+          : stage === 'in'
+            ? '<button class="punch-btn out" onclick="doPunch(\'out\')">Punch out</button>'
+            : '<span class="badge b-green" style="padding:8px 14px;font-size:.85rem">' +
+              esc(st.status === 'HD' ? 'Half day recorded' : 'Full day recorded') + '</span>') +
+      '</div>' +
+    '</div>' +
+    (stage === 'in' && st.mandatory
+      ? '<div class="sub-line" style="margin-top:10px">Punching out is required - a day that is never ' +
+        'closed does not count as a paid day.</div>' : '') +
+    ((st.openDays || []).length
+      ? '<div class="punch-open"><span>&#9888;</span><span>You did not punch out on ' +
+        st.openDays.map(function (d) { return esc(d.date) + ' (in at ' + esc(d.in_time) + ')'; }).join(', ') +
+        '. ' + (st.mandatory ? 'Those days are unpaid until they are fixed.' : '') + '</span>' +
+        '<button class="ghost sm" style="margin-left:auto" onclick="fixOpenDay(\'' +
+        esc(st.openDays[0].date) + '\')">Raise a swipe request</button></div>'
+      : '');
+}
+
+function doPunch(kind) {
+  var e = punchEmployee();
+  if (!e) return toast('No employee is linked to this login', 'bad');
+  var host = el('punch-card');
+  var btn = host.querySelector('.punch-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...'; }
+  var call = S.demo ? Promise.resolve(demoWebPunch(e.emp_code, kind))
+                    : api('webPunch', { emp_code: e.emp_code, kind: kind });
+  call.then(function (res) {
+    S.punch = res.state;
+    mergeAttendance([res.record]);
+    toast(kind === 'in' ? 'Punched in at ' + res.record.in_time
+                        : 'Punched out at ' + res.record.out_time + ' - ' + res.record.hours + ' hours', 'good');
+    renderPunchCard(); renderAttendance(); renderDashboard();
+  }).catch(function (err) {
+    toast(err.message, 'bad');
+    renderPunchCard();
+  });
+}
+
+/* Open a swipe request already filled in for the day that was left open. */
+function fixOpenDay(date) {
+  var e = punchEmployee();
+  go('leave'); leaveTab('requests');
+  openRequest();
+  setTimeout(function () {
+    var b = el('modal-body');
+    if (!b) return;
+    var typeSel = b.querySelector('[data-f="type"]');
+    var swipe = requestTypes().filter(function (t) { return String(t.effect) === 'times'; })[0];
+    if (swipe && typeSel) { typeSel.value = swipe.code; requestFormChanged(); }
+    var empSel = el('modal-body').querySelector('[data-f="emp_code"]');
+    if (empSel && e) empSel.value = e.emp_code;
+    var dateEl = el('modal-body').querySelector('[data-f="date"]');
+    if (dateEl) dateEl.value = date;
+    var rec = recordFor(date.slice(0, 7), e.emp_code, +date.slice(8));
+    var inEl = el('modal-body').querySelector('[data-f="in_time"]');
+    if (inEl && rec && rec.in_time) inEl.value = rec.in_time;
+    var reason = el('modal-body').querySelector('[data-f="reason"]');
+    if (reason) reason.value = 'Did not punch out';
+    requestFormChanged();
+  }, 60);
+}
+
+/* ---------------------- demo-mode equivalents --------------------- */
+function demoPunchState(code) {
+  var n = new Date();
+  var date = today();
+  var row = null, open = [];
+  S.attendance.forEach(function (a) {
+    if (String(a.emp_code) !== String(code)) return;
+    if (String(a.date) === date) row = a;
+    else if (String(a.date) < date && a.in_time && !a.out_time) {
+      open.push({ date: a.date, in_time: a.in_time });
+    }
+  });
+  open.sort(function (x, y) { return String(y.date).localeCompare(String(x.date)); });
+  return {
+    date: date, time: ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2),
+    in_time: row ? row.in_time : '', out_time: row ? row.out_time : '',
+    status: row ? row.status : '', hours: row ? row.hours : 0,
+    openDays: open.slice(0, 5),
+    mandatory: String(S.settings.punch_out_mandatory || 'yes').toLowerCase() === 'yes'
+  };
+}
+
+function demoWebPunch(code, kind) {
+  var st = demoPunchState(code);
+  var n = new Date();
+  var time = ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2);
+  var id = code + '_' + st.date;
+  var row = null;
+  S.attendance.forEach(function (a) { if (a.id === id) row = a; });
+  row = row || { id: id, date: st.date, emp_code: code, status: '', in_time: '', out_time: '',
+                 hours: 0, remarks: '' };
+  if (kind === 'in') {
+    if (row.in_time) throw new Error('Already punched in at ' + row.in_time + '.');
+    row.in_time = time; row.out_time = ''; row.status = 'P'; row.hours = 0;
+    row.remarks = 'web punch in';
+  } else {
+    if (!row.in_time) throw new Error('Punch in first.');
+    if (row.out_time) throw new Error('Already punched out at ' + row.out_time + '.');
+    row.out_time = time;
+    var hours = Math.max(0, (minutesOf(time) - minutesOf(row.in_time)) / 60);
+    row.hours = Math.round(hours * 10) / 10;
+    var cfg = shiftCfg(code);
+    row.status = hours >= cfg.fullHours ? 'P' : 'HD';
+    row.remarks = 'web punch ' + row.in_time + '-' + row.out_time;
+  }
+  row.updated_at = today();
+  demoApi('save', { sheet: 'Attendance', row: row });
+  mergeAttendance([row]);          /* so the state below sees the punch just made */
+  return { record: row, state: demoPunchState(code) };
 }
 </script>
 

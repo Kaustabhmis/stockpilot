@@ -89,6 +89,28 @@ attendance register credits. It is deliberately the simpler of the two: the sala
 one that has been matched against the company's sheet, so check the wage rules against a known month
 before relying on them.
 
+### The employee side: punch in and punch out
+
+Anyone whose login is linked to an employee — by `emp_code` on the **Users** tab, or by a matching
+email on their employee record — gets a punch card at the top of the dashboard: their name, the
+shift they are on, in time, out time, hours so far, and how late they were if they were.
+
+**The time comes from the backend, not the browser**, so moving a device clock does not move an
+in-time. Punching in twice, or out without having punched in, is refused with the reason.
+
+**Punch out is mandatory** (Settings → Shifts & attendance). A day punched in but never punched out
+is *not* a paid day: it is flagged on the register with a red corner, listed in Reports → Attendance
+exceptions, and counted as LOP until somebody closes it. In testing, one open day moved that
+employee's LOP from 0.5 to 1.5 — a full day of pay — which is exactly the gap the rule is there to
+close. Turn the setting off and an open day is simply paid as present.
+
+The employee sees the open day on their own punch card and can fix it in one click: **Raise a swipe
+request** opens a request already filled in with the date, the in-time that was recorded and the
+reason, for HR to approve.
+
+Employees only ever see themselves — their own attendance, leave, requests and payslips — and the
+admin-only buttons are not rendered for them.
+
 ### Requests — OD, swipe and comp-off
 
 Configured under **Settings → Requests**, raised and approved on the **Leave → Requests** tab. A

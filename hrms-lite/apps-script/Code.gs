@@ -89,6 +89,8 @@ var DEFAULT_SETTINGS = {
   sync_last_push: '',
   import_companies: '',
   register_group_by: 'unit',
+  web_punch_enabled: 'yes',
+  punch_out_mandatory: 'yes',
   co_payout_enabled: 'yes',
   co_validity_days: '90',
   register_footer: '',
@@ -151,6 +153,8 @@ function route(action, p) {
     case 'esslPush':      return esslPush(p.month, p.rows);
     case 'ingestPunches': return ingestPunches(p.punches, p.token, p.source);
     case 'testIntegration': return testIntegration();
+    case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note);
+    case 'punchState':    return punchState(p.emp_code);
     default: throw new Error('Unknown action: ' + action);
   }
 }
@@ -810,4 +814,102 @@ function applyPunches(punches, source) {
     punches: punches.length, days: rows.length, skipped: skipped.slice(0, 20),
     skippedCount: skipped.length, protectedDays: conflicts, source: source
   };
+}
+
+
+/* ==================================================================
+   WEB PUNCH
+   The time comes from this script, not from the browser, so a device
+   clock cannot be moved to fake an in-time.
+   ================================================================== */
+
+function nowParts() {
+  var tz = Session.getScriptTimeZone(), now = new Date();
+  return {
+    date: Utilities.formatDate(now, tz, 'yyyy-MM-dd'),
+    time: Utilities.formatDate(now, tz, 'HH:mm'),
+    stamp: Utilities.formatDate(now, tz, "yyyy-MM-dd'T'HH:mm:ss")
+  };
+}
+
+/** Today's punch record plus any earlier day left open. */
+function punchState(empCode) {
+  if (!empCode) throw new Error('No employee is linked to this login.');
+  var n = nowParts();
+  var rows = readSheet('Attendance').filter(function (a) {
+    return String(a.emp_code) === String(empCode);
+  });
+  var todayRow = null, open = [];
+  rows.forEach(function (a) {
+    if (String(a.date) === n.date) todayRow = a;
+    else if (String(a.date) < n.date && a.in_time && !a.out_time) {
+      open.push({ date: a.date, in_time: a.in_time });
+    }
+  });
+  open.sort(function (x, y) { return String(y.date).localeCompare(String(x.date)); });
+  return {
+    date: n.date, time: n.time,
+    in_time: todayRow ? todayRow.in_time : '',
+    out_time: todayRow ? todayRow.out_time : '',
+    status: todayRow ? todayRow.status : '',
+    hours: todayRow ? todayRow.hours : 0,
+    openDays: open.slice(0, 5),
+    mandatory: String(settingsMap().punch_out_mandatory || 'yes').toLowerCase() === 'yes'
+  };
+}
+
+function webPunch(empCode, kind, note) {
+  var st = settingsMap();
+  if (String(st.web_punch_enabled || 'yes').toLowerCase() !== 'yes') {
+    throw new Error('Punching from the app is switched off.');
+  }
+  if (!empCode) throw new Error('No employee is linked to this login.');
+  var emp = null;
+  readSheet('Employees').forEach(function (e) {
+    if (String(e.emp_code) === String(empCode)) emp = e;
+  });
+  if (!emp) throw new Error('That employee code is not in the master.');
+
+  var n = nowParts();
+  if (readSheet('Payroll').some(function (r) {
+    return String(r.month) === n.date.slice(0, 7) && r.status === 'Finalised';
+  })) {
+    throw new Error('Payroll for this month is finalised, so today cannot be changed.');
+  }
+
+  var id = empCode + '_' + n.date;
+  var row = null;
+  readSheet('Attendance').forEach(function (a) { if (String(a.id) === id) row = a; });
+  row = row || { id: id, date: n.date, emp_code: empCode, status: '', in_time: '', out_time: '',
+                 hours: 0, remarks: '' };
+
+  if (kind === 'in') {
+    if (row.in_time) throw new Error('Already punched in at ' + row.in_time + '.');
+    row.in_time = n.time;
+    row.out_time = '';
+    row.status = 'P';
+    row.hours = 0;
+    row.remarks = 'web punch in' + (note ? ' - ' + note : '');
+  } else if (kind === 'out') {
+    if (!row.in_time) throw new Error('Punch in first.');
+    if (row.out_time) throw new Error('Already punched out at ' + row.out_time + '.');
+    row.out_time = n.time;
+    var mins = function (t) { return (+String(t).slice(0, 2)) * 60 + (+String(t).slice(3, 5)); };
+    var hours = (mins(row.out_time) - mins(row.in_time)) / 60;
+    if (hours < 0) hours = 0;
+    row.hours = Math.round(hours * 10) / 10;
+    var full = parseFloat(st.full_day_hours || 8), half = parseFloat(st.half_day_hours || 4);
+    row.status = hours >= full ? 'P' : (hours >= half ? 'HD' : 'HD');
+    row.remarks = 'web punch ' + row.in_time + '-' + row.out_time +
+      (hours < half ? ' (short day, verify)' : '');
+  } else {
+    throw new Error('Unknown punch type.');
+  }
+  row.updated_at = n.date;
+  upsert('Attendance', row);
+  appendMany('Punches', [{
+    id: newId(), punch_time: n.date + ' ' + n.time, emp_code: empCode, device_id: emp.device_id || '',
+    device: 'web', direction: kind, source: 'web', imported_at: n.stamp
+  }]);
+  return { record: row, state: punchState(empCode) };
 }
