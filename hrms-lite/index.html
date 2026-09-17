@@ -727,7 +727,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
    filled in, staff only ever see Sign in - no setup, no mention of
    Apps Script anywhere.
    --------------------------------------------------------------- */
-var DEFAULT_API_URL = '';
+var DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxFUPMyQvLJFONHbK8Tgk54Sq6Gfje_5uzoNyrHa7anQeqXH0KV67ZGRfd3qpKzDpTDIA/exec';
 var BRAND = {
   name: 'BISCS', suffix: 'OS',
   headline: 'People and payroll, in one place.',
@@ -969,7 +969,7 @@ function jsonpCall(action, payload, token) {
   return new Promise(function (resolve, reject) {
     var cb = 'hrms_cb_' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
     var script = document.createElement('script');
-    var timer = setTimeout(function () { cleanup(); reject(new Error('The Apps Script URL did not respond.')); }, 30000);
+    var timer = setTimeout(function () { cleanup(); reject(new Error('The workspace did not respond. Check your internet connection and try again.')); }, 30000);
     function cleanup() {
       clearTimeout(timer); delete window[cb];
       if (script.parentNode) script.parentNode.removeChild(script);
@@ -977,7 +977,8 @@ function jsonpCall(action, payload, token) {
     window[cb] = function (data) { cleanup(); resolve(data); };
     script.onerror = function () {
       cleanup();
-      reject(new Error('Could not reach the Apps Script URL. Check it is deployed with access "Anyone".'));
+      reject(new Error('Could not reach the workspace. Check your internet connection, or ask ' +
+        'whoever installed this to check the connection settings.'));
     };
     script.src = S.api + (S.api.indexOf('?') >= 0 ? '&' : '?') + 'action=' + encodeURIComponent(action) +
       '&callback=' + cb + '&token=' + encodeURIComponent(token || '') +

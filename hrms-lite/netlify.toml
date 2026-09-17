@@ -1,0 +1,35 @@
+# Netlify config for HRMS Lite.
+#
+# This repository's root is a different (Next.js) project, so in Netlify set
+#   Site configuration -> Build & deploy -> Base directory = hrms-lite
+# and Netlify will read this file. The "build" just copies the one file we
+# publish into site/, so nothing else in this folder - the Apps Script
+# backend, the LAN agent, the README - ever reaches the internet.
+
+[build]
+  publish = "site"
+  command = "mkdir -p site && cp index.html site/index.html"
+
+# The app is one file and it changes when HR pushes a fix. Never let a browser
+# serve staff a stale copy.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Nobody frames the sign-in page inside another site.
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    # Google never learns which page of ours the request came from.
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # Geofenced punching needs the browser's location on this site, and
+    # nothing else needs a camera, a microphone or a payment sheet.
+    Permissions-Policy = "geolocation=(self), camera=(), microphone=(), payment=()"
+    # The app is a single self-contained file. The only place it may talk to
+    # is the Apps Script workspace; script.google.com is also listed under
+    # script-src because the JSONP fallback loads from there when a browser
+    # cannot POST.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"

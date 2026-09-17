@@ -493,6 +493,43 @@ var BRAND = { name: 'BISCS', suffix: 'OS',
 
 Change those five strings and the whole app follows; no other edit is needed.
 
+### Putting it on Netlify
+
+`netlify.toml` in this folder is ready to use. In Netlify, *Add new site → Import an existing
+project*, pick the repository, and set one thing:
+
+- **Base directory:** `hrms-lite`
+
+Leave the build command and publish directory alone — Netlify reads them from `netlify.toml`,
+which copies **only `index.html`** into the published folder. The Apps Script backend, the LAN
+agent and this README stay in the repository and never reach the internet.
+
+If you would rather not connect the repository at all: make a folder containing just
+`index.html` and drag it onto the Netlify dashboard. Same result, no configuration — you only
+lose the automatic redeploy when the file changes.
+
+Set `DEFAULT_API_URL` before you deploy, so staff only ever see a sign-in box.
+
+Two things HTTPS gives you that opening the file directly cannot:
+
+- **Geofenced punching starts working.** Browsers refuse to give a page the device's location
+  over `file://` or plain `http://`. On Netlify it is served over HTTPS, so *Settings → Shifts &
+  attendance → Geofence the punch* becomes usable.
+- **Everyone is on the same copy.** Push a fix and the next person to open the page has it;
+  `netlify.toml` sets `Cache-Control: must-revalidate` on `index.html` so nobody is served a
+  stale app.
+
+The headers in `netlify.toml` also stop the sign-in page being framed by another site, keep the
+workspace URL out of referrer headers, switch off camera/microphone/payment access, and add a
+content security policy that allows the page to talk to **your Apps Script workspace and nowhere
+else**.
+
+Note what this does *not* do: a Netlify site is public, so anyone with the link reaches the
+sign-in page, and the workspace URL is inside a file anyone can download. That is fine, and it is
+fine precisely because of the section above — the URL on its own gets you nothing, since every
+action needs a signed session and the session decides what is allowed. (Netlify's own password
+protection, on a paid plan, adds a second door if you want one.)
+
 Host `index.html` anywhere static (Google Drive, an internal share, GitHub Pages, any web
 server) or just email the file — it needs no server of its own.
 
