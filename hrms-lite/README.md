@@ -533,28 +533,50 @@ protection, on a paid plan, adds a second door if you want one.)
 Host `index.html` anywhere static (Google Drive, an internal share, GitHub Pages, any web
 server) or just email the file — it needs no server of its own.
 
-## Who can see what: admin and employee
+## Who can see what: owner, HR and employee
 
-There are two roles, and the line between them is drawn **in Apps Script, on the server** — not
+There are three roles, and the line between them is drawn **in Apps Script, on the server** — not
 in the browser. That distinction is the whole point: a browser can be opened, edited and its
 requests replayed by anyone sitting at it, so any rule that lives only in the browser is a
 suggestion. These rules are not.
 
-**An admin** gets everything: the HR dashboard, all five modules, Settings, and the whole
-organisation's data.
+**Owner** runs the system. **HR** runs the company. **Employee** sees their own record.
 
-**An employee** signs into the same file and gets their own corner of it:
+| | Owner | HR | Employee |
+|---|---|---|---|
+| HR dashboard (headcount, present/absent, payroll cost, attention list) | yes | yes | **no** — they get *My dashboard*: punch card, their month, leave balance, last payslip |
+| Employees module (everyone's profile and salary) | yes | yes | **no** |
+| Attendance | mark, edit, bulk fill, import | same | **their own month, read only** — no clickable cells, no column fill |
+| Payroll | run, finalise, bank file, email payslips | same | **their own payslips only**, print them |
+| Leave and requests | approve, reject, cancel anyone's | same | **apply for and withdraw their own** |
+| Reports | yes | yes | **no** |
+| Settings: shifts, holidays, leave policy, requests, CTC, payroll rules, import | yes | yes | **no** |
+| **Accounts** (who can sign in, and as what) | **yes** | no | no |
+| **Integrations** (eSSL and SQL credentials, pull/push, test) | **yes** | no | no |
+| Punch in / out | — | — | their own, always |
 
-| | Admin | Employee |
-|---|---|---|
-| HR dashboard (headcount, present/absent, payroll cost, attention list) | yes | **no** — they get *My dashboard*: their punch card, their month, their leave balance, their last payslip |
-| Settings (policy, shifts, statutory rates, CTC, integrations, import) | yes | **no** — the link is gone and the function refuses |
-| Employees module (everyone's profile and salary) | yes | **no** |
-| Reports (registers, statutory, salary data) | yes | **no** |
-| Attendance | mark, edit, bulk fill, import | **their own month, read only** — no clickable cells, no column fill |
-| Payroll | run, finalise, bank file, email everyone | **their own payslips only**, print them |
-| Leave and requests | approve, reject, cancel anyone's | **apply for and withdraw their own** |
-| Punch in / out | — | their own, always |
+`admin` is the old name for `owner` and keeps working, so an install made before this existed
+needs no migration.
+
+### Adding an HR account
+
+*Settings → Accounts → + Add account.* Fill in the email, pick **HR**, set a password, Create.
+Hand them the site link and that password; they change it themselves from *Settings → Account*.
+
+The password is sent once over HTTPS and **hashed on the server** — it is never stored as typed,
+and no password or hash is ever sent back to any browser, including yours.
+
+Choosing **Employee** requires a **linked employee**, picked from a dropdown of your actual
+staff. That link is what the server uses to decide which rows they may see, so it cannot be
+mistyped and it cannot be left empty.
+
+Two guards you cannot talk your way past: **the last owner account** cannot be demoted, disabled
+or deleted, and **you cannot remove your own owner access** — otherwise nobody could get back in.
+If someone is only away for a while, set *Active: No* rather than deleting them; their employee
+record, attendance, leave and payslips are untouched either way.
+
+If you are ever locked out completely, the way back is from the spreadsheet itself:
+*HRMS → Reset the admin password*.
 
 ### What actually stops them
 
@@ -573,6 +595,13 @@ Then the request is authorised:
   `remove` **on the `Leave` and `Requests` tabs alone**. Everything else — `saveSettings`,
   `saveMany`, `removeMany`, `list`, `setSecret`, `esslPull`, `sendPayslips`, any write to
   `Attendance`, `Employees`, `Payroll` or `Users` — is refused outright.
+- **HR** may do the whole job but not the owner's: `listUsers`, `saveUser`, `removeUser`,
+  `setSecret`, `secretStatus`, `testIntegration`, `esslPull` and `esslPush` are refused, as is any
+  write to the `Users` tab through the generic `save` / `saveMany` / `remove` routes. When HR
+  saves Settings, the `essl_`, `sql_` and `sync_` keys are dropped from the save rather than the
+  whole thing being rejected — the settings screen submits every field it shows at once, and those
+  panes are not rendered for HR in the first place. Their `bootstrap` carries no account list and
+  no integration credentials.
 - On the writes they *are* allowed, the server **overwrites the fields that matter** rather than
   trusting them: `emp_code` becomes their own, so a leave application filed under someone else's
   name is filed under theirs; `status` is forced back to `Pending`, so approving their own leave
@@ -592,19 +621,19 @@ biometric link, the SQL agent, payslip mail and imports are stripped out too.
 `setup` is public **only while the sheet has no accounts yet**, so the first run needs no login.
 After that it is an admin action like any other.
 
-You can see all of this for yourself: open the demo and click **View as an employee** in the
-bottom-left corner. The demo scopes its data the same way the server does.
+You can see all of this for yourself: open the demo and use the switch in the bottom-left corner,
+which cycles **owner → HR → employee**. The demo scopes its data the same way the server does.
 
-## Adding users
+## Adding users by hand
 
-Add a row to the **Users** tab:
+Normally you would use *Settings → Accounts*, above. If you would rather edit the sheet directly,
+add a row to the **Users** tab — `role` is `owner`, `hr` or `employee`:
 
 | email | password | role | emp_code | active |
 |-------|----------|------|----------|--------|
 | priya@company.com | *(see below)* | employee | EMP0004 | yes |
 
-`role` is `admin` (full access) or `employee`. **`emp_code` is what connects a login to a
-person** — it must match their code in the `Employees` tab exactly, or they sign in to an empty
+**`emp_code` is what connects a login to a person** — it must match their code in the `Employees` tab exactly, or they sign in to an empty
 screen that says so. It is also what the server uses to decide which rows they may see, so a
 typo here means they see nothing, never someone else's. Passwords are stored as SHA-256 hashes: the
 simplest way to set one is to add the row with any placeholder, then run `hash("thepassword")`

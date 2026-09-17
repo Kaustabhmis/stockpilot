@@ -418,7 +418,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
   <div class="sidebar-footer">
     <div id="side-mode">Connected</div>
     <div id="demo-role" style="display:none;margin-top:6px;">
-      <a href="#" onclick="demoRole();return false;">&#128100; <span id="demo-role-label">View as an employee</span></a>
+      <a href="#" onclick="demoRole();return false;">&#128100; <span id="demo-role-label">View as HR</span></a>
     </div>
     <div style="margin-top:6px;" class="adm"><a href="#" onclick="openSettings();return false;">&#9881; Settings</a></div>
   </div>
@@ -904,7 +904,18 @@ function toast(msg, kind) {
   clearTimeout(t._t);
   t._t = setTimeout(function () { t.className = ''; }, 3600);
 }
-function isAdmin() { return S.user && S.user.role === 'admin'; }
+/* isAdmin means "HR or above" - it gates the HR dashboard and the five
+   modules. isOwner is the narrower one: the accounts and the integration
+   credentials. 'admin' is the old name for owner and still works. */
+function isOwner() {
+  var r = S.user ? String(S.user.role || '') : '';
+  return r === 'owner' || r === 'admin';
+}
+function isAdmin() { return isOwner() || (S.user && String(S.user.role) === 'hr'); }
+function roleLabel() {
+  var r = S.user ? String(S.user.role || '') : '';
+  return r === 'hr' ? 'HR' : (isOwner() ? 'Owner' : 'Employee');
+}
 function myCode() { return S.user ? String(S.user.emp_code || '') : ''; }
 function download(name, text) {
   var a = document.createElement('a');
@@ -940,7 +951,13 @@ function minutesOf(hhmm) {
 
 /* ------------------------------ API ----------------------------- */
 function api(action, payload) {
-  if (S.demo) return Promise.resolve(demoApi(action, payload || {}));
+  if (S.demo) {
+    /* demoApi throws for the same things the server refuses. Turn that into a
+       rejected promise, or it escapes api() synchronously and every .catch()
+       on the call site is skipped. */
+    try { return Promise.resolve(demoApi(action, payload || {})); }
+    catch (err) { return Promise.reject(err); }
+  }
   var token = S.user ? (S.user.token || '') : '';
   var body = JSON.stringify({ action: action, payload: payload || {}, token: token });
   return fetch(S.api, {
@@ -1140,7 +1157,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v11';
+var DEMO_KEY = 'hrms_lite_demo_v12';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1249,7 +1266,8 @@ function demoDb() {
       { id: 'LT4', name: 'Unpaid', paid: 'no', quota: 0, carry_forward: 'no', max_consecutive: 30,
         notice_days: 1, allow_half_day: 'yes', active: 'yes' }
     ],
-    users: [{ email: 'admin@company.com', role: 'admin', emp_code: '', active: 'yes' }]
+    users: [{ email: 'admin@company.com', role: 'owner', emp_code: '', active: 'yes' },
+            { email: 'hr@company.com', role: 'hr', emp_code: '', active: 'yes' }]
   };
   var seed = [
     ['Ramesh Kumar', 'Production', 'Plant Head', 42000, 16800, 8000, '1979-03-12', '2019-04-01'],
@@ -1362,11 +1380,24 @@ function demoApi(action, p) {
   var db = demoDb(), list, key, i;
   switch (action) {
     case 'login':
-      return { email: 'admin@company.com', role: 'admin', emp_code: '', token: 'demo' };
+      return { email: 'admin@company.com', role: 'owner', emp_code: '', token: 'demo' };
     case 'bootstrap':
       /* The demo mirrors the server: an employee is handed their own rows and
          nothing else, so "view as an employee" shows the real thing. */
-      if (!S.user || S.user.role !== 'admin') {
+      if (S.user && String(S.user.role) === 'hr') {
+        var hrSafe = {};
+        Object.keys(db.settings).forEach(function (k) {
+          if (!/^(essl_|sql_|sync_)/.test(k)) hrSafe[k] = db.settings[k];
+        });
+        return { role: 'hr', settings: hrSafe, employees: db.employees,
+                 attendance: db.attendance, leave: db.leave, payroll: db.payroll,
+                 holidays: db.holidays, shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
+                 ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
+                 ctcValues: db.ctcValues || [], events: db.events || [],
+                 requestTypes: db.requestTypes || [], requests: db.requests || [],
+                 sites: db.sites || [], users: [], secrets: {} };
+      }
+      if (!S.user || !(S.user.role === 'admin' || S.user.role === 'owner')) {
         var code = String((S.user && S.user.emp_code) || '');
         var mineOnly = function (arr) {
           return (arr || []).filter(function (r) { return String(r.emp_code) === code; });
@@ -1387,7 +1418,7 @@ function demoApi(action, p) {
                  requestTypes: db.requestTypes || [],
                  sites: [], ctcVariables: [], ctcComponents: [], users: [], secrets: {} };
       }
-      return { role: 'admin', settings: db.settings, employees: db.employees, attendance: db.attendance,
+      return { role: 'owner', settings: db.settings, employees: db.employees, attendance: db.attendance,
                leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users,
                shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
@@ -1443,6 +1474,37 @@ function demoApi(action, p) {
     case 'setSecret':
     case 'secretStatus':
       return { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false };
+    case 'listUsers':
+      return (db.users || []).map(function (u) {
+        return { email: u.email, role: u.role, emp_code: u.emp_code || '',
+                 active: u.active || 'yes', has_password: true };
+      });
+    case 'saveUser':
+      db.users = db.users || [];
+      var nu = p.user || {};
+      var mail = String(nu.email || '').trim().toLowerCase();
+      if (!/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(mail)) throw new Error('That does not look like an email address.');
+      if (String(nu.role) === 'employee' && !nu.emp_code) {
+        throw new Error('An employee login needs an employee code, or it signs in to an empty screen.');
+      }
+      var found = false;
+      db.users.forEach(function (u) {
+        if (String(u.email).toLowerCase() === mail) {
+          found = true; u.role = nu.role; u.emp_code = nu.emp_code; u.active = nu.active;
+        }
+      });
+      if (!found) {
+        if (String(nu.password || '').length < 6) throw new Error('Set a password of at least 6 characters for the new account.');
+        db.users.push({ email: mail, role: nu.role, emp_code: nu.emp_code, active: nu.active });
+      }
+      demoSave(db);
+      return { saved: mail, role: nu.role, created: !found };
+    case 'removeUser':
+      db.users = (db.users || []).filter(function (u) {
+        return String(u.email).toLowerCase() !== String(p.email || '').toLowerCase();
+      });
+      demoSave(db);
+      return { removed: p.email };
     case 'payslipMailLog':
       return (db.payslipMail || []).filter(function (m) {
         return !p.month || String(m.month) === String(p.month);
@@ -1524,7 +1586,7 @@ el('btn-login').onclick = function () {
 };
 el('btn-demo').onclick = function () {
   S.demo = true;
-  S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
+  S.user = { email: 'demo@company.com', role: 'owner', emp_code: '' };
   start();
 };
 
@@ -1532,15 +1594,16 @@ el('btn-demo').onclick = function () {
    see for yourself exactly what an employee can and cannot reach. */
 function demoRole() {
   if (!S.demo) return;
-  if (isAdmin()) {
-    var first = (S.employees[0] || {}).emp_code || 'EMP0001';
-    S.user = { email: 'staff@company.com', role: 'employee', emp_code: first };
-  } else {
-    S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
-  }
+  var first = (S.employees[0] || {}).emp_code || 'EMP0001';
+  var next = isOwner() ? { email: 'hr@company.com', role: 'hr', emp_code: '' }
+           : (String(S.user.role) === 'hr'
+              ? { email: 'staff@company.com', role: 'employee', emp_code: first }
+              : { email: 'demo@company.com', role: 'owner', emp_code: '' });
+  S.user = next;
   el('who').textContent = S.user.email;
   el('avatar').textContent = (S.user.email[0] || 'U').toUpperCase();
-  el('demo-role-label').textContent = isAdmin() ? 'View as an employee' : 'Back to the HR view';
+  el('demo-role-label').textContent = isOwner() ? 'View as HR'
+    : (String(S.user.role) === 'hr' ? 'View as an employee' : 'Back to the owner view');
   go('dashboard');
   reload();
 }
@@ -4394,10 +4457,14 @@ function openSettings() {
   /* Settings is HR's. The link is hidden for an employee; this is the check
      that matters if they reach the function some other way. */
   if (!isAdmin()) return toast('Settings is for HR administrators only', 'bad');
+  /* HR never sees the Accounts or Integrations panes - and they are not
+     rendered at all, so their fields cannot be submitted by accident. */
+  var owner = isOwner();
   var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
     .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
-             ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
-             ['integrations', 'Integrations'], ['import', 'Import data'], ['account', 'Account']]);
+             ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules']])
+    .concat(owner ? [['accounts', 'Accounts'], ['integrations', 'Integrations']] : [])
+    .concat([['import', 'Import data'], ['account', 'Account']]);
 
   var body = '<div class="tabs">' + tabs.map(function (t, i) {
     return '<div class="tab' + (i === 0 ? ' active' : '') + '" data-stab="' + t[0] +
@@ -4415,7 +4482,8 @@ function openSettings() {
   '<div class="set-pane" id="stab-requests" style="display:none">' + requestsPane() + '</div>' +
   '<div id="stab-ctc" style="display:none">' + ctcPane() + '</div>' +
   '<div class="set-pane" id="stab-payrollrules" style="display:none">' + payrollRulesPane() + '</div>' +
-  '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' +
+  (owner ? '<div id="stab-accounts" style="display:none">' + accountsPane() + '</div>' +
+           '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' : '') +
   '<div id="stab-import" style="display:none">' + importPane() + '</div>' +
   '<div id="stab-account" style="display:none">' + accountPane() + '</div>';
 
@@ -4432,6 +4500,7 @@ function openSettings() {
   renderPolicyTable('ctcComponents');
   renderCtcPreview();
   renderImportHelp();
+  if (owner) { renderAccounts(); refreshUsers(); }
   el('imp-any').onchange = function () { if (this.files[0]) onImportFile(this.files[0]); };
 }
 
@@ -4629,6 +4698,167 @@ function leaveRulesPane() {
     '<b>Sandwich rule:</b> with it on, a weekly off or holiday that falls inside a leave block is ' +
     'charged as leave too.<br><b>Beyond the quota:</b> days past the annual quota are marked unpaid ' +
     'and become LOP in payroll, rather than quietly being paid.</p>';
+}
+
+/* ----------------------------- accounts -------------------------- */
+/* Owner only. Creating a login here hashes the password on the server; the
+   hash is never sent back to any browser. */
+function accountsPane() {
+  return '<div class="toolbar">' +
+    '<span class="sub-line" style="max-width:640px">Every person who signs in needs an account ' +
+    'here. <b>Owner</b> runs the system, <b>HR</b> runs the company, <b>Employee</b> sees only ' +
+    'their own record.</span>' +
+    '<span class="spacer"></span>' +
+    '<button class="sm" onclick="openAccount()">+ Add account</button>' +
+    '</div>' +
+    '<table id="acct-table"></table>' +
+    '<div style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.9">' +
+    '<b>Owner</b> &mdash; everything an HR account can do, plus these Accounts, the eSSL and SQL ' +
+    'credentials, and the pull/push actions. Keep this to yourself and one trusted deputy.<br>' +
+    '<b>HR</b> &mdash; the dashboard and all five modules: employees, attendance, leave, payroll, ' +
+    'reports, payslip email, imports, and the policy settings (shifts, holidays, leave, requests, ' +
+    'CTC, payroll rules). They cannot see or change accounts, and cannot see the biometric or ' +
+    'database credentials.<br>' +
+    '<b>Employee</b> &mdash; their own dashboard, attendance (read only), payslips, and applying ' +
+    'for leave or a request. The <b>employee code must match</b> their row in Employees, or they ' +
+    'sign in to an empty screen.<br><br>' +
+    'The last owner account cannot be demoted, disabled or deleted, and you cannot remove your ' +
+    'own owner access &mdash; otherwise nobody could get back in.</div>';
+}
+
+function renderAccounts() {
+  var host = el('acct-table');
+  if (!host || !isOwner()) return;
+  var users = (S.users || []).slice().sort(function (a, b) {
+    var rank = { owner: 0, admin: 0, hr: 1, employee: 2 };
+    var d = (rank[a.role] === undefined ? 3 : rank[a.role]) -
+            (rank[b.role] === undefined ? 3 : rank[b.role]);
+    return d || (String(a.email) < String(b.email) ? -1 : 1);
+  });
+  var badge = { owner: 'b-amber', admin: 'b-amber', hr: 'b-blue', employee: 'b-gray' };
+  var name = { owner: 'Owner', admin: 'Owner', hr: 'HR', employee: 'Employee' };
+  host.innerHTML = '<thead><tr><th>Email</th><th>Role</th><th>Employee</th><th>Active</th>' +
+    '<th></th></tr></thead><tbody>' +
+    (users.map(function (u) {
+      var e = empByCode(u.emp_code);
+      var mine = S.user && String(u.email).toLowerCase() === String(S.user.email).toLowerCase();
+      return '<tr><td>' + esc(u.email) + (mine ? ' <span class="sub-line">(you)</span>' : '') +
+        '</td><td><span class="badge ' + (badge[u.role] || 'b-gray') + '">' +
+        esc(name[u.role] || u.role) + '</span></td>' +
+        '<td>' + (u.emp_code
+          ? esc(u.emp_code) + (e ? '<div class="sub-line">' + esc(e.name) + '</div>'
+                                 : '<div class="sub-line" style="color:#b45309">no such employee</div>')
+          : '<span class="sub-line">&mdash;</span>') + '</td>' +
+        '<td>' + (String(u.active) === 'no'
+          ? '<span class="badge b-red">disabled</span>' : '<span class="badge b-green">yes</span>') +
+        '</td>' +
+        '<td><button class="ghost sm" onclick="openAccount(\'' + esc(u.email) + '\')">Edit</button> ' +
+        (mine ? '' : '<button class="ghost sm" onclick="deleteAccount(\'' + esc(u.email) +
+          '\')">Delete</button>') + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="empty">No accounts yet.</td></tr>') +
+    '</tbody>';
+}
+
+function openAccount(email) {
+  if (!isOwner()) return toast('Only the system owner can change accounts', 'bad');
+  var u = (S.users || []).filter(function (x) {
+    return String(x.email).toLowerCase() === String(email || '').toLowerCase();
+  })[0];
+  var isNew = !u;
+  u = u || { email: '', role: 'hr', emp_code: '', active: 'yes' };
+  var codes = (S.employees || []).slice().sort(function (a, b) {
+    return String(a.name) < String(b.name) ? -1 : 1;
+  });
+
+  showModal(isNew ? 'Add an account' : 'Edit ' + u.email,
+    '<div id="acct-err"></div><div class="grid2">' +
+    '<label class="field">Email' +
+      '<input id="acct-email" type="email" value="' + esc(u.email) + '"' +
+      (isNew ? ' placeholder="name@company.com"' : ' readonly style="background:#f1f5f9"') + '></label>' +
+    '<label class="field">Role<select id="acct-role" onchange="accountRoleChanged()">' +
+      [['owner', 'Owner - runs the system'], ['hr', 'HR - runs the company'],
+       ['employee', 'Employee - their own record only']].map(function (r) {
+        var sel = (r[0] === 'owner' ? (u.role === 'owner' || u.role === 'admin') : u.role === r[0]);
+        return '<option value="' + r[0] + '"' + (sel ? ' selected' : '') + '>' + r[1] + '</option>';
+      }).join('') + '</select></label>' +
+    '<label class="field">Linked employee<select id="acct-code">' +
+      '<option value="">&mdash; none &mdash;</option>' +
+      codes.map(function (e) {
+        return '<option value="' + esc(e.emp_code) + '"' +
+          (String(e.emp_code) === String(u.emp_code) ? ' selected' : '') + '>' +
+          esc(e.name) + ' (' + esc(e.emp_code) + ')</option>';
+      }).join('') + '</select></label>' +
+    '<label class="field">Active<select id="acct-active">' +
+      '<option value="yes"' + (String(u.active) !== 'no' ? ' selected' : '') + '>Yes</option>' +
+      '<option value="no"' + (String(u.active) === 'no' ? ' selected' : '') + '>No - cannot sign in</option>' +
+      '</select></label>' +
+    '<label class="field" style="grid-column:1/-1">' +
+      (isNew ? 'Password' : 'New password (leave blank to keep the current one)') +
+      '<input id="acct-pass" type="text" placeholder="at least 6 characters" autocomplete="off"></label>' +
+    '</div>' +
+    '<p id="acct-hint" style="margin-top:12px;font-size:.78rem;color:var(--text-muted);line-height:1.7"></p>',
+    [
+      { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+      { label: isNew ? 'Create account' : 'Save', onClick: function () { saveAccount(isNew); } }
+    ]);
+  accountRoleChanged();
+}
+
+function accountRoleChanged() {
+  var role = el('acct-role').value;
+  var hint = {
+    owner: 'Full access, including these Accounts and the eSSL and SQL credentials. ' +
+           'Give this to as few people as possible.',
+    hr: 'The dashboard and all five modules, payslip email, imports and the policy settings. ' +
+        'Cannot open Accounts or see the biometric and database credentials.',
+    employee: 'Their own dashboard, their own attendance (read only), their own payslips, and ' +
+              'applying for leave or a request. Nothing else - enforced on the server, not just ' +
+              'on screen. A linked employee is required.'
+  };
+  el('acct-hint').innerHTML = hint[role] || '';
+}
+
+function saveAccount(isNew) {
+  var err = el('acct-err');
+  var user = {
+    email: el('acct-email').value.trim(),
+    role: el('acct-role').value,
+    emp_code: el('acct-code').value,
+    active: el('acct-active').value,
+    password: el('acct-pass').value
+  };
+  err.innerHTML = '';
+  api('saveUser', { user: user }).then(function (res) {
+    closeModal();
+    toast(res.created ? 'Account created for ' + res.saved : 'Account updated', 'ok');
+    return refreshUsers();
+  }).catch(function (e) {
+    err.innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
+  });
+}
+
+function deleteAccount(email) {
+  if (!isOwner()) return toast('Only the system owner can change accounts', 'bad');
+  showModal('Delete this account?',
+    '<p>Delete the login <b>' + esc(email) + '</b>?</p>' +
+    '<p style="margin-top:8px;font-size:.8rem;color:var(--text-muted)">The person&rsquo;s employee ' +
+    'record, attendance, leave and payslips are not touched &mdash; only their ability to sign in. ' +
+    'If they are only away for a while, set <b>Active: No</b> instead.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Delete', onClick: function () {
+        api('removeUser', { email: email }).then(function () {
+          closeModal(); toast('Account deleted', 'ok'); return refreshUsers();
+        }).catch(function (e) { toast(e.message, 'bad'); });
+      } }
+  ]);
+}
+
+function refreshUsers() {
+  if (!isOwner()) return Promise.resolve();
+  return api('listUsers').then(function (rows) {
+    S.users = rows || [];
+    renderAccounts();
+  });
 }
 
 function payrollRulesPane() {
@@ -5091,7 +5321,7 @@ function accountPane() {
     '</div>' +
     '<button class="ghost sm" style="margin-top:12px" onclick="changePassword()">Update password</button>' +
     '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.7">Signed in as <b>' +
-    esc(S.user.email) + '</b> (' + esc(S.user.role) + ').<br>' +
+    esc(S.user.email) + '</b> (' + esc(roleLabel()) + ').<br>' +
     'Add more users by adding rows to the <b>Users</b> tab of the sheet: email, password hash, role ' +
     '(<code>admin</code> or <code>employee</code>), employee code, active.</p>';
 }

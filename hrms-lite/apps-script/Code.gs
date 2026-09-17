@@ -169,6 +169,22 @@ function handle(action, payload, callback, token) {
 var AUTH_PREFIX = 'AUTH:';
 var SESSION_HOURS = 12;
 
+/* Three levels of access.
+     owner    - everything, including the accounts themselves and the
+                integration credentials. 'admin' is the same thing under its
+                old name, so installs made before this existed keep working.
+     hr       - the dashboard and all five modules, and the policy settings
+                they work with. Not the accounts, not the eSSL/SQL keys.
+     employee - their own record and nothing else. */
+var ROLES = ['owner', 'hr', 'employee'];
+
+function isOwner(role)    { var r = String(role || ''); return r === 'owner' || r === 'admin'; }
+function isHrOrAbove(role){ return isOwner(role) || String(role || '') === 'hr'; }
+
+/* Settings only an owner may change: the biometric link and the SQL agent.
+   An HR save that includes them leaves them as they were. */
+var OWNER_ONLY_SETTINGS = /^(essl_|sql_|sync_)/;
+
 /* Actions anyone may call without signing in. Everything else needs a
    session, and most of it needs an admin session. */
 var PUBLIC_ACTIONS = { ping: 1, login: 1, setup: 1, ingestPunches: 1 };
@@ -294,9 +310,45 @@ function denied() {
   throw new Error('Not allowed. Your account does not have permission for this.');
 }
 
+/* Actions reserved for an owner: the accounts and the integration
+   credentials. HR runs the company; the owner runs the system. */
+var OWNER_ACTIONS = {
+  saveUser: 1, removeUser: 1, listUsers: 1,
+  setSecret: 1, secretStatus: 1, testIntegration: 1,
+  esslPull: 1, esslPush: 1
+};
+
 function authorize(action, p, caller) {
-  if (caller.role === 'admin') return;
   if (caller.role === 'public') return;           // already limited to PUBLIC_ACTIONS
+
+  if (isOwner(caller.role)) return;               // the owner may do anything
+
+  if (isHrOrAbove(caller.role)) {                 // i.e. HR
+    if (OWNER_ACTIONS[action]) {
+      throw new Error('Not allowed. Only the system owner can do this.');
+    }
+    if (action === 'save' && p.sheet === 'Users') {
+      throw new Error('Not allowed. Only the system owner can change accounts.');
+    }
+    if ((action === 'remove' || action === 'removeMany') && p.sheet === 'Users') {
+      throw new Error('Not allowed. Only the system owner can change accounts.');
+    }
+    if (action === 'saveMany' && p.sheet === 'Users') {
+      throw new Error('Not allowed. Only the system owner can change accounts.');
+    }
+    if (action === 'saveSettings') {
+      /* Drop the keys they may not touch rather than refusing the whole save,
+         because the settings screen sends every field it shows at once. */
+      var clean = {}, blocked = [];
+      Object.keys(p.settings || {}).forEach(function (k) {
+        if (OWNER_ONLY_SETTINGS.test(k)) blocked.push(k); else clean[k] = p.settings[k];
+      });
+      p.settings = clean;
+      p.blocked = blocked;
+    }
+    return;
+  }
+
   if (!EMPLOYEE_ACTIONS[action]) denied();
 
   var code = String(caller.emp_code || '');
@@ -374,6 +426,9 @@ function route(action, p, caller) {
     case 'sendPayslips':  return sendPayslips(p, caller);
     case 'mailQuota':     return { left: MailApp.getRemainingDailyQuota(), from: senderAddress() };
     case 'payslipMailLog': return payslipMailLog(p.month);
+    case 'listUsers':     return listUsers();
+    case 'saveUser':      return saveUser(p.user, caller);
+    case 'removeUser':    return removeUser(p.email, caller);
     default: throw new Error('Unknown action: ' + action);
   }
 }
@@ -654,6 +709,16 @@ function hash(value) {
    biometric link, the SQL agent, payslip mail or imports stays on the server. */
 var EMPLOYEE_SETTING_DENY = /^(essl_|sql_|sync_|payslip_email_|import_|register_group_by$)/;
 
+/* HR sees every setting they can act on. Only the biometric and SQL
+   credentials are held back, and those are the owner's. */
+function hrSettings() {
+  var all = settingsMap(), out = {};
+  Object.keys(all).forEach(function (k) {
+    if (!OWNER_ONLY_SETTINGS.test(k)) out[k] = all[k];
+  });
+  return out;
+}
+
 function employeeSettings() {
   var all = settingsMap(), out = {};
   Object.keys(all).forEach(function (k) {
@@ -678,7 +743,32 @@ function onlyMine(sheetName, code) {
  * salary in the company down the wire.
  */
 function bootstrap(caller) {
-  if (!caller || caller.role !== 'admin') {
+  if (caller && isHrOrAbove(caller.role)) {
+    var owner = isOwner(caller.role);
+    return {
+      role: owner ? 'owner' : 'hr',
+      settings:   owner ? settingsMap() : hrSettings(),
+      employees:  readSheet('Employees'),
+      attendance: readSheet('Attendance'),
+      leave:      readSheet('Leave'),
+      payroll:    readSheet('Payroll'),
+      holidays:   readSheet('Holidays'),
+      events:     readSheet('Events'),
+      sites:      readSheet('Sites'),
+      shifts:     readSheet('Shifts'),
+      leaveTypes: readSheet('LeaveTypes'),
+      requestTypes: readSheet('RequestTypes'),
+      requests:    readSheet('Requests'),
+      ctcVariables:  readSheet('CtcVariables'),
+      ctcComponents: readSheet('CtcComponents'),
+      ctcValues:     readSheet('CtcValues'),
+      /* The accounts and the integration keys are the owner's alone. */
+      secrets: owner ? secretStatus() : {},
+      users:   owner ? listUsers() : []
+    };
+  }
+
+  {
     var code = String((caller && caller.emp_code) || '');
     var me = null;
     if (code) {
@@ -709,28 +799,6 @@ function bootstrap(caller) {
     };
   }
 
-  return {
-    role: 'admin',
-    settings:   settingsMap(),
-    employees:  readSheet('Employees'),
-    attendance: readSheet('Attendance'),
-    leave:      readSheet('Leave'),
-    payroll:    readSheet('Payroll'),
-    holidays:   readSheet('Holidays'),
-    events:     readSheet('Events'),
-    sites:      readSheet('Sites'),
-    shifts:     readSheet('Shifts'),
-    leaveTypes: readSheet('LeaveTypes'),
-    requestTypes: readSheet('RequestTypes'),
-    requests:    readSheet('Requests'),
-    ctcVariables:  readSheet('CtcVariables'),
-    ctcComponents: readSheet('CtcComponents'),
-    ctcValues:     readSheet('CtcValues'),
-    secrets:    secretStatus(),
-    users:      readSheet('Users').map(function (u) {
-      return { email: u.email, role: u.role, emp_code: u.emp_code, active: u.active };
-    })
-  };
 }
 
 function sheet(name) {
@@ -1484,4 +1552,124 @@ function payslipMailLog(month) {
   return readSheet('PayslipMail').filter(function (r) {
     return !want || String(r.month) === want;
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Accounts - owner only                                               */
+/* ------------------------------------------------------------------ */
+
+/** Never returns the password column. */
+function listUsers() {
+  return readSheet('Users').map(function (u) {
+    return {
+      email: String(u.email || ''),
+      role: String(u.role || 'employee').toLowerCase(),
+      emp_code: String(u.emp_code || ''),
+      active: String(u.active || 'yes'),
+      has_password: !!String(u.password || '')
+    };
+  });
+}
+
+function countOwners(users) {
+  return users.filter(function (u) {
+    return isOwner(String(u.role || '').toLowerCase()) &&
+           String(u.active || 'yes').toLowerCase() !== 'no';
+  }).length;
+}
+
+/**
+ * Creates or updates one login. The password arrives in the clear over HTTPS
+ * and is hashed here - it is never stored, returned or logged as typed.
+ *
+ * The guards exist so an owner cannot lock the company out of its own system:
+ * the last active owner cannot be demoted, disabled or deleted, and nobody can
+ * demote or disable themselves.
+ */
+function saveUser(user, caller) {
+  user = user || {};
+  var email = String(user.email || '').trim().toLowerCase();
+  var role = String(user.role || 'employee').toLowerCase();
+  if (role === 'admin') role = 'owner';
+
+  if (!/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(email)) {
+    throw new Error('That does not look like an email address.');
+  }
+  if (ROLES.indexOf(role) < 0) {
+    throw new Error('Role must be one of: ' + ROLES.join(', '));
+  }
+  var empCode = String(user.emp_code || '').trim();
+  var active = String(user.active || 'yes').toLowerCase() === 'no' ? 'no' : 'yes';
+  var password = String(user.password || '');
+
+  if (role === 'employee' && !empCode) {
+    throw new Error('An employee login needs an employee code, or it signs in to an empty screen.');
+  }
+  if (empCode) {
+    var known = false;
+    readSheet('Employees').forEach(function (e) {
+      if (String(e.emp_code) === empCode) known = true;
+    });
+    if (!known) throw new Error('There is no employee with the code ' + empCode + '.');
+  }
+
+  var rows = indexed('Users');
+  var existing = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].data.email || '').trim().toLowerCase() === email) { existing = rows[i]; break; }
+  }
+
+  var me = String((caller && caller.email) || '').toLowerCase();
+  var wasOwner = existing && isOwner(String(existing.data.role || '').toLowerCase()) &&
+                 String(existing.data.active || 'yes').toLowerCase() !== 'no';
+  var stillOwner = isOwner(role) && active === 'yes';
+
+  if (email === me && !stillOwner) {
+    throw new Error('You cannot remove your own owner access. Ask another owner to do it.');
+  }
+  if (wasOwner && !stillOwner && countOwners(readSheet('Users')) <= 1) {
+    throw new Error('This is the only owner account. Make someone else an owner first.');
+  }
+
+  if (!existing && password.length < 6) {
+    throw new Error('Set a password of at least 6 characters for the new account.');
+  }
+  if (password && password.length < 6) {
+    throw new Error('The password must be at least 6 characters.');
+  }
+
+  var record = {
+    email: email, role: role, emp_code: empCode, active: active,
+    password: password ? hash(password)
+                       : (existing ? String(existing.data.password || '') : '')
+  };
+
+  if (existing) {
+    var cols = SHEETS.Users, sh = sheet('Users');
+    sh.getRange(existing.row, 1, 1, cols.length).setValues([cols.map(function (c) {
+      return record[c] === undefined ? existing.data[c] : record[c];
+    })]);
+  } else {
+    appendRow('Users', record);
+  }
+  return { saved: email, role: role, created: !existing };
+}
+
+function removeUser(email, caller) {
+  var want = String(email || '').trim().toLowerCase();
+  var me = String((caller && caller.email) || '').toLowerCase();
+  if (want === me) throw new Error('You cannot delete the account you are signed in with.');
+
+  var rows = indexed('Users'), target = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].data.email || '').trim().toLowerCase() === want) { target = rows[i]; break; }
+  }
+  if (!target) throw new Error('No account with that email.');
+
+  if (isOwner(String(target.data.role || '').toLowerCase()) &&
+      countOwners(readSheet('Users')) <= 1) {
+    throw new Error('This is the only owner account and cannot be deleted.');
+  }
+  sheet('Users').deleteRow(target.row);
+  return { removed: want };
 }
