@@ -118,6 +118,27 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .punch-btn.out{background:var(--danger);} .punch-btn.out:hover{background:#dc2626;}
 .punch-open{background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:.8rem;
   font-weight:600;margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+/* Segmented control for the register's two views. */
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  margin-bottom:1px;background:#fff;}
+.seg button{background:none;border:0;padding:8px 14px;font:inherit;font-size:.8rem;font-weight:600;
+  color:var(--text-muted);cursor:pointer;}
+.seg button:hover{background:#f1f5f9;}
+.seg button.on{background:var(--primary);color:#fff;}
+
+/* Timesheet view: in, out and hours stacked in each day cell. */
+.att-grid td.t-cell{min-width:56px;}
+.att-time{padding:3px 2px;text-align:center;font-size:.6rem;line-height:1.35;position:relative;
+  font-variant-numeric:tabular-nums;cursor:pointer;}
+.att-time .io{color:var(--text-muted);}
+.att-time .io.miss{color:var(--danger);font-weight:700;}
+.att-time .hrs{font-weight:800;font-size:.68rem;color:var(--text-dark);}
+.att-time .st{font-weight:800;font-size:.7rem;}
+.att-time.late .io:first-child{color:#b45309;font-weight:700;}
+.att-grid tfoot td{position:sticky;bottom:0;background:#f8fafc;font-weight:800;font-size:.62rem;
+  text-align:center;padding:5px 2px;border-top:1.5px solid var(--border);
+  font-variant-numeric:tabular-nums;}
+.att-grid tfoot td.emp-c{text-align:left;z-index:3;background:#f8fafc;}
 .att-cell.open::after{content:'';position:absolute;top:1px;right:1px;width:4px;height:4px;
   border-radius:50%;background:var(--danger);}
 
@@ -565,10 +586,15 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
       <div class="card">
         <div class="toolbar">
           <label class="field">Month<input type="month" id="att-month" onchange="onAttMonth()"></label>
+          <div class="seg" id="att-view">
+            <button class="on" data-attview="status" onclick="setAttView('status')">Status</button>
+            <button data-attview="times" onclick="setAttView('times')">In / out &amp; hours</button>
+          </div>
           <span class="spacer"></span>
           <button class="ghost sm adm" onclick="markAllPresent()">Fill blank days</button>
           <button class="ghost sm adm" onclick="openAttImport()">&#8679; Import device CSV</button>
           <button class="ghost sm" onclick="exportAttendance()">&#8681; Export CSV</button>
+          <button class="ghost sm" onclick="printAttendance()">&#128424; Print</button>
           <button class="adm" id="att-save" onclick="saveAttendance()" disabled>Save changes</button>
         </div>
         <div class="att-grid" id="att-grid"></div>
@@ -577,7 +603,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Leave</span>
           <span><b class="s-OD">OD</b>Out duty</span><span><b class="s-CO">CO</b>Comp-off</span>
           <span><b class="s-WO">WO</b>Weekly off</span><span><b class="s-H">H</b>Holiday</span>
-          <span style="margin-left:auto;">Click a cell to cycle &middot; double-click for times &middot; click a date header to fill the column</span>
+          <span style="margin-left:auto;" id="att-legend-note">Click a cell to cycle &middot; double-click for times &middot; click a date header to fill the column</span>
         </div>
       </div>
       <div class="card">
@@ -742,7 +768,7 @@ var S = {
   shifts: [], leaveTypes: [], leaveVersion: 0,
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
   requestTypes: [], requests: [], punch: null, sites: [],
-  attDirty: {}, payDraft: null, attVersion: 0,
+  attDirty: {}, payDraft: null, attVersion: 0, attView: 'status',
   empSort: { col: 'emp_code', dir: 1 }
 };
 
@@ -1630,6 +1656,11 @@ function start() {
   ['att-month', 'pay-month', 'rep-month', 'leave-month'].forEach(function (id) { el(id).value = thisMonth(); });
   el('dash-date').value = today();
   el('leave-year').value = new Date().getFullYear();
+  try { S.attView = localStorage.getItem('hrms_att_view') || 'status'; }
+  catch (e) { S.attView = 'status'; }
+  document.querySelectorAll('#att-view button').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.attview === S.attView);
+  });
   startClock();
   return reload();
 }
@@ -2765,12 +2796,86 @@ function attStats(ym, code) {
 
 function onAttMonth() { S.attDirty = {}; el('att-save').disabled = true; renderAttendance(); }
 
+/* ---------------- the register's two views ----------------
+   "Status"  - one letter a day: what was it, P/A/L/HD/WO/H.
+   "In / out & hours" - the same grid as a timesheet: when they came, when
+   they left, and how long they worked. Same data, same cells, same editing;
+   only what each cell shows changes. */
+function setAttView(view) {
+  S.attView = view === 'times' ? 'times' : 'status';
+  try { localStorage.setItem('hrms_att_view', S.attView); } catch (e) { /* private mode */ }
+  document.querySelectorAll('#att-view button').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.attview === S.attView);
+  });
+  renderAttendance();
+}
+
+/** Minutes worked on a day: the saved hours if there are any, else out - in. */
+function workedMinutes(rec) {
+  if (!rec) return null;
+  var inM = minutesOf(rec.in_time), outM = minutesOf(rec.out_time);
+  if (inM !== null && outM !== null) {
+    var mins = outM - inM;
+    if (mins < 0) mins += 24 * 60;          // a night shift crossing midnight
+    return mins;
+  }
+  var h = num(rec.hours);
+  return h ? Math.round(h * 60) : null;
+}
+
+/** 512 -> "8:32". Hours and minutes, because 8.53 h means nothing on a shop floor. */
+function hoursText(mins) {
+  if (!mins) return '0:00';
+  return Math.floor(mins / 60) + ':' + ('0' + Math.round(mins % 60)).slice(-2);
+}
+
+/** The month's worked days and total time for one employee. */
+function monthWorked(ym, code) {
+  var dim = daysInMonth(ym), days = 0, minutes = 0;
+  for (var d = 1; d <= dim; d++) {
+    var mins = workedMinutes(recordFor(ym, code, d));
+    if (mins !== null && mins > 0) { days++; minutes += mins; }
+  }
+  return { days: days, minutes: minutes };
+}
+
+/** What one day looks like in the timesheet view. */
+function timeCellHtml(rec, st, open) {
+  var inT = hhmm(rec && rec.in_time), outT = hhmm(rec && rec.out_time);
+  /* Nothing was worked: say which kind of day it was instead of three dashes. */
+  if (!inT && !outT) {
+    return '<div class="st">' + (st ? esc(st) : '&middot;') + '</div>';
+  }
+  var mins = workedMinutes(rec);
+  return '<div class="io">' + esc(inT || '--:--') + '</div>' +
+    '<div class="io' + (inT && !outT ? ' miss' : '') + '">' +
+      esc(outT || (open ? 'none' : '--:--')) + '</div>' +
+    '<div class="hrs">' + (mins === null ? '&mdash;' : hoursText(mins)) + '</div>';
+}
+
+/* The register printed as a timesheet, landscape, with the totals row. */
+function printAttendance() {
+  var ym = el('att-month').value || thisMonth();
+  var table = el('att-grid').querySelector('table');
+  if (!table) return toast('Nothing to print', 'bad');
+  printDocument({
+    title: (S.attView === 'times' ? 'Timesheet' : 'Attendance register') + ' - ' + monthLabel(ym),
+    subtitle: S.attView === 'times'
+      ? 'In time, out time and hours worked each day. Hours shown as h:mm.'
+      : 'P present, A absent, HD half day, L leave, OD out duty, CO comp-off, WO weekly off, H holiday.',
+    landscape: true,
+    body: '<div class="att-print">' + table.outerHTML + '</div>'
+  });
+}
+
 function renderAttendance() {
   var ym = el('att-month').value || thisMonth();
   var dim = daysInMonth(ym);
   var emps = activeEmployees();
   var locked = monthLocked(ym);
   var editable = canEditAtt(ym);
+  var times = S.attView === 'times';
+  var dayMins = [], dayHeads = [];     // per-day totals for the footer
 
   el('att-lock').innerHTML = locked
     ? '<div class="locked-note">&#128274; ' + monthLabel(ym) + ' is locked because its payroll run is finalised. ' +
@@ -2789,7 +2894,10 @@ function renderAttendance() {
       (editable ? ' onclick="fillColumn(' + d + ')"' : '') + '>' + d +
       '<div style="font-weight:400;opacity:.6">' + dow[0] + '</div></th>';
   }
-  head += '<th style="min-width:54px">Paid</th></tr>';
+  head += times
+    ? '<th style="min-width:54px">Days</th><th style="min-width:60px">Hours</th>' +
+      '<th style="min-width:54px">OT</th></tr>'
+    : '<th style="min-width:54px">Paid</th></tr>';
 
   var body = emps.map(function (e) {
     var row = '<td class="emp-c">' +
@@ -2806,19 +2914,62 @@ function renderAttendance() {
       var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + hhmm(rec.in_time) + '-' + (hhmm(rec.out_time) || '?') : '') +
         (late ? ' (late ' + late + 'm)' : '') + (open ? ' - never punched out' : '') +
         (rec && rec.remarks ? ' ' + rec.remarks : '');
-      row += '<td><div class="att-cell s-' + esc(st) + (S.attDirty[key] ? ' edited' : '') +
-        (late ? ' late' : '') + (open ? ' open' : '') + '" title="' + esc(tip) + '"' +
-        (editable ? ' onclick="cycleCell(\'' + esc(e.emp_code) + '\',' + d + ')"' +
-                    ' ondblclick="openCell(\'' + esc(e.emp_code) + '\',' + d + ')"' : '') +
-        ' id="c_' + esc(key) + '">' + esc(st) + '</div></td>';
+      var handlers = editable
+        ? (times ? ' onclick="openCell(\'' + esc(e.emp_code) + '\',' + d + ')"'
+                 : ' onclick="cycleCell(\'' + esc(e.emp_code) + '\',' + d + ')"' +
+                   ' ondblclick="openCell(\'' + esc(e.emp_code) + '\',' + d + ')"')
+        : '';
+
+      if (times) {
+        var mins = workedMinutes(rec);
+        if (mins !== null) dayMins[d] = (dayMins[d] || 0) + mins;
+        if (mins !== null) dayHeads[d] = (dayHeads[d] || 0) + 1;
+        row += '<td class="t-cell"><div class="att-time s-' + esc(st) +
+          (S.attDirty[key] ? ' edited' : '') + (late ? ' late' : '') + (open ? ' open' : '') +
+          '" title="' + esc(tip) + '"' + handlers + ' id="c_' + esc(key) + '">' +
+          timeCellHtml(rec, st, open) + '</div></td>';
+      } else {
+        row += '<td><div class="att-cell s-' + esc(st) + (S.attDirty[key] ? ' edited' : '') +
+          (late ? ' late' : '') + (open ? ' open' : '') + '" title="' + esc(tip) + '"' +
+          handlers + ' id="c_' + esc(key) + '">' + esc(st) + '</div></td>';
+      }
     }
-    row += '<td class="num-col" style="padding:0 8px"><b>' + s.paid + '</b></td>';
+    if (times) {
+      var worked = monthWorked(ym, e.emp_code);
+      row += '<td class="num-col" style="padding:0 8px"><b>' + worked.days + '</b></td>' +
+             '<td class="num-col" style="padding:0 8px"><b>' + hoursText(worked.minutes) + '</b></td>' +
+             '<td class="num-col" style="padding:0 8px">' +
+               (s.ot ? '<b>' + hoursText(s.ot) + '</b>' : '<span class="sub-line">&mdash;</span>') +
+             '</td>';
+    } else {
+      row += '<td class="num-col" style="padding:0 8px"><b>' + s.paid + '</b></td>';
+    }
     return '<tr>' + row + '</tr>';
   }).join('');
 
+  /* In the timesheet view, a row of daily totals across everyone - the number
+     the shop floor actually asks for. */
+  var foot = '';
+  if (times && emps.length) {
+    var total = 0;
+    foot = '<tr><td class="emp-c">Worked / day</td>';
+    for (var fd = 1; fd <= dim; fd++) {
+      var m = dayMins[fd] || 0;
+      total += m;
+      foot += '<td title="' + (dayHeads[fd] || 0) + ' employee(s) on ' + esc(dateStr(ym, fd)) + '">' +
+        (m ? hoursText(m) : '<span class="sub-line">&mdash;</span>') + '</td>';
+    }
+    foot += '<td></td><td>' + hoursText(total) + '</td><td></td></tr>';
+  }
+
   el('att-grid').innerHTML = emps.length
-    ? '<table><thead>' + head + '</thead><tbody>' + body + '</tbody></table>'
+    ? '<table><thead>' + head + '</thead><tbody>' + body + '</tbody>' +
+      (foot ? '<tfoot>' + foot + '</tfoot>' : '') + '</table>'
     : '<div class="empty">Add employees first (module 1).</div>';
+
+  el('att-legend-note').innerHTML = times
+    ? 'Click a cell to set the in and out times &middot; hours are worked out from them'
+    : 'Click a cell to cycle &middot; double-click for times &middot; click a date header to fill the column';
 
   renderAttSummary(ym, emps);
   markAttDirty(false);
@@ -3100,15 +3251,38 @@ function normalizeDate(v) {
   return null;
 }
 
+/* The export follows whichever view you are looking at: statuses, or one
+   in/out/hours triple per day for a real timesheet. */
 function exportAttendance() {
   var ym = el('att-month').value || thisMonth();
   var dim = daysInMonth(ym);
+  var d;
+
+  if (S.attView === 'times') {
+    var tcols = ['emp_code', 'name'];
+    for (d = 1; d <= dim; d++) tcols.push(d + ' in', d + ' out', d + ' hours');
+    tcols.push('days_worked', 'total_hours', 'late_marks', 'ot_hours');
+    var trows = activeEmployees().map(function (e) {
+      var r = [e.emp_code, e.name];
+      for (var dd = 1; dd <= dim; dd++) {
+        var rec = recordFor(ym, e.emp_code, dd);
+        var mins = workedMinutes(rec);
+        r.push(hhmm(rec && rec.in_time), hhmm(rec && rec.out_time),
+               mins === null ? '' : hoursText(mins));
+      }
+      var w = monthWorked(ym, e.emp_code), st = attStats(ym, e.emp_code);
+      r.push(w.days, hoursText(w.minutes), st.late, hoursText(st.ot));
+      return r;
+    });
+    return download('timesheet-' + ym + '.csv', toCSV(tcols, trows));
+  }
+
   var cols = ['emp_code', 'name'];
-  for (var d = 1; d <= dim; d++) cols.push(String(d));
+  for (d = 1; d <= dim; d++) cols.push(String(d));
   cols.push('late_marks', 'ot_hours', 'LOP', 'paid_days');
   var rows = activeEmployees().map(function (e) {
     var r = [e.emp_code, e.name];
-    for (var d = 1; d <= dim; d++) r.push(statusOf(ym, e.emp_code, d));
+    for (var dd2 = 1; dd2 <= dim; dd2++) r.push(statusOf(ym, e.emp_code, dd2));
     var s = attStats(ym, e.emp_code);
     r.push(s.late, (s.ot / 60).toFixed(1), s.lop, s.paid);
     return r;
@@ -8110,6 +8284,18 @@ function printDocument(opts) {
     '.sub-line{font-size:9.5px;color:#64748b;}' +
     '.empty{text-align:center;color:#64748b;padding:14px;}' +
     'input,select,button{display:none !important;}' +
+    /* the attendance register printed as a grid */
+    '.att-print table{table-layout:fixed;}' +
+    '.att-print th,.att-print td{border:1px solid #cbd5e1;padding:2px 1px;text-align:center;' +
+      'font-size:7px;line-height:1.25;}' +
+    '.att-print td.emp-c,.att-print th.emp-h{text-align:left;font-size:8px;width:110px;' +
+      'padding:2px 4px;font-weight:700;}' +
+    '.att-print .sub-line{font-size:6px;}' +
+    '.att-print .att-cell,.att-print .att-time{padding:0;}' +
+    '.att-print .att-time .io{font-size:6.5px;color:#334155;}' +
+    '.att-print .att-time .hrs{font-size:7px;font-weight:800;}' +
+    '.att-print tfoot td{background:#f1f5f9;font-weight:800;}' +
+    '.att-print a{color:inherit;text-decoration:none;}' +
     '.foot{position:fixed;bottom:6mm;left:0;right:0;display:flex;justify-content:space-between;' +
       'font-size:9.5px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:4px;}';
   w.document.write(

@@ -36,7 +36,7 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 | # | Module | What it does |
 |---|--------|--------------|
 | 1 | **Employees** | Employee master: full profile, salary structure, PF/ESI flags, exit date. Sortable, searchable, filterable. Per-employee 360° view (profile + salary + attendance + leave history + payslips). Validation on save (PAN format, duplicate email, ESI ceiling, dates). Record-completeness flags. CSV import with per-row validation, CSV export |
-| 2 | **Attendance** | Monthly register grid: click to cycle P/A/HD/L/WO/H, double-click for in/out times and remarks, click a date header to fill a column, fill a whole employee-month, fill blank days. Holiday calendar auto-marks H. Late marks and overtime derived from the shift and grace period. Biometric/device CSV import. Locks automatically once payroll is finalised |
+| 2 | **Attendance** | Monthly register grid in **two views** — *Status* (P/A/HD/L/WO/H) and *In / out & hours* (a timesheet: when they came, when they left, hours worked, daily and monthly totals). Click to cycle or to set times, click a date header to fill a column, fill a whole employee-month, fill blank days. Holiday calendar auto-marks H. Late marks and overtime derived from the shift and grace period. Biometric/device CSV import, CSV export and print in either view. Locks automatically once payroll is finalised |
 | 3 | **Leave** | Applications with live validation (quota balance, overlapping requests, working-day count that skips weekly offs and holidays). Approve / reject / cancel. **Requests** — out-of-office duty, swipe (missed punch) and compensatory off. Month calendar of who is off when. Per-type balances and a comp-off ledger. Approving writes onto the attendance register; cancelling clears those days |
 | 4 | **Payroll** | Generates from attendance, prorates by paid days, computes PF / ESI / PT / TDS plus employer PF & ESI and CTC. Editable arrears, bonus and other deductions per employee. Month-on-month variance per employee. Draft → finalise → (reopen if needed). **Payslips printed** one at a time or for the whole month, **and emailed** to staff as a PDF; bank transfer CSV |
 | 5 | **Reports** | Seven reports, each exportable **and printable**: **salary register unit by unit** (the company's own register layout), wages register, **leave report** (per-employee year balance plus the month's applications), PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
@@ -74,6 +74,32 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
 | **Import data** | manual import of punch logs, attendance, holidays and employees from CSV or Excel |
 | **Account** | change your password |
+
+### The register's two views
+
+The monthly grid has a switch at the top left. Both views are the same grid over the same data,
+with the same editing — only what each cell shows changes, and the choice is remembered per
+device.
+
+**Status** — one letter a day: `P` `A` `HD` `L` `OD` `CO` `WO` `H`. Click a cell to cycle it,
+double-click for times and remarks. The trailing column is paid days.
+
+**In / out & hours** — the same grid as a timesheet. Each day shows the **in time**, the **out
+time** and the **hours worked**, with the day's status colour still behind it, a late arrival in
+amber, and a missing punch-out in red rather than blank. A day with no times shows what kind of
+day it was instead (`WO`, `H`, `A`, `L`). Clicking a cell opens the times straight away.
+
+Three columns follow the month: **Days** actually worked, **Hours** worked in total, and **OT**.
+A **Worked / day** row along the bottom totals the hours across everyone for each day, with the
+month's total at the end — hover a figure to see how many people it covers.
+
+Hours are shown as **h:mm**, not decimals, because 8:32 is what a shop floor reads. They come
+from the in and out times when both are there, falling back to the saved `hours` value; a shift
+that crosses midnight is handled, so 22:00 → 06:00 is 8:00 and not minus sixteen hours.
+
+**Export CSV** and **Print** both follow the view you are on: the status export is one column per
+day, the timesheet export is `in`, `out` and `hours` per day plus the totals; print comes out
+landscape with the totals row.
 
 ### Payslips: printing and emailing
 
