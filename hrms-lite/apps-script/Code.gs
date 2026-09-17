@@ -36,6 +36,8 @@ var SHEETS = {
   CtcComponents: ['id', 'seq', 'code', 'name', 'section', 'kind', 'expr', 'taxable',
                   'in_gross', 'in_pf_wage', 'in_esi_wage', 'show_payslip', 'active'],
   CtcValues:    ['id', 'emp_code', 'code', 'value'],
+  Notices:    ['id', 'title', 'body', 'level', 'start_date', 'end_date', 'pinned', 'active',
+               'created_by', 'created_at'],
   PayslipMail: ['id', 'month', 'emp_code', 'name', 'email', 'sent_at', 'status', 'error', 'sent_by'],
   Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source',
                'imported_at', 'lat', 'lng', 'accuracy', 'site', 'distance_m'],
@@ -762,6 +764,7 @@ function bootstrap(caller) {
       ctcVariables:  readSheet('CtcVariables'),
       ctcComponents: readSheet('CtcComponents'),
       ctcValues:     readSheet('CtcValues'),
+      notices:       readSheet('Notices'),
       /* The accounts and the integration keys are the owner's alone. */
       secrets: owner ? secretStatus() : {},
       users:   owner ? listUsers() : []
@@ -791,6 +794,9 @@ function bootstrap(caller) {
       shifts:      readSheet('Shifts'),
       leaveTypes:  readSheet('LeaveTypes'),
       requestTypes: readSheet('RequestTypes'),
+      /* Staff see the notices that are live today - not the drafts, not the
+         expired ones, and not the ones scheduled for next month. */
+      notices:     liveNotices(),
       sites:       [],
       ctcVariables: [],
       ctcComponents: [],
@@ -1696,4 +1702,16 @@ function removeUser(email, caller) {
   }
   sheet('Users').deleteRow(target.row);
   return { removed: want };
+}
+
+/** The notices on the board right now: active, started, not yet finished. */
+function liveNotices() {
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return readSheet('Notices').filter(function (n) {
+    if (String(n.active || 'yes').toLowerCase() === 'no') return false;
+    var from = String(n.start_date || ''), to = String(n.end_date || '');
+    if (from && from > today) return false;
+    if (to && to < today) return false;
+    return true;
+  });
 }

@@ -118,6 +118,19 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .punch-btn.out{background:var(--danger);} .punch-btn.out:hover{background:#dc2626;}
 .punch-open{background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:.8rem;
   font-weight:600;margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+/* ---------------- Notice board ---------------- */
+.nb{margin-bottom:16px;display:grid;gap:10px;}
+.nb-item{background:var(--bg-card);border:1px solid var(--border);border-left:4px solid var(--primary);
+  border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.nb-item.important{border-left-color:var(--warning);background:#fffbeb;}
+.nb-item.urgent{border-left-color:var(--danger);background:#fef2f2;}
+.nb-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
+.nb-head h4{font-size:.95rem;font-weight:800;color:var(--text-dark);}
+.nb-body{font-size:.85rem;color:#334155;line-height:1.7;white-space:pre-wrap;}
+.nb-meta{font-size:.7rem;color:var(--text-muted);margin-top:8px;}
+.nb-more{background:none;border:0;font:inherit;font-size:.75rem;font-weight:700;
+  color:var(--primary);cursor:pointer;padding:4px 0;}
+
 /* Segmented control for the register's two views. */
 .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;
   margin-bottom:1px;background:#fff;}
@@ -485,6 +498,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             it opens the list of employees behind the number.</span>
         </div>
       </div>
+      <div id="notice-board"></div>
       <div id="my-dash" style="display:none"></div>
       <div id="hr-dash">
       <div class="kpis" id="dash-kpis"></div>
@@ -767,7 +781,7 @@ var S = {
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
   shifts: [], leaveTypes: [], leaveVersion: 0,
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
-  requestTypes: [], requests: [], punch: null, sites: [],
+  requestTypes: [], requests: [], punch: null, sites: [], notices: [], noticesExpanded: false,
   attDirty: {}, payDraft: null, attVersion: 0, attView: 'status',
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -1194,7 +1208,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v12';
+var DEMO_KEY = 'hrms_lite_demo_v13';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1227,6 +1241,19 @@ function demoDb() {
         'Regards,\n{company}'
     },
     payslipMail: [],
+    notices: [
+      { id: 'NT1', title: 'Diwali holiday - factory closed', level: 'important', pinned: 'yes',
+        body: 'Units 1, 2 and 3 will be closed for Diwali. Security and boiler staff work to the ' +
+              'roster on the notice board at the gate.\nOvertime for anyone called in will be paid ' +
+              'at double rate.',
+        start_date: '', end_date: '', active: 'yes', created_by: 'admin@company.com',
+        created_at: '2026-09-10' },
+      { id: 'NT2', title: 'Salary credited', level: 'info', pinned: 'no',
+        body: 'August salary has been credited. Payslips are in the Payroll screen - open yours ' +
+              'and print it if you need a copy.',
+        start_date: '', end_date: '', active: 'yes', created_by: 'admin@company.com',
+        created_at: '2026-09-02' }
+    ],
     employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [], events: [],
     requests: [],
     shifts: [
@@ -1411,7 +1438,7 @@ var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
   Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
   Events: 'events', Sites: 'sites', RequestTypes: 'requestTypes', Requests: 'requests', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
-  CtcComponents: 'ctcComponents', CtcValues: 'ctcValues'
+  CtcComponents: 'ctcComponents', CtcValues: 'ctcValues', Notices: 'notices'
 };
 function demoApi(action, p) {
   var db = demoDb(), list, key, i;
@@ -1432,7 +1459,8 @@ function demoApi(action, p) {
                  ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
                  ctcValues: db.ctcValues || [], events: db.events || [],
                  requestTypes: db.requestTypes || [], requests: db.requests || [],
-                 sites: db.sites || [], users: [], secrets: {} };
+                 sites: db.sites || [], users: [], secrets: {},
+                 notices: db.notices || [] };
       }
       if (!S.user || !(S.user.role === 'admin' || S.user.role === 'owner')) {
         var code = String((S.user && S.user.emp_code) || '');
@@ -1453,6 +1481,7 @@ function demoApi(action, p) {
                  holidays: db.holidays || [], events: db.events || [],
                  shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                  requestTypes: db.requestTypes || [],
+                 notices: (db.notices || []).filter(function (n) { return noticeLive(n); }),
                  sites: [], ctcVariables: [], ctcComponents: [], users: [], secrets: {} };
       }
       return { role: 'owner', settings: db.settings, employees: db.employees, attendance: db.attendance,
@@ -1461,7 +1490,7 @@ function demoApi(action, p) {
                ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
                ctcValues: db.ctcValues || [], events: db.events || [],
                requestTypes: db.requestTypes || [], requests: db.requests || [],
-               sites: db.sites || [],
+               sites: db.sites || [], notices: db.notices || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -1682,6 +1711,7 @@ function reload() {
     S.ctcVariables = d.ctcVariables || [];
     S.ctcComponents = d.ctcComponents || [];
     S.ctcValues = d.ctcValues || [];
+    S.notices = d.notices || [];
     S.secrets = d.secrets || {};
     S.leaveVersion++;
     S.attDirty = {}; S.payDraft = null; S.attVersion++;
@@ -1806,6 +1836,38 @@ function renderMyDashboard() {
   renderCalendar();
 }
 
+/* The board itself - the same on an HR screen and a staff screen. Notices are
+   read-only here for everyone; HR changes them in Settings. */
+function renderNoticeBoard() {
+  var host = el('notice-board');
+  if (!host) return;
+  var live = sortedNotices((S.notices || []).filter(function (n) { return noticeLive(n); }));
+  if (!live.length) { host.innerHTML = ''; return; }
+
+  var shown = S.noticesExpanded ? live : live.slice(0, 3);
+  host.innerHTML = '<div class="nb">' +
+    shown.map(function (n) {
+      var lvl = String(n.level || 'info');
+      return '<div class="nb-item ' + esc(lvl) + '">' +
+        '<div class="nb-head">' +
+          (String(n.pinned) === 'yes' ? '<span title="Pinned">&#128204;</span>' : '') +
+          '<h4>' + esc(n.title || 'Notice') + '</h4>' +
+          (lvl !== 'info' ? '<span class="badge ' + NOTICE_BADGE[lvl] + '">' +
+            esc(NOTICE_LEVELS[lvl]) + '</span>' : '') +
+        '</div>' +
+        (n.body ? '<div class="nb-body">' + esc(n.body) + '</div>' : '') +
+        '<div class="nb-meta">' +
+          (n.start_date ? 'Put up ' + esc(n.start_date) : 'Put up ' + esc(n.created_at || '')) +
+          (n.end_date ? ' &middot; until ' + esc(n.end_date) : '') +
+        '</div></div>';
+    }).join('') +
+    (live.length > 3
+      ? '<button class="nb-more" onclick="S.noticesExpanded=!S.noticesExpanded;renderNoticeBoard()">' +
+        (S.noticesExpanded ? 'Show fewer' : 'Show all ' + live.length + ' notices') + '</button>'
+      : '') +
+    '</div>';
+}
+
 function renderAll() {
   renderEmployees(); renderAttendance(); renderLeave(); renderRequests();
   renderPayroll(); renderReports(); renderDashboard();
@@ -1884,6 +1946,7 @@ var ATT_SERIES = {
 
 function renderDashboard() {
   if (!S.user) return;
+  renderNoticeBoard();
   if (!isAdmin()) return renderMyDashboard();
   el('my-dash').style.display = 'none';
   el('hr-dash').style.display = '';
@@ -2366,7 +2429,7 @@ function fieldInput(f, value) {
     }).join('') + '</select>';
   } else if (type === 'textarea') {
     html = '<textarea data-f="' + name + '" rows="6" style="font:inherit;padding:8px 10px;' +
-      'border:1px solid var(--line);border-radius:8px;resize:vertical;line-height:1.6">' +
+      'border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6">' +
       esc(value === undefined ? '' : value) + '</textarea>';
   } else if (type.indexOf('select:') === 0) {
     html = '<select data-f="' + name + '">' + type.slice(7).split(',').map(function (o) {
@@ -4647,7 +4710,8 @@ function openSettings() {
   var owner = isOwner();
   var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
     .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
-             ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules']])
+             ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
+             ['notices', 'Notice board']])
     .concat(owner ? [['accounts', 'Accounts'], ['integrations', 'Integrations']] : [])
     .concat([['import', 'Import data'], ['account', 'Account']]);
 
@@ -4667,6 +4731,7 @@ function openSettings() {
   '<div class="set-pane" id="stab-requests" style="display:none">' + requestsPane() + '</div>' +
   '<div id="stab-ctc" style="display:none">' + ctcPane() + '</div>' +
   '<div class="set-pane" id="stab-payrollrules" style="display:none">' + payrollRulesPane() + '</div>' +
+  '<div id="stab-notices" style="display:none">' + noticesPane() + '</div>' +
   (owner ? '<div id="stab-accounts" style="display:none">' + accountsPane() + '</div>' +
            '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' : '') +
   '<div id="stab-import" style="display:none">' + importPane() + '</div>' +
@@ -4685,8 +4750,18 @@ function openSettings() {
   renderPolicyTable('ctcComponents');
   renderCtcPreview();
   renderImportHelp();
+  renderNotices();
   if (owner) { renderAccounts(); refreshUsers(); }
   el('imp-any').onchange = function () { if (this.files[0]) onImportFile(this.files[0]); };
+}
+
+/* These editors open with showModal, which replaces whatever the modal was
+   showing - including Settings itself. So when one closes, put Settings back
+   on the tab it was opened from, instead of dumping the user on the
+   dashboard. */
+function reopenSettings(tab) {
+  openSettings();
+  settingsTab(tab);
 }
 
 function settingsTab(tab) {
@@ -4884,6 +4959,173 @@ function leaveRulesPane() {
     'and become LOP in payroll, rather than quietly being paid.</p>';
 }
 
+/* --------------------------- notice board ------------------------ */
+/* HR writes here; everybody reads it on their dashboard. A notice can be
+   scheduled, given an end date, pinned, or switched off without deleting. */
+
+function noticeLive(n, iso) {
+  var day = iso || today();
+  if (String(n.active || 'yes').toLowerCase() === 'no') return false;
+  if (n.start_date && String(n.start_date) > day) return false;
+  if (n.end_date && String(n.end_date) < day) return false;
+  return true;
+}
+
+function noticeState(n) {
+  if (String(n.active || 'yes').toLowerCase() === 'no') return { label: 'Off', cls: 'b-gray' };
+  var day = today();
+  if (n.start_date && String(n.start_date) > day) return { label: 'Scheduled', cls: 'b-blue' };
+  if (n.end_date && String(n.end_date) < day) return { label: 'Expired', cls: 'b-gray' };
+  return { label: 'On the board', cls: 'b-green' };
+}
+
+/* Newest and most urgent first, pinned above everything. */
+function sortedNotices(list) {
+  var rank = { urgent: 0, important: 1, info: 2 };
+  return (list || []).slice().sort(function (a, b) {
+    var pin = (String(b.pinned) === 'yes' ? 1 : 0) - (String(a.pinned) === 'yes' ? 1 : 0);
+    if (pin) return pin;
+    var lv = (rank[a.level] === undefined ? 3 : rank[a.level]) -
+             (rank[b.level] === undefined ? 3 : rank[b.level]);
+    if (lv) return lv;
+    return String(b.created_at || '') < String(a.created_at || '') ? -1 : 1;
+  });
+}
+
+function noticesPane() {
+  return '<div class="toolbar">' +
+    '<span class="sub-line" style="max-width:620px">Whatever you put here shows on ' +
+    '<b>everyone\'s dashboard</b>, staff included, the moment you save it. Give a notice an end ' +
+    'date and it takes itself down.</span>' +
+    '<span class="spacer"></span>' +
+    '<button class="sm" onclick="openNotice()">+ Add notice</button>' +
+    '</div>' +
+    '<div id="notice-list"></div>';
+}
+
+function renderNotices() {
+  var host = el('notice-list');
+  if (!host) return;
+  var list = sortedNotices(S.notices);
+  host.innerHTML = list.length
+    ? '<div class="table-wrap" style="max-height:none"><table><thead><tr><th>Notice</th>' +
+      '<th>Level</th><th>Shows</th><th>Status</th><th></th></tr></thead><tbody>' +
+      list.map(function (n) {
+        var st = noticeState(n);
+        return '<tr><td style="max-width:420px">' +
+          (String(n.pinned) === 'yes' ? '&#128204; ' : '') +
+          '<b>' + esc(n.title || '(no title)') + '</b>' +
+          '<div class="sub-line" style="white-space:normal">' +
+            esc(String(n.body || '').slice(0, 150)) +
+            (String(n.body || '').length > 150 ? '...' : '') + '</div></td>' +
+          '<td><span class="badge ' + NOTICE_BADGE[n.level || 'info'] + '">' +
+            esc(NOTICE_LEVELS[n.level || 'info'] || n.level) + '</span></td>' +
+          '<td class="sub-line">' + esc(n.start_date || 'straight away') + '<br>' +
+            esc(n.end_date ? 'until ' + n.end_date : 'no end date') + '</td>' +
+          '<td><span class="badge ' + st.cls + '">' + st.label + '</span></td>' +
+          '<td><button class="ghost sm" onclick="openNotice(\'' + esc(n.id) + '\')">Edit</button> ' +
+          '<button class="ghost sm" onclick="deleteNotice(\'' + esc(n.id) + '\')">Delete</button></td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : '<div class="empty">No notices yet. Anything you add shows on everyone\'s dashboard.</div>';
+}
+
+var NOTICE_LEVELS = { info: 'Notice', important: 'Important', urgent: 'Urgent' };
+var NOTICE_BADGE = { info: 'b-blue', important: 'b-amber', urgent: 'b-red' };
+
+function openNotice(id) {
+  if (!isAdmin()) return toast('Only HR can change the notice board', 'bad');
+  var n = (S.notices || []).filter(function (x) { return String(x.id) === String(id); })[0];
+  var isNew = !n;
+  n = n || { title: '', body: '', level: 'info', start_date: '', end_date: '',
+             pinned: 'no', active: 'yes' };
+
+  showModal(isNew ? 'New notice' : 'Edit notice',
+    '<div id="notice-err"></div>' +
+    '<label class="field">Title<input id="nt-title" value="' + esc(n.title) +
+      '" placeholder="Diwali holiday - factory closed" maxlength="120"></label>' +
+    '<label class="field" style="margin-top:12px">Notice' +
+      '<textarea id="nt-body" rows="6" placeholder="Write it as you would put it on the wall."' +
+      ' style="font:inherit;padding:10px;border:1px solid var(--border);border-radius:8px;' +
+      'resize:vertical;line-height:1.7">' + esc(n.body) + '</textarea></label>' +
+    '<div class="grid2" style="margin-top:12px">' +
+      '<label class="field">Level<select id="nt-level">' +
+        Object.keys(NOTICE_LEVELS).map(function (k) {
+          return '<option value="' + k + '"' + (n.level === k ? ' selected' : '') + '>' +
+            NOTICE_LEVELS[k] + '</option>';
+        }).join('') + '</select></label>' +
+      '<label class="field">Pin to the top<select id="nt-pinned">' +
+        '<option value="no"' + (String(n.pinned) !== 'yes' ? ' selected' : '') + '>No</option>' +
+        '<option value="yes"' + (String(n.pinned) === 'yes' ? ' selected' : '') + '>Yes</option>' +
+        '</select></label>' +
+      '<label class="field">Show from<input type="date" id="nt-from" value="' +
+        esc(n.start_date) + '"></label>' +
+      '<label class="field">Take down after<input type="date" id="nt-to" value="' +
+        esc(n.end_date) + '"></label>' +
+      '<label class="field">On the board<select id="nt-active">' +
+        '<option value="yes"' + (String(n.active) !== 'no' ? ' selected' : '') + '>Yes</option>' +
+        '<option value="no"' + (String(n.active) === 'no' ? ' selected' : '') + '>No - keep it, hide it</option>' +
+        '</select></label>' +
+    '</div>' +
+    '<p style="margin-top:12px;font-size:.78rem;color:var(--text-muted);line-height:1.7">' +
+    'Leave <b>Show from</b> empty and it goes up as soon as you save. Leave <b>Take down after</b> ' +
+    'empty and it stays until you remove it or switch it off.</p>',
+    [
+      { label: 'Cancel', cls: 'ghost', onClick: function () { reopenSettings('notices'); } },
+      { label: isNew ? 'Put it up' : 'Save', onClick: function () { saveNotice(n, isNew); } }
+    ]);
+  setTimeout(function () { var t = el('nt-title'); if (t) t.focus(); }, 60);
+}
+
+function saveNotice(existing, isNew) {
+  var title = el('nt-title').value.trim();
+  var body = el('nt-body').value.trim();
+  if (!title && !body) {
+    el('notice-err').innerHTML = '<div class="err show">Give the notice a title or something to say.</div>';
+    return;
+  }
+  var from = el('nt-from').value, to = el('nt-to').value;
+  if (from && to && to < from) {
+    el('notice-err').innerHTML = '<div class="err show">The end date is before the start date.</div>';
+    return;
+  }
+  var row = Object.assign({}, existing, {
+    id: existing.id || 'NT' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+    title: title, body: body,
+    level: el('nt-level').value, pinned: el('nt-pinned').value,
+    start_date: from, end_date: to, active: el('nt-active').value,
+    created_by: existing.created_by || (S.user ? S.user.email : ''),
+    created_at: existing.created_at || today()
+  });
+  api('save', { sheet: 'Notices', row: row }).then(function () {
+    S.notices = (S.notices || []).filter(function (x) { return String(x.id) !== String(row.id); });
+    S.notices.push(row);
+    toast(isNew ? 'Notice is on the board' : 'Notice updated', 'ok');
+    renderNoticeBoard();
+    reopenSettings('notices');
+  }).catch(function (e) {
+    el('notice-err').innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
+  });
+}
+
+function deleteNotice(id) {
+  if (!isAdmin()) return toast('Only HR can change the notice board', 'bad');
+  var n = (S.notices || []).filter(function (x) { return String(x.id) === String(id); })[0] || {};
+  showModal('Delete this notice?',
+    '<p>Remove <b>' + esc(n.title || 'this notice') + '</b> from the board for good?</p>' +
+    '<p style="margin-top:8px;font-size:.8rem;color:var(--text-muted)">If you only want it off the ' +
+    'board for now, edit it and set <b>On the board: No</b> instead.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: function () { reopenSettings('notices'); } },
+    { label: 'Delete', onClick: function () {
+        api('remove', { sheet: 'Notices', id: id }).then(function () {
+          S.notices = (S.notices || []).filter(function (x) { return String(x.id) !== String(id); });
+          toast('Notice removed', 'ok');
+          renderNoticeBoard();
+          reopenSettings('notices');
+        }).catch(function (e) { toast(e.message, 'bad'); });
+      } }
+  ]);
+}
+
 /* ----------------------------- accounts -------------------------- */
 /* Owner only. Creating a login here hashes the password on the server; the
    hash is never sent back to any browser. */
@@ -4982,7 +5224,7 @@ function openAccount(email) {
     '</div>' +
     '<p id="acct-hint" style="margin-top:12px;font-size:.78rem;color:var(--text-muted);line-height:1.7"></p>',
     [
-      { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+      { label: 'Cancel', cls: 'ghost', onClick: function () { reopenSettings('accounts'); } },
       { label: isNew ? 'Create account' : 'Save', onClick: function () { saveAccount(isNew); } }
     ]);
   accountRoleChanged();
@@ -5013,9 +5255,8 @@ function saveAccount(isNew) {
   };
   err.innerHTML = '';
   api('saveUser', { user: user }).then(function (res) {
-    closeModal();
     toast(res.created ? 'Account created for ' + res.saved : 'Account updated', 'ok');
-    return refreshUsers();
+    return refreshUsers().then(function () { reopenSettings('accounts'); });
   }).catch(function (e) {
     err.innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
   });
@@ -5028,10 +5269,11 @@ function deleteAccount(email) {
     '<p style="margin-top:8px;font-size:.8rem;color:var(--text-muted)">The person&rsquo;s employee ' +
     'record, attendance, leave and payslips are not touched &mdash; only their ability to sign in. ' +
     'If they are only away for a while, set <b>Active: No</b> instead.</p>', [
-    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Cancel', cls: 'ghost', onClick: function () { reopenSettings('accounts'); } },
     { label: 'Delete', onClick: function () {
         api('removeUser', { email: email }).then(function () {
-          closeModal(); toast('Account deleted', 'ok'); return refreshUsers();
+          toast('Account deleted', 'ok');
+          return refreshUsers().then(function () { reopenSettings('accounts'); });
         }).catch(function (e) { toast(e.message, 'bad'); });
       } }
   ]);

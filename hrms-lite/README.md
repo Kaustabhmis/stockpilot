@@ -70,10 +70,35 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | **Leave policy** | the leave-type table, plus the sandwich / excess-leave / probation rules |
 | **Requests** | the request-type table (OD, swipe, comp-off) and the comp-off rules |
 | **CTC structure** | salary-structure variables, components and formulas; upload and apply a CTC list |
+| **Notice board** | what everyone sees at the top of their dashboard |
 | **Payroll rules** | salary divisor, rounding, PF and ESI percentages and ceilings, professional tax |
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
 | **Import data** | manual import of punch logs, attendance, holidays and employees from CSV or Excel |
 | **Account** | change your password |
+
+### The notice board
+
+*Settings → Notice board.* Whatever you put there appears at the top of **everyone's dashboard**,
+staff included, the moment you save it — there is nothing to publish or send.
+
+A notice has a title, the text itself (line breaks are kept), and:
+
+- **Level** — *Notice* (blue), *Important* (amber) or *Urgent* (red). The colour carries across the
+  card so the important ones are not read last.
+- **Pin to the top** — pinned notices sit above everything else, then urgent, then newest.
+- **Show from** — leave it empty and it goes up on save; set a date and it waits until then.
+- **Take down after** — leave it empty and it stays until you remove it; set a date and it takes
+  itself down. Nobody has to remember to clear the Diwali notice in December.
+- **On the board: No** — off the board but kept, for anything you will want again.
+
+The Settings list shows each notice's real state — *On the board*, *Scheduled*, *Expired* or
+*Off* — so it is obvious why something is or is not showing. **Delete** removes it for good;
+switching it off is the reversible option, and the delete dialog says so.
+
+The dashboard shows the three most prominent notices with a *Show all* link when there are more.
+Staff can only read them: their browser is sent **only the notices that are live today** — not
+the drafts, not the expired ones, not next month's — and the server refuses any write to the
+notice board from an employee account.
 
 ### The register's two views
 
@@ -496,7 +521,7 @@ attendance register and mark someone absent → generate and finalise payroll �
 
    It creates eighteen tabs — `Settings`, `Users`, `Employees`, `Attendance`, `Leave`, `Payroll`,
    `Holidays`, `Events`, `Sites`, `Punches`, `Shifts`, `LeaveTypes`, `RequestTypes`, `Requests`,
-   `CtcVariables`, `CtcComponents`, `CtcValues`, `PayslipMail` — seeds a General shift, the four
+   `CtcVariables`, `CtcComponents`, `CtcValues`, `Notices`, `PayslipMail` — seeds a General shift, the four
    standard leave types and the company's salary structure, generates the key that signs logins,
    and creates the first admin account.
 
@@ -604,7 +629,8 @@ suggestion. These rules are not.
 | Payroll | run, finalise, bank file, email payslips | same | **their own payslips only**, print them |
 | Leave and requests | approve, reject, cancel anyone's | same | **apply for and withdraw their own** |
 | Reports | yes | yes | **no** |
-| Settings: shifts, holidays, leave policy, requests, CTC, payroll rules, import | yes | yes | **no** |
+| Settings: shifts, holidays, leave policy, requests, CTC, payroll rules, notice board, import | yes | yes | **no** |
+| Notice board | write | write | **read only**, and only what is live today |
 | **Accounts** (who can sign in, and as what) | **yes** | no | no |
 | **Integrations** (eSSL and SQL credentials, pull/push, test) | **yes** | no | no |
 | Punch in / out | — | — | their own, always |
