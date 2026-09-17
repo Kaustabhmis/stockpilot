@@ -14,7 +14,8 @@ var SHEETS = {
                'doj', 'status', 'basic', 'hra', 'special_allowance', 'other_allowance',
                'pf_applicable', 'esi_applicable', 'tds_monthly', 'pan', 'uan', 'esic_no',
                'bank_account', 'ifsc', 'manager', 'dob', 'gender', 'address', 'notes',
-               'updated_at', 'exit_date', 'device_id', 'company', 'shift'],
+               'updated_at', 'exit_date', 'device_id', 'company', 'shift',
+               'unit', 'wage_type', 'daily_rate', 'da_rate', 'hra_rate'],
   Attendance: ['id', 'date', 'emp_code', 'status', 'in_time', 'out_time', 'hours',
                'remarks', 'updated_at'],
   Holidays:   ['id', 'date', 'name', 'optional'],
@@ -34,7 +35,8 @@ var SHEETS = {
                'pf', 'esi', 'pt', 'tds', 'other_deduction', 'total_deduction', 'net',
                'status', 'generated_at', 'generated_by',
                'arrears', 'bonus', 'pf_employer', 'esi_employer', 'ctc',
-               'ot_hours', 'ot_amount', 'late_deduction_days', 'unpaid_leave_days']
+               'ot_hours', 'ot_amount', 'late_deduction_days', 'unpaid_leave_days',
+               'incentive', 'advance_deduction']
 };
 
 var DEFAULT_SETTINGS = {
@@ -80,6 +82,8 @@ var DEFAULT_SETTINGS = {
   sync_last_pull: '',
   sync_last_push: '',
   import_companies: '',
+  register_group_by: 'unit',
+  register_footer: '',
   keep_punch_log: 'yes',
   punch_log_days: '90',
   leave_types: 'Casual,Sick,Earned,Unpaid',

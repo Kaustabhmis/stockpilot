@@ -106,6 +106,16 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .b-amber{background:#fef3c7;color:#92400e;} .b-blue{background:#dbeafe;color:#1e40af;}
 .b-gray{background:#e2e8f0;color:#475569;} .b-violet{background:#ede9fe;color:#5b21b6;}
 
+/* ---------------- Salary register ---------------- */
+.reg-block{margin-bottom:22px;}
+.reg-title{font-weight:800;font-size:.82rem;letter-spacing:.4px;text-transform:uppercase;
+  padding:8px 10px;background:#0f172a;color:#fff;border-radius:7px 7px 0 0;}
+.reg-table{font-size:.72rem;}
+.reg-table th{font-size:.6rem;padding:6px 5px;line-height:1.25;white-space:normal;min-width:52px;vertical-align:bottom;}
+.reg-table td{padding:5px;white-space:nowrap;}
+.reg-total td{background:#f1f5f9;font-weight:800;border-top:2px solid var(--border);}
+@media print{.reg-block{page-break-inside:auto;} .reg-title{background:#fff;color:#000;border-bottom:2px solid #000;}}
+
 /* ---------------- Clock ---------------- */
 .clock{display:flex;align-items:center;gap:14px;}
 .clock .time{font-size:1.65rem;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1;}
@@ -544,7 +554,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <label class="field">Month<input type="month" id="rep-month" onchange="renderReports()"></label>
           <label class="field">Report
             <select id="rep-kind" onchange="renderReports()">
-              <option value="register">Salary register</option>
+              <option value="register">Salary register (unit-wise)</option>
+              <option value="wages">Wages register</option>
               <option value="statutory">PF / ESI statutory contributions</option>
               <option value="ytd">Year-to-date per employee</option>
               <option value="exceptions">Attendance exceptions</option>
@@ -974,7 +985,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v5';
+var DEMO_KEY = 'hrms_lite_demo_v6';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1082,6 +1093,9 @@ function demoDb() {
       pan: i % 4 === 3 ? '' : 'ABCDE' + (1000 + i) + 'F',
       uan: i % 5 === 4 ? '' : '1001' + (10000000 + i * 37),
       esic_no: '', device_id: String(101 + i),
+      unit: ['HO', 'U1', 'U2', 'U3'][i % 4],
+      wage_type: i >= 8 ? 'Wages' : 'Salary',
+      daily_rate: i >= 8 ? 420 : 0, da_rate: i >= 8 ? 56 : 0, hra_rate: i >= 8 ? 24 : 0,
       bank_account: i % 3 === 2 ? '' : '5011' + (100000000 + i * 7919),
       ifsc: i % 3 === 2 ? '' : 'HDFC0001234', manager: i === 0 ? '' : 'Ramesh Kumar',
       dob: r[6], gender: i % 2 ? 'F' : 'M', address: '', notes: '', updated_at: today()
@@ -1696,6 +1710,7 @@ var EMP_FIELDS = [
   ['email', 'Email', 'email'],
   ['phone', 'Phone', 'text'],
   ['company', 'Company / unit', 'text'],
+  ['unit', 'Unit / division (register)', 'text'],
   ['department', 'Department', 'text'],
   ['designation', 'Designation', 'text'],
   ['doj', 'Date of joining', 'date'],
@@ -1716,6 +1731,10 @@ var EMP_FIELDS = [
   ['manager', 'Reporting manager', 'text'],
   ['device_id', 'Biometric device ID', 'text'],
   ['shift', 'Shift', 'shift'],
+  ['wage_type', 'Paid as', 'select:Salary,Wages'],
+  ['daily_rate', 'Daily basic rate (wages)', 'number'],
+  ['da_rate', 'Daily DA rate (wages)', 'number'],
+  ['hra_rate', 'Daily HRA rate (wages)', 'number'],
   ['dob', 'Date of birth', 'date'],
   ['gender', 'Gender', 'select:,M,F,Other'],
   ['address', 'Address', 'text'],
@@ -2976,7 +2995,8 @@ function computePay(e, ym, prev) {
   var other = num(e.other_allowance) * factor;
   var arrears = prev && prev.arrears !== undefined ? num(prev.arrears) : 0;
   var bonus = prev && prev.bonus !== undefined ? num(prev.bonus) : 0;
-  var gross = basic + hra + special + other + arrears + bonus + otAmount;
+  var incentive = prev && prev.incentive !== undefined ? num(prev.incentive) : 0;
+  var gross = basic + hra + special + other + arrears + bonus + otAmount + incentive;
 
   var pfWage = 0, pf = 0, pfEmployer = 0;
   if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
@@ -3005,7 +3025,8 @@ function computePay(e, ym, prev) {
   }
   var tds = gross > 0 ? num(e.tds_monthly) : 0;
   var otherDed = prev && prev.other_deduction !== undefined ? num(prev.other_deduction) : 0;
-  var totalDed = pf + esi + pt + tds + otherDed;
+  var advance = prev && prev.advance_deduction !== undefined ? num(prev.advance_deduction) : 0;
+  var totalDed = pf + esi + pt + tds + otherDed + advance;
   var r = Math.round;
 
   return {
@@ -3013,7 +3034,7 @@ function computePay(e, ym, prev) {
     total_days: divisor, lop_days: s.lop, paid_days: Math.round(paidDays * 100) / 100,
     basic: roundTo(basic), hra: roundTo(hra), special_allowance: roundTo(special),
     other_allowance: roundTo(other),
-    arrears: r(arrears), bonus: r(bonus),
+    arrears: r(arrears), bonus: r(bonus), incentive: r(incentive), advance_deduction: r(advance),
     ot_hours: Math.round(otHours * 10) / 10, ot_amount: roundTo(otAmount),
     late_deduction_days: s.lateDeduction, unpaid_leave_days: s.unpaidLeave,
     gross: roundTo(gross),
@@ -3086,10 +3107,10 @@ function renderPayroll() {
   var editable = run.draft && isAdmin();
   var head = '<thead><tr><th>Employee</th><th class="num-col">Paid</th><th class="num-col">LOP</th>' +
     '<th class="num-col">Basic</th><th class="num-col">HRA</th><th class="num-col">Allow.</th>' +
-    '<th class="num-col">Arrears</th><th class="num-col">Bonus</th><th class="num-col">Gross</th>' +
+    '<th class="num-col">Arrears</th><th class="num-col">Incentive</th><th class="num-col">Gross</th>' +
     '<th class="num-col">PF</th><th class="num-col">ESI</th><th class="num-col">PT</th><th class="num-col">TDS</th>' +
-    '<th class="num-col">Other ded.</th><th class="num-col">Net pay</th><th class="num-col">Change</th>' +
-    '<th></th></tr></thead>';
+    '<th class="num-col">Advance</th><th class="num-col">Other ded.</th>' +
+    '<th class="num-col">Net pay</th><th class="num-col">Change</th><th></th></tr></thead>';
   var prevById = {};
   prevRun.forEach(function (r) { prevById[r.emp_code] = r; });
 
@@ -3113,10 +3134,11 @@ function renderPayroll() {
       '<td class="num-col">' + money(r.basic) + '</td><td class="num-col">' + money(r.hra) + '</td>' +
       '<td class="num-col">' + money(num(r.special_allowance) + num(r.other_allowance)) + '</td>' +
       '<td class="num-col">' + cell('arrears') + '</td>' +
-      '<td class="num-col">' + cell('bonus') + '</td>' +
+      '<td class="num-col">' + cell('incentive') + '</td>' +
       '<td class="num-col"><b>' + money(r.gross) + '</b></td>' +
       '<td class="num-col">' + money(r.pf) + '</td><td class="num-col">' + money(r.esi) + '</td>' +
       '<td class="num-col">' + money(r.pt) + '</td><td class="num-col">' + money(r.tds) + '</td>' +
+      '<td class="num-col">' + cell('advance_deduction') + '</td>' +
       '<td class="num-col">' + cell('other_deduction') + '</td>' +
       '<td class="num-col"><b>' + cur() + money(r.net) + '</b></td>' +
       '<td class="num-col">' + chg + '</td>' +
@@ -3125,7 +3147,7 @@ function renderPayroll() {
   }).join('');
 
   el('pay-table').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="17" class="empty">No payroll for ' + esc(monthLabel(ym)) +
+    '<tr><td colspan="18" class="empty">No payroll for ' + esc(monthLabel(ym)) +
     '. Press "Generate from attendance" to build it.</td></tr>') + '</tbody>';
 }
 
@@ -3148,7 +3170,8 @@ function editPayField(index, field, value) {
   var row = S.payDraft.rows[index];
   var e = empByCode(row.emp_code);
   var overrides = {
-    arrears: row.arrears, bonus: row.bonus, other_deduction: row.other_deduction
+    arrears: row.arrears, bonus: row.bonus, incentive: row.incentive,
+    other_deduction: row.other_deduction, advance_deduction: row.advance_deduction
   };
   overrides[field] = num(value);
   S.payDraft.rows[index] = computePay(e, row.month, overrides);
@@ -3240,12 +3263,15 @@ function payslipHtml(r, e) {
         line('Other allowance', r.other_allowance) +
         (num(r.arrears) ? line('Arrears', r.arrears) : '') +
         (num(r.bonus) ? line('Bonus', r.bonus) : '') +
+        (num(r.incentive) ? line('Incentive', r.incentive) : '') +
         (num(r.ot_amount) ? line('Overtime (' + num(r.ot_hours) + ' h)', r.ot_amount) : '') +
         '<tr><td><b>Gross earnings</b></td><td class="num-col"><b>' + cur() + money(r.gross) + '</b></td></tr>' +
       '</tbody></table>' +
       '<table><thead><tr><th>Deductions</th><th class="num-col">Amount</th></tr></thead><tbody>' +
         line('Provident fund', r.pf) + line('ESI', r.esi) + line('Professional tax', r.pt) +
-        line('TDS', r.tds) + line('Other', r.other_deduction) +
+        line('Income tax', r.tds) +
+        (num(r.advance_deduction) ? line('Advance', r.advance_deduction) : '') +
+        line('Other', r.other_deduction) +
         '<tr><td><b>Total deductions</b></td><td class="num-col"><b>' + cur() + money(r.total_deduction) + '</b></td></tr>' +
       '</tbody></table>' +
     '</div>' +
@@ -3330,8 +3356,22 @@ function registerRows(ym) {
 function renderReports() {
   var ym = el('rep-month').value || thisMonth();
   var kind = el('rep-kind').value;
-  var spec = { register: reportRegister, statutory: reportStatutory, ytd: reportYtd,
-               exceptions: reportExceptions, movement: reportMovement }[kind](ym);
+  var spec = { register: reportRegister, wages: reportWages, statutory: reportStatutory,
+               ytd: reportYtd, exceptions: reportExceptions, movement: reportMovement }[kind](ym);
+
+  if (spec.html) {                       /* grouped registers render themselves */
+    LAST_REPORT = { name: kind + '-' + ym, cols: spec.cols, rows: spec.rows };
+    el('rep-title').textContent = spec.title;
+    el('rep-note').textContent = spec.note;
+    el('rep-kpis').innerHTML = spec.kpis || '';
+    el('rep-table').innerHTML = '';
+    el('rep-table').outerHTML = '<div id="rep-table">' + spec.html + '</div>';
+    renderReportSideTables(ym);
+    return;
+  }
+  if (el('rep-table').tagName !== 'TABLE') {
+    el('rep-table').outerHTML = '<table id="rep-table"></table>';
+  }
 
   LAST_REPORT = { name: kind + '-' + ym, cols: spec.cols, rows: spec.rows };
   el('rep-title').textContent = spec.title;
@@ -3575,6 +3615,7 @@ var LEAVE_RULES = [
   ['leave_after_days', 'No leave in the first N days of service (0 = off)', 'number']
 ];
 var PAYROLL_RULES = [
+  ['register_group_by', 'Salary register grouped by', 'select:unit,department,company'],
   ['payroll_basis', 'Salary divisor', 'select:calendar,fixed26,working'],
   ['payroll_rounding', 'Round amounts to the nearest', 'select:1,5,10,100'],
   ['pf_employee_pct', 'PF employee %', 'number'],
@@ -4944,7 +4985,7 @@ var EMP_ALIASES = {
   employeecode: 'emp_code', empcode: 'emp_code', employeeid: 'emp_code', code: 'emp_code',
   employeename: 'name', empname: 'name', name: 'name',
   devicecode: 'device_id', deviceid: 'device_id', enrollno: 'device_id', userid: 'device_id',
-  company: 'company', department: 'department',
+  company: 'company', department: 'department', division: 'unit', unit: 'unit',
   designation: 'designation',
   gender: 'gender', doj: 'doj', dateofjoining: 'doj',
   dor: 'exit_date', dateofresignation: 'exit_date', exitdate: 'exit_date',
@@ -5763,6 +5804,195 @@ function exportCtcSheet() {
       }));
     });
   download('ctc-structure.csv', toCSV(cols, rows));
+}
+</script>
+
+<script>
+/* =================================================================
+   SALARY REGISTER, UNIT BY UNIT
+   The company's own register layout: one block per unit, the same
+   thirty columns, a total line per unit and a grand total.
+   ================================================================= */
+
+var REGISTER_COLS = [
+  'SR. NO.', 'CODE', 'Employee Name', 'Division', 'Days in Month',
+  'Actual present day in the month', 'Paid Holiday', 'Absent', 'Week Off', 'Leave',
+  'Final Attendance', 'Extra', 'BASIC SALARY', 'HRA', 'TA/SP ALW/ OT or Extra pay',
+  'INCENTIVE', 'Arear', 'Actual Salary Earn', 'Provident Fund (12%)', 'ESIC 0.75%',
+  'Professional Tax', 'Income Tax', 'Advance Deduction', 'Other Deduction',
+  'Total Deduction', 'Net Amount Payable',
+  'BASIC SALARY', 'HRA', 'TA/SP ALW', 'TOTAL'
+];
+/* the last four repeat the agreed full-month structure, as in the sheet */
+var REGISTER_NUM_FROM = 4;
+
+function unitOf(e) {
+  var field = String(S.settings.register_group_by || 'unit');
+  var v = String(e[field] || '').trim();
+  if (!v && field === 'unit') v = String(e.department || '').trim();
+  return v || 'Unassigned';
+}
+
+/* One register line for one employee. */
+function registerRow(e, r, sr) {
+  var ym = String(r.month);
+  var s = attStats(ym, e.emp_code);
+  var struct = { basic: num(e.basic), hra: num(e.hra),
+                 ta: num(e.special_allowance) + num(e.other_allowance) };
+  return [
+    sr, e.emp_code, e.name, unitOf(e),
+    s.total,
+    s.P + s.HD * 0.5,
+    s.H,
+    s.A,
+    s.WO,
+    s.L,
+    Math.round((s.P + s.HD * 0.5 + s.H + s.WO + s.L) * 100) / 100,
+    r.ot_hours ? num(r.ot_hours) : '',
+    num(r.basic),
+    num(r.hra),
+    num(r.special_allowance) + num(r.other_allowance) + num(r.ot_amount),
+    num(r.incentive) + num(r.bonus),
+    num(r.arrears),
+    num(r.gross),
+    num(r.pf),
+    num(r.esi),
+    num(r.pt),
+    num(r.tds),
+    num(r.advance_deduction),
+    num(r.other_deduction),
+    num(r.total_deduction),
+    num(r.net),
+    struct.basic, struct.hra, struct.ta, struct.basic + struct.hra + struct.ta
+  ];
+}
+
+function reportRegister(ym) {
+  var run = currentRun(ym).rows;
+  var live = !run.length;
+  if (live) {
+    run = activeEmployees()
+      .filter(function (e) { return String(e.wage_type || 'Salary') !== 'Wages'; })
+      .filter(function (e) { return !e.doj || String(e.doj) <= ym + '-31'; })
+      .map(function (e) { return computePay(e, ym, null); });
+  }
+  if (!isAdmin()) run = run.filter(function (r) { return String(r.emp_code) === myCode(); });
+
+  /* group by unit */
+  var units = {};
+  run.forEach(function (r) {
+    var e = empByCode(r.emp_code);
+    if (!e) return;
+    if (String(e.wage_type || 'Salary') === 'Wages') return;
+    var u = unitOf(e);
+    (units[u] = units[u] || []).push({ e: e, r: r });
+  });
+
+  var order = Object.keys(units).sort();
+  var allRows = [], html = '', grand = null;
+  var numeric = function (v) { return typeof v === 'number' ? v : 0; };
+
+  order.forEach(function (u) {
+    var lines = units[u].sort(function (a, b) {
+      return String(a.e.name).localeCompare(String(b.e.name));
+    }).map(function (x, i) { return registerRow(x.e, x.r, i + 1); });
+
+    var totals = REGISTER_COLS.map(function (_, i) { return i < REGISTER_NUM_FROM ? '' : 0; });
+    lines.forEach(function (ln) {
+      for (var i = REGISTER_NUM_FROM; i < ln.length; i++) totals[i] += numeric(ln[i]);
+    });
+    totals[2] = 'Total — ' + u + ' (' + lines.length + ')';
+    if (!grand) grand = totals.map(function (v, i) { return i < REGISTER_NUM_FROM ? '' : 0; });
+    for (var g = REGISTER_NUM_FROM; g < totals.length; g++) grand[g] += totals[g];
+
+    allRows = allRows.concat(lines, [totals]);
+    html += '<div class="reg-block">' +
+      '<div class="reg-title">SALARY REGISTER OF STAFF UNIT-' + esc(u.toUpperCase()) +
+        ' FOR THE MONTH OF ' + esc(monthLabel(ym).toUpperCase()) + '</div>' +
+      '<div class="table-wrap" style="max-height:none"><table class="reg-table"><thead><tr>' +
+      REGISTER_COLS.map(function (c, i) {
+        return '<th' + (i >= REGISTER_NUM_FROM ? ' class="num-col"' : '') + '>' + esc(c) + '</th>';
+      }).join('') + '</tr></thead><tbody>' +
+      lines.map(function (ln) {
+        return '<tr>' + ln.map(function (v, i) {
+          return '<td' + (i >= REGISTER_NUM_FROM ? ' class="num-col"' : '') + '>' +
+            (i >= 12 && typeof v === 'number' ? money(v) : esc(v)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') +
+      '<tr class="reg-total">' + totals.map(function (v, i) {
+        return '<td' + (i >= REGISTER_NUM_FROM ? ' class="num-col"' : '') + '>' +
+          (typeof v === 'number' ? money(v) : esc(v)) + '</td>';
+      }).join('') + '</tr>' +
+      '</tbody></table></div></div>';
+  });
+
+  if (grand && order.length > 1) {
+    grand[2] = 'GRAND TOTAL (' + run.length + ')';
+    allRows.push(grand);
+    html += '<div class="reg-block"><div class="table-wrap" style="max-height:none">' +
+      '<table class="reg-table"><tbody><tr class="reg-total">' +
+      grand.map(function (v, i) {
+        return '<td' + (i >= REGISTER_NUM_FROM ? ' class="num-col"' : '') + '>' +
+          (typeof v === 'number' ? money(v) : esc(v)) + '</td>';
+      }).join('') + '</tr></tbody></table></div></div>';
+  }
+
+  var net = run.reduce(function (t, r) { return t + num(r.net); }, 0);
+  var ded = run.reduce(function (t, r) { return t + num(r.total_deduction); }, 0);
+  var earn = run.reduce(function (t, r) { return t + num(r.gross); }, 0);
+
+  return {
+    title: 'Salary register — ' + monthLabel(ym),
+    note: (live ? 'Live preview from attendance; this month has not been finalised yet. '
+                : 'From the saved payroll run. ') +
+      'Grouped by ' + (S.settings.register_group_by || 'unit') +
+      '. The last four columns are the agreed monthly structure, not the earned amount.',
+    cols: REGISTER_COLS, rows: allRows, html: html || '<div class="empty">Nobody to show.</div>',
+    kpis: kpi('Units', order.length, order.join(', ')) +
+          kpi('Employees', run.length, 'on salary') +
+          kpi('Salary earned', cur() + money(earn), 'before deductions') +
+          kpi('Net payable', cur() + money(net), cur() + money(ded) + ' deducted')
+  };
+}
+
+/* ---- wages register: kept available, driven by daily rates ---- */
+var WAGES_COLS = ['S NO', 'NAME', 'UAN NUMBER', 'WORKING DAYS', 'BASIC RATE', 'DA', 'HRA',
+  'GROSS BASIC PAY', 'GROSS D A', 'GROSS HRA', 'TOTAL BASIC AND DA', 'TOTAL HRA',
+  'TOTAL BASIC DA HRA', 'PROVIDENT FUND 12%', 'ESIC 0.75%', 'PROFESSION TAX',
+  'Other Deduction', 'ADVANCE DEDUCTION', 'TOTAL DEDUCTION', 'NET AMT PAYABLE'];
+
+function reportWages(ym) {
+  var wage = activeEmployees().filter(function (e) {
+    return String(e.wage_type || '') === 'Wages';
+  });
+  var rows = wage.map(function (e, i) {
+    var s = attStats(ym, e.emp_code);
+    var days = s.P + s.HD * 0.5 + s.H + s.WO + s.L;
+    var basic = num(e.daily_rate) * days;
+    var da = num(e.da_rate) * days;
+    var hra = num(e.hra_rate) * days;
+    var basicDa = basic + da, total = basicDa + hra;
+    var pf = Math.round(basicDa * num(S.settings.pf_employee_pct || 12) / 100);
+    var esi = total <= num(S.settings.esi_wage_ceiling || 21000)
+      ? Math.round(total * num(S.settings.esi_employee_pct || 0.75) / 100) : 0;
+    var ptComp = ctcComponentByCode('ptax');
+    var pt = ptComp ? num(computeCtc({ gross: total }, {}).values.ptax) : num(S.settings.pt_amount || 0);
+    var ded = pf + esi + pt;
+    return [i + 1, e.name, e.uan || '', days, num(e.daily_rate), num(e.da_rate), num(e.hra_rate),
+            Math.round(basic), Math.round(da), Math.round(hra), Math.round(basicDa),
+            Math.round(hra), Math.round(total), pf, esi, pt, 0, 0, ded, Math.round(total - ded)];
+  });
+  return {
+    title: 'Wages register — ' + monthLabel(ym),
+    note: 'Daily-rate workers: anyone whose employee record is marked "Paid as: Wages". Pay is the ' +
+      'daily basic, DA and HRA rates on their record times the days credited by the attendance ' +
+      'register. Set those three rates on each worker before relying on this.',
+    cols: WAGES_COLS, numFrom: 3, rows: rows,
+    kpis: kpi('Wage workers', wage.length, wage.length ? 'marked "Wages"' : 'none marked yet') +
+          kpi('Days credited', rows.reduce(function (t, r) { return t + r[3]; }, 0), 'in ' + monthLabel(ym)) +
+          kpi('Total earnings', cur() + money(rows.reduce(function (t, r) { return t + r[12]; }, 0)), '') +
+          kpi('Net payable', cur() + money(rows.reduce(function (t, r) { return t + r[19]; }, 0)), '')
+  };
 }
 </script>
 

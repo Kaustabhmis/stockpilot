@@ -33,7 +33,7 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 | 2 | **Attendance** | Monthly register grid: click to cycle P/A/HD/L/WO/H, double-click for in/out times and remarks, click a date header to fill a column, fill a whole employee-month, fill blank days. Holiday calendar auto-marks H. Late marks and overtime derived from the shift and grace period. Biometric/device CSV import. Locks automatically once payroll is finalised |
 | 3 | **Leave** | Applications with live validation (quota balance, overlapping requests, working-day count that skips weekly offs and holidays). Approve / reject / cancel. Month calendar of who is off when. Per-type balances against annual quota. Approving writes **L** onto the attendance register; cancelling clears those days |
 | 4 | **Payroll** | Generates from attendance, prorates by paid days, computes PF / ESI / PT / TDS plus employer PF & ESI and CTC. Editable arrears, bonus and other deductions per employee. Month-on-month variance per employee. Draft → finalise → (reopen if needed). Printable payslips, bulk payslip print, bank transfer CSV |
-| 5 | **Reports** | Five reports, each exportable: salary register, PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
+| 5 | **Reports** | Six reports, each exportable: **salary register unit by unit** (the company's own register layout), wages register, PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
 
 ## Settings
 
@@ -50,6 +50,37 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
 | **Import data** | manual import of punch logs, attendance, holidays and employees from CSV or Excel |
 | **Account** | change your password |
+
+### The salary register, unit by unit
+
+**Reports → Salary register (unit-wise)** reproduces the company's own register: one block per unit
+with its title bar, the same thirty columns, a total line under each unit and a grand total.
+
+```
+SR. NO. | CODE | Employee Name | Division | Days in Month | Actual present day |
+Paid Holiday | Absent | Week Off | Leave | Final Attendance | Extra |
+BASIC SALARY | HRA | TA/SP ALW/OT | INCENTIVE | Arear | Actual Salary Earn |
+Provident Fund (12%) | ESIC 0.75% | Professional Tax | Income Tax |
+Advance Deduction | Other Deduction | Total Deduction | Net Amount Payable |
+BASIC SALARY | HRA | TA/SP ALW | TOTAL        ← the agreed structure, not the earned amount
+```
+
+The attendance columns come from the register, the money columns from the payroll run (or a live
+preview when the month is not finalised yet), and the last four repeat the agreed monthly structure
+from the employee record, exactly as the spreadsheet does.
+
+Grouping is the **Unit / division** field on the employee record — `HO`, `U1`, `U2`, `U3` — and
+falls back to department when a unit is blank. *Salary register grouped by* in Payroll rules can
+switch it to department or company instead. A `Division` column in any import maps straight onto it.
+
+Payroll gained **Incentive** and **Advance deduction** to match the register; both are editable in
+the draft run and appear on the payslip.
+
+**Wages register** is there and working for daily-rate workers — mark someone *Paid as: Wages* and
+fill in their daily basic, DA and HRA rates, and the register pays those rates against the days the
+attendance register credits. It is deliberately the simpler of the two: the salary register is the
+one that has been matched against the company's sheet, so check the wage rules against a known month
+before relying on them.
 
 ### CTC / salary structure
 
