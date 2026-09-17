@@ -835,10 +835,34 @@ function indexed(name) {
   return out;
 }
 
+/**
+ * Sheets hands back a Date object for anything it thinks is a date or a time,
+ * and a bare time like 09:30 comes back anchored to 30 December 1899. Left
+ * alone, a shift start reads "1899-12-30T09:30:00", every "HH:MM" parse fails,
+ * and late marks, overtime and half-days quietly stop working. So each column
+ * is formatted as what the rest of the system expects to read.
+ */
 function normalize(value, header, tz) {
   if (value instanceof Date) {
-    var dateOnly = /(^date$|_date$|^doj$|^dob$)/.test(header);
-    return Utilities.formatDate(value, tz, dateOnly ? 'yyyy-MM-dd' : "yyyy-MM-dd'T'HH:mm:ss");
+    if (/(^date$|_date$|^doj$|^dob$)/.test(header)) {
+      return Utilities.formatDate(value, tz, 'yyyy-MM-dd');
+    }
+    // A real moment in time: keep the date with it.
+    if (/^punch_time$|_at$/.test(header)) {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd'T'HH:mm:ss");
+    }
+    // A clock time: the day it is anchored to is meaningless.
+    if (/_time$|^shift_start$|^shift_end$/.test(header)) {
+      return Utilities.formatDate(value, tz, 'HH:mm');
+    }
+    /* The Settings tab is key/value, so the column name says nothing. A value
+       sitting on the 1899 epoch is a time someone typed; anything else is a
+       date. */
+    if (header === 'value') {
+      return Utilities.formatDate(value, tz,
+        value.getFullYear() < 1901 ? 'HH:mm' : 'yyyy-MM-dd');
+    }
+    return Utilities.formatDate(value, tz, "yyyy-MM-dd'T'HH:mm:ss");
   }
   return value === null || value === undefined ? '' : value;
 }

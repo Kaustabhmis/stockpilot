@@ -944,9 +944,20 @@ function parseCSV(text) {
   if (field !== '' || row.length) { row.push(field); rows.push(row); }
   return rows.filter(function (r) { return r.join('').trim() !== ''; });
 }
+/* Accepts "09:30", and also the "1899-12-30T09:30:00" that a Google Sheets
+   time cell turns into - so a sheet saved before the backend was fixed, or
+   edited by hand in Sheets, still reads correctly. */
 function minutesOf(hhmm) {
-  var m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/);
+  var str = String(hhmm || '');
+  var m = str.match(/^(\d{1,2}):(\d{2})/) || str.match(/T(\d{2}):(\d{2})/);
   return m ? (+m[1]) * 60 + (+m[2]) : null;
+}
+
+/* The same value, for showing on screen. */
+function hhmm(value) {
+  var mins = minutesOf(value);
+  if (mins === null) return String(value || '');
+  return ('0' + Math.floor(mins / 60)).slice(-2) + ':' + ('0' + (mins % 60)).slice(-2);
 }
 
 /* ------------------------------ API ----------------------------- */
@@ -2065,10 +2076,10 @@ function showPeople(kind, iso) {
   var body = list.map(function (x) {
     var e = x.e, extra = '';
     if (kind === 'late') {
-      extra = '<td class="num-col">' + esc(x.rec.in_time || '-') +
+      extra = '<td class="num-col">' + esc(hhmm(x.rec.in_time) || '-') +
         ' <span class="badge b-amber">' + x.late + ' min late</span></td>';
     } else if (kind === 'present') {
-      extra = '<td class="num-col">' + esc(x.rec.in_time || '-') + ' - ' + esc(x.rec.out_time || '-') +
+      extra = '<td class="num-col">' + esc(hhmm(x.rec.in_time) || '-') + ' - ' + esc(hhmm(x.rec.out_time) || '-') +
         (x.st === 'HD' ? ' <span class="badge b-amber">half day</span>' : '') +
         (x.late ? ' <span class="badge b-amber">' + x.late + 'm late</span>' : '') + '</td>';
     } else if (kind === 'absent') {
@@ -2792,7 +2803,7 @@ function renderAttendance() {
       var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
       var late = (st === 'P' || st === 'HD') && lateMinutes(rec, e.emp_code);
       var open = rec && rec.in_time && !rec.out_time && dateStr(ym, d) < today();
-      var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + rec.in_time + '-' + (rec.out_time || '?') : '') +
+      var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + hhmm(rec.in_time) + '-' + (hhmm(rec.out_time) || '?') : '') +
         (late ? ' (late ' + late + 'm)' : '') + (open ? ' - never punched out' : '') +
         (rec && rec.remarks ? ' ' + rec.remarks : '');
       row += '<td><div class="att-cell s-' + esc(st) + (S.attDirty[key] ? ' edited' : '') +
@@ -4505,12 +4516,11 @@ function openSettings() {
 }
 
 function settingsTab(tab) {
-  var all = SETTING_GROUPS.map(function (g) { return g.id; })
-    .concat(['shifts', 'holidays', 'leaverules', 'requests', 'ctc', 'payrollrules',
-             'integrations', 'import', 'account']);
-  all.forEach(function (t) {
-    var pane = el('stab-' + t);
-    if (pane) pane.style.display = t === tab ? '' : 'none';
+  /* Read the panes out of the modal rather than keeping a second list of tab
+     names here. A hardcoded list silently hides any pane somebody adds later
+     and forgets to register - which is exactly what happened to Accounts. */
+  document.querySelectorAll('#modal [id^="stab-"]').forEach(function (pane) {
+    pane.style.display = pane.id === 'stab-' + tab ? '' : 'none';
   });
   document.querySelectorAll('#modal .tab').forEach(function (n) {
     n.classList.toggle('active', n.dataset.stab === tab);
@@ -5354,7 +5364,7 @@ function startClock() {
       d.innerHTML = now.toLocaleDateString(undefined, {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
       }) + (sh && sh.start_time ? ' &middot; ' + esc(sh.name || 'shift') + ' ' +
-            esc(sh.start_time) + '-' + esc(sh.end_time || '') : '');
+            esc(hhmm(sh.start_time)) + '-' + esc(hhmm(sh.end_time)) : '');
     }
   };
   tick();
@@ -7317,7 +7327,7 @@ function renderRequests() {
     var t = requestTypeByCode(r.type) || { name: r.type };
     var detail = '';
     if (requestEffect(r.type) === 'times') {
-      detail = esc((r.in_time || '--') + ' to ' + (r.out_time || '--'));
+      detail = esc((hhmm(r.in_time) || '--') + ' to ' + (hhmm(r.out_time) || '--'));
     } else if (requestEffect(r.type) === 'comp_off') {
       detail = r.mode === 'payout' ? '<span class="badge b-violet">pay out</span>'
         : 'adjust against ' + esc(r.adjust_date || '-');
@@ -7406,7 +7416,7 @@ function requestFormChanged() {
   if (effect === 'times') {
     extra.innerHTML = '<div class="grid2">' +
       '<label class="field">In time<input data-f="in_time" type="time" value="' +
-        esc(keep.in_time || S.settings.shift_start || '09:30') + '"></label>' +
+        esc(hhmm(keep.in_time) || hhmm(S.settings.shift_start) || '09:30') + '"></label>' +
       '<label class="field">Out time<input data-f="out_time" type="time" value="' +
         esc(keep.out_time || S.settings.shift_end || '18:30') + '"></label>' +
       '<label class="field">Why<select data-f="mode">' +
@@ -7677,7 +7687,7 @@ function renderPunchCard() {
   }
 
   var st = S.punch;
-  var inT = st.in_time, outT = st.out_time;
+  var inT = hhmm(st.in_time), outT = hhmm(st.out_time);
   var stage = !inT ? 'ready' : (!outT ? 'in' : 'done');
   var worked = '';
   if (inT && outT) {
@@ -7723,7 +7733,7 @@ function renderPunchCard() {
         'closed does not count as a paid day.</div>' : '') +
     ((st.openDays || []).length
       ? '<div class="punch-open"><span>&#9888;</span><span>You did not punch out on ' +
-        st.openDays.map(function (d) { return esc(d.date) + ' (in at ' + esc(d.in_time) + ')'; }).join(', ') +
+        st.openDays.map(function (d) { return esc(d.date) + ' (in at ' + esc(hhmm(d.in_time)) + ')'; }).join(', ') +
         '. ' + (st.mandatory ? 'Those days are unpaid until they are fixed.' : '') + '</span>' +
         '<button class="ghost sm" style="margin-left:auto" onclick="fixOpenDay(\'' +
         esc(st.openDays[0].date) + '\')">Raise a swipe request</button></div>'
@@ -7827,7 +7837,7 @@ function fixOpenDay(date) {
     if (dateEl) dateEl.value = date;
     var rec = recordFor(date.slice(0, 7), e.emp_code, +date.slice(8));
     var inEl = el('modal-body').querySelector('[data-f="in_time"]');
-    if (inEl && rec && rec.in_time) inEl.value = rec.in_time;
+    if (inEl && rec && rec.in_time) inEl.value = hhmm(rec.in_time);
     var reason = el('modal-body').querySelector('[data-f="reason"]');
     if (reason) reason.value = 'Did not punch out';
     requestFormChanged();
