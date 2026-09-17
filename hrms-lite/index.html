@@ -589,6 +589,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 var S = {
   api: '', demo: false, user: null, view: 'dashboard',
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
+  shifts: [], leaveTypes: [], leaveVersion: 0,
   attDirty: {}, payDraft: null, attVersion: 0,
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -626,16 +627,123 @@ function monthLabel(ym) {
   return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + " '" + p[0].slice(2);
 }
 var WEEKDAY_MAP = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-function isWeeklyOff(ym, d) {
-  var offs = String(S.settings.weekly_off || 'Sun').split(',')
-    .map(function (x) { return WEEKDAY_MAP[x.trim()]; });
-  return offs.indexOf(weekdayOf(ym, d)) >= 0;
+
+/* ---------------------------------------------------------------
+   Policy engine. Every rule below is read from Settings and is
+   actually applied - to the register, to leave, or to pay.
+   --------------------------------------------------------------- */
+
+/* The shift an employee works. Falls back to the plain settings values
+   so the app still behaves if the Shifts table is empty. */
+function shiftFor(code) {
+  var e = code ? empByCode(code) : null;
+  var want = String((e && e.shift) || S.settings.default_shift || 'General').trim().toLowerCase();
+  var found = null, firstActive = null;
+  (S.shifts || []).forEach(function (sh) {
+    if (String(sh.active || 'yes').toLowerCase() === 'no') return;
+    if (!firstActive) firstActive = sh;
+    if (String(sh.name || '').trim().toLowerCase() === want) found = sh;
+  });
+  var sh = found || firstActive;
+  if (sh) return sh;
+  return {
+    name: 'General',
+    start_time: S.settings.shift_start || '09:30',
+    end_time: S.settings.shift_end || '18:30',
+    grace_minutes: S.settings.grace_minutes || 15,
+    full_day_hours: S.settings.full_day_hours || 8,
+    half_day_hours: S.settings.half_day_hours || 4,
+    weekly_off: S.settings.weekly_off || 'Sun',
+    saturday_policy: S.settings.saturday_policy || 'working',
+    ot_after_minutes: S.settings.ot_after_minutes || 30
+  };
 }
+
+var SATURDAY_POLICIES = {
+  working: 'All Saturdays working',
+  all_off: 'All Saturdays off',
+  '2_4': '2nd and 4th Saturday off',
+  '1_3': '1st and 3rd Saturday off',
+  alt: 'Alternate Saturdays off (even ones)'
+};
+function saturdayOff(d, policy) {
+  var nth = Math.floor((d - 1) / 7) + 1;
+  switch (String(policy || 'working')) {
+    case 'all_off': return true;
+    case '2_4': return nth === 2 || nth === 4;
+    case '1_3': return nth === 1 || nth === 3;
+    case 'alt': return nth % 2 === 0;
+    default: return false;
+  }
+}
+
+function isWeeklyOff(ym, d, code) {
+  var sh = shiftFor(code);
+  var dow = weekdayOf(ym, d);
+  var offs = String(sh.weekly_off || 'Sun').split(',')
+    .map(function (x) { return WEEKDAY_MAP[x.trim()]; });
+  if (offs.indexOf(dow) >= 0) return true;
+  if (dow === 6) return saturdayOff(d, sh.saturday_policy);
+  return false;
+}
+
+/* An optional (restricted) holiday is listed but not auto-applied. */
 function holidayOn(iso) {
+  for (var i = 0; i < S.holidays.length; i++) {
+    if (String(S.holidays[i].date) === iso &&
+        String(S.holidays[i].optional || 'no').toLowerCase() !== 'yes') return S.holidays[i];
+  }
+  return null;
+}
+function anyHolidayOn(iso) {
   for (var i = 0; i < S.holidays.length; i++) {
     if (String(S.holidays[i].date) === iso) return S.holidays[i];
   }
   return null;
+}
+
+/* ---- leave policy ---- */
+function leaveTypeNamed(name) {
+  var want = String(name || '').trim().toLowerCase(), found = null;
+  (S.leaveTypes || []).forEach(function (t) {
+    if (String(t.name || '').trim().toLowerCase() === want) found = t;
+  });
+  return found;
+}
+function activeLeaveTypes() {
+  return (S.leaveTypes || []).filter(function (t) {
+    return String(t.active || 'yes').toLowerCase() !== 'no';
+  });
+}
+
+/**
+ * Which approved leave days are unpaid: days of an unpaid type, plus - when
+ * "excess leave is unpaid" is on - the days beyond the annual quota.
+ * Built once per change and cached.
+ */
+function unpaidLeaveMap() {
+  if (S._ulV === S.leaveVersion) return S._ul;
+  var map = {}, used = {};
+  var excessUnpaid = String(S.settings.excess_leave_unpaid || 'yes').toLowerCase() === 'yes';
+  S.leave.filter(function (l) { return l.status === 'Approved'; })
+    .sort(function (a, b) { return String(a.from_date).localeCompare(String(b.from_date)); })
+    .forEach(function (l) {
+      var type = leaveTypeNamed(l.type);
+      var paid = type ? String(type.paid || 'yes').toLowerCase() !== 'no' : true;
+      var quota = type ? num(type.quota) : 0;
+      var year = String(l.from_date).slice(0, 4);
+      var key = l.emp_code + '|' + String(l.type) + '|' + year;
+      var a = new Date(l.from_date), b = new Date(l.to_date);
+      for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+        var iso = d.toISOString().slice(0, 10);
+        if (isWeeklyOff(iso.slice(0, 7), d.getDate(), l.emp_code) || holidayOn(iso)) continue;
+        used[key] = (used[key] || 0) + 1;
+        var overQuota = excessUnpaid && quota > 0 && used[key] > quota;
+        if (!paid || overQuota) map[l.emp_code + '_' + iso] = !paid ? 'unpaid type' : 'over quota';
+      }
+    });
+  S._ul = map; S._ulV = S.leaveVersion;
+  return map;
 }
 function toast(msg, kind) {
   var t = el('toast');
@@ -865,7 +973,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v3';
+var DEMO_KEY = 'hrms_lite_demo_v4';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -877,6 +985,10 @@ function demoDb() {
       esi_employee_pct: '0.75', esi_employer_pct: '3.25', esi_wage_ceiling: '21000',
       pt_amount: '200', weekly_off: 'Sun', shift_start: '09:30', shift_end: '18:30',
       grace_minutes: '15', ot_after_minutes: '30', full_day_hours: '8', half_day_hours: '4',
+      saturday_policy: 'working', default_shift: 'General', late_marks_per_halfday: '3',
+      ot_pay_enabled: 'no', ot_rate_multiplier: '1', ot_max_hours_month: '60',
+      sandwich_rule: 'no', excess_leave_unpaid: 'yes', leave_after_days: '0',
+      payroll_basis: 'calendar', payroll_rounding: '1',
       essl_mode: 'sql-agent', essl_api_url: '', essl_api_user: '', essl_auth_style: 'basic',
       essl_device_serial: '', essl_push_enabled: 'no', essl_push_url: '',
       sql_server: 'localhost\\SQLEXPRESS', sql_database: 'etimetracklite1', sql_table: 'DeviceLogs',
@@ -884,6 +996,24 @@ function demoDb() {
       leave_types: 'Casual,Sick,Earned,Unpaid', quota_casual: '12', quota_sick: '6', quota_earned: '15'
     },
     employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [],
+    shifts: [
+      { id: 'SH1', name: 'General', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
+        full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun', saturday_policy: 'working',
+        ot_after_minutes: 30, active: 'yes' },
+      { id: 'SH2', name: 'Shift A', start_time: '06:00', end_time: '14:30', grace_minutes: 10,
+        full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun', saturday_policy: '2_4',
+        ot_after_minutes: 30, active: 'yes' }
+    ],
+    leaveTypes: [
+      { id: 'LT1', name: 'Casual', paid: 'yes', quota: 12, carry_forward: 'no', max_consecutive: 3,
+        notice_days: 1, allow_half_day: 'yes', active: 'yes' },
+      { id: 'LT2', name: 'Sick', paid: 'yes', quota: 6, carry_forward: 'no', max_consecutive: 3,
+        notice_days: 0, allow_half_day: 'yes', active: 'yes' },
+      { id: 'LT3', name: 'Earned', paid: 'yes', quota: 15, carry_forward: 'yes', max_consecutive: 15,
+        notice_days: 7, allow_half_day: 'no', active: 'yes' },
+      { id: 'LT4', name: 'Unpaid', paid: 'no', quota: 0, carry_forward: 'no', max_consecutive: 30,
+        notice_days: 1, allow_half_day: 'yes', active: 'yes' }
+    ],
     users: [{ email: 'admin@company.com', role: 'admin', emp_code: '', active: 'yes' }]
   };
   var seed = [
@@ -982,7 +1112,8 @@ function demoSave(db) { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); }
 function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet === 'Users' ? 'email' : 'id'); }
 var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
-  Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches'
+  Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
+  Shifts: 'shifts', LeaveTypes: 'leaveTypes'
 };
 function demoApi(action, p) {
   var db = demoDb(), list, key, i;
@@ -992,6 +1123,7 @@ function demoApi(action, p) {
     case 'bootstrap':
       return { settings: db.settings, employees: db.employees, attendance: db.attendance,
                leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users,
+               shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -1095,7 +1227,10 @@ function reload() {
     S.leave = d.leave || [];
     S.payroll = d.payroll || [];
     S.holidays = d.holidays || [];
+    S.shifts = d.shifts || [];
+    S.leaveTypes = d.leaveTypes || [];
     S.secrets = d.secrets || {};
+    S.leaveVersion++;
     S.attDirty = {}; S.payDraft = null; S.attVersion++;
     el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
     document.querySelectorAll('.adm').forEach(function (n) { n.style.display = isAdmin() ? '' : 'none'; });
@@ -1343,20 +1478,22 @@ function dashDate() {
 /* kind: headcount | present | absent | late | leave | unmarked | halfday */
 function peopleOn(kind, iso) {
   var ym = iso.slice(0, 7), d = +iso.slice(8);
-  var nonWorking = isWeeklyOff(ym, d) || !!holidayOn(iso);
   return activeEmployees().map(function (e) {
     var rec = recordFor(ym, e.emp_code, d);
-    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
-    return { e: e, st: st, rec: rec || {}, late: (st === 'P' || st === 'HD') ? lateMinutes(rec) : 0 };
+    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
+    /* each employee can be on a different shift, so "non-working" is per person */
+    var off = st === 'WO' || st === 'H';
+    return { e: e, st: st, off: off, rec: rec || {},
+             late: (st === 'P' || st === 'HD') ? lateMinutes(rec, e.emp_code) : 0 };
   }).filter(function (x) {
     switch (kind) {
       case 'headcount': return true;
-      case 'present':   return !nonWorking && (x.st === 'P' || x.st === 'HD');
-      case 'absent':    return !nonWorking && x.st === 'A';
-      case 'halfday':   return !nonWorking && x.st === 'HD';
-      case 'late':      return !nonWorking && x.late > 0;
-      case 'leave':     return !nonWorking && x.st === 'L';
-      case 'unmarked':  return !nonWorking && !x.st;
+      case 'present':   return !x.off && (x.st === 'P' || x.st === 'HD');
+      case 'absent':    return !x.off && x.st === 'A';
+      case 'halfday':   return !x.off && x.st === 'HD';
+      case 'late':      return !x.off && x.late > 0;
+      case 'leave':     return !x.off && x.st === 'L';
+      case 'unmarked':  return !x.off && !x.st;
       default:          return false;
     }
   });
@@ -1530,6 +1667,7 @@ var EMP_FIELDS = [
   ['ifsc', 'IFSC', 'text'],
   ['manager', 'Reporting manager', 'text'],
   ['device_id', 'Biometric device ID', 'text'],
+  ['shift', 'Shift', 'shift'],
   ['dob', 'Date of birth', 'date'],
   ['gender', 'Gender', 'select:,M,F,Other'],
   ['address', 'Address', 'text'],
@@ -1626,7 +1764,16 @@ function renderEmployees() {
 function fieldInput(f, value) {
   var name = f[0], label = f[1], type = f[2], readonly = f[3];
   var html;
-  if (type.indexOf('select:') === 0) {
+  if (type === 'shift') {
+    var names = (S.shifts || []).filter(function (x) {
+      return String(x.active || 'yes').toLowerCase() !== 'no';
+    }).map(function (x) { return String(x.name); });
+    if (!names.length) names = [String(S.settings.default_shift || 'General')];
+    html = '<select data-f="' + name + '">' + names.map(function (o) {
+      return '<option value="' + esc(o) + '"' + (String(value || '') === o ? ' selected' : '') + '>' +
+        esc(o) + '</option>';
+    }).join('') + '</select>';
+  } else if (type.indexOf('select:') === 0) {
     html = '<select data-f="' + name + '">' + type.slice(7).split(',').map(function (o) {
       return '<option value="' + esc(o) + '"' + (String(value || '') === o ? ' selected' : '') + '>' +
         esc(o || '-') + '</option>';
@@ -1943,10 +2090,10 @@ function attMap(ym) {
 }
 
 /* Default status for an unmarked day: holiday, weekly off, or blank. */
-function defaultStatus(ym, d) {
+function defaultStatus(ym, d, code) {
   var iso = dateStr(ym, d);
   if (holidayOn(iso)) return 'H';
-  if (isWeeklyOff(ym, d)) return 'WO';
+  if (isWeeklyOff(ym, d, code)) return 'WO';
   return '';
 }
 function recordFor(ym, code, d) {
@@ -1955,7 +2102,7 @@ function recordFor(ym, code, d) {
 }
 function statusOf(ym, code, d) {
   var rec = recordFor(ym, code, d);
-  return (rec && rec.status) ? rec.status : defaultStatus(ym, d);
+  return (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
 }
 
 /* A month is locked once its payroll run has been finalised. */
@@ -1964,21 +2111,24 @@ function monthLocked(ym) {
 }
 function canEditAtt(ym) { return isAdmin() && !monthLocked(ym); }
 
-function shiftCfg() {
+function shiftCfg(code) {
+  var sh = shiftFor(code);
   return {
-    start: minutesOf(S.settings.shift_start || '09:30'),
-    end: minutesOf(S.settings.shift_end || '18:30'),
-    grace: num(S.settings.grace_minutes || 15),
-    otAfter: num(S.settings.ot_after_minutes || 30)
+    start: minutesOf(sh.start_time || '09:30'),
+    end: minutesOf(sh.end_time || '18:30'),
+    grace: num(sh.grace_minutes || 15),
+    otAfter: num(sh.ot_after_minutes || 30),
+    fullHours: num(sh.full_day_hours || 8) || 8,
+    halfHours: num(sh.half_day_hours || 4) || 4
   };
 }
-function lateMinutes(rec) {
-  var cfg = shiftCfg(), inM = minutesOf(rec && rec.in_time);
+function lateMinutes(rec, code) {
+  var cfg = shiftCfg(code), inM = minutesOf(rec && rec.in_time);
   if (inM === null || cfg.start === null) return 0;
   return Math.max(0, inM - cfg.start - cfg.grace);
 }
-function otMinutes(rec) {
-  var cfg = shiftCfg(), outM = minutesOf(rec && rec.out_time);
+function otMinutes(rec, code) {
+  var cfg = shiftCfg(code), outM = minutesOf(rec && rec.out_time);
   if (outM === null || cfg.end === null) return 0;
   var over = outM - cfg.end;
   return over > cfg.otAfter ? over : 0;
@@ -1988,21 +2138,30 @@ function attStats(ym, code) {
   var dim = daysInMonth(ym);
   /* In the running month, days that have not happened yet are not "missing". */
   var upTo = ym === thisMonth() ? new Date().getDate() : dim;
-  var s = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0, blankDays: [], future: 0, late: 0, ot: 0 };
+  var unpaid = unpaidLeaveMap();
+  var s = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0, blankDays: [], future: 0,
+            late: 0, ot: 0, unpaidLeave: 0, working: 0 };
   for (var d = 1; d <= dim; d++) {
+    var iso = dateStr(ym, d);
     var rec = recordFor(ym, code, d);
-    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
+    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
     if (st && s[st] !== undefined) s[st]++;
-    else if (d <= upTo) { s.blank++; s.blankDays.push(dateStr(ym, d)); }
+    else if (d <= upTo) { s.blank++; s.blankDays.push(iso); }
     else s.future++;
+    if (st !== 'WO' && st !== 'H') s.working++;
+    if (st === 'L' && unpaid[code + '_' + iso]) s.unpaidLeave++;
     if (st === 'P' || st === 'HD') {
-      if (lateMinutes(rec)) s.late++;
-      s.ot += otMinutes(rec);
+      if (lateMinutes(rec, code)) s.late++;
+      s.ot += otMinutes(rec, code);
     }
   }
   s.total = dim;
-  /* An unmarked day that has already passed is unpaid until someone marks it. */
-  s.lop = s.A + s.HD * 0.5 + s.blank;
+  /* Late-mark rule: every N late marks costs half a day. */
+  var per = num(S.settings.late_marks_per_halfday || 0);
+  s.lateDeduction = per > 0 ? Math.floor(s.late / per) * 0.5 : 0;
+  /* An unmarked day that has already passed is unpaid until someone marks it.
+     Leave of an unpaid type - or beyond quota - is unpaid too. */
+  s.lop = s.A + s.HD * 0.5 + s.blank + s.unpaidLeave + s.lateDeduction;
   s.paid = dim - s.lop;
   return s;
 }
@@ -2044,8 +2203,8 @@ function renderAttendance() {
     for (var d = 1; d <= dim; d++) {
       var key = e.emp_code + '_' + dateStr(ym, d);
       var rec = recordFor(ym, e.emp_code, d);
-      var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
-      var late = (st === 'P' || st === 'HD') && lateMinutes(rec);
+      var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
+      var late = (st === 'P' || st === 'HD') && lateMinutes(rec, e.emp_code);
       var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + rec.in_time + '-' + (rec.out_time || '?') : '') +
         (late ? ' (late ' + late + 'm)' : '') + (rec && rec.remarks ? ' ' + rec.remarks : '');
       row += '<td><div class="att-cell s-' + esc(st) + (S.attDirty[key] ? ' edited' : '') +
@@ -2109,8 +2268,8 @@ function refreshCell(ym, code, d) {
   var cell = el('c_' + key);
   if (!cell) return;
   var rec = recordFor(ym, code, d);
-  var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d);
-  var late = (st === 'P' || st === 'HD') && lateMinutes(rec);
+  var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
+  var late = (st === 'P' || st === 'HD') && lateMinutes(rec, code);
   cell.className = 'att-cell s-' + st + (S.attDirty[key] ? ' edited' : '') + (late ? ' late' : '');
   cell.textContent = st;
 }
@@ -2157,7 +2316,7 @@ function applyFill(kind, target, status) {
     });
   } else {
     for (var d = 1; d <= dim; d++) {
-      if (defaultStatus(ym, d)) continue;           /* keep weekly offs and holidays */
+      if (defaultStatus(ym, d, target)) continue;   /* keep weekly offs and holidays */
       setCell(ym, target, d, { status: status, in_time: inT, out_time: outT }); n++;
     }
   }
@@ -2242,6 +2401,7 @@ function renderAttSummary(ym, emps) {
   var head = '<thead><tr><th>Employee</th><th class="num-col">Present</th><th class="num-col">Absent</th>' +
     '<th class="num-col">Half day</th><th class="num-col">Leave</th><th class="num-col">Weekly off</th>' +
     '<th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">Late</th>' +
+    '<th class="num-col">Late ded.</th><th class="num-col">Unpaid leave</th>' +
     '<th class="num-col">OT hrs</th><th class="num-col">LOP</th><th class="num-col">Paid days</th></tr></thead>';
   var body = emps.map(function (e) {
     var s = attStats(ym, e.emp_code);
@@ -2249,11 +2409,13 @@ function renderAttSummary(ym, emps) {
       ['P', 'A', 'HD', 'L', 'WO', 'H'].map(function (k) { return '<td class="num-col">' + s[k] + '</td>'; }).join('') +
       '<td class="num-col">' + (s.blank ? '<span class="badge b-amber">' + s.blank + '</span>' : 0) + '</td>' +
       '<td class="num-col">' + (s.late ? '<span class="badge b-amber">' + s.late + '</span>' : 0) + '</td>' +
+      '<td class="num-col">' + (s.lateDeduction || 0) + '</td>' +
+      '<td class="num-col">' + (s.unpaidLeave ? '<span class="badge b-red">' + s.unpaidLeave + '</span>' : 0) + '</td>' +
       '<td class="num-col">' + (s.ot / 60).toFixed(1) + '</td>' +
       '<td class="num-col">' + s.lop + '</td><td class="num-col"><b>' + s.paid + '</b></td></tr>';
   }).join('');
   el('att-summary').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="12" class="empty">Nothing to summarise.</td></tr>') + '</tbody>';
+    '<tr><td colspan="14" class="empty">Nothing to summarise.</td></tr>') + '</tbody>';
 }
 
 /* Biometric / device CSV import: date, emp_code, in, out (header names are matched loosely) */
@@ -2359,20 +2521,28 @@ function exportAttendance() {
    ================================================================= */
 
 function leaveTypes() {
+  var fromTable = activeLeaveTypes().map(function (t) { return String(t.name); });
+  if (fromTable.length) return fromTable;
   return String(S.settings.leave_types || 'Casual,Sick,Earned,Unpaid').split(',')
     .map(function (t) { return t.trim(); }).filter(Boolean);
 }
 function quotaFor(type) {
+  var t = leaveTypeNamed(type);
+  if (t) return num(t.quota);
   var v = S.settings['quota_' + String(type).toLowerCase()];
   return v === undefined || v === '' ? 0 : num(v);
 }
-function workingDaysBetween(from, to) {
+
+/* Days charged to leave. With the sandwich rule on, weekly offs and holidays
+   that fall inside a leave block are charged too. */
+function workingDaysBetween(from, to, code) {
   var a = new Date(from), b = new Date(to), n = 0;
   if (isNaN(a) || isNaN(b) || b < a) return 0;
+  var sandwich = String(S.settings.sandwich_rule || 'no').toLowerCase() === 'yes';
   for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
     var iso = d.toISOString().slice(0, 10);
-    if (isWeeklyOff(iso.slice(0, 7), d.getDate())) continue;
-    if (holidayOn(iso)) continue;
+    var off = isWeeklyOff(iso.slice(0, 7), d.getDate(), code) || holidayOn(iso);
+    if (off && !sandwich) continue;
     n++;
   }
   return n;
@@ -2449,8 +2619,11 @@ function renderLeaveBalance(year) {
   var types = leaveTypes();
   var emps = activeEmployees();
   var head = '<thead><tr><th>Employee</th>' + types.map(function (t) {
+    var rule = leaveTypeNamed(t) || {};
     return '<th class="num-col">' + esc(t) +
-      '<div style="font-weight:400;text-transform:none">quota ' + (quotaFor(t) || '—') + '</div></th>';
+      '<div style="font-weight:400;text-transform:none">' +
+      (String(rule.paid || 'yes').toLowerCase() === 'no' ? 'unpaid' : 'quota ' + (quotaFor(t) || '—')) +
+      '</div></th>';
   }).join('') + '<th class="num-col">Total taken</th></tr></thead>';
   var body = emps.map(function (e) {
     var total = 0;
@@ -2524,20 +2697,51 @@ function checkLeave(recompute) {
   var from = b.querySelector('[data-f="from_date"]').value;
   var to = b.querySelector('[data-f="to_date"]').value;
   var daysInput = b.querySelector('[data-f="days"]');
-  if (recompute) daysInput.value = workingDaysBetween(from, to);
+  if (recompute) daysInput.value = workingDaysBetween(from, to, code);
   var days = num(daysInput.value);
-  var warns = [];
-  if (to < from) warns.push('"To" is before "From".');
-  if (!days) warns.push('That range has no working days in it.');
+  var warns = [], blocks = [];
+  var rule = leaveTypeNamed(type) || {};
+  if (to < from) blocks.push('"To" is before "From".');
+  if (!days) blocks.push('That range has no leave days in it.');
   var year = String(from).slice(0, 4);
   var q = quotaFor(type);
   if (q) {
     var taken = takenDays(code, type, year);
     if (taken + days > q) {
       warns.push(type + ' balance for ' + year + ' is ' + (q - taken) + ' day(s); this asks for ' + days +
-        '. It can still be approved - the extra shows as a negative balance.');
+        (String(S.settings.excess_leave_unpaid || 'yes').toLowerCase() === 'yes'
+          ? '. The extra ' + (taken + days - q) + ' day(s) will be unpaid.'
+          : '. It can still be approved - the extra shows as a negative balance.'));
     }
   }
+  if (String(rule.paid || 'yes').toLowerCase() === 'no') warns.push(type + ' leave is unpaid.');
+  var maxRun = num(rule.max_consecutive);
+  if (maxRun > 0 && days > maxRun) {
+    blocks.push(type + ' leave allows at most ' + maxRun + ' day(s) at a stretch.');
+  }
+  if (days % 1 !== 0 && String(rule.allow_half_day || 'yes').toLowerCase() === 'no') {
+    blocks.push(type + ' leave cannot be taken as a half day.');
+  }
+  var notice = num(rule.notice_days);
+  if (notice > 0) {
+    var gap = Math.round((new Date(from) - new Date(today())) / 86400000);
+    if (gap < notice) warns.push(type + ' leave asks for ' + notice + ' day(s) notice; this is ' +
+      (gap < 0 ? 'backdated' : gap + ' day(s) ahead') + '.');
+  }
+  var probation = num(S.settings.leave_after_days);
+  var emp = empByCode(code);
+  if (probation > 0 && emp && emp.doj) {
+    var served = Math.round((new Date(from) - new Date(emp.doj)) / 86400000);
+    if (served < probation) {
+      blocks.push('Leave is only allowed after ' + probation + ' days of service; ' +
+        emp.name + ' will have served ' + Math.max(0, served) + '.');
+    }
+  }
+  if (String(S.settings.sandwich_rule || 'no').toLowerCase() === 'yes') {
+    warns.push('Sandwich rule is on: weekly offs and holidays inside the range are charged as leave.');
+  }
+  warns = blocks.concat(warns);
+  S._leaveBlocks = blocks;
   var clash = S.leave.filter(function (l) {
     return String(l.emp_code) === String(code) && ['Approved', 'Pending'].indexOf(l.status) >= 0 &&
       String(l.from_date) <= to && from <= String(l.to_date);
@@ -2547,7 +2751,8 @@ function checkLeave(recompute) {
       clash[0].from_date + ' to ' + clash[0].to_date + ').');
   }
   el('leave-warn').innerHTML = warns.length
-    ? '<div class="err show" style="background:#fef3c7;color:#92400e">' + warns.map(esc).join('<br>') + '</div>' : '';
+    ? '<div class="err show" style="background:' + (blocks.length ? '#fee2e2' : '#fef3c7') +
+      ';color:' + (blocks.length ? '#991b1b' : '#92400e') + '">' + warns.map(esc).join('<br>') + '</div>' : '';
   return warns;
 }
 
@@ -2557,6 +2762,8 @@ function submitLeave() {
   if (!row.from_date || !row.to_date) return toast('Pick both dates', 'bad');
   if (row.to_date < row.from_date) return toast('"To" cannot be before "From"', 'bad');
   if (num(row.days) <= 0) return toast('Days must be more than zero', 'bad');
+  checkLeave();
+  if (S._leaveBlocks && S._leaveBlocks.length) return toast(S._leaveBlocks[0], 'bad');
   var clash = S.leave.filter(function (l) {
     return String(l.emp_code) === String(row.emp_code) && ['Approved', 'Pending'].indexOf(l.status) >= 0 &&
       String(l.from_date) <= row.to_date && row.from_date <= String(l.to_date);
@@ -2568,6 +2775,7 @@ function submitLeave() {
   row.decided_by = ''; row.decided_at = ''; row.decision_note = '';
   api('save', { sheet: 'Leave', row: row }).then(function (saved) {
     S.leave.push(Object.assign({}, row, { id: saved.id }));
+    S.leaveVersion++;
     closeModal(); toast('Leave application submitted', 'good');
     renderLeave(); renderDashboard();
   }).catch(function (e) { toast(e.message, 'bad'); });
@@ -2584,6 +2792,7 @@ function decideLeave(id, decision) {
   var row = Object.assign({}, l, { status: decision, decided_by: S.user.email, decided_at: today() });
   api('save', { sheet: 'Leave', row: row }).then(function () {
     Object.assign(l, row);
+    S.leaveVersion++;
     if (decision === 'Approved') return writeLeaveToAttendance(row, 'L');
   }).then(function () {
     toast('Leave ' + decision.toLowerCase(), 'good');
@@ -2608,6 +2817,7 @@ function cancelLeave(id) {
       var row = Object.assign({}, l, { status: 'Cancelled', decided_by: S.user.email, decided_at: today() });
       api('save', { sheet: 'Leave', row: row }).then(function () {
         Object.assign(l, row);
+        S.leaveVersion++;
         return writeLeaveToAttendance(row, '');
       }).then(function () {
         closeModal(); toast('Leave cancelled', 'good');
@@ -2624,7 +2834,7 @@ function writeLeaveToAttendance(l, status) {
   for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
     var iso = d.toISOString().slice(0, 10);
     var ym = iso.slice(0, 7);
-    if (isWeeklyOff(ym, d.getDate()) || holidayOn(iso)) continue;
+    if (isWeeklyOff(ym, d.getDate(), l.emp_code) || holidayOn(iso)) continue;
     var existing = attMap(ym)[l.emp_code + '_' + iso];
     if (!status && existing && existing.status !== 'L') continue;   /* leave someone else's marking alone */
     rows.push({
@@ -2640,6 +2850,7 @@ function writeLeaveToAttendance(l, status) {
 function deleteLeave(id) {
   api('remove', { sheet: 'Leave', id: id }).then(function () {
     S.leave = S.leave.filter(function (l) { return String(l.id) !== String(id); });
+    S.leaveVersion++;
     toast('Application deleted', 'good'); renderLeave(); renderDashboard();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
@@ -2658,16 +2869,45 @@ function exportLeave() {
    MODULE 4 - PAYROLL
    ================================================================= */
 
+/* Scheduled working days in the month for this employee's shift. */
+function workingDaysIn(ym, code) {
+  var n = 0, dim = daysInMonth(ym);
+  for (var d = 1; d <= dim; d++) if (!defaultStatus(ym, d, code)) n++;
+  return n;
+}
+
+/* Calendar days, a fixed 26, or actual working days - a real payroll choice. */
+function payrollDivisor(ym, code, s) {
+  var basis = String(S.settings.payroll_basis || 'calendar');
+  if (basis === 'fixed26') return 26;
+  if (basis === 'working') return workingDaysIn(ym, code) || s.total;
+  return s.total;
+}
+
 function computePay(e, ym, prev) {
   var s = attStats(ym, e.emp_code);
-  var factor = s.total ? s.paid / s.total : 0;
+  var cfg = shiftCfg(e.emp_code);
+  var divisor = payrollDivisor(ym, e.emp_code, s);
+  var paidDays = Math.max(0, divisor - s.lop);
+  var factor = divisor ? paidDays / divisor : 0;
+  var step = num(S.settings.payroll_rounding || 1) || 1;
+  var roundTo = function (v) { return Math.round(v / step) * step; };
+
+  /* overtime, paid only if the policy says so and within the monthly cap */
+  var otHours = s.ot / 60;
+  var otCap = num(S.settings.ot_max_hours_month || 0);
+  if (otCap > 0) otHours = Math.min(otHours, otCap);
+  var otPayOn = String(S.settings.ot_pay_enabled || 'no').toLowerCase() === 'yes';
+  var hourly = divisor && cfg.fullHours ? grossOf(e) / (divisor * cfg.fullHours) : 0;
+  var otAmount = otPayOn ? hourly * otHours * (num(S.settings.ot_rate_multiplier || 1) || 1) : 0;
+
   var basic = num(e.basic) * factor;
   var hra = num(e.hra) * factor;
   var special = num(e.special_allowance) * factor;
   var other = num(e.other_allowance) * factor;
   var arrears = prev && prev.arrears !== undefined ? num(prev.arrears) : 0;
   var bonus = prev && prev.bonus !== undefined ? num(prev.bonus) : 0;
-  var gross = basic + hra + special + other + arrears + bonus;
+  var gross = basic + hra + special + other + arrears + bonus + otAmount;
 
   var pfWage = 0, pf = 0, pfEmployer = 0;
   if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
@@ -2689,13 +2929,17 @@ function computePay(e, ym, prev) {
 
   return {
     id: ym + '_' + e.emp_code, month: ym, emp_code: e.emp_code,
-    total_days: s.total, lop_days: s.lop, paid_days: s.paid,
-    basic: r(basic), hra: r(hra), special_allowance: r(special), other_allowance: r(other),
-    arrears: r(arrears), bonus: r(bonus), gross: r(gross),
+    total_days: divisor, lop_days: s.lop, paid_days: Math.round(paidDays * 100) / 100,
+    basic: roundTo(basic), hra: roundTo(hra), special_allowance: roundTo(special),
+    other_allowance: roundTo(other),
+    arrears: r(arrears), bonus: r(bonus),
+    ot_hours: Math.round(otHours * 10) / 10, ot_amount: roundTo(otAmount),
+    late_deduction_days: s.lateDeduction, unpaid_leave_days: s.unpaidLeave,
+    gross: roundTo(gross),
     pf: r(pf), esi: r(esi), pt: r(pt), tds: r(tds), other_deduction: r(otherDed),
-    total_deduction: r(totalDed), net: r(gross - totalDed),
+    total_deduction: r(totalDed), net: roundTo(gross - totalDed),
     pf_employer: r(pfEmployer), esi_employer: r(esiEmployer),
-    ctc: r(gross + pfEmployer + esiEmployer),
+    ctc: roundTo(gross + pfEmployer + esiEmployer),
     status: 'Draft', generated_at: today(), generated_by: S.user ? S.user.email : ''
   };
 }
@@ -2901,7 +3145,9 @@ function payslipHtml(r, e) {
       '<tr><td><b>Designation</b></td><td>' + esc(e.designation || '-') + '</td>' +
         '<td><b>Department</b></td><td>' + esc(e.department || '-') + '</td></tr>' +
       '<tr><td><b>Paid days</b></td><td>' + r.paid_days + ' / ' + r.total_days + '</td>' +
-        '<td><b>LOP days</b></td><td>' + r.lop_days + '</td></tr>' +
+        '<td><b>LOP days</b></td><td>' + r.lop_days +
+        (num(r.late_deduction_days) ? ' (incl. ' + r.late_deduction_days + ' for late marks)' : '') +
+        '</td></tr>' +
       '<tr><td><b>PAN</b></td><td>' + esc(e.pan || '-') + '</td>' +
         '<td><b>UAN</b></td><td>' + esc(e.uan || '-') + '</td></tr>' +
       '<tr><td><b>Bank</b></td><td>' + esc(e.bank_account || '-') + '</td>' +
@@ -2913,6 +3159,7 @@ function payslipHtml(r, e) {
         line('Other allowance', r.other_allowance) +
         (num(r.arrears) ? line('Arrears', r.arrears) : '') +
         (num(r.bonus) ? line('Bonus', r.bonus) : '') +
+        (num(r.ot_amount) ? line('Overtime (' + num(r.ot_hours) + ' h)', r.ot_amount) : '') +
         '<tr><td><b>Gross earnings</b></td><td class="num-col"><b>' + cur() + money(r.gross) + '</b></td></tr>' +
       '</tbody></table>' +
       '<table><thead><tr><th>Deductions</th><th class="num-col">Amount</th></tr></thead><tbody>' +
@@ -3230,43 +3477,54 @@ var SETTING_GROUPS = [
     ['company_name', 'Company name', 'text'],
     ['company_address', 'Company address', 'text'],
     ['currency', 'Currency', 'select:INR,USD,AED,GBP,EUR']
-  ], note: 'Shown on payslips and reports.' },
+  ], note: 'Shown on payslips and reports.' }
+];
 
-  { id: 'shift', label: 'Attendance &amp; shift', fields: [
-    ['weekly_off', 'Weekly off (comma separated)', 'text'],
-    ['shift_start', 'Shift start', 'time'],
-    ['shift_end', 'Shift end', 'time'],
-    ['grace_minutes', 'Late grace (minutes)', 'number'],
-    ['ot_after_minutes', 'Overtime counts after (minutes)', 'number'],
-    ['full_day_hours', 'Hours for a full day', 'number'],
-    ['half_day_hours', 'Hours for a half day', 'number']
-  ], note: 'Late marks and overtime are measured against the shift and grace. Full/half day hours ' +
-           'decide what a biometric punch pair becomes: at or above full = P, at or above half = HD, ' +
-           'below that = A for review.' },
+/* Rules that are not per shift or per leave type. Every one is applied. */
+var ATTENDANCE_RULES = [
+  ['default_shift', 'Default shift for new staff', 'text'],
+  ['late_marks_per_halfday', 'Late marks that cost half a day (0 = off)', 'number'],
+  ['ot_pay_enabled', 'Pay overtime', 'select:no,yes'],
+  ['ot_rate_multiplier', 'Overtime rate multiplier', 'number'],
+  ['ot_max_hours_month', 'Overtime hours paid per month at most', 'number']
+];
+var LEAVE_RULES = [
+  ['sandwich_rule', 'Sandwich rule (offs inside a leave are charged)', 'select:no,yes'],
+  ['excess_leave_unpaid', 'Leave beyond the quota is unpaid', 'select:yes,no'],
+  ['leave_after_days', 'No leave in the first N days of service (0 = off)', 'number']
+];
+var PAYROLL_RULES = [
+  ['payroll_basis', 'Salary divisor', 'select:calendar,fixed26,working'],
+  ['payroll_rounding', 'Round amounts to the nearest', 'select:1,5,10,100'],
+  ['pf_employee_pct', 'PF employee %', 'number'],
+  ['pf_employer_pct', 'PF employer %', 'number'],
+  ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
+  ['esi_employee_pct', 'ESI employee %', 'number'],
+  ['esi_employer_pct', 'ESI employer %', 'number'],
+  ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
+  ['pt_amount', 'Professional tax / month', 'number']
+];
 
-  { id: 'statutory', label: 'Statutory', fields: [
-    ['pf_employee_pct', 'PF employee %', 'number'],
-    ['pf_employer_pct', 'PF employer %', 'number'],
-    ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
-    ['esi_employee_pct', 'ESI employee %', 'number'],
-    ['esi_employer_pct', 'ESI employer %', 'number'],
-    ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
-    ['pt_amount', 'Professional tax / month', 'number']
-  ], note: 'Rates apply to every payroll run from now on. Runs already finalised keep the numbers ' +
-           'they were saved with.' },
-
-  { id: 'leave', label: 'Leave', fields: [
-    ['leave_types', 'Leave types (comma separated)', 'text'],
-    ['quota_casual', 'Casual leave quota / year', 'number'],
-    ['quota_sick', 'Sick leave quota / year', 'number'],
-    ['quota_earned', 'Earned leave quota / year', 'number']
-  ], note: 'Quotas are per calendar year and are matched to a leave type by name.' }
+/* Editable policy tables. */
+var SHIFT_COLS = [
+  ['name', 'Name', 'text'], ['start_time', 'Start', 'time'], ['end_time', 'End', 'time'],
+  ['grace_minutes', 'Grace min', 'number'], ['full_day_hours', 'Full day hrs', 'number'],
+  ['half_day_hours', 'Half day hrs', 'number'], ['weekly_off', 'Weekly off', 'text'],
+  ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt'],
+  ['ot_after_minutes', 'OT after min', 'number'], ['active', 'Active', 'select:yes,no']
+];
+var LEAVE_TYPE_COLS = [
+  ['name', 'Leave type', 'text'], ['paid', 'Paid', 'select:yes,no'],
+  ['quota', 'Quota / year', 'number'], ['carry_forward', 'Carry forward', 'select:no,yes'],
+  ['max_consecutive', 'Max at a stretch', 'number'], ['notice_days', 'Notice days', 'number'],
+  ['allow_half_day', 'Half day', 'select:yes,no'], ['active', 'Active', 'select:yes,no']
 ];
 
 function openSettings() {
   var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
-    .concat([['holidays', 'Holidays'], ['integrations', 'Integrations'],
-             ['import', 'Import data'], ['account', 'Account']]);
+    .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
+             ['leaverules', 'Leave policy'], ['payrollrules', 'Payroll rules'],
+             ['integrations', 'Integrations'], ['import', 'Import data'], ['account', 'Account']]);
 
   var body = '<div class="tabs">' + tabs.map(function (t, i) {
     return '<div class="tab' + (i === 0 ? ' active' : '') + '" data-stab="' + t[0] +
@@ -3278,7 +3536,10 @@ function openSettings() {
       '</div><p style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.6">' +
       g.note + '</p></div>';
   }).join('') +
+  '<div class="set-pane" id="stab-shifts" style="display:none">' + shiftsPane() + '</div>' +
   '<div id="stab-holidays" style="display:none">' + holidaysPane() + '</div>' +
+  '<div class="set-pane" id="stab-leaverules" style="display:none">' + leaveRulesPane() + '</div>' +
+  '<div class="set-pane" id="stab-payrollrules" style="display:none">' + payrollRulesPane() + '</div>' +
   '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' +
   '<div id="stab-import" style="display:none">' + importPane() + '</div>' +
   '<div id="stab-account" style="display:none">' + accountPane() + '</div>';
@@ -3288,13 +3549,15 @@ function openSettings() {
     { label: 'Save settings', onClick: saveSettingsForm }
   ], true);
   renderHolidays();
+  renderPolicyTable('shifts');
+  renderPolicyTable('leaveTypes');
   renderImportHelp();
   el('imp-any').onchange = function () { if (this.files[0]) onImportFile(this.files[0]); };
 }
 
 function settingsTab(tab) {
   var all = SETTING_GROUPS.map(function (g) { return g.id; })
-    .concat(['holidays', 'integrations', 'import', 'account']);
+    .concat(['shifts', 'holidays', 'leaverules', 'payrollrules', 'integrations', 'import', 'account']);
   all.forEach(function (t) {
     var pane = el('stab-' + t);
     if (pane) pane.style.display = t === tab ? '' : 'none';
@@ -3319,50 +3582,308 @@ function saveSettingsForm() {
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
+/* --------------------- editable policy tables --------------------- */
+var POLICY_TABLES = {
+  shifts: { sheet: 'Shifts', cols: SHIFT_COLS, state: 'shifts', label: 'shift',
+            blank: { name: 'New shift', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
+                     full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun',
+                     saturday_policy: 'working', ot_after_minutes: 30, active: 'yes' } },
+  leaveTypes: { sheet: 'LeaveTypes', cols: LEAVE_TYPE_COLS, state: 'leaveTypes', label: 'leave type',
+                blank: { name: 'New type', paid: 'yes', quota: 0, carry_forward: 'no',
+                         max_consecutive: 0, notice_days: 0, allow_half_day: 'yes', active: 'yes' } }
+};
+
+function renderPolicyTable(kind) {
+  var host = el('policy-' + kind);
+  if (!host) return;
+  var spec = POLICY_TABLES[kind], rows = S[spec.state] || [];
+  host.innerHTML = '<div class="table-wrap" style="max-height:none"><table><thead><tr>' +
+    spec.cols.map(function (c) { return '<th>' + esc(c[1]) + '</th>'; }).join('') +
+    '<th></th></tr></thead><tbody>' +
+    (rows.map(function (r, i) {
+      return '<tr>' + spec.cols.map(function (c) {
+        var v = r[c[0]] === undefined ? '' : r[c[0]];
+        if (c[2].indexOf('select:') === 0) {
+          return '<td><select data-pt="' + kind + '" data-row="' + i + '" data-col="' + c[0] + '">' +
+            c[2].slice(7).split(',').map(function (o) {
+              return '<option value="' + esc(o) + '"' + (String(v) === o ? ' selected' : '') + '>' +
+                esc(kind === 'shifts' && c[0] === 'saturday_policy' ? (SATURDAY_POLICIES[o] || o) : o) +
+                '</option>';
+            }).join('') + '</select></td>';
+        }
+        return '<td><input type="' + c[2] + '" value="' + esc(v) + '" data-pt="' + kind +
+          '" data-row="' + i + '" data-col="' + c[0] + '" style="width:' +
+          (c[2] === 'number' ? '86px' : '118px') + '"></td>';
+      }).join('') +
+      '<td><button class="ghost sm" onclick="removePolicyRow(\'' + kind + '\',' + i + ')">Remove</button></td></tr>';
+    }).join('') || '<tr><td colspan="' + (spec.cols.length + 1) + '" class="empty">Nothing set up yet.</td></tr>') +
+    '</tbody></table></div>' +
+    '<div class="toolbar" style="margin-top:12px">' +
+      '<button class="ghost sm" onclick="addPolicyRow(\'' + kind + '\')">+ Add ' + spec.label + '</button>' +
+      '<span class="spacer"></span>' +
+      '<button onclick="savePolicyTable(\'' + kind + '\')">Save ' + spec.label + 's</button>' +
+    '</div>';
+}
+
+function collectPolicyRows(kind) {
+  var spec = POLICY_TABLES[kind], rows = (S[spec.state] || []).map(function (r) {
+    return Object.assign({}, r);
+  });
+  document.querySelectorAll('[data-pt="' + kind + '"]').forEach(function (n) {
+    var r = rows[+n.dataset.row];
+    if (r) r[n.dataset.col] = n.value;
+  });
+  return rows;
+}
+
+function addPolicyRow(kind) {
+  var spec = POLICY_TABLES[kind];
+  S[spec.state] = collectPolicyRows(kind).concat([Object.assign({}, spec.blank)]);
+  renderPolicyTable(kind);
+}
+
+function removePolicyRow(kind, index) {
+  var spec = POLICY_TABLES[kind];
+  var rows = collectPolicyRows(kind);
+  var gone = rows[index];
+  rows.splice(index, 1);
+  S[spec.state] = rows;
+  renderPolicyTable(kind);
+  if (gone && gone.id) {
+    api('remove', { sheet: spec.sheet, id: gone.id })
+      .then(function () { S.leaveVersion++; renderAll(); })
+      .catch(function (e) { toast(e.message, 'bad'); });
+  }
+}
+
+function savePolicyTable(kind) {
+  var spec = POLICY_TABLES[kind];
+  var rows = collectPolicyRows(kind).filter(function (r) { return String(r.name || '').trim(); });
+  if (!rows.length) return toast('Add at least one ' + spec.label, 'bad');
+  var names = {};
+  for (var i = 0; i < rows.length; i++) {
+    var n = String(rows[i].name).trim().toLowerCase();
+    if (names[n]) return toast('Two rows are both called "' + rows[i].name + '"', 'bad');
+    names[n] = 1;
+  }
+  api('saveMany', { sheet: spec.sheet, rows: rows }).then(function () {
+    return api('bootstrap');
+  }).then(function (d) {
+    S[spec.state] = d[spec.state] || rows;
+    S.leaveVersion++;
+    renderPolicyTable(kind);
+    toast(spec.label.charAt(0).toUpperCase() + spec.label.slice(1) + 's saved', 'good');
+    renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+function shiftsPane() {
+  return '<h3>Shifts</h3>' +
+    '<div class="card-sub">Each employee works one of these. Late marks, overtime, weekly offs and ' +
+    'what a punch pair becomes all come from the employee\u2019s own shift.</div>' +
+    '<div id="policy-shifts"></div>' +
+    '<h3 style="margin-top:22px">Attendance rules</h3>' +
+    '<div class="card-sub">Applied to the register and to pay.</div>' +
+    '<div class="grid2">' + ATTENDANCE_RULES.map(function (f) {
+      return fieldInput(f, S.settings[f[0]]);
+    }).join('') + '</div>' +
+    '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted);line-height:1.7">' +
+    '<b>Late marks:</b> every N late arrivals cost half a day of pay - set 0 to switch the rule off.<br>' +
+    '<b>Overtime:</b> minutes past the shift end (beyond the shift\u2019s OT threshold) are counted ' +
+    'always, but only paid when "Pay overtime" is yes. The rate is the hourly rate from the monthly ' +
+    'gross, times the multiplier, capped at the monthly hours above.</p>';
+}
+
+function leaveRulesPane() {
+  return '<h3>Leave types</h3>' +
+    '<div class="card-sub">Quota, whether it is paid, how long a stretch may be, and the notice ' +
+    'expected - all enforced when someone applies.</div>' +
+    '<div id="policy-leaveTypes"></div>' +
+    '<h3 style="margin-top:22px">Leave rules</h3>' +
+    '<div class="grid2">' + LEAVE_RULES.map(function (f) {
+      return fieldInput(f, S.settings[f[0]]);
+    }).join('') + '</div>' +
+    '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted);line-height:1.7">' +
+    '<b>Sandwich rule:</b> with it on, a weekly off or holiday that falls inside a leave block is ' +
+    'charged as leave too.<br><b>Beyond the quota:</b> days past the annual quota are marked unpaid ' +
+    'and become LOP in payroll, rather than quietly being paid.</p>';
+}
+
+function payrollRulesPane() {
+  return '<div class="grid2">' + PAYROLL_RULES.map(function (f) {
+    return fieldInput(f, S.settings[f[0]]);
+  }).join('') + '</div>' +
+    '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.8">' +
+    '<b>Salary divisor</b> decides what one day of pay is worth:<br>' +
+    '&bull; <b>calendar</b> - the days in the month (30 or 31). Weekly offs are paid.<br>' +
+    '&bull; <b>fixed26</b> - a flat 26 days every month, the common factory basis.<br>' +
+    '&bull; <b>working</b> - only scheduled working days, so a day of LOP costs more.<br>' +
+    'Rates apply to every run from now on. Runs already finalised keep the numbers they were saved ' +
+    'with.</p>';
+}
+
 /* ----------------------------- holidays -------------------------- */
 function holidaysPane() {
-  return '<div class="toolbar"><span class="spacer"></span>' +
-    '<button class="ghost sm" onclick="addHolidayRow()">+ Add holiday</button></div>' +
+  var year = new Date().getFullYear();
+  return '<div class="toolbar">' +
+    '<label class="field">Year<select id="hol-year" onchange="renderHolidays()">' +
+      [year - 1, year, year + 1, year + 2].map(function (y) {
+        return '<option' + (y === year ? ' selected' : '') + '>' + y + '</option>';
+      }).join('') + '</select></label>' +
+    '<span class="spacer"></span>' +
+    '<button class="ghost sm" onclick="addNationalHolidays()">Add fixed national holidays</button>' +
+    '<button class="ghost sm" onclick="el(\'hol-file\').click()">&#8679; Import list</button>' +
+    '<button class="ghost sm" onclick="exportHolidays()">&#8681; Export</button>' +
+    '<button class="ghost sm" onclick="addHolidayRow()">+ Add holiday</button>' +
+    '<input type="file" id="hol-file" accept=".csv,.xlsx,.xls" style="display:none" ' +
+    'onchange="importHolidays(this.files[0])">' +
+    '</div>' +
     '<table id="hol-table"></table>' +
-    '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Holidays show as <b>H</b> on the ' +
-    'attendance register, are paid, and are skipped when leave days are counted.</p>';
+    '<div id="hol-status" style="margin-top:10px;font-size:.8rem"></div>' +
+    '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted);line-height:1.7">' +
+    'A holiday shows as <b>H</b> on the register, is paid, and is skipped when leave days are counted.<br>' +
+    'An <b>optional</b> (restricted) holiday is listed for reference only - it is not applied to the ' +
+    'register, so people who work that day are marked normally.<br>' +
+    'To import a list, use a file with <code>date, name</code> and optionally <code>optional</code>.</p>';
 }
 
 function renderHolidays() {
   if (!el('hol-table')) return;
-  var rows = S.holidays.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+  var year = el('hol-year') ? el('hol-year').value : String(new Date().getFullYear());
+  var rows = S.holidays.filter(function (h) { return String(h.date).slice(0, 4) === String(year); })
+    .sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+  var dayName = function (iso) {
+    var d = new Date(iso + 'T00:00:00');
+    return isNaN(d) ? '' : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+  };
   el('hol-table').innerHTML =
-    '<thead><tr><th>Date</th><th>Name</th><th></th></tr></thead><tbody>' +
+    '<thead><tr><th>Date</th><th>Day</th><th>Name</th><th>Type</th><th></th></tr></thead><tbody>' +
     (rows.map(function (h) {
-      return '<tr><td>' + esc(h.date) + '</td><td>' + esc(h.name) + '</td>' +
+      var opt = String(h.optional || 'no').toLowerCase() === 'yes';
+      return '<tr><td>' + esc(h.date) + '</td><td class="sub-line">' + dayName(h.date) + '</td>' +
+        '<td>' + esc(h.name) + '</td>' +
+        '<td><span class="badge ' + (opt ? 'b-gray' : 'b-violet') + '" style="cursor:pointer" ' +
+        'onclick="toggleHoliday(\'' + esc(h.id) + '\')">' + (opt ? 'optional' : 'applied') + '</span></td>' +
         '<td class="num-col"><button class="ghost sm" onclick="removeHoliday(\'' + esc(h.id) +
         '\')">Remove</button></td></tr>';
-    }).join('') || '<tr><td colspan="3" class="empty">No holidays yet.</td></tr>') + '</tbody>';
+    }).join('') || '<tr><td colspan="5" class="empty">No holidays for ' + esc(year) + ' yet.</td></tr>') +
+    '</tbody>';
+}
+
+function toggleHoliday(id) {
+  var h = null;
+  S.holidays.forEach(function (x) { if (String(x.id) === String(id)) h = x; });
+  if (!h) return;
+  var next = String(h.optional || 'no').toLowerCase() === 'yes' ? 'no' : 'yes';
+  api('save', { sheet: 'Holidays', row: Object.assign({}, h, { optional: next }) }).then(function () {
+    h.optional = next;
+    S.attVersion++; S.leaveVersion++;
+    renderHolidays(); renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* Only the date-certain ones - festival dates move every year, so those are
+   added by hand or imported from your own list. */
+var FIXED_NATIONAL_HOLIDAYS = [
+  ['01-01', 'New Year\u2019s Day'],
+  ['01-26', 'Republic Day'],
+  ['05-01', 'May Day'],
+  ['08-15', 'Independence Day'],
+  ['10-02', 'Gandhi Jayanti'],
+  ['12-25', 'Christmas Day']
+];
+
+function addNationalHolidays() {
+  var year = el('hol-year').value;
+  var add = FIXED_NATIONAL_HOLIDAYS
+    .map(function (h) { return { date: year + '-' + h[0], name: h[1], optional: 'no' }; })
+    .filter(function (h) { return !anyHolidayOn(h.date); });
+  if (!add.length) return toast('Those are already in the list for ' + year);
+  api('saveMany', { sheet: 'Holidays', rows: add }).then(function () { return api('bootstrap'); })
+    .then(function (d) {
+      S.holidays = d.holidays || S.holidays;
+      S.attVersion++; S.leaveVersion++;
+      renderHolidays(); renderAll();
+      toast(add.length + ' holiday(s) added for ' + year + '. Festival dates move each year - add ' +
+        'those yourself or import a list.', 'good');
+    }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+function importHolidays(file) {
+  if (!file) return;
+  el('hol-status').innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Reading...';
+  readSpreadsheet(file).then(function (sheets) {
+    var rows = flatRows(sheets);
+    if (rows.length < 2) throw new Error('That file has no rows under a header.');
+    var h = normHeaders(rows[0]);
+    var iDate = headerIndex(h, ['date', 'holidaydate', 'day']);
+    var iName = headerIndex(h, ['name', 'holiday', 'occasion', 'description', 'festival']);
+    var iOpt = headerIndex(h, ['optional', 'restricted', 'type']);
+    if (iDate < 0 || iName < 0) throw new Error('The file needs a date column and a name column.');
+    var add = [], bad = 0;
+    rows.slice(1).forEach(function (r) {
+      var serial = excelSerial(r[iDate]);
+      var iso = normalizeDate(serial ? serial.slice(0, 10) : r[iDate]);
+      var name = String(r[iName] || '').trim();
+      if (!iso || !name) { bad++; return; }
+      if (anyHolidayOn(iso)) return;
+      var opt = iOpt >= 0 && /^(yes|y|1|optional|restricted)$/i.test(String(r[iOpt] || '').trim()) ? 'yes' : 'no';
+      add.push({ date: iso, name: name, optional: opt });
+    });
+    if (!add.length) {
+      el('hol-status').innerHTML = '<div class="err show">Nothing new to add' +
+        (bad ? ' (' + bad + ' row(s) unreadable)' : '') + '.</div>';
+      return;
+    }
+    return api('saveMany', { sheet: 'Holidays', rows: add }).then(function () { return api('bootstrap'); })
+      .then(function (d) {
+        S.holidays = d.holidays || S.holidays;
+        S.attVersion++; S.leaveVersion++;
+        renderHolidays(); renderAll();
+        el('hol-status').innerHTML = '<div class="locked-note" style="background:#d1fae5;color:#065f46">' +
+          add.length + ' holiday(s) imported' + (bad ? ', ' + bad + ' row(s) skipped' : '') + '.</div>';
+      });
+  }).catch(function (e) {
+    el('hol-status').innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
+  });
+}
+
+function exportHolidays() {
+  var rows = S.holidays.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+  download('holidays.csv', toCSV(['date', 'name', 'optional'], rows.map(function (h) {
+    return [h.date, h.name, h.optional || 'no'];
+  })));
 }
 
 function addHolidayRow() {
+  var year = el('hol-year') ? el('hol-year').value : String(new Date().getFullYear());
   el('hol-table').insertAdjacentHTML('beforeend',
-    '<tbody id="hol-new"><tr><td><input id="hol-date" type="date" value="' + today() + '"></td>' +
-    '<td><input id="hol-name" placeholder="Republic Day"></td>' +
+    '<tbody id="hol-new"><tr><td><input id="hol-date" type="date" value="' + year + '-01-01"></td>' +
+    '<td></td><td><input id="hol-name" placeholder="Durga Puja"></td>' +
+    '<td><select id="hol-opt"><option value="no">applied</option>' +
+    '<option value="yes">optional</option></select></td>' +
     '<td class="num-col"><button class="ok sm" onclick="saveHoliday()">Add</button></td></tr></tbody>');
   el('hol-date').focus();
 }
 
 function saveHoliday() {
   var date = el('hol-date').value, name = el('hol-name').value.trim();
+  var optional = el('hol-opt') ? el('hol-opt').value : 'no';
   if (!date || !name) return toast('Pick a date and give the holiday a name', 'bad');
-  if (holidayOn(date)) return toast('There is already a holiday on that date', 'bad');
-  api('save', { sheet: 'Holidays', row: { date: date, name: name, optional: 'no' } }).then(function (saved) {
-    S.holidays.push({ id: saved.id, date: date, name: name, optional: 'no' });
-    S.attVersion++;
-    renderHolidays(); toast('Holiday added', 'good'); renderAll();
-  }).catch(function (e) { toast(e.message, 'bad'); });
+  if (anyHolidayOn(date)) return toast('There is already a holiday on that date', 'bad');
+  api('save', { sheet: 'Holidays', row: { date: date, name: name, optional: optional } })
+    .then(function (saved) {
+      S.holidays.push({ id: saved.id, date: date, name: name, optional: optional });
+      S.attVersion++; S.leaveVersion++;
+      if (el('hol-year')) el('hol-year').value = String(date).slice(0, 4);
+      renderHolidays(); toast('Holiday added', 'good'); renderAll();
+    }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 function removeHoliday(id) {
   api('remove', { sheet: 'Holidays', id: id }).then(function () {
     S.holidays = S.holidays.filter(function (h) { return String(h.id) !== String(id); });
-    S.attVersion++;
+    S.attVersion++; S.leaveVersion++;
     renderHolidays(); toast('Holiday removed', 'good'); renderAll();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
@@ -3658,10 +4179,11 @@ function startClock() {
     if (t) t.innerHTML = h12 + ':' + pad(m) + ':' + pad(sec) + ' <small>' + ampm + '</small>';
     var d = el('clock-date');
     if (d) {
+      var sh = shiftFor(null);
       d.innerHTML = now.toLocaleDateString(undefined, {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-      }) + (S.settings.shift_start ? ' &middot; shift ' + esc(S.settings.shift_start) + '-' +
-            esc(S.settings.shift_end || '') : '');
+      }) + (sh && sh.start_time ? ' &middot; ' + esc(sh.name || 'shift') + ' ' +
+            esc(sh.start_time) + '-' + esc(sh.end_time || '') : '');
     }
   };
   tick();

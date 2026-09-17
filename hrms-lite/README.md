@@ -42,13 +42,64 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | Tab | Holds |
 |---|---|
 | **Company** | name, address, currency |
-| **Attendance & shift** | weekly off, shift start/end, late grace, overtime threshold, hours that count as a full and a half day |
-| **Statutory** | PF and ESI percentages (employee and employer), wage ceilings, professional tax |
-| **Leave** | leave types and annual quotas |
-| **Holidays** | the holiday calendar — these auto-mark **H** on the register |
+| **Shifts & attendance** | the shift table, plus the late-mark and overtime rules |
+| **Holidays** | the holiday calendar, per year |
+| **Leave policy** | the leave-type table, plus the sandwich / excess-leave / probation rules |
+| **Payroll rules** | salary divisor, rounding, PF and ESI percentages and ceilings, professional tax |
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
-| **Import data** | manual import of punch logs, attendance and employees from CSV or Excel |
+| **Import data** | manual import of punch logs, attendance, holidays and employees from CSV or Excel |
 | **Account** | change your password |
+
+### Policies and rules — and where each one bites
+
+Every rule below is read from Settings and **applied**; none of them is decorative text.
+
+**Shifts** (a table, not a single setting). Each row is a shift: start, end, grace minutes, hours for
+a full and a half day, weekly off, Saturday policy, and the overtime threshold. Every employee is
+assigned one on their record, so a night shift and a general shift can run side by side. The shift
+drives late marks, overtime, which days are weekly offs, and what a pair of biometric punches
+becomes.
+
+**Saturday policy** — all working, all off, 2nd and 4th off, 1st and 3rd off, or alternate. Set per
+shift, and it changes the register, leave-day counting and paid days. (On the demo month: 4 weekly
+offs on "all working", 6 on "2nd and 4th", 8 on "all off".)
+
+**Late marks** — every *N* late arrivals cost half a day of pay; 0 turns the rule off. The month
+summary shows the late count and the deduction it produced, so nobody has to take it on trust.
+
+**Overtime** — minutes past the shift end (beyond the shift's threshold) are always counted, and
+**paid** only when *Pay overtime* is on: hourly rate from the monthly gross × the multiplier, capped
+at the monthly hours you allow. It appears as its own payslip line.
+
+**Leave types** (a table). Per type: paid or unpaid, annual quota, carry forward, longest stretch
+allowed, notice days expected, and whether half days are allowed. Applying for leave enforces them —
+a Casual request longer than the allowed stretch is refused, not warned about.
+
+**Sandwich rule** — with it on, a weekly off or holiday falling inside a leave block is charged as
+leave.
+
+**Leave beyond the quota is unpaid** — days past the annual quota (and every day of an unpaid type)
+become LOP in payroll instead of being quietly paid. The register's month summary has an *Unpaid
+leave* column.
+
+**No leave in the first N days of service** — a probation gate, checked against the joining date.
+
+**Salary divisor** — what one day of pay is worth: `calendar` (30/31 days), `fixed26` (a flat 26,
+the common factory basis), or `working` (scheduled working days only). On ₹28,221 gross with 2 LOP
+days this pays ₹26,340 / ₹26,050 / ₹25,963 respectively — worth choosing deliberately.
+
+**Rounding** — round every amount to the nearest 1, 5, 10 or 100.
+
+### Holidays
+
+Per-year list with the weekday shown. You can add the **fixed national holidays** for a year in one
+click (Republic Day, May Day, Independence Day, Gandhi Jayanti, Christmas, New Year — only the
+date-certain ones; festival dates move, so add those yourself or import them), **import a list**
+from CSV/Excel with `date, name, optional`, or **export** what you have.
+
+A holiday marked **optional** (restricted) is listed but *not* applied to the register, so people
+who work that day are marked normally. Click the badge to flip a holiday between applied and
+optional.
 
 ### Employee codes are yours
 
@@ -180,9 +231,10 @@ attendance register and mark someone absent → generate and finalise payroll �
    paste everything from `apps-script/Code.gs`, and save.
 3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
    dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates eight tabs — `Settings`, `Users`, `Employees`, `Attendance`,
-   `Leave`, `Payroll`, `Holidays`, `Punches` — and seeds the first admin login. It is safe to
-   re-run: new columns are appended, existing data is left where it is.
+   spreadsheet). This creates ten tabs — `Settings`, `Users`, `Employees`, `Attendance`,
+   `Leave`, `Payroll`, `Holidays`, `Punches`, `Shifts`, `LeaveTypes` — seeds a General shift and
+   the four standard leave types, and creates the first admin login. It is safe to re-run: new
+   columns are appended, existing data is left where it is.
 4. **Deploy the web app.** *Deploy → New deployment → type: Web app*.
    - Execute as: **Me**
    - Who has access: **Anyone**

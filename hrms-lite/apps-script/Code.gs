@@ -14,10 +14,14 @@ var SHEETS = {
                'doj', 'status', 'basic', 'hra', 'special_allowance', 'other_allowance',
                'pf_applicable', 'esi_applicable', 'tds_monthly', 'pan', 'uan', 'esic_no',
                'bank_account', 'ifsc', 'manager', 'dob', 'gender', 'address', 'notes',
-               'updated_at', 'exit_date', 'device_id', 'company'],
+               'updated_at', 'exit_date', 'device_id', 'company', 'shift'],
   Attendance: ['id', 'date', 'emp_code', 'status', 'in_time', 'out_time', 'hours',
                'remarks', 'updated_at'],
   Holidays:   ['id', 'date', 'name', 'optional'],
+  Shifts:     ['id', 'name', 'start_time', 'end_time', 'grace_minutes', 'full_day_hours',
+               'half_day_hours', 'weekly_off', 'saturday_policy', 'ot_after_minutes', 'active'],
+  LeaveTypes: ['id', 'name', 'paid', 'quota', 'carry_forward', 'max_consecutive', 'notice_days',
+               'allow_half_day', 'active'],
   Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source', 'imported_at'],
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
                'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note'],
@@ -25,7 +29,8 @@ var SHEETS = {
                'basic', 'hra', 'special_allowance', 'other_allowance', 'gross',
                'pf', 'esi', 'pt', 'tds', 'other_deduction', 'total_deduction', 'net',
                'status', 'generated_at', 'generated_by',
-               'arrears', 'bonus', 'pf_employer', 'esi_employer', 'ctc']
+               'arrears', 'bonus', 'pf_employer', 'esi_employer', 'ctc',
+               'ot_hours', 'ot_amount', 'late_deduction_days', 'unpaid_leave_days']
 };
 
 var DEFAULT_SETTINGS = {
@@ -46,6 +51,17 @@ var DEFAULT_SETTINGS = {
   ot_after_minutes: '30',
   full_day_hours: '8',
   half_day_hours: '4',
+  saturday_policy: 'working',
+  default_shift: 'General',
+  late_marks_per_halfday: '3',
+  ot_pay_enabled: 'no',
+  ot_rate_multiplier: '1',
+  ot_max_hours_month: '60',
+  sandwich_rule: 'no',
+  excess_leave_unpaid: 'yes',
+  leave_after_days: '0',
+  payroll_basis: 'calendar',
+  payroll_rounding: '1',
   essl_mode: 'none',
   essl_api_url: '',
   essl_api_user: '',
@@ -149,6 +165,26 @@ function setup() {
     if (!(k in settings)) appendRow('Settings', { key: k, value: DEFAULT_SETTINGS[k] });
   });
 
+  // Seed one shift and the standard leave types, so the rules are never empty
+  if (readSheet('Shifts').length === 0) {
+    appendRow('Shifts', {
+      id: newId(), name: 'General', start_time: '09:30', end_time: '18:30', grace_minutes: '15',
+      full_day_hours: '8', half_day_hours: '4', weekly_off: 'Sun', saturday_policy: 'working',
+      ot_after_minutes: '30', active: 'yes'
+    });
+  }
+  if (readSheet('LeaveTypes').length === 0) {
+    [['Casual', 'yes', '12', 'no', '3', '1', 'yes'],
+     ['Sick', 'yes', '6', 'no', '3', '0', 'yes'],
+     ['Earned', 'yes', '15', 'yes', '15', '7', 'no'],
+     ['Unpaid', 'no', '0', 'no', '30', '1', 'yes']].forEach(function (t) {
+      appendRow('LeaveTypes', {
+        id: newId(), name: t[0], paid: t[1], quota: t[2], carry_forward: t[3],
+        max_consecutive: t[4], notice_days: t[5], allow_half_day: t[6], active: 'yes'
+      });
+    });
+  }
+
   // Seed the first admin user
   if (readSheet('Users').length === 0) {
     appendRow('Users', {
@@ -219,6 +255,8 @@ function bootstrap() {
     leave:      readSheet('Leave'),
     payroll:    readSheet('Payroll'),
     holidays:   readSheet('Holidays'),
+    shifts:     readSheet('Shifts'),
+    leaveTypes: readSheet('LeaveTypes'),
     secrets:    secretStatus(),
     users:      readSheet('Users').map(function (u) {
       return { email: u.email, role: u.role, emp_code: u.emp_code, active: u.active };
