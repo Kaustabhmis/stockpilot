@@ -37,7 +37,7 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 |---|--------|--------------|
 | 1 | **Employees** | Employee master: full profile, salary structure, PF/ESI flags, exit date. Sortable, searchable, filterable. Per-employee 360° view (profile + salary + attendance + leave history + payslips). Validation on save (PAN format, duplicate email, ESI ceiling, dates). Record-completeness flags. CSV import with per-row validation, CSV export |
 | 2 | **Attendance** | Monthly register grid: click to cycle P/A/HD/L/WO/H, double-click for in/out times and remarks, click a date header to fill a column, fill a whole employee-month, fill blank days. Holiday calendar auto-marks H. Late marks and overtime derived from the shift and grace period. Biometric/device CSV import. Locks automatically once payroll is finalised |
-| 3 | **Leave** | Applications with live validation (quota balance, overlapping requests, working-day count that skips weekly offs and holidays). Approve / reject / cancel. Month calendar of who is off when. Per-type balances against annual quota. Approving writes **L** onto the attendance register; cancelling clears those days |
+| 3 | **Leave** | Applications with live validation (quota balance, overlapping requests, working-day count that skips weekly offs and holidays). Approve / reject / cancel. **Requests** — out-of-office duty, swipe (missed punch) and compensatory off. Month calendar of who is off when. Per-type balances and a comp-off ledger. Approving writes onto the attendance register; cancelling clears those days |
 | 4 | **Payroll** | Generates from attendance, prorates by paid days, computes PF / ESI / PT / TDS plus employer PF & ESI and CTC. Editable arrears, bonus and other deductions per employee. Month-on-month variance per employee. Draft → finalise → (reopen if needed). Printable payslips, bulk payslip print, bank transfer CSV |
 | 5 | **Reports** | Six reports, each exportable: **salary register unit by unit** (the company's own register layout), wages register, PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
 
@@ -51,6 +51,7 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | **Shifts & attendance** | the shift table, plus the late-mark and overtime rules |
 | **Holidays** | the holiday calendar, per year |
 | **Leave policy** | the leave-type table, plus the sandwich / excess-leave / probation rules |
+| **Requests** | the request-type table (OD, swipe, comp-off) and the comp-off rules |
 | **CTC structure** | salary-structure variables, components and formulas; upload and apply a CTC list |
 | **Payroll rules** | salary divisor, rounding, PF and ESI percentages and ceilings, professional tax |
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
@@ -87,6 +88,31 @@ fill in their daily basic, DA and HRA rates, and the register pays those rates a
 attendance register credits. It is deliberately the simpler of the two: the salary register is the
 one that has been matched against the company's sheet, so check the wage rules against a known month
 before relying on them.
+
+### Requests — OD, swipe and comp-off
+
+Configured under **Settings → Requests**, raised and approved on the **Leave → Requests** tab. A
+request type says what approval *does to the register*, which is the only thing that matters:
+
+| Type | Effect | What approval does |
+|---|---|---|
+| **OD** — out of office duty | `present` | Marks the day **OD**: duty away from the office. Paid, counted as present, and visible as its own status rather than hidden inside "P". Takes a date range for a multi-day visit |
+| **SWIPE** — swipe request | `times` | Writes the in and out times onto that day and re-reads the status from the hours worked. Covers a **missed punch**, **out duty** and **emergency duty** — the reason is recorded on the request. Capped at 3 a month by default |
+| **CO** — compensatory off | `comp_off` | Earned *only* for a weekly off or holiday that was actually worked. Then either **set against an absent day** — that day becomes **CO** and stops being LOP — or **paid out**, which payroll picks up as an incentive that month |
+| *(any)* | `none` | Recorded and approved, but the register is left alone |
+
+Comp-off is checked before it is granted: the earning day must be a weekly off or a holiday (a
+working day is refused outright), the day being covered must be an unpaid absence, and neither may
+sit in a month whose payroll is finalised. A payout is valued at one day of the employee's gross on
+the current salary divisor and appears on the payslip as *Incentive (incl. N comp-off days)*.
+
+The **comp-off ledger** on the same tab shows, per employee, what is pending, approved, set against
+an absence, paid out and lapsed. Credits lapse after *Comp-off lapses after* days (90 by default);
+payouts can be switched off entirely.
+
+Two new day statuses come with this: **OD** (out duty — paid, counts as present) and **CO**
+(comp-off taken — paid, not a working day). Both appear on the register, in the month summary, in
+the attendance share of the reports, and neither counts as LOP.
 
 ### CTC / salary structure
 
@@ -312,9 +338,9 @@ attendance register and mark someone absent → generate and finalise payroll �
    paste everything from `apps-script/Code.gs`, and save.
 3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
    dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates fourteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
-   `Leave`, `Payroll`, `Holidays`, `Events`, `Punches`, `Shifts`, `LeaveTypes`, `CtcVariables`,
-   `CtcComponents`, `CtcValues` — seeds a General shift, the four standard leave types and the
+   spreadsheet). This creates sixteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
+   `Leave`, `Payroll`, `Holidays`, `Events`, `Punches`, `Shifts`, `LeaveTypes`, `RequestTypes`,
+   `Requests`, `CtcVariables`, `CtcComponents`, `CtcValues` — seeds a General shift, the four standard leave types and the
    company's salary structure, and creates the first admin login. It is safe to re-run: new
    columns are appended, existing data is left where it is.
 4. **Deploy the web app.** *Deploy → New deployment → type: Web app*.

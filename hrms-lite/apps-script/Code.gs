@@ -24,6 +24,11 @@ var SHEETS = {
                'half_day_hours', 'weekly_off', 'saturday_policy', 'ot_after_minutes', 'active'],
   LeaveTypes: ['id', 'name', 'paid', 'quota', 'carry_forward', 'max_consecutive', 'notice_days',
                'allow_half_day', 'active'],
+  RequestTypes: ['id', 'code', 'name', 'effect', 'paid', 'needs_approval', 'max_per_month',
+                 'validity_days', 'allow_half', 'active'],
+  Requests:     ['id', 'emp_code', 'type', 'date', 'to_date', 'in_time', 'out_time', 'reason',
+                 'mode', 'adjust_date', 'days', 'status', 'applied_at', 'decided_by',
+                 'decided_at', 'note'],
   CtcVariables: ['id', 'code', 'value', 'note'],
   CtcComponents: ['id', 'seq', 'code', 'name', 'section', 'kind', 'expr', 'taxable',
                   'in_gross', 'in_pf_wage', 'in_esi_wage', 'show_payslip', 'active'],
@@ -84,6 +89,8 @@ var DEFAULT_SETTINGS = {
   sync_last_push: '',
   import_companies: '',
   register_group_by: 'unit',
+  co_payout_enabled: 'yes',
+  co_validity_days: '90',
   register_footer: '',
   keep_punch_log: 'yes',
   punch_log_days: '90',
@@ -190,6 +197,20 @@ function setup() {
       appendRow('LeaveTypes', {
         id: newId(), name: t[0], paid: t[1], quota: t[2], carry_forward: t[3],
         max_consecutive: t[4], notice_days: t[5], allow_half_day: t[6], active: 'yes'
+      });
+    });
+  }
+
+  // Seed the request types: out-of-office duty, a missed-punch correction and
+  // compensatory off for working a weekly off or a holiday.
+  if (readSheet('RequestTypes').length === 0) {
+    [['OD', 'Out of office duty', 'present', 'yes', 'yes', '0', '0', 'yes'],
+     ['SWIPE', 'Swipe request (missed punch)', 'times', 'yes', 'yes', '3', '0', 'no'],
+     ['CO', 'Compensatory off', 'comp_off', 'yes', 'yes', '0', '90', 'yes']
+    ].forEach(function (t) {
+      appendRow('RequestTypes', {
+        id: newId(), code: t[0], name: t[1], effect: t[2], paid: t[3], needs_approval: t[4],
+        max_per_month: t[5], validity_days: t[6], allow_half: t[7], active: 'yes'
       });
     });
   }
@@ -316,6 +337,8 @@ function bootstrap() {
     events:     readSheet('Events'),
     shifts:     readSheet('Shifts'),
     leaveTypes: readSheet('LeaveTypes'),
+    requestTypes: readSheet('RequestTypes'),
+    requests:    readSheet('Requests'),
     ctcVariables:  readSheet('CtcVariables'),
     ctcComponents: readSheet('CtcComponents'),
     ctcValues:     readSheet('CtcValues'),

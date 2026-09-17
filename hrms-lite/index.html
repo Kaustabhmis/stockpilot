@@ -206,6 +206,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .s-P{background:#d1fae5;color:#065f46;} .s-A{background:#fee2e2;color:#991b1b;}
 .s-HD{background:#fef3c7;color:#92400e;} .s-L{background:#dbeafe;color:#1e40af;}
 .s-WO{background:#f1f5f9;color:#94a3b8;} .s-H{background:#ede9fe;color:#5b21b6;}
+.s-OD{background:#cffafe;color:#155e75;} .s-CO{background:#ffe4e6;color:#9f1239;}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--text-muted);margin-top:10px;align-items:center;}
 .legend span b{display:inline-block;width:18px;height:18px;border-radius:4px;text-align:center;line-height:18px;
   font-size:.6rem;margin-right:5px;vertical-align:middle;}
@@ -539,6 +540,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
         <div class="legend">
           <span><b class="s-P">P</b>Present</span><span><b class="s-A">A</b>Absent (LOP)</span>
           <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Leave</span>
+          <span><b class="s-OD">OD</b>Out duty</span><span><b class="s-CO">CO</b>Comp-off</span>
           <span><b class="s-WO">WO</b>Weekly off</span><span><b class="s-H">H</b>Holiday</span>
           <span style="margin-left:auto;">Click a cell to cycle &middot; double-click for times &middot; click a date header to fill the column</span>
         </div>
@@ -555,6 +557,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
       <div class="kpis" id="leave-kpis"></div>
       <div class="tabs">
         <div class="tab active" data-tab="list" onclick="leaveTab('list')">Applications</div>
+        <div class="tab" data-tab="requests" onclick="leaveTab('requests')">Requests
+          <span class="badge b-amber" id="req-tab-badge" style="margin-left:6px;display:none">0</span></div>
         <div class="tab" data-tab="calendar" onclick="leaveTab('calendar')">Calendar</div>
         <div class="tab" data-tab="balance" onclick="leaveTab('balance')">Balances</div>
       </div>
@@ -572,6 +576,29 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             <button onclick="openLeave()">+ Apply for leave</button>
           </div>
           <div class="table-wrap"><table id="leave-table"></table></div>
+        </div>
+      </div>
+      <div id="leave-pane-requests" style="display:none;">
+        <div class="card">
+          <div class="toolbar">
+            <select id="req-status" onchange="renderRequests()">
+              <option value="Pending">Pending</option><option value="">All</option>
+              <option value="Approved">Approved</option><option value="Rejected">Rejected</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+            <select id="req-type" onchange="renderRequests()"><option value="">All types</option></select>
+            <input type="month" id="req-month" onchange="renderRequests()">
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="exportRequests()">&#8681; Export CSV</button>
+            <button onclick="openRequest()">+ New request</button>
+          </div>
+          <div class="table-wrap"><table id="req-table"></table></div>
+        </div>
+        <div class="card">
+          <h3>Comp-off balance</h3>
+          <div class="card-sub">Earned by working a weekly off or a holiday, spent against an absence
+            or paid out. Credits lapse after the validity set in Settings.</div>
+          <div class="table-wrap"><table id="co-balance"></table></div>
         </div>
       </div>
       <div id="leave-pane-calendar" style="display:none;">
@@ -663,16 +690,17 @@ var S = {
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
   shifts: [], leaveTypes: [], leaveVersion: 0,
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
+  requestTypes: [], requests: [],
   attDirty: {}, payDraft: null, attVersion: 0,
   empSort: { col: 'emp_code', dir: 1 }
 };
 
-var STATUSES = ['P', 'A', 'HD', 'L', 'WO', 'H'];
+var STATUSES = ['P', 'A', 'HD', 'L', 'OD', 'CO', 'WO', 'H'];
 var TITLES = {
   dashboard: ['Dashboard', 'Everything that needs you today'],
   employees: ['Employees', 'Employee master &mdash; the single source of truth'],
   attendance: ['Attendance', 'Daily marking, monthly register, late marks and LOP'],
-  leave: ['Leave', 'Applications, approvals, calendar and balances'],
+  leave: ['Leave', 'Leave, out-duty and swipe requests, comp-off, calendar and balances'],
   payroll: ['Payroll', 'Monthly run, statutory deductions, payslips'],
   reports: ['Reports', 'Registers, statutory returns and exceptions']
 };
@@ -1046,7 +1074,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v7';
+var DEMO_KEY = 'hrms_lite_demo_v8';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1069,6 +1097,7 @@ function demoDb() {
       leave_types: 'Casual,Sick,Earned,Unpaid', quota_casual: '12', quota_sick: '6', quota_earned: '15'
     },
     employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [], events: [],
+    requests: [],
     shifts: [
       { id: 'SH1', name: 'General', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
         full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun', saturday_policy: 'working',
@@ -1078,6 +1107,15 @@ function demoDb() {
         ot_after_minutes: 30, active: 'yes' }
     ],
     ctcValues: [],
+    requests: [],
+    requestTypes: [
+      { id: 'RT1', code: 'OD', name: 'Out of office duty', effect: 'present', paid: 'yes',
+        needs_approval: 'yes', max_per_month: 0, validity_days: 0, allow_half: 'no', active: 'yes' },
+      { id: 'RT2', code: 'SWIPE', name: 'Swipe request (missed punch)', effect: 'times', paid: 'yes',
+        needs_approval: 'yes', max_per_month: 3, validity_days: 0, allow_half: 'no', active: 'yes' },
+      { id: 'RT3', code: 'CO', name: 'Compensatory off', effect: 'comp_off', paid: 'yes',
+        needs_approval: 'yes', max_per_month: 0, validity_days: 90, allow_half: 'yes', active: 'yes' }
+    ],
     ctcVariables: [
       { id: 'V1', code: 'basic_pct', value: '0.60', note: 'Basic as a share of gross' },
       { id: 'V2', code: 'hra_pct', value: '0.40', note: 'HRA as a share of gross' },
@@ -1234,7 +1272,7 @@ function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet ===
 var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
   Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
-  Events: 'events', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
+  Events: 'events', RequestTypes: 'requestTypes', Requests: 'requests', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
   CtcComponents: 'ctcComponents', CtcValues: 'ctcValues'
 };
 function demoApi(action, p) {
@@ -1248,6 +1286,7 @@ function demoApi(action, p) {
                shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
                ctcValues: db.ctcValues || [], events: db.events || [],
+               requestTypes: db.requestTypes || [], requests: db.requests || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -1354,6 +1393,8 @@ function reload() {
     S.events = d.events || [];
     S.shifts = d.shifts || [];
     S.leaveTypes = d.leaveTypes || [];
+    S.requestTypes = d.requestTypes || [];
+    S.requests = d.requests || [];
     S.ctcVariables = d.ctcVariables || [];
     S.ctcComponents = d.ctcComponents || [];
     S.ctcValues = d.ctcValues || [];
@@ -1367,7 +1408,8 @@ function reload() {
 }
 
 function renderAll() {
-  renderEmployees(); renderAttendance(); renderLeave(); renderPayroll(); renderReports(); renderDashboard();
+  renderEmployees(); renderAttendance(); renderLeave(); renderRequests();
+  renderPayroll(); renderReports(); renderDashboard();
 }
 
 /* --------------------------- navigation ------------------------- */
@@ -1504,8 +1546,8 @@ function renderDashboard() {
     var counts = { P: 0, L: 0, A: 0 };
     actives.forEach(function (e) {
       var st = statusOf(m, e.emp_code, dd);
-      if (st === 'P' || st === 'HD') counts.P++;
-      else if (st === 'L') counts.L++;
+      if (st === 'P' || st === 'HD' || st === 'OD') counts.P++;
+      else if (st === 'L' || st === 'CO') counts.L++;
       else if (st === 'A') counts.A++;
     });
     days.push({
@@ -1571,6 +1613,14 @@ function renderDashActions() {
       sub: 'Across ' + Object.keys(unmarkedDays).length + ' date(s) in ' + monthLabel(ym) +
            ' - payroll will treat them as unpaid', go: "go('attendance')" });
   }
+  var reqs = pendingRequests();
+  if (reqs.length) {
+    items.push({ icon: '&#128221;', bg: '#cffafe', title: reqs.length + ' request' +
+      (reqs.length === 1 ? '' : 's') + ' waiting',
+      sub: reqs.slice(0, 3).map(function (r) { return r.type + ' \u2013 ' + empName(r.emp_code); }).join(', ') +
+           (reqs.length > 3 ? ' and more' : ''),
+      go: "go('leave');leaveTab('requests')" });
+  }
   var prev = addMonths(ym, -1);
   if (!S.payroll.some(function (r) { return String(r.month) === prev; }) && S.employees.length) {
     items.push({ icon: '&#128176;', bg: '#fee2e2', title: 'Payroll for ' + monthLabel(prev) + ' is not saved',
@@ -1617,7 +1667,7 @@ function peopleOn(kind, iso) {
   }).filter(function (x) {
     switch (kind) {
       case 'headcount': return true;
-      case 'present':   return !x.off && (x.st === 'P' || x.st === 'HD');
+      case 'present':   return !x.off && (x.st === 'P' || x.st === 'HD' || x.st === 'OD');
       case 'absent':    return !x.off && x.st === 'A';
       case 'halfday':   return !x.off && x.st === 'HD';
       case 'late':      return !x.off && x.late > 0;
@@ -2294,8 +2344,8 @@ function attStats(ym, code) {
   /* In the running month, days that have not happened yet are not "missing". */
   var upTo = ym === thisMonth() ? new Date().getDate() : dim;
   var unpaid = unpaidLeaveMap();
-  var s = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0, blankDays: [], future: 0,
-            late: 0, ot: 0, unpaidLeave: 0, working: 0 };
+  var s = { P: 0, A: 0, HD: 0, L: 0, OD: 0, CO: 0, WO: 0, H: 0, blank: 0, blankDays: [],
+            future: 0, late: 0, ot: 0, unpaidLeave: 0, working: 0 };
   for (var d = 1; d <= dim; d++) {
     var iso = dateStr(ym, d);
     var rec = recordFor(ym, code, d);
@@ -2309,6 +2359,8 @@ function attStats(ym, code) {
       if (lateMinutes(rec, code)) s.late++;
       s.ot += otMinutes(rec, code);
     }
+    /* OD is duty away from the office and CO is an earned day off - both paid,
+       neither is LOP. */
   }
   s.total = dim;
   /* Late-mark rule: every N late marks costs half a day. */
@@ -2457,7 +2509,8 @@ function fillRow(code) {
     [{ label: 'Cancel', cls: 'ghost', onClick: closeModal }]);
 }
 function statusName(s) {
-  return { P: 'Present', A: 'Absent (LOP)', HD: 'Half day', L: 'Leave', WO: 'Weekly off', H: 'Holiday' }[s] || s;
+  return { P: 'Present', A: 'Absent (LOP)', HD: 'Half day', L: 'Leave', OD: 'Out of office duty',
+           CO: 'Comp-off taken', WO: 'Weekly off', H: 'Holiday' }[s] || s;
 }
 function applyFill(kind, target, status) {
   var ym = el('att-month').value || thisMonth();
@@ -2554,14 +2607,16 @@ function mergeAttendance(rows) {
 
 function renderAttSummary(ym, emps) {
   var head = '<thead><tr><th>Employee</th><th class="num-col">Present</th><th class="num-col">Absent</th>' +
-    '<th class="num-col">Half day</th><th class="num-col">Leave</th><th class="num-col">Weekly off</th>' +
-    '<th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">Late</th>' +
+    '<th class="num-col">Half day</th><th class="num-col">Leave</th><th class="num-col">OD</th>' +
+    '<th class="num-col">CO</th><th class="num-col">Weekly off</th><th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">Late</th>' +
     '<th class="num-col">Late ded.</th><th class="num-col">Unpaid leave</th>' +
     '<th class="num-col">OT hrs</th><th class="num-col">LOP</th><th class="num-col">Paid days</th></tr></thead>';
   var body = emps.map(function (e) {
     var s = attStats(ym, e.emp_code);
     return '<tr><td>' + esc(e.name) + '</td>' +
-      ['P', 'A', 'HD', 'L', 'WO', 'H'].map(function (k) { return '<td class="num-col">' + s[k] + '</td>'; }).join('') +
+      ['P', 'A', 'HD', 'L', 'OD', 'CO', 'WO', 'H'].map(function (k) {
+        return '<td class="num-col">' + s[k] + '</td>';
+      }).join('') +
       '<td class="num-col">' + (s.blank ? '<span class="badge b-amber">' + s.blank + '</span>' : 0) + '</td>' +
       '<td class="num-col">' + (s.late ? '<span class="badge b-amber">' + s.late + '</span>' : 0) + '</td>' +
       '<td class="num-col">' + (s.lateDeduction || 0) + '</td>' +
@@ -2570,7 +2625,7 @@ function renderAttSummary(ym, emps) {
       '<td class="num-col">' + s.lop + '</td><td class="num-col"><b>' + s.paid + '</b></td></tr>';
   }).join('');
   el('att-summary').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="14" class="empty">Nothing to summarise.</td></tr>') + '</tbody>';
+    '<tr><td colspan="16" class="empty">Nothing to summarise.</td></tr>') + '</tbody>';
 }
 
 /* Biometric / device CSV import: date, emp_code, in, out (header names are matched loosely) */
@@ -2713,13 +2768,14 @@ function takenDays(code, type, year) {
 }
 
 function leaveTab(tab) {
-  ['list', 'calendar', 'balance'].forEach(function (t) {
+  ['list', 'requests', 'calendar', 'balance'].forEach(function (t) {
     el('leave-pane-' + t).style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('#view-leave .tab').forEach(function (n) {
     n.classList.toggle('active', n.dataset.tab === tab);
   });
   if (tab === 'calendar') renderLeaveCalendar();
+  if (tab === 'requests') renderRequests();
 }
 
 function renderLeave() {
@@ -3063,6 +3119,10 @@ function computePay(e, ym, prev) {
   var arrears = prev && prev.arrears !== undefined ? num(prev.arrears) : 0;
   var bonus = prev && prev.bonus !== undefined ? num(prev.bonus) : 0;
   var incentive = prev && prev.incentive !== undefined ? num(prev.incentive) : 0;
+  /* Comp-off the employee chose to be paid for, rather than take as a day off. */
+  var coDays = typeof coPayoutDays === 'function' ? coPayoutDays(ym, e.emp_code) : 0;
+  var coAmount = coDays && divisor ? (grossOf(e) / divisor) * coDays : 0;
+  incentive += coAmount;
   var gross = basic + hra + special + other + arrears + bonus + otAmount + incentive;
 
   var pfWage = 0, pf = 0, pfEmployer = 0;
@@ -3104,6 +3164,7 @@ function computePay(e, ym, prev) {
     arrears: r(arrears), bonus: r(bonus), incentive: r(incentive), advance_deduction: r(advance),
     ot_hours: Math.round(otHours * 10) / 10, ot_amount: roundTo(otAmount),
     late_deduction_days: s.lateDeduction, unpaid_leave_days: s.unpaidLeave,
+    co_payout_days: coDays,
     gross: roundTo(gross),
     pf: r(pf), esi: r(esi), pt: r(pt), tds: r(tds), other_deduction: r(otherDed),
     total_deduction: r(totalDed), net: roundTo(gross - totalDed),
@@ -3330,7 +3391,9 @@ function payslipHtml(r, e) {
         line('Other allowance', r.other_allowance) +
         (num(r.arrears) ? line('Arrears', r.arrears) : '') +
         (num(r.bonus) ? line('Bonus', r.bonus) : '') +
-        (num(r.incentive) ? line('Incentive', r.incentive) : '') +
+        (num(r.incentive) ? line('Incentive' +
+          (num(r.co_payout_days) ? ' (incl. ' + num(r.co_payout_days) + ' comp-off day(s))' : ''),
+          r.incentive) : '') +
         (num(r.ot_amount) ? line('Overtime (' + num(r.ot_hours) + ' h)', r.ot_amount) : '') +
         '<tr><td><b>Gross earnings</b></td><td class="num-col"><b>' + cur() + money(r.gross) + '</b></td></tr>' +
       '</tbody></table>' +
@@ -3629,18 +3692,18 @@ function renderReportSideTables(ym) {
         '<td class="num-col">' + Math.round(byDept[d].n * 100 / (actives.length || 1)) + '%</td></tr>';
     }).join('') || '<tr><td colspan="4" class="empty">No active employees.</td></tr>') + '</tbody>';
 
-  var agg = { P: 0, A: 0, HD: 0, L: 0, WO: 0, H: 0, blank: 0 };
+  var agg = { P: 0, A: 0, HD: 0, L: 0, OD: 0, CO: 0, WO: 0, H: 0, blank: 0 };
   actives.forEach(function (e) {
     var s = attStats(ym, e.emp_code);
     Object.keys(agg).forEach(function (k) { agg[k] += s[k]; });
   });
-  var marked = agg.P + agg.A + agg.HD + agg.L;
-  var labels = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'Leave', WO: 'Weekly off',
-                 H: 'Holiday', blank: 'Not marked' };
+  var marked = agg.P + agg.A + agg.HD + agg.L + agg.OD + agg.CO;
+  var labels = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'Leave', OD: 'Out of office duty',
+                 CO: 'Comp-off', WO: 'Weekly off', H: 'Holiday', blank: 'Not marked' };
   el('rep-att').innerHTML = '<thead><tr><th>Status</th><th class="num-col">Days</th>' +
     '<th class="num-col">Of marked</th></tr></thead><tbody>' +
     Object.keys(labels).map(function (k) {
-      var share = marked && ['P', 'A', 'HD', 'L'].indexOf(k) >= 0
+      var share = marked && ['P', 'A', 'HD', 'L', 'OD', 'CO'].indexOf(k) >= 0
         ? Math.round(agg[k] * 100 / marked) + '%' : '—';
       return '<tr><td>' + labels[k] + '</td><td class="num-col">' + agg[k] + '</td>' +
         '<td class="num-col">' + share + '</td></tr>';
@@ -3702,6 +3765,14 @@ var SHIFT_COLS = [
   ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt'],
   ['ot_after_minutes', 'OT after min', 'number'], ['active', 'Active', 'select:yes,no']
 ];
+var REQUEST_TYPE_COLS = [
+  ['code', 'Code', 'text'], ['name', 'Shown as', 'text'],
+  ['effect', 'What approval does', 'select:present,times,comp_off,none'],
+  ['paid', 'Paid', 'select:yes,no'], ['needs_approval', 'Needs approval', 'select:yes,no'],
+  ['max_per_month', 'Max per month (0 = no cap)', 'number'],
+  ['validity_days', 'Credit validity in days (comp-off)', 'number'],
+  ['allow_half', 'Half day', 'select:no,yes'], ['active', 'Active', 'select:yes,no']
+];
 var CTC_VAR_COLS = [
   ['code', 'Variable', 'text'], ['value', 'Value', 'number'], ['note', 'What it means', 'wide']
 ];
@@ -3724,7 +3795,7 @@ var LEAVE_TYPE_COLS = [
 function openSettings() {
   var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
     .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
-             ['leaverules', 'Leave policy'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
+             ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
              ['integrations', 'Integrations'], ['import', 'Import data'], ['account', 'Account']]);
 
   var body = '<div class="tabs">' + tabs.map(function (t, i) {
@@ -3740,6 +3811,7 @@ function openSettings() {
   '<div class="set-pane" id="stab-shifts" style="display:none">' + shiftsPane() + '</div>' +
   '<div id="stab-holidays" style="display:none">' + holidaysPane() + '</div>' +
   '<div class="set-pane" id="stab-leaverules" style="display:none">' + leaveRulesPane() + '</div>' +
+  '<div class="set-pane" id="stab-requests" style="display:none">' + requestsPane() + '</div>' +
   '<div id="stab-ctc" style="display:none">' + ctcPane() + '</div>' +
   '<div class="set-pane" id="stab-payrollrules" style="display:none">' + payrollRulesPane() + '</div>' +
   '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' +
@@ -3753,6 +3825,7 @@ function openSettings() {
   renderHolidays();
   renderPolicyTable('shifts');
   renderPolicyTable('leaveTypes');
+  renderPolicyTable('requestTypes');
   renderPolicyTable('ctcVariables');
   renderPolicyTable('ctcComponents');
   renderCtcPreview();
@@ -3762,7 +3835,8 @@ function openSettings() {
 
 function settingsTab(tab) {
   var all = SETTING_GROUPS.map(function (g) { return g.id; })
-    .concat(['shifts', 'holidays', 'leaverules', 'ctc', 'payrollrules', 'integrations', 'import', 'account']);
+    .concat(['shifts', 'holidays', 'leaverules', 'requests', 'ctc', 'payrollrules',
+             'integrations', 'import', 'account']);
   all.forEach(function (t) {
     var pane = el('stab-' + t);
     if (pane) pane.style.display = t === tab ? '' : 'none';
@@ -3793,6 +3867,11 @@ var POLICY_TABLES = {
             blank: { name: 'New shift', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
                      full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun',
                      saturday_policy: 'working', ot_after_minutes: 30, active: 'yes' } },
+  requestTypes: { sheet: 'RequestTypes', cols: REQUEST_TYPE_COLS, state: 'requestTypes',
+                  label: 'request type', key: 'code',
+                  blank: { code: 'NEW', name: 'New request type', effect: 'none', paid: 'yes',
+                           needs_approval: 'yes', max_per_month: 0, validity_days: 0,
+                           allow_half: 'no', active: 'yes' } },
   ctcVariables: { sheet: 'CtcVariables', cols: CTC_VAR_COLS, state: 'ctcVariables', label: 'variable',
                   key: 'code', blank: { code: 'new_variable', value: '0', note: '' } },
   ctcComponents: { sheet: 'CtcComponents', cols: CTC_COMP_COLS, state: 'ctcComponents', label: 'component',
@@ -5909,12 +5988,12 @@ function registerRow(e, r, sr) {
   return [
     sr, e.emp_code, e.name, unitOf(e),
     s.total,
-    s.P + s.HD * 0.5,
+    s.P + s.OD + s.HD * 0.5,
     s.H,
     s.A,
     s.WO,
-    s.L,
-    Math.round((s.P + s.HD * 0.5 + s.H + s.WO + s.L) * 100) / 100,
+    s.L + s.CO,
+    Math.round((s.P + s.OD + s.HD * 0.5 + s.H + s.WO + s.L + s.CO) * 100) / 100,
     r.ot_hours ? num(r.ot_hours) : '',
     num(r.basic),
     num(r.hra),
@@ -6266,6 +6345,422 @@ function removeEvent(id) {
     S.events = S.events.filter(function (e) { return String(e.id) !== String(id); });
     closeModal(); toast('Event removed', 'good'); renderCalendar();
   }).catch(function (e) { toast(e.message, 'bad'); });
+}
+</script>
+
+<script>
+/* =================================================================
+   REQUESTS
+   OD    - out of office duty: the day is duty, marked OD and paid.
+   SWIPE - a missed punch: approval writes the in/out times.
+   CO    - compensatory off: earned by working a weekly off or a
+           holiday, then either set against an absence or paid out.
+   ================================================================= */
+
+function requestTypes() {
+  return (S.requestTypes || []).filter(function (t) {
+    return String(t.active || 'yes').toLowerCase() !== 'no' && String(t.code || '').trim();
+  });
+}
+function requestTypeByCode(code) {
+  var want = String(code || '').trim().toUpperCase(), found = null;
+  (S.requestTypes || []).forEach(function (t) {
+    if (String(t.code || '').trim().toUpperCase() === want) found = t;
+  });
+  return found;
+}
+function visibleRequests() {
+  return isAdmin() ? S.requests
+    : (S.requests || []).filter(function (r) { return String(r.emp_code) === myCode(); });
+}
+function pendingRequests() {
+  return (S.requests || []).filter(function (r) { return r.status === 'Pending'; });
+}
+
+/* ---- comp-off ledger ---------------------------------------------
+   A credit is one approved CO request whose work day was a weekly off
+   or a holiday. It is spent the moment it is approved - either onto an
+   absent day, or as a payout - so the balance below is what is still
+   waiting to be decided, plus anything approved but unused. */
+function coLedger(code) {
+  var validity = num(S.settings.co_validity_days || 90);
+  var earned = 0, adjusted = 0, paid = 0, pending = 0, expired = 0;
+  visibleRequests().filter(function (r) {
+    return String(r.emp_code) === String(code) && requestEffect(r.type) === 'comp_off';
+  }).forEach(function (r) {
+    var days = num(r.days) || 1;
+    if (r.status === 'Pending') { pending += days; return; }
+    if (r.status !== 'Approved') return;
+    var age = Math.round((new Date(today()) - new Date(r.date)) / 86400000);
+    if (validity > 0 && age > validity && r.mode !== 'adjust' && r.mode !== 'payout') {
+      expired += days; return;
+    }
+    earned += days;
+    if (r.mode === 'payout') paid += days;
+    else adjusted += days;
+  });
+  return { earned: earned, adjusted: adjusted, paid: paid, pending: pending, expired: expired };
+}
+function requestEffect(typeCode) {
+  var t = requestTypeByCode(typeCode);
+  return t ? String(t.effect || 'none') : 'none';
+}
+
+/* Comp-off days paid out in a month - picked up by payroll as incentive. */
+function coPayoutDays(ym, code) {
+  return (S.requests || []).filter(function (r) {
+    return String(r.emp_code) === String(code) && r.status === 'Approved' &&
+      r.mode === 'payout' && String(r.decided_at || r.date).slice(0, 7) === ym &&
+      requestEffect(r.type) === 'comp_off';
+  }).reduce(function (t, r) { return t + (num(r.days) || 1); }, 0);
+}
+
+/* ------------------------------ list ----------------------------- */
+function renderRequests() {
+  if (!el('req-table') || !S.user) return;
+  var sel = el('req-type');
+  if (sel && sel.options.length <= 1) {
+    sel.innerHTML = '<option value="">All types</option>' + requestTypes().map(function (t) {
+      return '<option value="' + esc(t.code) + '">' + esc(t.name) + '</option>';
+    }).join('');
+  }
+  var status = el('req-status').value, type = el('req-type').value;
+  var month = el('req-month').value;
+  var rows = visibleRequests().filter(function (r) {
+    if (status && r.status !== status) return false;
+    if (type && String(r.type) !== type) return false;
+    if (month && String(r.date).slice(0, 7) !== month) return false;
+    return true;
+  }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+
+  var badge = el('req-tab-badge');
+  var pend = pendingRequests().length;
+  if (badge) { badge.textContent = pend; badge.style.display = pend ? '' : 'none'; }
+
+  var head = '<thead><tr><th>Employee</th><th>Type</th><th>Date</th><th>Detail</th>' +
+    '<th>Reason</th><th>Status</th><th>Decided by</th><th></th></tr></thead>';
+  var body = rows.map(function (r) {
+    var cls = r.status === 'Approved' ? 'b-green' : r.status === 'Rejected' ? 'b-red'
+      : r.status === 'Cancelled' ? 'b-gray' : 'b-amber';
+    var t = requestTypeByCode(r.type) || { name: r.type };
+    var detail = '';
+    if (requestEffect(r.type) === 'times') {
+      detail = esc((r.in_time || '--') + ' to ' + (r.out_time || '--'));
+    } else if (requestEffect(r.type) === 'comp_off') {
+      detail = r.mode === 'payout' ? '<span class="badge b-violet">pay out</span>'
+        : 'adjust against ' + esc(r.adjust_date || '-');
+    } else if (r.to_date && r.to_date !== r.date) {
+      detail = esc(r.date + ' to ' + r.to_date);
+    }
+    var actions = '';
+    if (isAdmin() && r.status === 'Pending') {
+      actions = '<button class="ok sm" onclick="decideRequest(\'' + esc(r.id) + '\',\'Approved\')">Approve</button> ' +
+        '<button class="danger sm" onclick="decideRequest(\'' + esc(r.id) + '\',\'Rejected\')">Reject</button>';
+    } else if (isAdmin() && r.status === 'Approved') {
+      actions = '<button class="ghost sm" onclick="cancelRequest(\'' + esc(r.id) + '\')">Cancel</button>';
+    }
+    return '<tr><td>' + esc(empName(r.emp_code)) + '<div class="sub-line">' + esc(r.emp_code) + '</div></td>' +
+      '<td>' + esc(t.name) + '<div class="sub-line">' + esc(r.type) + '</div></td>' +
+      '<td>' + esc(r.date) + '</td><td>' + detail + '</td>' +
+      '<td>' + esc(r.reason || '-') + '</td>' +
+      '<td><span class="badge ' + cls + '">' + esc(r.status) + '</span>' +
+        (r.note ? '<div class="sub-line">' + esc(r.note) + '</div>' : '') + '</td>' +
+      '<td class="sub-line">' + esc(r.decided_by || '-') + '</td>' +
+      '<td style="white-space:nowrap">' + actions + '</td></tr>';
+  }).join('');
+  el('req-table').innerHTML = head + '<tbody>' + (body ||
+    '<tr><td colspan="8" class="empty">No requests for this filter.</td></tr>') + '</tbody>';
+
+  renderCoBalance();
+}
+
+function renderCoBalance() {
+  if (!el('co-balance')) return;
+  var emps = activeEmployees().filter(function (e) {
+    return coLedger(e.emp_code).earned || coLedger(e.emp_code).pending;
+  });
+  el('co-balance').innerHTML = '<thead><tr><th>Employee</th><th class="num-col">Pending</th>' +
+    '<th class="num-col">Approved</th><th class="num-col">Set against an absence</th>' +
+    '<th class="num-col">Paid out</th><th class="num-col">Lapsed</th></tr></thead><tbody>' +
+    (emps.map(function (e) {
+      var l = coLedger(e.emp_code);
+      return '<tr><td>' + esc(e.name) + '</td>' +
+        '<td class="num-col">' + (l.pending ? '<span class="badge b-amber">' + l.pending + '</span>' : 0) + '</td>' +
+        '<td class="num-col">' + l.earned + '</td><td class="num-col">' + l.adjusted + '</td>' +
+        '<td class="num-col">' + l.paid + '</td>' +
+        '<td class="num-col">' + (l.expired ? '<span class="badge b-red">' + l.expired + '</span>' : 0) + '</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="empty">No comp-off yet.</td></tr>') + '</tbody>';
+}
+
+/* ----------------------------- raise ----------------------------- */
+function openRequest() {
+  var emps = activeEmployees();
+  if (!emps.length) return toast('Add an employee first', 'bad');
+  var types = requestTypes();
+  if (!types.length) return toast('No request types are set up - add them in Settings', 'bad');
+  var body = '<div id="req-warn"></div><div class="grid2">' +
+    '<label class="field">Employee<select data-f="emp_code" onchange="requestFormChanged()">' +
+      emps.map(function (e) {
+        return '<option value="' + esc(e.emp_code) + '"' + (e.emp_code === myCode() ? ' selected' : '') +
+          '>' + esc(e.name) + ' (' + esc(e.emp_code) + ')</option>';
+      }).join('') + '</select></label>' +
+    '<label class="field">Type<select data-f="type" onchange="requestFormChanged()">' +
+      types.map(function (t) {
+        return '<option value="' + esc(t.code) + '">' + esc(t.name) + '</option>';
+      }).join('') + '</select></label>' +
+    '<label class="field">Date<input data-f="date" type="date" value="' + today() + '" onchange="requestFormChanged()"></label>' +
+    '</div><div id="req-extra"></div>' +
+    '<label class="field" style="margin-top:12px">Reason<input data-f="reason" type="text" ' +
+      'placeholder="Client visit / machine breakdown / forgot to punch"></label>';
+  showModal('New request', body, [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Submit request', onClick: submitRequest }
+  ]);
+  requestFormChanged();
+}
+
+/* The form changes shape with the type, and warns before you submit. */
+function requestFormChanged() {
+  var b = el('modal-body');
+  var type = b.querySelector('[data-f="type"]').value;
+  var code = b.querySelector('[data-f="emp_code"]').value;
+  var date = b.querySelector('[data-f="date"]').value;
+  var effect = requestEffect(type);
+  var rule = requestTypeByCode(type) || {};
+  var extra = el('req-extra');
+  var keep = {};
+  extra.querySelectorAll('[data-f]').forEach(function (n) { keep[n.dataset.f] = n.value; });
+
+  if (effect === 'times') {
+    extra.innerHTML = '<div class="grid2">' +
+      '<label class="field">In time<input data-f="in_time" type="time" value="' +
+        esc(keep.in_time || S.settings.shift_start || '09:30') + '"></label>' +
+      '<label class="field">Out time<input data-f="out_time" type="time" value="' +
+        esc(keep.out_time || S.settings.shift_end || '18:30') + '"></label>' +
+      '<label class="field">Why<select data-f="mode">' +
+        '<option value="miss_punch">Missed punch</option>' +
+        '<option value="out_duty">Out duty</option>' +
+        '<option value="emergency">Emergency duty</option></select></label></div>';
+  } else if (effect === 'comp_off') {
+    extra.innerHTML = '<div class="grid2">' +
+      '<label class="field">What to do with it<select data-f="mode" onchange="requestFormChanged()">' +
+        '<option value="adjust"' + (keep.mode === 'payout' ? '' : ' selected') + '>Set against an absent day</option>' +
+        '<option value="payout"' + (keep.mode === 'payout' ? ' selected' : '') + '>Pay it as an incentive</option>' +
+      '</select></label>' +
+      (keep.mode === 'payout' ? ''
+        : '<label class="field">Absent day to cover<input data-f="adjust_date" type="date" value="' +
+          esc(keep.adjust_date || '') + '"></label>') +
+      (String(rule.allow_half || 'no').toLowerCase() === 'yes'
+        ? '<label class="field">Days<input data-f="days" type="number" step="0.5" min="0.5" value="' +
+          esc(keep.days || 1) + '"></label>' : '') +
+      '</div>';
+  } else if (effect === 'present') {
+    extra.innerHTML = '<div class="grid2">' +
+      '<label class="field">Until (for more than one day)<input data-f="to_date" type="date" value="' +
+        esc(keep.to_date || date) + '"></label></div>';
+  } else {
+    extra.innerHTML = '';
+  }
+  checkRequest();
+}
+
+function checkRequest() {
+  var b = el('modal-body'), warns = [], blocks = [];
+  var get = function (f) { var n = b.querySelector('[data-f="' + f + '"]'); return n ? n.value : ''; };
+  var code = get('emp_code'), type = get('type'), date = get('date');
+  var effect = requestEffect(type), rule = requestTypeByCode(type) || {};
+  var ym = String(date).slice(0, 7), day = +String(date).slice(8);
+
+  if (!date) blocks.push('Pick a date.');
+  else if (monthLocked(ym)) blocks.push('Payroll for ' + monthLabel(ym) + ' is finalised, so that day cannot change.');
+
+  if (effect === 'comp_off' && date) {
+    var offDay = isWeeklyOff(ym, day, code) || !!anyHolidayOn(date);
+    var st = statusOf(ym, code, day);
+    if (!offDay) blocks.push('Comp-off is earned by working a weekly off or a holiday; ' + date + ' is a working day.');
+    else if (st !== 'P' && st !== 'HD' && st !== 'OD') {
+      warns.push('The register does not show work on ' + date + ' yet (it reads "' +
+        (st || 'not marked') + '"). Mark the day worked first, or this will be approved on trust.');
+    }
+    if (get('mode') === 'adjust') {
+      var adj = get('adjust_date');
+      if (!adj) blocks.push('Pick the absent day this should cover.');
+      else {
+        var aSt = statusOf(adj.slice(0, 7), code, +adj.slice(8));
+        if (monthLocked(adj.slice(0, 7))) blocks.push('Payroll for ' + monthLabel(adj.slice(0, 7)) + ' is finalised.');
+        else if (aSt !== 'A') blocks.push('The day to cover must be an unpaid absence; ' + adj +
+          ' currently reads "' + (aSt || 'not marked') + '".');
+      }
+    } else if (get('mode') === 'payout' &&
+               String(S.settings.co_payout_enabled || 'yes').toLowerCase() !== 'yes') {
+      blocks.push('Paying comp-off out is switched off in Settings.');
+    }
+  }
+
+  if (effect === 'times' && date) {
+    if (minutesOf(get('in_time')) === null) blocks.push('Give an in time.');
+    if (get('out_time') && minutesOf(get('out_time')) < minutesOf(get('in_time'))) {
+      blocks.push('Out time is before in time.');
+    }
+  }
+
+  var cap = num(rule.max_per_month);
+  if (cap > 0 && date) {
+    var used = (S.requests || []).filter(function (r) {
+      return String(r.emp_code) === String(code) && String(r.type) === type &&
+        ['Approved', 'Pending'].indexOf(r.status) >= 0 && String(r.date).slice(0, 7) === ym;
+    }).length;
+    if (used >= cap) {
+      blocks.push(rule.name + ' is capped at ' + cap + ' per month and ' + used + ' are already in for ' +
+        monthLabel(ym) + '.');
+    }
+  }
+  var dup = (S.requests || []).filter(function (r) {
+    return String(r.emp_code) === String(code) && String(r.type) === type &&
+      String(r.date) === date && ['Approved', 'Pending'].indexOf(r.status) >= 0;
+  });
+  if (dup.length) blocks.push('There is already a ' + type + ' request for that day.');
+
+  var all = blocks.concat(warns);
+  el('req-warn').innerHTML = all.length
+    ? '<div class="err show" style="background:' + (blocks.length ? '#fee2e2' : '#fef3c7') +
+      ';color:' + (blocks.length ? '#991b1b' : '#92400e') + '">' + all.map(esc).join('<br>') + '</div>' : '';
+  S._reqBlocks = blocks;
+  return blocks;
+}
+
+function submitRequest() {
+  var row = collectFields();
+  checkRequest();
+  if (S._reqBlocks && S._reqBlocks.length) return toast(S._reqBlocks[0], 'bad');
+  var rule = requestTypeByCode(row.type) || {};
+  row.days = num(row.days) || 1;
+  row.status = String(rule.needs_approval || 'yes').toLowerCase() === 'no' ? 'Approved' : 'Pending';
+  row.applied_at = today();
+  row.decided_by = row.status === 'Approved' ? S.user.email : '';
+  row.decided_at = row.status === 'Approved' ? today() : '';
+  api('save', { sheet: 'Requests', row: row }).then(function (saved) {
+    var full = Object.assign({}, row, { id: saved.id });
+    S.requests.push(full);
+    if (full.status === 'Approved') return applyRequest(full);
+  }).then(function () {
+    closeModal(); toast('Request submitted', 'good');
+    renderRequests(); renderAttendance(); renderDashboard();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* --------------------------- decide ------------------------------ */
+function decideRequest(id, decision) {
+  var r = null;
+  (S.requests || []).forEach(function (x) { if (String(x.id) === String(id)) r = x; });
+  if (!r) return;
+  if (monthLocked(String(r.date).slice(0, 7))) {
+    return toast('Payroll for ' + monthLabel(String(r.date).slice(0, 7)) + ' is finalised - reopen it first', 'bad');
+  }
+  var row = Object.assign({}, r, { status: decision, decided_by: S.user.email, decided_at: today() });
+  api('save', { sheet: 'Requests', row: row }).then(function () {
+    Object.assign(r, row);
+    if (decision === 'Approved') return applyRequest(r);
+  }).then(function () {
+    toast('Request ' + decision.toLowerCase(), 'good');
+    renderRequests(); renderAttendance(); renderPayroll(); renderDashboard();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* Approval is what actually writes to the register. */
+function applyRequest(r) {
+  var effect = requestEffect(r.type);
+  var rows = [];
+  if (effect === 'present') {
+    var from = new Date(r.date), to = new Date(r.to_date || r.date);
+    for (var d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      var iso = d.toISOString().slice(0, 10);
+      if (isWeeklyOff(iso.slice(0, 7), d.getDate(), r.emp_code) || holidayOn(iso)) continue;
+      rows.push({ id: r.emp_code + '_' + iso, date: iso, emp_code: r.emp_code, status: 'OD',
+                  in_time: '', out_time: '', hours: 0,
+                  remarks: 'OD - ' + (r.reason || 'out of office duty'), updated_at: today() });
+    }
+  } else if (effect === 'times') {
+    var hours = 0;
+    if (minutesOf(r.in_time) !== null && minutesOf(r.out_time) !== null) {
+      hours = (minutesOf(r.out_time) - minutesOf(r.in_time)) / 60;
+    }
+    var cfg = shiftCfg(r.emp_code);
+    var status = hours >= cfg.fullHours ? 'P' : (hours >= cfg.halfHours ? 'HD' : 'P');
+    rows.push({ id: r.emp_code + '_' + r.date, date: r.date, emp_code: r.emp_code, status: status,
+                in_time: r.in_time || '', out_time: r.out_time || '',
+                hours: Math.round(hours * 10) / 10,
+                remarks: 'swipe request - ' + (r.mode || 'miss punch'), updated_at: today() });
+  } else if (effect === 'comp_off' && r.mode === 'adjust' && r.adjust_date) {
+    rows.push({ id: r.emp_code + '_' + r.adjust_date, date: r.adjust_date, emp_code: r.emp_code,
+                status: 'CO', in_time: '', out_time: '', hours: 0,
+                remarks: 'comp-off for working ' + r.date, updated_at: today() });
+  }
+  if (!rows.length) return Promise.resolve();
+  return api('saveMany', { sheet: 'Attendance', rows: rows }).then(function () { mergeAttendance(rows); });
+}
+
+function cancelRequest(id) {
+  var r = null;
+  (S.requests || []).forEach(function (x) { if (String(x.id) === String(id)) r = x; });
+  if (!r) return;
+  var effect = requestEffect(r.type);
+  var touched = effect === 'comp_off' ? r.adjust_date : r.date;
+  showModal('Cancel this request',
+    '<p style="line-height:1.7">Cancel the <b>' + esc(r.type) + '</b> request for <b>' +
+    esc(empName(r.emp_code)) + '</b> on <b>' + esc(r.date) + '</b>?</p>' +
+    (touched && effect !== 'none'
+      ? '<p style="margin-top:10px">' + esc(touched) + ' goes back to <b>unmarked</b> on the register, ' +
+        'so mark it again before the next payroll run.</p>' : ''),
+    [{ label: 'Keep it', cls: 'ghost', onClick: closeModal },
+     { label: 'Cancel the request', cls: 'danger', onClick: function () {
+        var row = Object.assign({}, r, { status: 'Cancelled', decided_by: S.user.email, decided_at: today() });
+        api('save', { sheet: 'Requests', row: row }).then(function () {
+          Object.assign(r, row);
+          if (!touched || effect === 'none' || monthLocked(String(touched).slice(0, 7))) return;
+          var blank = { id: r.emp_code + '_' + touched, date: touched, emp_code: r.emp_code, status: '',
+                        in_time: '', out_time: '', hours: 0, remarks: '', updated_at: today() };
+          return api('saveMany', { sheet: 'Attendance', rows: [blank] })
+            .then(function () { mergeAttendance([blank]); });
+        }).then(function () {
+          closeModal(); toast('Request cancelled', 'good');
+          renderRequests(); renderAttendance(); renderDashboard();
+        }).catch(function (e) { toast(e.message, 'bad'); });
+     } }]);
+}
+
+function exportRequests() {
+  var cols = ['emp_code', 'name', 'type', 'date', 'to_date', 'in_time', 'out_time', 'mode',
+              'adjust_date', 'days', 'reason', 'status', 'applied_at', 'decided_by', 'decided_at'];
+  download('requests.csv', toCSV(cols, visibleRequests().map(function (r) {
+    return cols.map(function (c) { return c === 'name' ? empName(r.emp_code) : r[c]; });
+  })));
+}
+
+/* --------------------------- settings ---------------------------- */
+function requestsPane() {
+  return '<h3>Request types</h3>' +
+    '<div class="card-sub">What staff can ask for, and what approval does to the register.</div>' +
+    '<div id="policy-requestTypes"></div>' +
+    '<h3 style="margin-top:22px">Comp-off rules</h3>' +
+    '<div class="grid2">' +
+      fieldInput(['co_payout_enabled', 'Allow comp-off to be paid out', 'select:yes,no'],
+                 S.settings.co_payout_enabled) +
+      fieldInput(['co_validity_days', 'Comp-off lapses after (days, 0 = never)', 'number'],
+                 S.settings.co_validity_days) +
+    '</div>' +
+    '<div class="locked-note" style="background:#f1f5f9;color:var(--text-dark);align-items:flex-start;margin-top:14px">' +
+    '<div>&#9432;</div><div style="font-weight:500;line-height:1.8">' +
+    '<b>What approval does</b><br>' +
+    '<b>present</b> &mdash; the day becomes <b>OD</b> on the register: duty away from the office, paid, ' +
+    'counted as present. Used for client visits and site work.<br>' +
+    '<b>times</b> &mdash; writes the in and out times onto that day and re-reads the status from the ' +
+    'hours. This is the missed-punch fix, and it also covers out duty and emergency duty.<br>' +
+    '<b>comp_off</b> &mdash; earned only for a weekly off or a holiday that was actually worked. ' +
+    'Approval either marks a chosen absent day <b>CO</b> (so it stops being unpaid), or pays the day ' +
+    'out, which payroll picks up as an incentive that month.<br>' +
+    '<b>none</b> &mdash; recorded and approved, but the register is left alone.' +
+    '</div></div>';
 }
 </script>
 
