@@ -106,6 +106,37 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .b-amber{background:#fef3c7;color:#92400e;} .b-blue{background:#dbeafe;color:#1e40af;}
 .b-gray{background:#e2e8f0;color:#475569;} .b-violet{background:#ede9fe;color:#5b21b6;}
 
+/* ---------------- Company calendar ---------------- */
+.cal-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.cal-nav{display:flex;align-items:center;gap:8px;}
+.cal-month{font-weight:700;font-size:1rem;min-width:150px;text-align:center;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}
+.cal-dow{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
+  color:var(--text-muted);text-align:center;padding:6px 0;}
+.cal-cell{min-height:86px;border:1px solid var(--border);border-radius:7px;padding:6px;
+  background:var(--bg-card);display:flex;flex-direction:column;gap:3px;font-size:.74rem;cursor:pointer;
+  transition:.12s;}
+.cal-cell:hover{border-color:var(--primary);}
+.cal-cell.is-blank{background:transparent;border-color:transparent;cursor:default;}
+.cal-cell.is-blank:hover{border-color:transparent;}
+.cal-cell.is-today{border-color:var(--primary);box-shadow:0 0 0 2px rgba(37,99,235,.12);}
+.cal-cell.is-weekend{background:#f8fafc;}
+.cal-cell.is-holiday{background:#fef3c7;border-color:#fbbf24;}
+.cal-date{font-weight:700;font-size:.78rem;color:var(--text-dark);}
+.cal-cell.is-weekend .cal-date{color:var(--text-muted);}
+.cal-tag{font-size:.64rem;font-weight:600;padding:2px 5px;border-radius:3px;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-tag-holiday{background:#fde68a;color:#92400e;}
+.cal-tag-optional{background:#ede9fe;color:#5b21b6;}
+.cal-tag-leave{background:#fee2e2;color:#991b1b;}
+.cal-tag-event{background:#e0e7ff;color:#3730a3;}
+.cal-tag-birthday{background:#fce7f3;color:#9d174d;}
+.cal-tag-anniversary{background:#dbeafe;color:#1e40af;}
+.cal-tag-more{background:#f1f5f9;color:#475569;}
+.cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:.75rem;color:var(--text-muted);}
+.cal-legend span{display:inline-flex;align-items:center;gap:5px;}
+.cal-dot{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
 /* ---------------- Salary register ---------------- */
 .reg-block{margin-bottom:22px;}
 .reg-title{font-weight:800;font-size:.82rem;letter-spacing:.4px;text-transform:uppercase;
@@ -423,6 +454,36 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <div class="card-sub">Net payout per month</div>
           <div class="chart" id="dash-cost-chart"></div>
         </div>
+      </div>
+
+      <div class="card" id="dash-cal-card">
+        <div class="cal-toolbar">
+          <div>
+            <h3>Company calendar</h3>
+            <div class="card-sub">Holidays, approved leave, birthdays, work anniversaries and company events.</div>
+          </div>
+          <div class="cal-nav">
+            <button class="ghost sm" onclick="shiftCalendar(-1)">&lsaquo; Prev</button>
+            <div class="cal-month" id="cal-month">--</div>
+            <button class="ghost sm" onclick="shiftCalendar(1)">Next &rsaquo;</button>
+            <button class="ghost sm" onclick="shiftCalendar(0)">Today</button>
+            <button class="sm adm" onclick="openCalendarAdd()">+ Event</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-legend">
+          <span><i class="cal-dot" style="background:#fde68a"></i> Holiday</span>
+          <span><i class="cal-dot" style="background:#ede9fe"></i> Optional holiday</span>
+          <span><i class="cal-dot" style="background:#fecaca"></i> Approved leave</span>
+          <span><i class="cal-dot" style="background:#c7d2fe"></i> Company event</span>
+          <span><i class="cal-dot" style="background:#fbcfe8"></i> Birthday</span>
+          <span><i class="cal-dot" style="background:#bfdbfe"></i> Work anniversary</span>
+          <span><i class="cal-dot" style="background:#f1f5f9"></i> Weekly off</span>
+          <span style="margin-left:auto">Click any day to see everything on it.</span>
+        </div>
+      </div>
+
+      <div class="grid-half">
         <div class="card">
           <h3>Who is out today</h3>
           <div class="card-sub" id="dash-today-date"></div>
@@ -601,7 +662,7 @@ var S = {
   api: '', demo: false, user: null, view: 'dashboard',
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
   shifts: [], leaveTypes: [], leaveVersion: 0,
-  ctcVariables: [], ctcComponents: [], ctcValues: [],
+  ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
   attDirty: {}, payDraft: null, attVersion: 0,
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -985,7 +1046,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v6';
+var DEMO_KEY = 'hrms_lite_demo_v7';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1007,7 +1068,7 @@ function demoDb() {
       sql_user: 'sa', sync_last_pull: '', sync_last_push: '',
       leave_types: 'Casual,Sick,Earned,Unpaid', quota_casual: '12', quota_sick: '6', quota_earned: '15'
     },
-    employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [],
+    employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [], events: [],
     shifts: [
       { id: 'SH1', name: 'General', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
         full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun', saturday_policy: 'working',
@@ -1106,6 +1167,10 @@ function demoDb() {
   db.holidays = [
     { id: 'H1', date: dateStr(ym, 15), name: 'Company foundation day', optional: 'no' }
   ];
+  db.events = [
+    { id: 'E1', date: dateStr(ym, 24), name: 'Payroll cut-off', type: 'Payroll', note: '' },
+    { id: 'E2', date: dateStr(ym, 10), name: 'Quarterly town hall', type: 'Company', note: '' }
+  ];
 
   function seedMonth(m, full) {
     var dim = daysInMonth(m);
@@ -1169,7 +1234,7 @@ function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet ===
 var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
   Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
-  Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
+  Events: 'events', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
   CtcComponents: 'ctcComponents', CtcValues: 'ctcValues'
 };
 function demoApi(action, p) {
@@ -1182,7 +1247,7 @@ function demoApi(action, p) {
                leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users,
                shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
-               ctcValues: db.ctcValues || [],
+               ctcValues: db.ctcValues || [], events: db.events || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -1286,6 +1351,7 @@ function reload() {
     S.leave = d.leave || [];
     S.payroll = d.payroll || [];
     S.holidays = d.holidays || [];
+    S.events = d.events || [];
     S.shifts = d.shifts || [];
     S.leaveTypes = d.leaveTypes || [];
     S.ctcVariables = d.ctcVariables || [];
@@ -1477,6 +1543,7 @@ function renderDashboard() {
                   ' &middot; net ' + shortMoney(months[m].net) };
   }));
 
+  renderCalendar();
   renderDashActions();
   renderDashToday(iso, nonWorking);
   renderDashUpcoming();
@@ -5993,6 +6060,212 @@ function reportWages(ym) {
           kpi('Total earnings', cur() + money(rows.reduce(function (t, r) { return t + r[12]; }, 0)), '') +
           kpi('Net payable', cur() + money(rows.reduce(function (t, r) { return t + r[19]; }, 0)), '')
   };
+}
+</script>
+
+<script>
+/* =================================================================
+   COMPANY CALENDAR  (dashboard)
+   Holidays, approved leave, birthdays, work anniversaries, company
+   events and weekly offs - all read from live data.
+   ================================================================= */
+
+var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December'];
+var DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function calCursor() {
+  if (!S.calCursor) {
+    var d = new Date();
+    S.calCursor = { year: d.getFullYear(), month: d.getMonth() };
+  }
+  return S.calCursor;
+}
+
+function shiftCalendar(delta) {
+  var c = calCursor();
+  if (delta === 0) {
+    var now = new Date();
+    S.calCursor = { year: now.getFullYear(), month: now.getMonth() };
+  } else {
+    var m = c.month + delta, y = c.year;
+    if (m < 0) { m = 11; y--; }
+    if (m > 11) { m = 0; y++; }
+    S.calCursor = { year: y, month: m };
+  }
+  renderCalendar();
+}
+
+/* Everything happening on one date, in the order it should be shown. */
+function dayMarks(iso) {
+  var marks = [];
+  var md = iso.slice(5);
+
+  var hol = anyHolidayOn(iso);
+  if (hol) {
+    var optional = String(hol.optional || 'no').toLowerCase() === 'yes';
+    marks.push({ cls: optional ? 'cal-tag-optional' : 'cal-tag-holiday',
+                 text: hol.name + (optional ? ' (optional)' : ''), kind: 'holiday' });
+  }
+  (S.events || []).forEach(function (ev) {
+    if (String(ev.date) === iso) {
+      marks.push({ cls: 'cal-tag-event', text: ev.name, kind: 'event', id: ev.id });
+    }
+  });
+  visibleLeave().forEach(function (l) {
+    if (l.status !== 'Approved') return;
+    if (String(l.from_date) > iso || iso > String(l.to_date)) return;
+    marks.push({ cls: 'cal-tag-leave', text: empName(l.emp_code) + ' - ' + l.type, kind: 'leave' });
+  });
+  activeEmployees().forEach(function (e) {
+    if (e.dob && String(e.dob).slice(5) === md) {
+      marks.push({ cls: 'cal-tag-birthday', text: '\u{1F382} ' + e.name, kind: 'birthday' });
+    }
+    if (e.doj && String(e.doj).slice(5) === md && String(e.doj).slice(0, 4) < iso.slice(0, 4)) {
+      var yrs = (+iso.slice(0, 4)) - (+String(e.doj).slice(0, 4));
+      marks.push({ cls: 'cal-tag-anniversary', text: e.name + ' - ' + yrs + 'y', kind: 'anniversary' });
+    }
+  });
+  return marks;
+}
+
+function renderCalendar() {
+  var grid = el('cal-grid');
+  if (!grid || !S.user) return;
+  var c = calCursor();
+  var ym = c.year + '-' + ('0' + (c.month + 1)).slice(-2);
+  var label = el('cal-month');
+  if (label) label.textContent = MONTH_NAMES[c.month] + ' ' + c.year;
+
+  var firstDow = new Date(c.year, c.month, 1).getDay();
+  var dim = daysInMonth(ym);
+  var todayIso = today();
+
+  var html = DOW_NAMES.map(function (d) { return '<div class="cal-dow">' + d + '</div>'; }).join('');
+  for (var i = 0; i < firstDow; i++) html += '<div class="cal-cell is-blank"></div>';
+
+  for (var day = 1; day <= dim; day++) {
+    var iso = dateStr(ym, day);
+    var marks = dayMarks(iso);
+    var cls = ['cal-cell'];
+    if (holidayOn(iso)) cls.push('is-holiday');
+    else if (isWeeklyOff(ym, day)) cls.push('is-weekend');
+    if (iso === todayIso) cls.push('is-today');
+    html += '<div class="' + cls.join(' ') + '" onclick="openCalendarDay(\'' + iso + '\')">' +
+      '<div class="cal-date">' + day + '</div>' +
+      marks.slice(0, 3).map(function (m) {
+        return '<div class="cal-tag ' + m.cls + '" title="' + esc(m.text) + '">' + esc(m.text) + '</div>';
+      }).join('') +
+      (marks.length > 3 ? '<div class="cal-tag cal-tag-more">+' + (marks.length - 3) + ' more</div>' : '') +
+      '</div>';
+  }
+  grid.innerHTML = html;
+}
+
+/* ------------------------- one day in detail ---------------------- */
+function openCalendarDay(iso) {
+  var ym = iso.slice(0, 7), d = +iso.slice(8);
+  var marks = dayMarks(iso);
+  var weekly = isWeeklyOff(ym, d), hol = anyHolidayOn(iso);
+  var dateText = new Date(iso + 'T00:00:00').toDateString();
+
+  var counts = { present: 0, absent: 0, leave: 0, unmarked: 0 };
+  if (iso <= today()) {
+    counts.present = peopleOn('present', iso).length;
+    counts.absent = peopleOn('absent', iso).length;
+    counts.leave = peopleOn('leave', iso).length;
+    counts.unmarked = peopleOn('unmarked', iso).length;
+  }
+
+  var body =
+    '<div class="card-sub">' + esc(dateText) +
+      (hol ? ' &middot; ' + esc(hol.name) +
+             (String(hol.optional || 'no').toLowerCase() === 'yes' ? ' (optional holiday)' : ' (holiday)')
+           : (weekly ? ' &middot; weekly off' : '')) + '</div>' +
+    (iso <= today() && !weekly && !holidayOn(iso)
+      ? '<div class="kpis" style="margin:12px 0">' +
+          kpi('Present', counts.present, '', "closeModal();el('dash-date').value='" + iso + "';renderDashboard();showPeople('present','" + iso + "')") +
+          kpi('Absent', counts.absent, '', "closeModal();showPeople('absent','" + iso + "')") +
+          kpi('On leave', counts.leave, '', "closeModal();showPeople('leave','" + iso + "')") +
+          kpi('Not marked', counts.unmarked, '', "closeModal();showPeople('unmarked','" + iso + "')") +
+        '</div>'
+      : '') +
+    (marks.length
+      ? '<table><tbody>' + marks.map(function (m) {
+          return '<tr><td style="width:150px"><span class="cal-tag ' + m.cls + '">' +
+            esc(m.kind) + '</span></td><td>' + esc(m.text) + '</td>' +
+            '<td class="num-col">' + (m.kind === 'event' && isAdmin()
+              ? '<button class="ghost sm" onclick="removeEvent(\'' + esc(m.id) + '\')">Remove</button>' : '') +
+            '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<div class="empty">Nothing marked on this day.</div>');
+
+  var buttons = [{ label: 'Close', cls: 'ghost', onClick: closeModal }];
+  if (isAdmin()) {
+    buttons.push({ label: 'Add event', cls: 'ghost', onClick: function () { openCalendarAdd(iso, 'event'); } });
+    if (!hol) buttons.push({ label: 'Mark as holiday', onClick: function () { openCalendarAdd(iso, 'holiday'); } });
+  }
+  showModal(dateText, body, buttons);
+}
+
+/* ------------------------- add an entry --------------------------- */
+function openCalendarAdd(iso, kind) {
+  if (!isAdmin()) return;
+  var c = calCursor();
+  iso = iso || dateStr(c.year + '-' + ('0' + (c.month + 1)).slice(-2), 1);
+  kind = kind || 'event';
+  showModal(kind === 'holiday' ? 'Add a holiday' : 'Add a company event',
+    '<div class="grid2">' +
+      '<label class="field">Date<input id="cal-add-date" type="date" value="' + esc(iso) + '"></label>' +
+      '<label class="field">What is it<input id="cal-add-name" placeholder="' +
+        (kind === 'holiday' ? 'Durga Puja' : 'Payroll cut-off') + '"></label>' +
+      (kind === 'holiday'
+        ? '<label class="field">Type<select id="cal-add-type">' +
+          '<option value="no">Applied - paid, marked H</option>' +
+          '<option value="yes">Optional / restricted - listed only</option></select></label>'
+        : '<label class="field">Type<select id="cal-add-type">' +
+          '<option>Company</option><option>Payroll</option><option>Training</option>' +
+          '<option>Audit</option><option>Other</option></select></label>') +
+    '</div>' +
+    '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted);line-height:1.6">' +
+      (kind === 'holiday'
+        ? 'An applied holiday is paid and shows as <b>H</b> on the attendance register, and is skipped when leave days are counted.'
+        : 'An event is a note on the calendar. It does not change attendance or pay.') + '</p>',
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
+     { label: 'Add', onClick: function () { saveCalendarEntry(kind); } }]);
+}
+
+function saveCalendarEntry(kind) {
+  var date = el('cal-add-date').value;
+  var name = el('cal-add-name').value.trim();
+  var type = el('cal-add-type').value;
+  if (!date || !name) return toast('Pick a date and give it a name', 'bad');
+  if (kind === 'holiday') {
+    if (anyHolidayOn(date)) return toast('There is already a holiday on that date', 'bad');
+    api('save', { sheet: 'Holidays', row: { date: date, name: name, optional: type } })
+      .then(function (saved) {
+        S.holidays.push({ id: saved.id, date: date, name: name, optional: type });
+        S.attVersion++; S.leaveVersion++;
+        closeModal(); toast('Holiday added', 'good');
+        S.calCursor = { year: +date.slice(0, 4), month: (+date.slice(5, 7)) - 1 };
+        renderAll();
+      }).catch(function (e) { toast(e.message, 'bad'); });
+    return;
+  }
+  api('save', { sheet: 'Events', row: { date: date, name: name, type: type, note: '' } })
+    .then(function (saved) {
+      S.events.push({ id: saved.id, date: date, name: name, type: type, note: '' });
+      closeModal(); toast('Event added', 'good');
+      S.calCursor = { year: +date.slice(0, 4), month: (+date.slice(5, 7)) - 1 };
+      renderCalendar();
+    }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+function removeEvent(id) {
+  api('remove', { sheet: 'Events', id: id }).then(function () {
+    S.events = S.events.filter(function (e) { return String(e.id) !== String(id); });
+    closeModal(); toast('Event removed', 'good'); renderCalendar();
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 </script>
 

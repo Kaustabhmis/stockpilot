@@ -24,6 +24,12 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 - Three charts: attendance over the last 14 working days (stacked), headcount by department,
   payroll cost across the last six saved runs — all with hover detail
 - Who is out on the selected day, and birthdays / work anniversaries in the next 30 days
+- A **company calendar** — the month grid from the old BISCS HRMS, on live data: holidays (applied
+  and optional shown apart), approved leave with the person and type, birthdays, work anniversaries
+  and company events, with weekly offs shaded and today outlined. Prev / Next / Today move the
+  month; clicking any day opens everything on it, with that day's present / absent / on-leave /
+  unmarked counts for past days, each clicking through to the list of people. Admins can add a
+  company event, or mark the day a holiday, straight from the calendar.
 
 ## The five modules
 
@@ -306,8 +312,8 @@ attendance register and mark someone absent → generate and finalise payroll �
    paste everything from `apps-script/Code.gs`, and save.
 3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
    dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates thirteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
-   `Leave`, `Payroll`, `Holidays`, `Punches`, `Shifts`, `LeaveTypes`, `CtcVariables`,
+   spreadsheet). This creates fourteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
+   `Leave`, `Payroll`, `Holidays`, `Events`, `Punches`, `Shifts`, `LeaveTypes`, `CtcVariables`,
    `CtcComponents`, `CtcValues` — seeds a General shift, the four standard leave types and the
    company's salary structure, and creates the first admin login. It is safe to re-run: new
    columns are appended, existing data is left where it is.
