@@ -39,7 +39,24 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 | 2 | **Attendance** | Monthly register grid: click to cycle P/A/HD/L/WO/H, double-click for in/out times and remarks, click a date header to fill a column, fill a whole employee-month, fill blank days. Holiday calendar auto-marks H. Late marks and overtime derived from the shift and grace period. Biometric/device CSV import. Locks automatically once payroll is finalised |
 | 3 | **Leave** | Applications with live validation (quota balance, overlapping requests, working-day count that skips weekly offs and holidays). Approve / reject / cancel. **Requests** — out-of-office duty, swipe (missed punch) and compensatory off. Month calendar of who is off when. Per-type balances and a comp-off ledger. Approving writes onto the attendance register; cancelling clears those days |
 | 4 | **Payroll** | Generates from attendance, prorates by paid days, computes PF / ESI / PT / TDS plus employer PF & ESI and CTC. Editable arrears, bonus and other deductions per employee. Month-on-month variance per employee. Draft → finalise → (reopen if needed). Printable payslips, bulk payslip print, bank transfer CSV |
-| 5 | **Reports** | Six reports, each exportable: **salary register unit by unit** (the company's own register layout), wages register, PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
+| 5 | **Reports** | Seven reports, each exportable **and printable**: **salary register unit by unit** (the company's own register layout), wages register, **leave report** (per-employee year balance plus the month's applications), PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
+
+### Reports — printing and the leave report
+
+Every report has an **Export CSV** and a **Print** button, and both work on all seven.
+
+Print opens a clean print view: the company name and address as a letterhead, the report title
+and the period, a *"Printed &lt;date&gt; by &lt;user&gt;"* line, the table itself, and a footer. Filters,
+buttons and the app chrome are dropped; table headers repeat on every page and rows are not
+split across a page break. Wide reports (more than nine columns — the salary register, the leave
+report, statutory, YTD) switch to **landscape** automatically; narrow ones stay portrait. It is
+the browser's own print dialog, so "Save as PDF" gives you a PDF with no extra tool.
+
+The **leave report** shows, for the selected month's year, one row per employee with a column for
+each leave type, the total taken, the balance left, unpaid (LOP) days and the days taken in that
+month — with a totals row at the bottom. Underneath it lists that month's leave applications:
+who, type, dates, days, paid or unpaid, and status.
+
 
 ## Settings
 
@@ -396,10 +413,36 @@ attendance register and mark someone absent → generate and finalise payroll �
    - Who has access: **Anyone**
 
    Copy the `/exec` URL it gives you.
-5. **Sign in.** Open `index.html`, expand **Connection settings** on the login screen, paste that
-   URL, and log in with **admin@company.com / admin123**. Change the password immediately from
-   *Settings → Account*. The URL is remembered on that device and can be changed later from
-   *Settings → Integrations*.
+5. **Connect the file to that URL — once, before you hand it out.** Open `index.html` in a text
+   editor and put the `/exec` URL into the line near the top of the first `<script>` block:
+
+   ```js
+   var DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfy.../exec';
+   ```
+
+   Now everyone who opens the file just sees a sign-in box. Nothing about Apps Script, script
+   URLs or connection settings is shown to staff anywhere on the login screen.
+
+   If you would rather not edit the file, the same panel is still reachable on the machine
+   you are setting up: **tap or click the logo five times**, or add `#setup` to the URL
+   (`…/index.html#setup`). Paste the URL there and it is remembered on that device. It can
+   always be changed later from *Settings → Integrations*.
+6. **Sign in** with **admin@company.com / admin123** and change the password immediately from
+   *Settings → Account*.
+
+### Renaming it
+
+The login screen and the sidebar read their name and wording from one block at the top of the
+first `<script>` in `index.html`:
+
+```js
+var BRAND = { name: 'BISCS', suffix: 'OS',
+  headline: 'People and payroll, in one place.',
+  lede: '…the paragraph under the headline…',
+  footer: 'BISCS OS · Dynamic Engineers' };
+```
+
+Change those five strings and the whole app follows; no other edit is needed.
 
 Host `index.html` anywhere static (Google Drive, an internal share, GitHub Pages, any web
 server) or just email the file — it needs no server of its own.

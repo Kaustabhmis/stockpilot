@@ -24,6 +24,7 @@ body{background:var(--bg-main);color:var(--text-dark);display:flex;height:100vh;
 .sidebar{width:250px;background:var(--sidebar-bg);color:#fff;display:flex;flex-direction:column;flex-shrink:0;}
 .sidebar-header{padding:20px;font-size:1.25rem;font-weight:800;border-bottom:1px solid rgba(255,255,255,.06);}
 .sidebar-header span{color:var(--accent);}
+.sidebar-header #side-brand{color:#fff;}
 .sidebar-header small{display:block;font-size:.65rem;font-weight:600;letter-spacing:1px;color:#475569;margin-top:4px;
   text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .nav-items{flex:1;padding:10px 0;overflow-y:auto;}
@@ -260,49 +261,54 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .x:hover{background:none;color:var(--text-dark);}
 
 /* ---------------- Login ---------------- */
-.login-bg{position:fixed;inset:0;background:#0b1220;display:flex;align-items:stretch;z-index:200;overflow:auto;}
-.login-split{display:grid;grid-template-columns:1.05fr .95fr;width:100%;min-height:100vh;}
-.login-brand{background:linear-gradient(160deg,#0f172a 0%,#152a52 55%,#1e3a8a 100%);color:#fff;
-  padding:56px 56px 40px;display:flex;flex-direction:column;position:relative;overflow:hidden;}
-.login-brand::after{content:'';position:absolute;right:-120px;bottom:-140px;width:420px;height:420px;
-  border-radius:50%;background:rgba(37,99,235,.18);}
-.login-logo{display:flex;align-items:center;gap:12px;font-size:1.15rem;font-weight:800;letter-spacing:-.2px;}
-.login-logo .glyph{width:38px;height:38px;border-radius:9px;background:var(--primary);display:flex;
-  align-items:center;justify-content:center;font-size:.95rem;font-weight:800;letter-spacing:-.5px;}
-.login-brand h2{font-size:2.1rem;line-height:1.2;font-weight:800;margin:auto 0 14px;max-width:15ch;letter-spacing:-.6px;}
-.login-brand p.lede{font-size:.95rem;color:#c7d2e5;max-width:42ch;line-height:1.6;margin-bottom:26px;}
-.login-mods{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px;margin-bottom:auto;max-width:430px;}
-.login-mods div{display:flex;align-items:center;gap:10px;font-size:.85rem;color:#dbe4f3;}
-.login-mods span{width:20px;height:20px;border-radius:5px;background:rgba(255,255,255,.1);display:flex;
-  align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#93c5fd;flex-shrink:0;}
-.login-foot{font-size:.74rem;color:#64748b;position:relative;z-index:1;padding-top:32px;}
-.login-pane{background:#fff;display:flex;align-items:center;justify-content:center;padding:48px 40px;}
-.login-card{width:100%;max-width:392px;}
-.login-card h1{font-size:1.45rem;font-weight:800;margin-bottom:6px;letter-spacing:-.3px;}
-.login-card p.sub{color:var(--text-muted);font-size:.85rem;margin-bottom:26px;}
-.login-card label.field{margin-bottom:16px;}
-.login-card button{width:100%;padding:12px;font-size:.9rem;}
-.login-adv{border-top:1px solid var(--border);margin-top:22px;padding-top:16px;}
-.login-adv summary{font-size:.78rem;font-weight:700;color:var(--text-muted);cursor:pointer;
-  text-transform:uppercase;letter-spacing:.5px;list-style:none;display:flex;align-items:center;gap:7px;}
-.login-adv summary::-webkit-details-marker{display:none;}
-.login-adv summary::before{content:'\25B8';transition:transform .15s;display:inline-block;}
-.login-adv[open] summary::before{transform:rotate(90deg);}
-.login-adv .body{padding-top:14px;}
-.login-or{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--text-soft);font-size:.72rem;
-  text-transform:uppercase;letter-spacing:.6px;font-weight:700;}
-.login-or::before,.login-or::after{content:'';flex:1;height:1px;background:var(--border);}
-@media (max-width:900px){
+.login-bg{position:fixed;inset:0;background:#fff;display:flex;align-items:stretch;z-index:200;overflow:auto;}
+.login-split{display:grid;grid-template-columns:1.02fr .98fr;width:100%;min-height:100vh;}
+.login-brand{background:linear-gradient(165deg,#132a5c 0%,#16306b 45%,#1b3c86 100%);color:#fff;
+  padding:54px 60px 40px;display:flex;flex-direction:column;position:relative;overflow:hidden;}
+.login-logo{display:flex;align-items:center;gap:13px;font-size:1.3rem;font-weight:700;letter-spacing:-.2px;
+  cursor:default;user-select:none;}
+.login-logo .glyph{width:38px;height:38px;border-radius:10px;background:#2f7ef0;flex-shrink:0;}
+.login-logo b{font-weight:800;}
+.login-logo span{font-weight:400;color:#cbd9f2;}
+.login-brand h2{font-size:2.5rem;line-height:1.16;font-weight:800;margin:auto 0 18px;max-width:13ch;
+  letter-spacing:-1px;}
+.login-brand p.lede{font-size:.95rem;color:#c3d2ea;max-width:44ch;line-height:1.65;margin-bottom:34px;}
+.login-points{display:flex;flex-direction:column;gap:20px;margin-bottom:auto;max-width:460px;}
+.login-points .pt{display:flex;gap:14px;align-items:flex-start;}
+.login-points .ico{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.1);display:flex;
+  align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;}
+.login-points b{display:block;font-size:.92rem;font-weight:700;margin-bottom:3px;}
+.login-points span{font-size:.83rem;color:#b9c9e4;line-height:1.5;}
+.login-foot{font-size:.76rem;color:#7f93ba;padding-top:34px;}
+.login-pane{background:#fff;display:flex;align-items:center;justify-content:center;padding:48px 44px;}
+.login-card{width:100%;max-width:400px;}
+.login-card h1{font-size:1.65rem;font-weight:800;margin-bottom:8px;letter-spacing:-.4px;}
+.login-card p.sub{color:var(--text-muted);font-size:.88rem;margin-bottom:28px;line-height:1.5;}
+.login-card label.lab{display:block;font-size:.82rem;font-weight:700;margin-bottom:7px;color:var(--text-dark);}
+.login-card input[type=email],.login-card input[type=password],.login-card input[type=text]{
+  width:100%;padding:12px 13px;font-size:.92rem;border-radius:8px;}
+.login-field{margin-bottom:18px;position:relative;}
+.login-show{position:absolute;right:12px;top:37px;font-size:.8rem;font-weight:600;color:var(--text-muted);
+  cursor:pointer;user-select:none;background:none;border:none;padding:0;}
+.login-show:hover{color:var(--primary);background:none;}
+.login-forgot{display:block;text-align:right;font-size:.82rem;color:var(--primary);margin:-6px 0 20px;
+  text-decoration:none;}
+.login-forgot:hover{text-decoration:underline;}
+.login-card button.signin{width:100%;padding:13px;font-size:.95rem;border-radius:8px;}
+.login-note{border-top:1px solid var(--border);margin-top:26px;padding-top:18px;font-size:.82rem;
+  color:var(--text-muted);line-height:1.6;}
+.login-setup{margin-top:18px;padding:16px;border:1px solid var(--border);border-radius:10px;
+  background:#f8fafc;display:none;}
+.login-setup.open{display:block;}
+.login-setup h4{font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--text-muted);margin-bottom:10px;}
+@media (max-width:920px){
   .login-split{grid-template-columns:1fr;}
-  .login-brand{padding:36px 28px;min-height:auto;}
-  .login-brand h2{font-size:1.5rem;margin:22px 0 10px;}
-  .login-mods{display:none;}
-  .login-pane{padding:32px 24px 48px;}
+  .login-brand{padding:34px 26px;}
+  .login-brand h2{font-size:1.7rem;margin:20px 0 12px;}
+  .login-points{display:none;}
+  .login-pane{padding:30px 22px 46px;}
 }
-.err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:7px;font-size:.8rem;margin-bottom:14px;display:none;}
-.err.show{display:block;}
-.hintbox{font-size:.72rem;color:var(--text-muted);margin-top:16px;line-height:1.6;border-top:1px solid var(--border);padding-top:14px;}
-
 #toast{position:fixed;bottom:22px;right:22px;background:var(--text-dark);color:#fff;padding:12px 18px;border-radius:8px;
   font-size:.83rem;font-weight:600;z-index:300;opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;
   max-width:420px;}
@@ -335,52 +341,59 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
   <div class="login-split">
 
     <div class="login-brand">
-      <div class="login-logo"><span class="glyph">HR</span> HRMS Lite</div>
-      <h2>HR and payroll, without a database server.</h2>
-      <p class="lede">One dashboard and five modules, running on a Google Sheet your
-        finance team already knows how to read. Biometric punches in, payslips out.</p>
-      <div class="login-mods">
-        <div><span>1</span> Employees</div>
-        <div><span>2</span> Attendance</div>
-        <div><span>3</span> Leave</div>
-        <div><span>4</span> Payroll</div>
-        <div><span>5</span> Reports</div>
-        <div><span>&#9679;</span> Dashboard</div>
+      <div class="login-logo" id="brand-logo" onclick="brandTap()">
+        <span class="glyph"></span><b id="brand-name">BISCS</b> <span id="brand-suffix">OS</span>
       </div>
-      <div class="login-foot">Your data stays in your own Google Sheet. Nothing is sent anywhere else.</div>
+      <h2 id="brand-headline">People and payroll, in one place.</h2>
+      <p class="lede" id="brand-lede">Attendance from your eSSL machines, salaries with PF, ESI and TDS
+        worked out, and every payslip kept where you can find it again.</p>
+      <div class="login-points">
+        <div class="pt"><div class="ico">&#128101;</div>
+          <div><b>Everyone on the payroll</b><span>One record per person, from joining to final settlement.</span></div></div>
+        <div class="pt"><div class="ico">&#9200;</div>
+          <div><b>Attendance without typing</b><span>Punches come straight from the machine, in or out.</span></div></div>
+        <div class="pt"><div class="ico">&#128176;</div>
+          <div><b>Salary in a few clicks</b><span>The statutory bits are calculated, not remembered.</span></div></div>
+      </div>
+      <div class="login-foot" id="brand-foot">BISCS OS &middot; Dynamic Engineers</div>
     </div>
 
     <div class="login-pane">
       <div class="login-card">
         <h1>Sign in</h1>
-        <p class="sub" id="login-target">Connect to your company workspace.</p>
+        <p class="sub">Use the email address your HR administrator set up for you.</p>
         <div class="err" id="login-err"></div>
 
-        <label class="field">Email address
-          <input id="in-email" type="email" value="admin@company.com" autocomplete="username"
-            placeholder="you@company.com">
-        </label>
-        <label class="field">Password
-          <input id="in-pass" type="password" value="admin123" autocomplete="current-password">
-        </label>
-        <button id="btn-login">Sign in</button>
+        <div class="login-field">
+          <label class="lab" for="in-email">Email</label>
+          <input id="in-email" type="email" placeholder="name@company.com" autocomplete="username">
+        </div>
+        <div class="login-field">
+          <label class="lab" for="in-pass">Password</label>
+          <input id="in-pass" type="password" placeholder="Your password" autocomplete="current-password">
+          <button type="button" class="login-show" id="pw-toggle" onclick="togglePassword()">Show</button>
+        </div>
+        <a href="#" class="login-forgot" onclick="forgotPassword();return false;">Forgot password?</a>
+        <button class="signin" id="btn-login">Sign in</button>
 
-        <details class="login-adv" id="login-adv">
-          <summary>Connection settings</summary>
-          <div class="body">
-            <label class="field">Google Apps Script Web App URL
-              <input id="in-api" type="url" placeholder="https://script.google.com/macros/s/..../exec">
-            </label>
-            <p style="font-size:.74rem;color:var(--text-muted);line-height:1.6">
-              Open your Google Sheet &rarr; <b>Extensions &rarr; Apps Script</b>, paste <b>Code.gs</b>,
-              run <code>setup()</code> once, then deploy it as a Web app and paste the
-              <code>/exec</code> URL here. It is remembered on this device.
-            </p>
+        <div class="login-note">
+          Accounts are held in your organisation&rsquo;s database. Your HR administrator issues them,
+          and nobody can open a screen their account has not been given.
+        </div>
+
+        <div class="login-setup" id="login-setup">
+          <h4>Workspace connection</h4>
+          <label class="field" style="margin-bottom:12px">Google Apps Script Web App URL
+            <input id="in-api" type="url" placeholder="https://script.google.com/macros/s/..../exec">
+          </label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="ghost sm" onclick="saveLoginUrl()">Save on this device</button>
+            <button class="ghost sm" id="btn-demo">Open the demo</button>
           </div>
-        </details>
-
-        <div class="login-or">or</div>
-        <button class="ghost" id="btn-demo">Explore the demo with sample data</button>
+          <p style="font-size:.74rem;color:var(--text-muted);margin-top:10px;line-height:1.6">
+            Set once per device by whoever installs it. Staff never see this panel.
+          </p>
+        </div>
       </div>
     </div>
 
@@ -389,7 +402,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
 <!-- ============================ SIDEBAR =========================== -->
 <div class="sidebar">
-  <div class="sidebar-header">HRMS <span>Lite</span><small id="side-company">Dashboard + 5 Modules</small></div>
+  <div class="sidebar-header"><span id="side-brand">BISCS</span> <span id="side-brand2">OS</span>
+    <small id="side-company">Dashboard + 5 Modules</small></div>
   <div class="nav-items">
     <div class="nav-item home active" data-view="dashboard" onclick="go('dashboard')">&#127968; Dashboard
       <span class="dot" id="nav-alerts">0</span></div>
@@ -659,6 +673,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             <select id="rep-kind" onchange="renderReports()">
               <option value="register">Salary register (unit-wise)</option>
               <option value="wages">Wages register</option>
+              <option value="leave">Leave report</option>
               <option value="statutory">PF / ESI statutory contributions</option>
               <option value="ytd">Year-to-date per employee</option>
               <option value="exceptions">Attendance exceptions</option>
@@ -667,7 +682,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           </label>
           <span class="spacer"></span>
           <button class="ghost sm" onclick="exportReport()">&#8681; Export CSV</button>
-          <button class="ghost sm" onclick="window.print()">&#128424; Print</button>
+          <button class="ghost sm" onclick="printReport()">&#128424; Print</button>
         </div>
       </div>
       <div class="kpis" id="rep-kpis"></div>
@@ -699,6 +714,20 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 /* =================================================================
    HRMS Lite - Dashboard + 5 modules on Google Sheets
    ================================================================= */
+
+/* ---------------------------------------------------------------
+   Set these two once, before handing the file out. With the URL
+   filled in, staff only ever see Sign in - no setup, no mention of
+   Apps Script anywhere.
+   --------------------------------------------------------------- */
+var DEFAULT_API_URL = '';
+var BRAND = {
+  name: 'BISCS', suffix: 'OS',
+  headline: 'People and payroll, in one place.',
+  lede: 'Attendance from your eSSL machines, salaries with PF, ESI and TDS worked out, ' +
+        'and every payslip kept where you can find it again.',
+  footer: 'BISCS OS \u00b7 Dynamic Engineers'
+};
 
 var S = {
   api: '', demo: false, user: null, view: 'dashboard',
@@ -1368,12 +1397,43 @@ function demoApi(action, p) {
 /* ----------------------------- login ---------------------------- */
 function showLoginError(msg) { var e = el('login-err'); e.textContent = msg; e.className = 'err show'; }
 
-el('btn-login').onclick = function () {
+function configuredUrl() {
+  return (localStorage.getItem('hrms_lite_api') || DEFAULT_API_URL || '').trim();
+}
+function saveLoginUrl() {
   var url = el('in-api').value.trim();
+  if (!url) return showLoginError('Paste the web app URL first.');
+  localStorage.setItem('hrms_lite_api', url);
+  el('login-setup').classList.remove('open');
+  showLoginError('');
+  el('login-err').className = 'err';
+  toast('Workspace saved on this device', 'good');
+}
+function togglePassword() {
+  var i = el('in-pass'), t = el('pw-toggle');
+  var show = i.type === 'password';
+  i.type = show ? 'text' : 'password';
+  t.textContent = show ? 'Hide' : 'Show';
+}
+function forgotPassword() {
+  showLoginError('Passwords are reset by your HR administrator, from Settings \u2192 Account ' +
+    'in this system. Ask them to set a new one for you.');
+}
+/* Five taps on the logo opens the connection panel - for whoever installs it. */
+var brandTaps = 0;
+function brandTap() {
+  brandTaps++;
+  if (brandTaps < 5) return;
+  brandTaps = 0;
+  el('login-setup').classList.add('open');
+  el('in-api').focus();
+}
+
+el('btn-login').onclick = function () {
+  var url = configuredUrl();
   if (!url) {
-    el('login-adv').open = true;
-    return showLoginError('Add your Apps Script Web App URL under "Connection settings", ' +
-      'or explore the demo below.');
+    return showLoginError('This copy has not been connected to a workspace yet. ' +
+      'Ask whoever installed it to finish the setup.');
   }
   S.api = url; S.demo = false;
   var btn = this; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Signing in...';
@@ -1382,11 +1442,6 @@ el('btn-login').onclick = function () {
     .catch(function (e) { showLoginError(e.message); })
     .then(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
 };
-el('in-api').addEventListener('change', function () {
-  try {
-    el('login-target').textContent = 'Connecting to ' + new URL(this.value.trim()).hostname + '.';
-  } catch (e) { el('login-target').textContent = 'Connect to your company workspace.'; }
-});
 el('btn-demo').onclick = function () {
   S.demo = true;
   S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
@@ -3514,6 +3569,7 @@ function exportPayroll() {
    ================================================================= */
 
 var LAST_REPORT = { name: 'report', cols: [], rows: [] };
+var LAST_SPEC = null;
 
 function registerRows(ym) {
   var saved = savedRunFor(ym);
@@ -3525,8 +3581,10 @@ function registerRows(ym) {
 function renderReports() {
   var ym = el('rep-month').value || thisMonth();
   var kind = el('rep-kind').value;
-  var spec = { register: reportRegister, wages: reportWages, statutory: reportStatutory,
-               ytd: reportYtd, exceptions: reportExceptions, movement: reportMovement }[kind](ym);
+  var spec = { register: reportRegister, wages: reportWages, leave: reportLeave,
+               statutory: reportStatutory, ytd: reportYtd, exceptions: reportExceptions,
+               movement: reportMovement }[kind](ym);
+  LAST_SPEC = spec;
 
   if (spec.html) {                       /* grouped registers render themselves */
     LAST_REPORT = { name: kind + '-' + ym, cols: spec.cols, rows: spec.rows };
@@ -4567,15 +4625,18 @@ function startClock() {
 
 /* ------------------------------ init ---------------------------- */
 (function init() {
-  var saved = localStorage.getItem('hrms_lite_api');
-  if (saved) {
-    el('in-api').value = saved;
-    try {
-      el('login-target').textContent = 'Connecting to ' + new URL(saved).hostname + '.';
-    } catch (e) { /* keep the default line */ }
-  } else {
-    el('login-adv').open = true;      /* first run: show where the URL goes */
-  }
+  el('brand-name').textContent = BRAND.name;
+  el('brand-suffix').textContent = BRAND.suffix;
+  el('brand-headline').textContent = BRAND.headline;
+  el('brand-lede').textContent = BRAND.lede;
+  el('brand-foot').textContent = BRAND.footer;
+  el('side-brand').textContent = BRAND.name;
+  el('side-brand2').textContent = BRAND.suffix;
+  document.title = BRAND.name + ' ' + BRAND.suffix + ' \u2014 Sign in';
+
+  var saved = configuredUrl();
+  if (saved) el('in-api').value = saved;
+  if (location.hash === '#setup') el('login-setup').classList.add('open');
   ['in-pass', 'in-email'].forEach(function (id) {
     el(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-login').click(); });
   });
@@ -7145,6 +7206,181 @@ function demoWebPunch(code, kind, geo) {
   demoApi('save', { sheet: 'Attendance', row: row });
   mergeAttendance([row]);          /* so the state below sees the punch just made */
   return { record: row, state: demoPunchState(code), fence: fence };
+}
+</script>
+
+<script>
+/* =================================================================
+   LEAVE REPORT  +  PRINTING FOR EVERY REPORT
+   ================================================================= */
+
+function reportLeave(ym) {
+  var year = ym.slice(0, 4);
+  var types = leaveTypes();
+  var emps = activeEmployees();
+  var unpaid = unpaidLeaveMap();
+
+  /* --- summary: type by type for the year, plus this month --- */
+  var cols = ['Code', 'Name', 'Department'].concat(types)
+    .concat(['Total taken', 'Balance', 'Unpaid days', monthLabel(ym)]);
+  var rows = [], totals = {}, anyTaken = 0;
+  emps.forEach(function (e) {
+    var line = [e.emp_code, e.name, e.department || e.company || '-'];
+    var total = 0, quotaTotal = 0;
+    types.forEach(function (t) {
+      var taken = takenDays(e.emp_code, t, year);
+      total += taken;
+      quotaTotal += quotaFor(t);
+      totals[t] = (totals[t] || 0) + taken;
+      line.push(taken);
+    });
+    var unpaidDays = Object.keys(unpaid).filter(function (k) {
+      return k.indexOf(e.emp_code + '_') === 0 && k.slice(-10, -6) === year;
+    }).length;
+    var inMonth = S.leave.filter(function (l) {
+      return String(l.emp_code) === String(e.emp_code) && l.status === 'Approved' &&
+        String(l.from_date).slice(0, 7) <= ym && ym <= String(l.to_date).slice(0, 7);
+    }).reduce(function (t, l) { return t + num(l.days); }, 0);
+    line.push(total, Math.round((quotaTotal - total) * 10) / 10, unpaidDays, inMonth);
+    if (total || inMonth) anyTaken++;
+    rows.push(line);
+  });
+  var totalRow = ['', 'Total (' + emps.length + ' employees)', ''].concat(types.map(function (t) {
+    return totals[t] || 0;
+  })).concat([rows.reduce(function (t, r) { return t + num(r[3 + types.length]); }, 0), '',
+              rows.reduce(function (t, r) { return t + num(r[5 + types.length]); }, 0),
+              rows.reduce(function (t, r) { return t + num(r[6 + types.length]); }, 0)]);
+
+  /* --- the applications themselves, for the month --- */
+  var apps = visibleLeave().filter(function (l) {
+    return String(l.from_date).slice(0, 7) <= ym && ym <= String(l.to_date).slice(0, 7);
+  }).sort(function (a, b) { return String(a.from_date).localeCompare(String(b.from_date)); });
+
+  var html =
+    '<div class="reg-block">' +
+      '<div class="reg-title">LEAVE SUMMARY ' + esc(year) + '</div>' +
+      '<div class="table-wrap" style="max-height:none"><table class="reg-table"><thead><tr>' +
+        cols.map(function (c, i) {
+          return '<th' + (i >= 3 ? ' class="num-col"' : '') + '>' + esc(c) + '</th>';
+        }).join('') + '</tr></thead><tbody>' +
+        rows.map(function (r) {
+          return '<tr>' + r.map(function (v, i) {
+            return '<td' + (i >= 3 ? ' class="num-col"' : '') + '>' + esc(v) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') +
+        '<tr class="reg-total">' + totalRow.map(function (v, i) {
+          return '<td' + (i >= 3 ? ' class="num-col"' : '') + '>' + esc(v) + '</td>';
+        }).join('') + '</tr>' +
+      '</tbody></table></div></div>' +
+    '<div class="reg-block">' +
+      '<div class="reg-title">LEAVE TAKEN IN ' + esc(monthLabel(ym).toUpperCase()) + '</div>' +
+      '<div class="table-wrap" style="max-height:none"><table class="reg-table"><thead><tr>' +
+        '<th>Code</th><th>Employee</th><th>Type</th><th>From</th><th>To</th>' +
+        '<th class="num-col">Days</th><th>Paid</th><th>Reason</th><th>Status</th><th>Decided by</th>' +
+      '</tr></thead><tbody>' +
+      (apps.map(function (l) {
+        var rule = leaveTypeNamed(l.type) || {};
+        var paid = String(rule.paid || 'yes').toLowerCase() !== 'no';
+        var cls = l.status === 'Approved' ? 'b-green' : l.status === 'Rejected' ? 'b-red'
+          : l.status === 'Cancelled' ? 'b-gray' : 'b-amber';
+        return '<tr><td>' + esc(l.emp_code) + '</td><td>' + esc(empName(l.emp_code)) + '</td>' +
+          '<td>' + esc(l.type) + '</td><td>' + esc(l.from_date) + '</td><td>' + esc(l.to_date) + '</td>' +
+          '<td class="num-col">' + esc(l.days) + '</td>' +
+          '<td>' + (paid ? 'Paid' : 'Unpaid') + '</td>' +
+          '<td>' + esc(l.reason || '-') + '</td>' +
+          '<td><span class="badge ' + cls + '">' + esc(l.status) + '</span></td>' +
+          '<td>' + esc(l.decided_by || '-') + '</td></tr>';
+      }).join('') || '<tr><td colspan="10" class="empty">No leave in ' + esc(monthLabel(ym)) + '.</td></tr>') +
+      '</tbody></table></div></div>';
+
+  var pending = S.leave.filter(function (l) { return l.status === 'Pending'; }).length;
+  var monthDays = apps.filter(function (l) { return l.status === 'Approved'; })
+    .reduce(function (t, l) { return t + num(l.days); }, 0);
+  return {
+    title: 'Leave report \\u2014 ' + monthLabel(ym),
+    note: 'Type by type for ' + year + ', with the balance against each annual quota, and every ' +
+      'application touching ' + monthLabel(ym) + '. Unpaid days are leave of an unpaid type or beyond quota.',
+    cols: cols, rows: rows.concat([totalRow]), html: html,
+    kpis: kpi('Employees with leave', anyTaken, 'in ' + year) +
+          kpi('Days taken', Object.keys(totals).reduce(function (t, k) { return t + totals[k]; }, 0), 'approved, ' + year) +
+          kpi('Days in ' + monthLabel(ym), monthDays, 'approved') +
+          kpi('Pending', pending, pending ? 'waiting on HR' : 'nothing waiting')
+  };
+}
+
+/* ---------------------------- printing ---------------------------- */
+
+/** Every report prints the same way: letterhead, the report as shown, a footer. */
+function printReport() {
+  var spec = LAST_SPEC;
+  var ym = el('rep-month').value || thisMonth();
+  var kindSel = el('rep-kind');
+  var kindName = kindSel.options[kindSel.selectedIndex].text;
+  var bodyHtml = spec && spec.html
+    ? spec.html
+    : '<table class="reg-table">' + (el('rep-table') ? el('rep-table').innerHTML : '') + '</table>';
+  var wide = (spec && spec.cols ? spec.cols.length : 0) > 9;
+
+  printDocument({
+    title: (spec && spec.title) || kindName,
+    subtitle: (spec && spec.note) || '',
+    body: bodyHtml,
+    landscape: wide,
+    fileTitle: kindName + ' ' + ym
+  });
+}
+
+/**
+ * Open a clean print window: company letterhead, the content, and a footer
+ * saying who printed it and when, so a printed sheet can be placed later.
+ */
+function printDocument(opts) {
+  var w = window.open('', '_blank');
+  if (!w) return toast('Allow pop-ups to print', 'bad');
+  var when = new Date();
+  var css =
+    '@page{size:' + (opts.landscape ? 'A4 landscape' : 'A4 portrait') + ';margin:12mm 10mm;}' +
+    'body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;margin:0;font-size:12px;}' +
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;' +
+      'padding-bottom:10px;margin-bottom:14px;}' +
+    '.head h1{font-size:16px;margin:0 0 3px;} .head .addr{font-size:11px;color:#475569;}' +
+    '.head .rt{text-align:right;font-size:11px;color:#475569;}' +
+    '.head .rt b{display:block;font-size:13px;color:#0f172a;}' +
+    '.note{font-size:11px;color:#475569;margin-bottom:12px;line-height:1.5;}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:14px;}' +
+    'th{background:#f1f5f9;text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;' +
+      'padding:5px 4px;border-bottom:1.5px solid #cbd5e1;vertical-align:bottom;}' +
+    'td{padding:4px;border-bottom:1px solid #e2e8f0;font-size:11px;}' +
+    '.num-col{text-align:right;}' +
+    '.reg-title{font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.4px;' +
+      'padding:6px 8px;background:#0f172a;color:#fff;margin-top:10px;}' +
+    '.reg-total td{background:#f1f5f9;font-weight:800;border-top:1.5px solid #94a3b8;}' +
+    '.reg-block{page-break-inside:auto;margin-bottom:16px;}' +
+    'tr{page-break-inside:avoid;} thead{display:table-header-group;}' +
+    '.badge{font-size:10px;padding:1px 5px;border-radius:99px;background:#e2e8f0;}' +
+    '.table-wrap{max-height:none !important;overflow:visible !important;border:0 !important;}' +
+    '.sub-line{font-size:9.5px;color:#64748b;}' +
+    '.empty{text-align:center;color:#64748b;padding:14px;}' +
+    'input,select,button{display:none !important;}' +
+    '.foot{position:fixed;bottom:6mm;left:0;right:0;display:flex;justify-content:space-between;' +
+      'font-size:9.5px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:4px;}';
+  w.document.write(
+    '<html><head><title>' + esc(opts.fileTitle || opts.title) + '</title><style>' + css + '</style></head><body>' +
+    '<div class="head"><div>' +
+      '<h1>' + esc(S.settings.company_name || 'Company') + '</h1>' +
+      '<div class="addr">' + esc(S.settings.company_address || '') + '</div>' +
+    '</div><div class="rt"><b>' + esc(opts.title) + '</b>' +
+      'Printed ' + esc(when.toLocaleDateString()) + ' ' + esc(when.toLocaleTimeString()) + '<br>' +
+      'by ' + esc(S.user ? S.user.email : '') +
+    '</div></div>' +
+    (opts.subtitle ? '<div class="note">' + esc(opts.subtitle) + '</div>' : '') +
+    opts.body +
+    '<div class="foot"><span>' + esc(S.settings.company_name || '') + '</span>' +
+    '<span>' + esc(opts.title) + '</span></div>' +
+    '</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(function () { w.print(); }, 250);
 }
 </script>
 
