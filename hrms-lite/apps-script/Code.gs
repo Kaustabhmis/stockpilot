@@ -7,6 +7,8 @@
  * Copy the /exec URL into the API URL box on the HRMS Lite login screen.
  */
 
+var VERSION = 2;
+
 var SHEETS = {
   Settings:   ['key', 'value'],
   Users:      ['email', 'password', 'role', 'emp_code', 'active'],
@@ -125,45 +127,242 @@ var DEFAULT_SETTINGS = {
 
 function doGet(e) {
   var p = (e && e.parameter) || {};
-  if (p.action) return handle(p.action, p.payload ? JSON.parse(p.payload) : {}, p.callback);
-  return json({ ok: true, service: 'HRMS Lite', version: 1 });
+  if (p.action) {
+    return handle(p.action, p.payload ? JSON.parse(p.payload) : {}, p.callback, p.token);
+  }
+  return json({ ok: true, service: 'HRMS Lite', version: VERSION });
 }
 
 function doPost(e) {
   var body = {};
   try { body = JSON.parse(e.postData.contents); } catch (err) { body = {}; }
-  return handle(body.action, body.payload || {}, null);
+  return handle(body.action, body.payload || {}, null, body.token);
 }
 
-function handle(action, payload, callback) {
+function handle(action, payload, callback, token) {
   var out;
   try {
+    /* Who is calling, and may they do this? Both are decided here, on the
+       server. The browser hides buttons as a courtesy; this is the fence. */
+    var caller = authenticate(action, token);
+    authorize(action, payload || {}, caller);
+
     var lock = LockService.getScriptLock();
     lock.waitLock(25000);
     try {
-      out = { ok: true, data: route(action, payload || {}) };
+      out = { ok: true, data: route(action, payload || {}, caller) };
     } finally {
       lock.releaseLock();
     }
   } catch (err) {
-    out = { ok: false, error: String(err && err.message ? err.message : err) };
+    var msg = String(err && err.message ? err.message : err);
+    out = { ok: false, error: msg };
+    if (msg.indexOf(AUTH_PREFIX) === 0) { out.authFailed = true; out.error = msg.slice(AUTH_PREFIX.length); }
   }
   return callback ? jsonp(out, callback) : json(out);
 }
 
-function route(action, p) {
+/* ------------------------------------------------------------------ */
+/* Authentication - signed sessions                                    */
+/* ------------------------------------------------------------------ */
+
+var AUTH_PREFIX = 'AUTH:';
+var SESSION_HOURS = 12;
+
+/* Actions anyone may call without signing in. Everything else needs a
+   session, and most of it needs an admin session. */
+var PUBLIC_ACTIONS = { ping: 1, login: 1, setup: 1, ingestPunches: 1 };
+
+/* Per-install signing key. Created on first use and never leaves the script. */
+function sessionSecret() {
+  var props = PropertiesService.getScriptProperties();
+  var key = props.getProperty('session_secret');
+  if (!key) {
+    key = Utilities.getUuid() + '-' + Utilities.getUuid();
+    props.setProperty('session_secret', key);
+  }
+  return key;
+}
+
+function b64url(bytes) {
+  return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, '');
+}
+
+function signToken(user) {
+  var body = [
+    String(user.email || '').toLowerCase(),
+    String(user.role || 'employee').toLowerCase(),
+    String(user.emp_code || ''),
+    String(Date.now() + SESSION_HOURS * 3600 * 1000)
+  ].join('|');
+  var sig = b64url(Utilities.computeHmacSha256Signature(body, sessionSecret()));
+  return b64url(Utilities.newBlob(body).getBytes()) + '.' + sig;
+}
+
+/* Length-independent comparison, so a wrong signature tells an attacker
+   nothing by how long it took to reject. */
+function sameSignature(a, b) {
+  a = String(a); b = String(b);
+  var diff = a.length ^ b.length;
+  for (var i = 0; i < a.length && i < b.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function authenticate(action, token) {
+  if (PUBLIC_ACTIONS[action]) {
+    /* setup is public only while the sheet is empty, so the very first run
+       needs no login. After that it is an admin action like any other. */
+    if (action === 'setup' && hasUsers()) return requireSession(token);
+    return { email: '', role: 'public', emp_code: '' };
+  }
+  return requireSession(token);
+}
+
+function requireSession(token) {
+  var raw = String(token || '');
+  var dot = raw.lastIndexOf('.');
+  if (dot < 1) throw new Error(AUTH_PREFIX + 'Please sign in again.');
+
+  var body;
+  try {
+    body = Utilities.newBlob(Utilities.base64DecodeWebSafe(raw.slice(0, dot))).getDataAsString();
+  } catch (err) {
+    throw new Error(AUTH_PREFIX + 'Please sign in again.');
+  }
+  var want = b64url(Utilities.computeHmacSha256Signature(body, sessionSecret()));
+  if (!sameSignature(want, raw.slice(dot + 1))) {
+    throw new Error(AUTH_PREFIX + 'Please sign in again.');
+  }
+
+  var parts = body.split('|');
+  if (parts.length !== 4) throw new Error(AUTH_PREFIX + 'Please sign in again.');
+  if (Number(parts[3]) < Date.now()) {
+    throw new Error(AUTH_PREFIX + 'Your session has expired. Please sign in again.');
+  }
+
+  /* The token says who they were. The Users tab says who they are now, so
+     a disabled account or a role taken away stops working immediately. */
+  var user = findUser(parts[0]);
+  if (!user) throw new Error(AUTH_PREFIX + 'This account no longer exists.');
+  if (String(user.active || 'yes').toLowerCase() === 'no') {
+    throw new Error(AUTH_PREFIX + 'This account is disabled.');
+  }
+  return {
+    email: String(user.email || '').toLowerCase(),
+    role: String(user.role || 'employee').toLowerCase(),
+    emp_code: String(user.emp_code || '')
+  };
+}
+
+function findUser(email) {
+  var want = String(email || '').trim().toLowerCase();
+  var users = readSheet('Users');
+  for (var i = 0; i < users.length; i++) {
+    if (String(users[i].email || '').trim().toLowerCase() === want) return users[i];
+  }
+  return null;
+}
+
+/* Looks straight at the tab. It must not go through sheet(), because that
+   creates what is missing - which would run setup() from inside the check
+   that decides whether setup() may run. */
+function hasUsers() {
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
+    return !!sh && sh.getLastRow() > 1;
+  } catch (err) {
+    return false;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Authorisation - what an employee may do                             */
+/* ------------------------------------------------------------------ */
+
+/* An employee may read their own things and ask for leave, a request, or a
+   punch. Nothing else: no settings, no attendance, no payroll, no other
+   person's record, whatever the browser sends. */
+var EMPLOYEE_ACTIONS = {
+  bootstrap: 1, changePassword: 1, punchState: 1, webPunch: 1, ping: 1,
+  save: 1, remove: 1
+};
+
+/* The only tabs an employee may write to, and only their own rows. */
+var EMPLOYEE_WRITE_SHEETS = { Leave: 1, Requests: 1 };
+
+function denied() {
+  throw new Error('Not allowed. Your account does not have permission for this.');
+}
+
+function authorize(action, p, caller) {
+  if (caller.role === 'admin') return;
+  if (caller.role === 'public') return;           // already limited to PUBLIC_ACTIONS
+  if (!EMPLOYEE_ACTIONS[action]) denied();
+
+  var code = String(caller.emp_code || '');
+
+  if (action === 'bootstrap' || action === 'ping') return;   // read-only, already scoped
+  if (action === 'changePassword') {
+    p.email = caller.email;                        // only ever their own
+    return;
+  }
+  if (action === 'webPunch' || action === 'punchState') {
+    if (!code) throw new Error('Your login is not linked to an employee code. Ask HR to set it.');
+    p.emp_code = code;                             // never punch for someone else
+    return;
+  }
+  if (action === 'save') {
+    if (!EMPLOYEE_WRITE_SHEETS[p.sheet]) denied();
+    if (!code) throw new Error('Your login is not linked to an employee code. Ask HR to set it.');
+    var row = p.row || {};
+    var existing = row.id ? findById(p.sheet, row.id) : null;
+    if (existing && String(existing.emp_code) !== code) denied();
+    if (existing && String(existing.status || '') !== 'Pending') {
+      throw new Error('This has already been decided and cannot be changed.');
+    }
+    row.emp_code = code;                           // always their own
+    /* They may raise it or withdraw it. They may not approve it. */
+    var wanted = String(row.status || 'Pending');
+    row.status = wanted === 'Cancelled' ? 'Cancelled' : 'Pending';
+    delete row.decided_by; delete row.decided_at;
+    delete row.decision_note; delete row.note;
+    p.row = row;
+    return;
+  }
+  if (action === 'remove') {
+    if (!EMPLOYEE_WRITE_SHEETS[p.sheet]) denied();
+    var mine = findById(p.sheet, p.id);
+    if (!mine || String(mine.emp_code) !== code) denied();
+    if (String(mine.status || '') !== 'Pending') {
+      throw new Error('This has already been decided and cannot be withdrawn.');
+    }
+    return;
+  }
+  denied();
+}
+
+function findById(sheetName, id) {
+  if (!SHEETS[sheetName]) return null;
+  var rows = readSheet(sheetName);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(id)) return rows[i];
+  }
+  return null;
+}
+
+function route(action, p, caller) {
   switch (action) {
-    case 'ping':        return { service: 'HRMS Lite', version: 1 };
+    case 'ping':        return { service: 'HRMS Lite', version: VERSION };
     case 'setup':       return setup();
     case 'login':       return login(p.email, p.password);
-    case 'bootstrap':   return bootstrap();
+    case 'bootstrap':   return bootstrap(caller);
     case 'list':        return readSheet(p.sheet);
     case 'save':        return upsert(p.sheet, p.row);
     case 'saveMany':    return upsertMany(p.sheet, p.rows);
     case 'remove':      return removeRow(p.sheet, p.id);
     case 'removeMany':  return removeMany(p.sheet, p.ids);
     case 'saveSettings':return saveSettings(p.settings);
-    case 'changePassword': return changePassword(p.email, p.oldPassword, p.newPassword);
+    case 'changePassword': return changePassword(caller.email || p.email, p.oldPassword, p.newPassword);
     case 'setSecret':     return setSecret(p.key, p.value);
     case 'secretStatus':  return secretStatus();
     case 'esslPull':      return esslPull(p.from, p.to);
@@ -172,7 +371,7 @@ function route(action, p) {
     case 'testIntegration': return testIntegration();
     case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note);
     case 'punchState':    return punchState(p.emp_code);
-    case 'sendPayslips':  return sendPayslips(p);
+    case 'sendPayslips':  return sendPayslips(p, caller);
     case 'mailQuota':     return { left: MailApp.getRemainingDailyQuota(), from: senderAddress() };
     case 'payslipMailLog': return payslipMailLog(p.month);
     default: throw new Error('Unknown action: ' + action);
@@ -302,7 +501,106 @@ function setup() {
   var blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0) ss.deleteSheet(blank);
 
-  return { created: created, sheets: Object.keys(SHEETS) };
+  // The key that signs login sessions. Created once, then left alone.
+  sessionSecret();
+
+  var summary = {
+    version: VERSION,
+    created: created,
+    sheets: Object.keys(SHEETS),
+    employees: readSheet('Employees').length,
+    users: readSheet('Users').length,
+    admin: firstAdminEmail(),
+    timezone: Session.getScriptTimeZone(),
+    url: webAppUrl()
+  };
+  return summary;
+}
+
+function firstAdminEmail() {
+  var users = readSheet('Users'), out = '';
+  users.forEach(function (u) {
+    if (!out && String(u.role || '').toLowerCase() === 'admin') out = String(u.email || '');
+  });
+  return out;
+}
+
+function webAppUrl() {
+  try { return ScriptApp.getService().getUrl() || ''; } catch (err) { return ''; }
+}
+
+/* ------------------------------------------------------------------ */
+/* One-click setup from the spreadsheet                                */
+/* ------------------------------------------------------------------ */
+
+/* Puts an "HRMS" menu in the spreadsheet, so setup is a menu click rather
+   than a trip into the script editor. Runs by itself when the sheet opens. */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('HRMS')
+    .addItem('Set up / update the database', 'setupFromMenu')
+    .addItem('Show the web app link', 'showWebAppUrl')
+    .addSeparator()
+    .addItem('Reset the admin password', 'resetAdminPassword')
+    .addToUi();
+}
+
+function setupFromMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var r;
+  try {
+    r = setup();
+  } catch (err) {
+    ui.alert('Setup failed', String(err && err.message ? err.message : err), ui.ButtonSet.OK);
+    return;
+  }
+  ui.alert('HRMS is ready',
+    (r.created.length
+      ? 'Created ' + r.created.length + ' tab(s): ' + r.created.join(', ')
+      : 'All ' + r.sheets.length + ' tabs were already there and have been checked.') +
+    '\n\nTabs: ' + r.sheets.length +
+    '\nEmployees: ' + r.employees +
+    '\nLogins: ' + r.users +
+    '\nTime zone: ' + r.timezone +
+    '\n\nSign in as ' + (r.admin || 'admin@company.com') + ' with the password admin123, ' +
+    'then change it from Settings \u2192 Account.' +
+    (r.url ? '\n\nWeb app link:\n' + r.url
+           : '\n\nNow deploy it: Deploy \u2192 New deployment \u2192 Web app, ' +
+             'execute as Me, access Anyone.'),
+    ui.ButtonSet.OK);
+}
+
+function showWebAppUrl() {
+  var ui = SpreadsheetApp.getUi();
+  var url = webAppUrl();
+  ui.alert('Web app link',
+    url ? url + '\n\nPaste this into the HRMS file once, and everyone else just signs in.'
+        : 'Not deployed yet. Deploy \u2192 New deployment \u2192 Web app, ' +
+          'execute as Me, access Anyone.',
+    ui.ButtonSet.OK);
+}
+
+/* For when the admin password is lost - the only way back in, and it can only
+   be done by someone who can already open the spreadsheet. */
+function resetAdminPassword() {
+  var ui = SpreadsheetApp.getUi();
+  var email = firstAdminEmail();
+  if (!email) { ui.alert('No admin account found. Run setup first.'); return; }
+  var answer = ui.prompt('Reset the password for ' + email,
+    'Type the new password (at least 6 characters):', ui.ButtonSet.OK_CANCEL);
+  if (answer.getSelectedButton() !== ui.Button.OK) return;
+  var pw = String(answer.getResponseText() || '');
+  if (pw.length < 6) { ui.alert('That password is too short. Nothing was changed.'); return; }
+  var rows = indexed('Users');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].data.email).trim().toLowerCase() === email.toLowerCase()) {
+      sheet('Users').getRange(rows[i].row, SHEETS.Users.indexOf('password') + 1)
+        .setValue(hash(pw));
+      ui.alert('Password changed for ' + email + '.');
+      return;
+    }
+  }
+  ui.alert('Could not find that account.');
 }
 
 /* ------------------------------------------------------------------ */
@@ -319,12 +617,14 @@ function login(email, password) {
   if (!user) throw new Error('No account found for this email');
   if (String(user.active || 'yes').toLowerCase() === 'no') throw new Error('This account is disabled');
   if (String(user.password) !== hash(password)) throw new Error('Incorrect password');
-  return {
+  var who = {
     email: user.email,
     role: String(user.role || 'employee').toLowerCase(),
-    emp_code: user.emp_code || '',
-    token: Utilities.base64Encode(user.email + '|' + Date.now())
+    emp_code: user.emp_code || ''
   };
+  who.token = signToken(who);
+  who.expires_in_hours = SESSION_HOURS;
+  return who;
 }
 
 function changePassword(email, oldPassword, newPassword) {
@@ -350,8 +650,67 @@ function hash(value) {
 /* Data access                                                         */
 /* ------------------------------------------------------------------ */
 
-function bootstrap() {
+/* Settings an employee's browser is allowed to hold. Anything to do with the
+   biometric link, the SQL agent, payslip mail or imports stays on the server. */
+var EMPLOYEE_SETTING_DENY = /^(essl_|sql_|sync_|payslip_email_|import_|register_group_by$)/;
+
+function employeeSettings() {
+  var all = settingsMap(), out = {};
+  Object.keys(all).forEach(function (k) {
+    if (!EMPLOYEE_SETTING_DENY.test(k)) out[k] = all[k];
+  });
+  return out;
+}
+
+function onlyMine(sheetName, code) {
+  return readSheet(sheetName).filter(function (r) {
+    return String(r.emp_code) === String(code);
+  });
+}
+
+/**
+ * What the browser is given when it starts.
+ *
+ * An admin gets the organisation. An employee gets their own record, their own
+ * attendance, leave, requests, punches and payslips, and the policy they need
+ * to read those (holidays, shifts, leave types) - and nothing else. This is the
+ * point that decides it: filtering in the browser would still have sent every
+ * salary in the company down the wire.
+ */
+function bootstrap(caller) {
+  if (!caller || caller.role !== 'admin') {
+    var code = String((caller && caller.emp_code) || '');
+    var me = null;
+    if (code) {
+      readSheet('Employees').forEach(function (e) {
+        if (String(e.emp_code) === code) me = e;
+      });
+    }
+    return {
+      role: 'employee',
+      settings:    employeeSettings(),
+      employees:   me ? [me] : [],
+      attendance:  code ? onlyMine('Attendance', code) : [],
+      leave:       code ? onlyMine('Leave', code) : [],
+      payroll:     code ? onlyMine('Payroll', code) : [],
+      requests:    code ? onlyMine('Requests', code) : [],
+      punches:     code ? onlyMine('Punches', code) : [],
+      ctcValues:   code ? onlyMine('CtcValues', code) : [],
+      holidays:    readSheet('Holidays'),
+      events:      readSheet('Events'),
+      shifts:      readSheet('Shifts'),
+      leaveTypes:  readSheet('LeaveTypes'),
+      requestTypes: readSheet('RequestTypes'),
+      sites:       [],
+      ctcVariables: [],
+      ctcComponents: [],
+      users:       [],
+      secrets:     {}
+    };
+  }
+
   return {
+    role: 'admin',
     settings:   settingsMap(),
     employees:  readSheet('Employees'),
     attendance: readSheet('Attendance'),
@@ -1038,7 +1397,7 @@ function senderAddress() {
  *
  * items: [{ emp_code, name, to, subject, text, html, filename }]
  */
-function sendPayslips(p) {
+function sendPayslips(p, caller) {
   var items = (p && p.items) || [];
   if (!items.length) throw new Error('Nothing to send');
 
@@ -1054,7 +1413,7 @@ function sendPayslips(p) {
   var replyTo = String((p && p.replyTo) || st.payslip_email_reply_to || '').trim();
   var cc = String((p && p.cc) || st.payslip_email_cc || '').trim();
   var bcc = String((p && p.bcc) || st.payslip_email_bcc || '').trim();
-  var by = String((p && p.by) || '');
+  var by = String((caller && caller.email) || (p && p.by) || '');
   var now = new Date();
   var stamp = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 

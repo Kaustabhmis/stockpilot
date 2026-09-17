@@ -436,16 +436,27 @@ attendance register and mark someone absent → generate and finalise payroll �
 1. **Create the spreadsheet.** In Google Drive: *New → Google Sheets*. Name it e.g. `HRMS Data`.
 2. **Add the backend.** In that sheet: *Extensions → Apps Script*. Delete the sample code,
    paste everything from `apps-script/Code.gs`, and save.
-3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
-   dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates eighteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
-   `Leave`, `Payroll`, `Holidays`, `Events`, `Sites`, `Punches`, `Shifts`, `LeaveTypes`,
-   `RequestTypes`, `Requests`, `CtcVariables`, `CtcComponents`, `CtcValues`, `PayslipMail` — seeds a General shift, the four standard leave types and the
-   company's salary structure, and creates the first admin login. It is safe to re-run: new
-   columns are appended, existing data is left where it is.
-   Re-running `setup` on a sheet that already has data is safe, and is how you pick up the
-   `PayslipMail` tab if you installed an earlier copy. The first time you email a payslip, Apps
-   Script asks once for permission to send mail as you — that is the same consent screen as step 3.
+3. **Click Set up.** Reload the spreadsheet tab. A new **HRMS** menu appears next to *Help*:
+   choose **HRMS → Set up / update the database**. Approve the permission prompt once, then
+   choose it again. That single click builds the whole backend and tells you what it made.
+
+   It creates eighteen tabs — `Settings`, `Users`, `Employees`, `Attendance`, `Leave`, `Payroll`,
+   `Holidays`, `Events`, `Sites`, `Punches`, `Shifts`, `LeaveTypes`, `RequestTypes`, `Requests`,
+   `CtcVariables`, `CtcComponents`, `CtcValues`, `PayslipMail` — seeds a General shift, the four
+   standard leave types and the company's salary structure, generates the key that signs logins,
+   and creates the first admin account.
+
+   **It is safe to press again, any time.** New tabs and new columns are added, existing data is
+   left exactly where it is, and nothing is re-seeded. That is also how an older install picks up
+   a new tab. (The same thing still runs from the Apps Script editor as the `setup` function, if
+   you prefer.)
+
+   The other two menu items: **Show the web app link** prints the `/exec` URL, and **Reset the
+   admin password** is the way back in if the admin password is lost — it can only be used by
+   someone who can already open the spreadsheet.
+
+   The first time you email a payslip, Apps Script asks once more for permission to send mail as
+   you.
 4. **Deploy the web app.** *Deploy → New deployment → type: Web app*.
    - Execute as: **Me**
    - Who has access: **Anyone**
@@ -485,6 +496,68 @@ Change those five strings and the whole app follows; no other edit is needed.
 Host `index.html` anywhere static (Google Drive, an internal share, GitHub Pages, any web
 server) or just email the file — it needs no server of its own.
 
+## Who can see what: admin and employee
+
+There are two roles, and the line between them is drawn **in Apps Script, on the server** — not
+in the browser. That distinction is the whole point: a browser can be opened, edited and its
+requests replayed by anyone sitting at it, so any rule that lives only in the browser is a
+suggestion. These rules are not.
+
+**An admin** gets everything: the HR dashboard, all five modules, Settings, and the whole
+organisation's data.
+
+**An employee** signs into the same file and gets their own corner of it:
+
+| | Admin | Employee |
+|---|---|---|
+| HR dashboard (headcount, present/absent, payroll cost, attention list) | yes | **no** — they get *My dashboard*: their punch card, their month, their leave balance, their last payslip |
+| Settings (policy, shifts, statutory rates, CTC, integrations, import) | yes | **no** — the link is gone and the function refuses |
+| Employees module (everyone's profile and salary) | yes | **no** |
+| Reports (registers, statutory, salary data) | yes | **no** |
+| Attendance | mark, edit, bulk fill, import | **their own month, read only** — no clickable cells, no column fill |
+| Payroll | run, finalise, bank file, email everyone | **their own payslips only**, print them |
+| Leave and requests | approve, reject, cancel anyone's | **apply for and withdraw their own** |
+| Punch in / out | — | their own, always |
+
+### What actually stops them
+
+Every request carries a **signed session token**, issued at sign-in. It is an HMAC-SHA256 over
+the email, role, employee code and an expiry, signed with a key generated at setup that never
+leaves the script. A token that has been edited in any way fails the signature check; one older
+than **12 hours** is refused as expired.
+
+The token says who they *were*. Before each request the server re-reads the `Users` tab for who
+they *are*, so a disabled account or a role taken away stops working on the very next request —
+no waiting for a session to lapse.
+
+Then the request is authorised:
+
+- An employee may call only `bootstrap`, `changePassword`, `punchState`, `webPunch`, and `save` /
+  `remove` **on the `Leave` and `Requests` tabs alone**. Everything else — `saveSettings`,
+  `saveMany`, `removeMany`, `list`, `setSecret`, `esslPull`, `sendPayslips`, any write to
+  `Attendance`, `Employees`, `Payroll` or `Users` — is refused outright.
+- On the writes they *are* allowed, the server **overwrites the fields that matter** rather than
+  trusting them: `emp_code` becomes their own, so a leave application filed under someone else's
+  name is filed under theirs; `status` is forced back to `Pending`, so approving their own leave
+  does nothing; `decided_by` and `decided_at` are stripped. A row that is already decided cannot
+  be touched at all.
+- `changePassword` ignores the email in the request and uses the session's, so it can only ever
+  change their own.
+- `webPunch` and `punchState` ignore the employee code in the request and use the session's, so
+  nobody can punch in for a colleague.
+
+And the data never leaves the server in the first place: **`bootstrap` is scoped by role.** An
+employee's browser is sent their own employee record, their own attendance, leave, requests,
+punches and payslips, plus the holidays, shifts and leave types needed to read them — and nothing
+else. No other person's salary is ever in their browser to be found. Settings to do with the
+biometric link, the SQL agent, payslip mail and imports are stripped out too.
+
+`setup` is public **only while the sheet has no accounts yet**, so the first run needs no login.
+After that it is an admin action like any other.
+
+You can see all of this for yourself: open the demo and click **View as an employee** in the
+bottom-left corner. The demo scopes its data the same way the server does.
+
 ## Adding users
 
 Add a row to the **Users** tab:
@@ -493,8 +566,10 @@ Add a row to the **Users** tab:
 |-------|----------|------|----------|--------|
 | priya@company.com | *(see below)* | employee | EMP0004 | yes |
 
-`role` is `admin` (full access) or `employee` (sees only their own rows, can apply for
-leave, cannot edit the master or run payroll). Passwords are stored as SHA-256 hashes: the
+`role` is `admin` (full access) or `employee`. **`emp_code` is what connects a login to a
+person** — it must match their code in the `Employees` tab exactly, or they sign in to an empty
+screen that says so. It is also what the server uses to decide which rows they may see, so a
+typo here means they see nothing, never someone else's. Passwords are stored as SHA-256 hashes: the
 simplest way to set one is to add the row with any placeholder, then run `hash("thepassword")`
 once in the Apps Script editor and paste the result into the cell.
 
@@ -544,6 +619,13 @@ cancelled either. **Reopen run** unlocks it when a correction is genuinely neede
 - **Email quota**: payslip mail uses Google's own quota — about 100 a day on free Gmail, 1,500 on
   Workspace. Over that, the send stops and says so; the rest go the next day and the already-sent
   ones are skipped.
-- **Security**: the deployment is public-by-URL and authentication is the `Users` tab, which
-  suits an internal tool. For anything stricter, set the deployment to "Anyone within
-  <your organisation>" instead.
+- **Security**: the deployment is public-by-URL, but the URL alone gets you nothing — every action
+  other than sign-in needs a valid signed session, and the session decides what is allowed. For
+  anything stricter, set the deployment to "Anyone within <your organisation>" instead.
+- **Sessions last 12 hours** and are held in memory only, so closing the tab means signing in
+  again. That is deliberate on shared factory machines.
+- **Passwords** are SHA-256 hashes without a per-user salt. That is adequate for an internal tool
+  where the sheet is only visible to HR, but it is not what a public service should use. Anyone
+  who can open the spreadsheet can read the hashes — so keep the spreadsheet shared with HR only.
+- **The JSONP fallback** (used only if the browser cannot POST) puts the session token in the URL,
+  where it may appear in Google's request logs. The normal path is a POST and does not.

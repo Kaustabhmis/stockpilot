@@ -408,16 +408,19 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
     <div class="nav-item home active" data-view="dashboard" onclick="go('dashboard')">&#127968; Dashboard
       <span class="dot" id="nav-alerts">0</span></div>
     <div class="nav-label">Modules</div>
-    <div class="nav-item" data-view="employees" onclick="go('employees')">&#128101; Employees <span class="num">1</span></div>
+    <div class="nav-item adm" data-view="employees" onclick="go('employees')">&#128101; Employees <span class="num">1</span></div>
     <div class="nav-item" data-view="attendance" onclick="go('attendance')">&#9200; Attendance <span class="num">2</span></div>
     <div class="nav-item" data-view="leave" onclick="go('leave')">&#127796; Leave <span class="num">3</span>
       <span class="dot" id="nav-leave">0</span></div>
     <div class="nav-item" data-view="payroll" onclick="go('payroll')">&#128176; Payroll <span class="num">4</span></div>
-    <div class="nav-item" data-view="reports" onclick="go('reports')">&#128202; Reports <span class="num">5</span></div>
+    <div class="nav-item adm" data-view="reports" onclick="go('reports')">&#128202; Reports <span class="num">5</span></div>
   </div>
   <div class="sidebar-footer">
     <div id="side-mode">Connected</div>
-    <div style="margin-top:6px;"><a href="#" onclick="openSettings();return false;">&#9881; Settings</a></div>
+    <div id="demo-role" style="display:none;margin-top:6px;">
+      <a href="#" onclick="demoRole();return false;">&#128100; <span id="demo-role-label">View as an employee</span></a>
+    </div>
+    <div style="margin-top:6px;" class="adm"><a href="#" onclick="openSettings();return false;">&#9881; Settings</a></div>
   </div>
 </div>
 
@@ -454,13 +457,15 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             </div>
           </div>
           <span style="width:1px;height:38px;background:var(--border);margin:0 6px;"></span>
-          <label class="field">Attendance as on<input type="date" id="dash-date" onchange="renderDashboard()"></label>
-          <button class="ghost sm" style="margin-bottom:1px" onclick="el('dash-date').value=today();renderDashboard()">Today</button>
+          <label class="field adm">Attendance as on<input type="date" id="dash-date" onchange="renderDashboard()"></label>
+          <button class="ghost sm adm" style="margin-bottom:1px" onclick="el('dash-date').value=today();renderDashboard()">Today</button>
           <span class="spacer"></span>
-          <span class="sub-line" style="text-align:right;max-width:280px">Every tile below is clickable &mdash;
+          <span class="sub-line adm" style="text-align:right;max-width:280px">Every tile below is clickable &mdash;
             it opens the list of employees behind the number.</span>
         </div>
       </div>
+      <div id="my-dash" style="display:none"></div>
+      <div id="hr-dash">
       <div class="kpis" id="dash-kpis"></div>
       <div class="grid-half">
         <div class="card">
@@ -484,6 +489,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <div class="card-sub">Net payout per month</div>
           <div class="chart" id="dash-cost-chart"></div>
         </div>
+      </div>
       </div>
 
       <div class="card" id="dash-cal-card">
@@ -654,8 +660,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
         <div class="toolbar">
           <label class="field">Month<input type="month" id="pay-month" onchange="renderPayroll()"></label>
           <span class="spacer"></span>
-          <button class="ghost sm" onclick="exportPayroll()">&#8681; Bank CSV</button>
-          <button class="ghost sm" onclick="printAllPayslips()">&#128424; Print all payslips</button>
+          <button class="ghost sm adm" onclick="exportPayroll()">&#8681; Bank CSV</button>
+          <button class="ghost sm" onclick="printAllPayslips()" id="pay-print-all">&#128424; Print all payslips</button>
           <button class="ghost sm adm" onclick="emailAllPayslips()">&#9993; Email payslips</button>
           <button class="ghost sm adm" id="pay-generate" onclick="generatePayroll()">&#9881; Generate from attendance</button>
           <button class="adm" id="pay-save" onclick="savePayroll()" disabled>Finalise run</button>
@@ -935,18 +941,31 @@ function minutesOf(hhmm) {
 /* ------------------------------ API ----------------------------- */
 function api(action, payload) {
   if (S.demo) return Promise.resolve(demoApi(action, payload || {}));
-  var body = JSON.stringify({ action: action, payload: payload || {} });
+  var token = S.user ? (S.user.token || '') : '';
+  var body = JSON.stringify({ action: action, payload: payload || {}, token: token });
   return fetch(S.api, {
     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body
   }).then(function (r) { return r.json(); }).catch(function (netErr) {
     if (body.length > 6000) throw netErr;
-    return jsonpCall(action, payload || {});
+    return jsonpCall(action, payload || {}, token);
   }).then(function (j) {
-    if (!j.ok) throw new Error(j.error || 'Request failed');
+    if (!j.ok) {
+      /* The server refused the session, not the request. Nothing this browser
+         holds is worth keeping - start again at the sign-in screen. */
+      if (j.authFailed) { sessionEnded(j.error || 'Please sign in again.'); }
+      throw new Error(j.error || 'Request failed');
+    }
     return j.data;
   });
 }
-function jsonpCall(action, payload) {
+
+function sessionEnded(msg) {
+  if (S.signingOut) return;
+  S.signingOut = true;
+  alert(msg);
+  location.reload();
+}
+function jsonpCall(action, payload, token) {
   return new Promise(function (resolve, reject) {
     var cb = 'hrms_cb_' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
     var script = document.createElement('script');
@@ -961,7 +980,8 @@ function jsonpCall(action, payload) {
       reject(new Error('Could not reach the Apps Script URL. Check it is deployed with access "Anyone".'));
     };
     script.src = S.api + (S.api.indexOf('?') >= 0 ? '&' : '?') + 'action=' + encodeURIComponent(action) +
-      '&callback=' + cb + '&payload=' + encodeURIComponent(JSON.stringify(payload));
+      '&callback=' + cb + '&token=' + encodeURIComponent(token || '') +
+      '&payload=' + encodeURIComponent(JSON.stringify(payload));
     document.body.appendChild(script);
   });
 }
@@ -1343,7 +1363,30 @@ function demoApi(action, p) {
     case 'login':
       return { email: 'admin@company.com', role: 'admin', emp_code: '', token: 'demo' };
     case 'bootstrap':
-      return { settings: db.settings, employees: db.employees, attendance: db.attendance,
+      /* The demo mirrors the server: an employee is handed their own rows and
+         nothing else, so "view as an employee" shows the real thing. */
+      if (!S.user || S.user.role !== 'admin') {
+        var code = String((S.user && S.user.emp_code) || '');
+        var mineOnly = function (arr) {
+          return (arr || []).filter(function (r) { return String(r.emp_code) === code; });
+        };
+        var safe = {};
+        Object.keys(db.settings).forEach(function (k) {
+          if (!/^(essl_|sql_|sync_|payslip_email_|import_|register_group_by$)/.test(k)) {
+            safe[k] = db.settings[k];
+          }
+        });
+        return { role: 'employee', settings: safe,
+                 employees: (db.employees || []).filter(function (e) { return String(e.emp_code) === code; }),
+                 attendance: mineOnly(db.attendance), leave: mineOnly(db.leave),
+                 payroll: mineOnly(db.payroll), requests: mineOnly(db.requests),
+                 punches: mineOnly(db.punches), ctcValues: mineOnly(db.ctcValues),
+                 holidays: db.holidays || [], events: db.events || [],
+                 shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
+                 requestTypes: db.requestTypes || [],
+                 sites: [], ctcVariables: [], ctcComponents: [], users: [], secrets: {} };
+      }
+      return { role: 'admin', settings: db.settings, employees: db.employees, attendance: db.attendance,
                leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users,
                shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
@@ -1483,11 +1526,29 @@ el('btn-demo').onclick = function () {
   S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
   start();
 };
+
+/* Demo only: switch between the HR view and an employee's view, so you can
+   see for yourself exactly what an employee can and cannot reach. */
+function demoRole() {
+  if (!S.demo) return;
+  if (isAdmin()) {
+    var first = (S.employees[0] || {}).emp_code || 'EMP0001';
+    S.user = { email: 'staff@company.com', role: 'employee', emp_code: first };
+  } else {
+    S.user = { email: 'demo@company.com', role: 'admin', emp_code: '' };
+  }
+  el('who').textContent = S.user.email;
+  el('avatar').textContent = (S.user.email[0] || 'U').toUpperCase();
+  el('demo-role-label').textContent = isAdmin() ? 'View as an employee' : 'Back to the HR view';
+  go('dashboard');
+  reload();
+}
 function logout() { S.user = null; location.reload(); }
 
 function start() {
   el('login').style.display = 'none';
   el('demo-flag').style.display = S.demo ? 'inline-block' : 'none';
+  el('demo-role').style.display = S.demo ? '' : 'none';
   el('side-mode').textContent = S.demo ? 'Demo mode (browser storage)' : 'Google Sheets connected';
   el('who').textContent = S.user.email;
   el('avatar').textContent = (S.user.email[0] || 'U').toUpperCase();
@@ -1519,9 +1580,124 @@ function reload() {
     S.leaveVersion++;
     S.attDirty = {}; S.payDraft = null; S.attVersion++;
     el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
-    document.querySelectorAll('.adm').forEach(function (n) { n.style.display = isAdmin() ? '' : 'none'; });
+    applyRole();
     renderAll();
   }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* The chrome an employee gets: their own screens, nothing of HR's. The real
+   fence is in Apps Script - an employee's browser is never sent anyone else's
+   data and its writes are refused - but the screen should match. */
+function applyRole() {
+  var admin = isAdmin();
+  document.querySelectorAll('.adm').forEach(function (n) { n.style.display = admin ? '' : 'none'; });
+  TITLES.dashboard = admin
+    ? ['Dashboard', 'Everything that needs you today']
+    : ['My dashboard', 'Your attendance, leave and payslips'];
+  TITLES.attendance = admin
+    ? ['Attendance', 'Daily marking, monthly register, late marks and LOP']
+    : ['My attendance', 'Your own register - marked by HR, read only'];
+  TITLES.payroll = admin
+    ? ['Payroll', 'Monthly run, statutory deductions, payslips']
+    : ['My payslips', 'Your salary, month by month'];
+  TITLES.leave = admin
+    ? ['Leave', 'Leave, out-duty and swipe requests, comp-off, calendar and balances']
+    : ['My leave', 'Apply for leave, out-duty, a missed punch or comp-off'];
+  var navDash = document.querySelector('.nav-item[data-view="dashboard"]');
+  if (navDash) navDash.childNodes[0].nodeValue = admin ? '\uD83C\uDFE0 Dashboard ' : '\uD83C\uDFE0 My dashboard ';
+  var printAll = el('pay-print-all');
+  if (printAll) printAll.innerHTML = admin ? '\u{1F5A8} Print all payslips' : '\u{1F5A8} Print my payslips';
+  if (!admin) {
+    /* The alert counts are HR's queue, not theirs. */
+    ['nav-alerts', 'nav-leave'].forEach(function (id) { el(id).style.display = 'none'; });
+  }
+  if (ADMIN_VIEWS[S.view] && !admin) return go('dashboard');
+  /* Re-label the header for the view already on screen. */
+  var t = TITLES[S.view || 'dashboard'];
+  if (t) { el('page-title').textContent = t[0]; el('page-sub').innerHTML = t[1]; }
+}
+
+/* An employee's home screen: their punch, their month, their balances and
+   their last payslip. None of it is anyone else's. */
+function renderMyDashboard() {
+  el('hr-dash').style.display = 'none';
+  var host = el('my-dash');
+  host.style.display = '';
+
+  var code = myCode();
+  var me = empByCode(code);
+  if (!code || !me) {
+    host.innerHTML = '<div class="card"><h3>Your login is not linked to an employee record</h3>' +
+      '<p class="card-sub">Ask HR to put your employee code against your login, and your ' +
+      'attendance, leave and payslips will appear here.</p></div>';
+    return;
+  }
+
+  var ym = thisMonth();
+  var st = attStats(ym, code);
+  var mine = (S.leave || []).filter(function (l) { return String(l.emp_code) === code; });
+  var pending = mine.filter(function (l) { return String(l.status) === 'Pending'; }).length;
+  var reqPending = (S.requests || []).filter(function (r) {
+    return String(r.emp_code) === code && String(r.status) === 'Pending';
+  }).length;
+  var slips = (S.payroll || []).filter(function (r) { return String(r.emp_code) === code; })
+    .sort(function (a, b) { return String(a.month) < String(b.month) ? 1 : -1; });
+  var last = slips[0];
+
+  var types = (S.leaveTypes || []).filter(function (t) {
+    return String(t.active || 'yes').toLowerCase() !== 'no';
+  });
+  var year = String(new Date().getFullYear());
+  var balances = types.map(function (t) {
+    var taken = mine.reduce(function (n, l) {
+      return (String(l.status) === 'Approved' && String(l.type) === String(t.name) &&
+              String(l.from_date).slice(0, 4) === year) ? n + num(l.days) : n;
+    }, 0);
+    return { name: t.name, quota: num(t.quota), taken: taken, left: Math.max(0, num(t.quota) - taken) };
+  });
+
+  host.innerHTML =
+    '<div class="kpis">' +
+      kpi('Present this month', st.P + st.HD * 0.5, monthLabel(ym) + ' so far') +
+      kpi('On leave', st.L, 'approved days this month') +
+      kpi('Absent', st.A, st.A ? 'these are unpaid' : 'nothing unpaid') +
+      kpi('Awaiting a decision', pending + reqPending,
+          pending + ' leave, ' + reqPending + ' request') +
+    '</div>' +
+    '<div class="grid-half">' +
+      '<div class="card"><h3>My leave balance</h3>' +
+        '<div class="card-sub">' + esc(year) + ', approved days only</div>' +
+        '<table><thead><tr><th>Type</th><th class="num-col">Quota</th>' +
+        '<th class="num-col">Taken</th><th class="num-col">Left</th></tr></thead><tbody>' +
+        (balances.map(function (b) {
+          return '<tr><td>' + esc(b.name) + '</td><td class="num-col">' + b.quota +
+            '</td><td class="num-col">' + b.taken + '</td><td class="num-col"><b>' + b.left +
+            '</b></td></tr>';
+        }).join('') || '<tr><td colspan="4" class="empty">No leave types set up yet.</td></tr>') +
+        '</tbody></table>' +
+        '<button class="ghost sm" onclick="go(\'leave\')">Apply for leave</button></div>' +
+      '<div class="card"><h3>My last payslip</h3>' +
+        (last
+          ? '<div class="card-sub">' + esc(monthLabel(last.month)) + '</div>' +
+            '<table><tbody>' +
+            '<tr><td>Paid days</td><td class="num-col">' + last.paid_days + ' / ' + last.total_days + '</td></tr>' +
+            '<tr><td>Gross</td><td class="num-col">' + cur() + money(last.gross) + '</td></tr>' +
+            '<tr><td>Deductions</td><td class="num-col">' + cur() + money(last.total_deduction) + '</td></tr>' +
+            '<tr><td><b>Net pay</b></td><td class="num-col"><b>' + cur() + money(last.net) + '</b></td></tr>' +
+            '</tbody></table>' +
+            '<button class="ghost sm" onclick="payslip(\'' + esc(code) + '\',\'' + esc(last.month) +
+              '\')">Open payslip</button> ' +
+            '<button class="ghost sm" onclick="go(\'payroll\')">All my payslips</button>'
+          : '<div class="card-sub">Nothing yet. Your payslip appears here once HR finalises the ' +
+            'month.</div>') +
+      '</div>' +
+    '</div>';
+
+  /* The punch card and the calendar belong on their screen too. Both read
+     only what the server sent this browser, which is their own rows plus
+     the holidays and events everyone shares. */
+  renderPunchCard();
+  renderCalendar();
 }
 
 function renderAll() {
@@ -1530,7 +1706,10 @@ function renderAll() {
 }
 
 /* --------------------------- navigation ------------------------- */
+var ADMIN_VIEWS = { employees: 1, reports: 1 };
+
 function go(view) {
+  if (ADMIN_VIEWS[view] && !isAdmin()) view = 'dashboard';
   S.view = view;
   document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
   el('view-' + view).classList.add('active');
@@ -1599,6 +1778,9 @@ var ATT_SERIES = {
 
 function renderDashboard() {
   if (!S.user) return;
+  if (!isAdmin()) return renderMyDashboard();
+  el('my-dash').style.display = 'none';
+  el('hr-dash').style.display = '';
   var ym = thisMonth();
   var actives = activeEmployees();
   var todayIso = today();
@@ -3321,7 +3503,7 @@ function currentRun(ym) {
 
 function renderPayroll() {
   var ym = el('pay-month').value || thisMonth();
-  if (S.mailLogMonth !== ym) {
+  if (isAdmin() && S.mailLogMonth !== ym) {
     S.mailLogMonth = ym;
     S.mailLog = [];
     refreshMailLog(ym).then(function () {
@@ -3840,6 +4022,7 @@ function mailStateFor(code, ym) {
 }
 
 function exportPayroll() {
+  if (!isAdmin()) return toast('The bank file is for HR administrators only', 'bad');
   var ym = el('pay-month').value || thisMonth();
   var rows = currentRun(ym).rows;
   if (!rows.length) return toast('Nothing to export for ' + monthLabel(ym), 'bad');
@@ -4207,6 +4390,9 @@ var LEAVE_TYPE_COLS = [
 ];
 
 function openSettings() {
+  /* Settings is HR's. The link is hidden for an employee; this is the check
+     that matters if they reach the function some other way. */
+  if (!isAdmin()) return toast('Settings is for HR administrators only', 'bad');
   var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
     .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
              ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
