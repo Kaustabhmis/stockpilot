@@ -111,6 +111,32 @@ reason, for HR to approve.
 Employees only ever see themselves — their own attendance, leave, requests and payslips — and the
 admin-only buttons are not rendered for them.
 
+### Geofencing the punch
+
+Turn on **Geofence the punch** in Settings → Shifts & attendance and add your gates to the **Punch
+sites** table: name, latitude, longitude and a radius in metres. Stand at the gate and press **Use my
+location** to fill a row in, then check the pin on a map before saving.
+
+When someone punches, the browser asks for a location and sends it with the punch. **The distance is
+worked out in the backend, not the browser**, so the check cannot be skipped by editing the page.
+
+| Case | What happens |
+|---|---|
+| Inside an allowed site | Punch accepted, and the site and distance are recorded on it |
+| Outside every site | `block`: refused, naming the site, the distance and the allowance ("about 6,148 m from Head office, which allows 150 m"). `warn`: allowed, and how far away it was is recorded |
+| Location too rough | Refused above *Reject a location less accurate than* (120 m by default) rather than trusted |
+| No location sent | Refused under `block` |
+| Approved **OD** that day | Allowed from anywhere and tagged *out duty*, so field staff are not stuck |
+| Employee tied to a site | Set **Punch site** on their record and only that gate works; blank means any active site |
+
+Every web punch stores latitude, longitude, accuracy, the matched site and the distance on the
+`Punches` tab, so an argument later can be settled from the record.
+
+**Two honest limits.** Browser geolocation only works over **https** (or localhost) — a file opened
+from disk or served over plain http will not return a position, and under `block` nobody will be
+able to punch. And a determined phone can still lie about where it is: a geofence raises the bar,
+it is not proof. Use `warn` mode first if you want to see the data before enforcing on it.
+
 ### Requests — OD, swipe and comp-off
 
 Configured under **Settings → Requests**, raised and approved on the **Leave → Requests** tab. A
@@ -360,9 +386,9 @@ attendance register and mark someone absent → generate and finalise payroll �
    paste everything from `apps-script/Code.gs`, and save.
 3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
    dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates sixteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
-   `Leave`, `Payroll`, `Holidays`, `Events`, `Punches`, `Shifts`, `LeaveTypes`, `RequestTypes`,
-   `Requests`, `CtcVariables`, `CtcComponents`, `CtcValues` — seeds a General shift, the four standard leave types and the
+   spreadsheet). This creates seventeen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
+   `Leave`, `Payroll`, `Holidays`, `Events`, `Sites`, `Punches`, `Shifts`, `LeaveTypes`,
+   `RequestTypes`, `Requests`, `CtcVariables`, `CtcComponents`, `CtcValues` — seeds a General shift, the four standard leave types and the
    company's salary structure, and creates the first admin login. It is safe to re-run: new
    columns are appended, existing data is left where it is.
 4. **Deploy the web app.** *Deploy → New deployment → type: Web app*.

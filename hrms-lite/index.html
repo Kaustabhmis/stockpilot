@@ -705,7 +705,7 @@ var S = {
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
   shifts: [], leaveTypes: [], leaveVersion: 0,
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
-  requestTypes: [], requests: [], punch: null,
+  requestTypes: [], requests: [], punch: null, sites: [],
   attDirty: {}, payDraft: null, attVersion: 0,
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -1089,7 +1089,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v9';
+var DEMO_KEY = 'hrms_lite_demo_v10';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1103,6 +1103,8 @@ function demoDb() {
       grace_minutes: '15', ot_after_minutes: '30', full_day_hours: '8', half_day_hours: '4',
       saturday_policy: 'working', default_shift: 'General', late_marks_per_halfday: '3',
       web_punch_enabled: 'yes', punch_out_mandatory: 'yes',
+      geofence_enabled: 'no', geofence_mode: 'block', geofence_accuracy_m: '120',
+      geofence_allow_od: 'yes',
       ot_pay_enabled: 'no', ot_rate_multiplier: '1', ot_max_hours_month: '60',
       sandwich_rule: 'no', excess_leave_unpaid: 'yes', leave_after_days: '0',
       payroll_basis: 'calendar', payroll_rounding: '1',
@@ -1124,6 +1126,12 @@ function demoDb() {
     ],
     ctcValues: [],
     requests: [],
+    sites: [
+      { id: 'S1', name: 'Head office', lat: '22.572600', lng: '88.363900', radius_m: 150,
+        active: 'yes', note: 'Main gate' },
+      { id: 'S2', name: 'Unit 2', lat: '22.601000', lng: '88.402000', radius_m: 200,
+        active: 'yes', note: '' }
+    ],
     requestTypes: [
       { id: 'RT1', code: 'OD', name: 'Out of office duty', effect: 'present', paid: 'yes',
         needs_approval: 'yes', max_per_month: 0, validity_days: 0, allow_half: 'no', active: 'yes' },
@@ -1288,7 +1296,7 @@ function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet ===
 var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
   Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
-  Events: 'events', RequestTypes: 'requestTypes', Requests: 'requests', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
+  Events: 'events', Sites: 'sites', RequestTypes: 'requestTypes', Requests: 'requests', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
   CtcComponents: 'ctcComponents', CtcValues: 'ctcValues'
 };
 function demoApi(action, p) {
@@ -1303,6 +1311,7 @@ function demoApi(action, p) {
                ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
                ctcValues: db.ctcValues || [], events: db.events || [],
                requestTypes: db.requestTypes || [], requests: db.requests || [],
+               sites: db.sites || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -1407,6 +1416,7 @@ function reload() {
     S.payroll = d.payroll || [];
     S.holidays = d.holidays || [];
     S.events = d.events || [];
+    S.sites = d.sites || [];
     S.shifts = d.shifts || [];
     S.leaveTypes = d.leaveTypes || [];
     S.requestTypes = d.requestTypes || [];
@@ -1845,6 +1855,7 @@ var EMP_FIELDS = [
   ['phone', 'Phone', 'text'],
   ['company', 'Company / unit', 'text'],
   ['unit', 'Unit / division (register)', 'text'],
+  ['site', 'Punch site (blank = any site)', 'text'],
   ['department', 'Department', 'text'],
   ['designation', 'Designation', 'text'],
   ['doj', 'Date of joining', 'date'],
@@ -3764,6 +3775,10 @@ var SETTING_GROUPS = [
 var ATTENDANCE_RULES = [
   ['web_punch_enabled', 'Let staff punch from the app', 'select:yes,no'],
   ['punch_out_mandatory', 'Punch out is mandatory', 'select:yes,no'],
+  ['geofence_enabled', 'Geofence the punch', 'select:no,yes'],
+  ['geofence_mode', 'When outside a site', 'select:block,warn'],
+  ['geofence_accuracy_m', 'Reject a location less accurate than (m)', 'number'],
+  ['geofence_allow_od', 'Allow punching away on an approved OD', 'select:yes,no'],
   ['default_shift', 'Default shift for new staff', 'text'],
   ['late_marks_per_halfday', 'Late marks that cost half a day (0 = off)', 'number'],
   ['ot_pay_enabled', 'Pay overtime', 'select:no,yes'],
@@ -3795,6 +3810,11 @@ var SHIFT_COLS = [
   ['half_day_hours', 'Half day hrs', 'number'], ['weekly_off', 'Weekly off', 'text'],
   ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt'],
   ['ot_after_minutes', 'OT after min', 'number'], ['active', 'Active', 'select:yes,no']
+];
+var SITE_COLS = [
+  ['name', 'Site', 'text'], ['lat', 'Latitude', 'text'], ['lng', 'Longitude', 'text'],
+  ['radius_m', 'Radius (m)', 'number'], ['active', 'Active', 'select:yes,no'],
+  ['note', 'Note', 'wide']
 ];
 var REQUEST_TYPE_COLS = [
   ['code', 'Code', 'text'], ['name', 'Shown as', 'text'],
@@ -3855,6 +3875,7 @@ function openSettings() {
   ], true);
   renderHolidays();
   renderPolicyTable('shifts');
+  renderPolicyTable('sites');
   renderPolicyTable('leaveTypes');
   renderPolicyTable('requestTypes');
   renderPolicyTable('ctcVariables');
@@ -3898,6 +3919,8 @@ var POLICY_TABLES = {
             blank: { name: 'New shift', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
                      full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun',
                      saturday_policy: 'working', ot_after_minutes: 30, active: 'yes' } },
+  sites: { sheet: 'Sites', cols: SITE_COLS, state: 'sites', label: 'site',
+           blank: { name: 'New site', lat: '', lng: '', radius_m: 150, active: 'yes', note: '' } },
   requestTypes: { sheet: 'RequestTypes', cols: REQUEST_TYPE_COLS, state: 'requestTypes',
                   label: 'request type', key: 'code',
                   blank: { code: 'NEW', name: 'New request type', effect: 'none', paid: 'yes',
@@ -4012,12 +4035,28 @@ function shiftsPane() {
     '<div class="card-sub">Each employee works one of these. Late marks, overtime, weekly offs and ' +
     'what a punch pair becomes all come from the employee\u2019s own shift.</div>' +
     '<div id="policy-shifts"></div>' +
+  '<h3 style="margin-top:22px">Punch sites (geofence)</h3>' +
+  '<div class="card-sub">Where staff are allowed to punch from. Stand at the gate and press ' +
+  '<b>Use my location</b> to fill a row in.</div>' +
+  '<div id="policy-sites"></div>' +
+  '<div class="toolbar" style="margin-top:10px">' +
+    '<button class="ghost sm" onclick="fillSiteFromLocation()">&#128205; Use my location for the last row</button>' +
+    '<span class="spacer"></span><span class="sub-line" id="site-geo-out"></span>' +
+  '</div>' +
     '<h3 style="margin-top:22px">Attendance rules</h3>' +
     '<div class="card-sub">Applied to the register and to pay.</div>' +
     '<div class="grid2">' + ATTENDANCE_RULES.map(function (f) {
       return fieldInput(f, S.settings[f[0]]);
     }).join('') + '</div>' +
     '<p style="margin-top:14px;font-size:.75rem;color:var(--text-muted);line-height:1.7">' +
+    '<b>Geofence:</b> the punch is checked against the sites above by the backend, not the browser, ' +
+    'so the check cannot be skipped by the app. <b>block</b> refuses a punch from outside every ' +
+    'allowed site; <b>warn</b> lets it through and records how far away it was. A location reading ' +
+    'worse than the accuracy above is refused rather than trusted. Assign a site on the employee ' +
+    'record to tie someone to one gate; leave it blank and any active site will do. Staff with an ' +
+    'approved OD for the day can punch from anywhere when that is switched on.<br>' +
+    'Geolocation only works over <b>https</b> (or localhost), and a determined phone can still lie ' +
+    'about where it is - this raises the bar, it is not proof.<br>' +
     '<b>Punch out mandatory:</b> a day punched in but never punched out is not a paid day. It stays ' +
     'flagged on the register and counts as LOP until someone closes it - by a swipe request, or by ' +
     'editing the day. Turn it off and an open day is paid as present.<br>' +
@@ -6876,6 +6915,10 @@ function renderPunchCard() {
               esc(st.status === 'HD' ? 'Half day recorded' : 'Full day recorded') + '</span>') +
       '</div>' +
     '</div>' +
+    (st.geofence && st.geofence.enabled
+      ? '<div class="sub-line" style="margin-top:10px">&#128205; Punching is geofenced \u2013 be at ' +
+        (e.site ? esc(e.site) : 'a company site') + ' when you punch.</div>'
+      : '') +
     (stage === 'in' && st.mandatory
       ? '<div class="sub-line" style="margin-top:10px">Punching out is required - a day that is never ' +
         'closed does not count as a paid day.</div>' : '') +
@@ -6888,19 +6931,55 @@ function renderPunchCard() {
       : '');
 }
 
+/* Ask the browser where we are. Resolves to null when geofencing is off - the
+   backend decides what to do when there is no reading. */
+function currentPosition() {
+  var fenceOn = String(S.settings.geofence_enabled || 'no').toLowerCase() === 'yes';
+  if (!fenceOn) return Promise.resolve(null);
+  if (!navigator.geolocation) {
+    return Promise.reject(new Error('This browser cannot report a location, and punching is geofenced.'));
+  }
+  return new Promise(function (resolve, reject) {
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+      },
+      function (err) {
+        reject(new Error(err.code === 1
+          ? 'Location permission was refused, and punching is geofenced. Allow location and try again.'
+          : 'Could not get your location (' + (err.message || 'unknown') + '). ' +
+            'Location needs an https address.'));
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+}
+
 function doPunch(kind) {
   var e = punchEmployee();
   if (!e) return toast('No employee is linked to this login', 'bad');
   var host = el('punch-card');
   var btn = host.querySelector('.punch-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...'; }
-  var call = S.demo ? Promise.resolve(demoWebPunch(e.emp_code, kind))
-                    : api('webPunch', { emp_code: e.emp_code, kind: kind });
+  var fenceOn = String(S.settings.geofence_enabled || 'no').toLowerCase() === 'yes';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>' + (fenceOn ? 'Checking location...' : 'Saving...');
+  }
+  var call = currentPosition().then(function (geo) {
+    if (btn) btn.innerHTML = '<span class="spin"></span>Saving...';
+    return S.demo ? demoWebPunch(e.emp_code, kind, geo)
+                  : api('webPunch', { emp_code: e.emp_code, kind: kind, geo: geo });
+  });
   call.then(function (res) {
     S.punch = res.state;
     mergeAttendance([res.record]);
-    toast(kind === 'in' ? 'Punched in at ' + res.record.in_time
-                        : 'Punched out at ' + res.record.out_time + ' - ' + res.record.hours + ' hours', 'good');
+    var where = res.fence && res.fence.site
+      ? ' at ' + res.fence.site + (res.fence.distance !== undefined ? ' (' + res.fence.distance + ' m)' : '')
+      : '';
+    toast((kind === 'in' ? 'Punched in at ' + res.record.in_time
+                         : 'Punched out at ' + res.record.out_time + ' - ' + res.record.hours + ' hours') +
+          where, 'good');
+    if (res.fence && res.fence.soft && res.fence.reason) toast(res.fence.reason, 'bad');
     renderPunchCard(); renderAttendance(); renderDashboard();
   }).catch(function (err) {
     toast(err.message, 'bad');
@@ -6909,6 +6988,30 @@ function doPunch(kind) {
 }
 
 /* Open a swipe request already filled in for the day that was left open. */
+/* Fill the last site row from where the admin is standing. */
+function fillSiteFromLocation() {
+  var out = el('site-geo-out');
+  if (!navigator.geolocation) { out.textContent = 'This browser cannot report a location.'; return; }
+  out.textContent = 'Getting your location...';
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    var rows = document.querySelectorAll('[data-pt="sites"][data-col="lat"]');
+    if (!rows.length) { out.textContent = 'Add a site row first.'; return; }
+    var last = rows.length - 1;
+    document.querySelector('[data-pt="sites"][data-row="' + last + '"][data-col="lat"]').value =
+      pos.coords.latitude.toFixed(6);
+    document.querySelector('[data-pt="sites"][data-row="' + last + '"][data-col="lng"]').value =
+      pos.coords.longitude.toFixed(6);
+    out.innerHTML = 'Filled the last row: ' + pos.coords.latitude.toFixed(5) + ', ' +
+      pos.coords.longitude.toFixed(5) + ' (\u00b1' + Math.round(pos.coords.accuracy) + ' m). ' +
+      '<a href="https://www.google.com/maps?q=' + pos.coords.latitude + ',' + pos.coords.longitude +
+      '" target="_blank" rel="noopener">Check it on a map</a>, then press Save sites.';
+  }, function (err) {
+    out.textContent = err.code === 1
+      ? 'Location permission refused.'
+      : 'Could not get a location - this needs an https address.';
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+}
+
 function fixOpenDay(date) {
   var e = punchEmployee();
   go('leave'); leaveTab('requests');
@@ -6950,11 +7053,72 @@ function demoPunchState(code) {
     in_time: row ? row.in_time : '', out_time: row ? row.out_time : '',
     status: row ? row.status : '', hours: row ? row.hours : 0,
     openDays: open.slice(0, 5),
-    mandatory: String(S.settings.punch_out_mandatory || 'yes').toLowerCase() === 'yes'
+    mandatory: String(S.settings.punch_out_mandatory || 'yes').toLowerCase() === 'yes',
+    geofence: {
+      enabled: String(S.settings.geofence_enabled || 'no').toLowerCase() === 'yes',
+      mode: String(S.settings.geofence_mode || 'block'),
+      accuracy: num(S.settings.geofence_accuracy_m || 120)
+    }
   };
 }
 
-function demoWebPunch(code, kind) {
+/* Metres between two points - the same haversine the backend uses. */
+function metresBetween(lat1, lng1, lat2, lng2) {
+  var R = 6371000, toRad = Math.PI / 180;
+  var dLat = (lat2 - lat1) * toRad, dLng = (lng2 - lng1) * toRad;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function demoGeoCheck(emp, geo) {
+  var on = String(S.settings.geofence_enabled || 'no').toLowerCase() === 'yes';
+  if (!on) return { ok: true, enabled: false };
+  var soft = String(S.settings.geofence_mode || 'block').toLowerCase() !== 'block';
+  var maxAcc = num(S.settings.geofence_accuracy_m || 120);
+  if (!geo) return { ok: soft, enabled: true, soft: soft,
+                     reason: 'Location is required to punch, and none was sent.' };
+  if (maxAcc > 0 && geo.accuracy > maxAcc) {
+    return { ok: soft, enabled: true, soft: soft,
+             reason: 'Location is only accurate to about ' + Math.round(geo.accuracy) + ' m; ' +
+                     maxAcc + ' m or better is needed.' };
+  }
+  var allowed = (S.sites || []).filter(function (x) {
+    return String(x.active || 'yes').toLowerCase() !== 'no' && x.lat !== '' && x.lng !== '';
+  });
+  var only = String((emp && emp.site) || '').trim();
+  if (only) {
+    var mine = allowed.filter(function (x) { return String(x.name).trim() === only; });
+    if (mine.length) allowed = mine;
+  }
+  if (!allowed.length) {
+    return { ok: soft, enabled: true, soft: soft,
+             reason: 'Geofencing is on but no site has been set up yet.' };
+  }
+  var best = null;
+  allowed.forEach(function (x) {
+    var d = metresBetween(geo.lat, geo.lng, num(x.lat), num(x.lng));
+    if (!best || d < best.distance) best = { site: x.name, distance: d, radius: num(x.radius_m || 150) };
+  });
+  if (best.distance <= best.radius) {
+    return { ok: true, enabled: true, site: best.site, distance: best.distance };
+  }
+  if (String(S.settings.geofence_allow_od || 'yes').toLowerCase() === 'yes' && emp) {
+    var od = (S.requests || []).some(function (r) {
+      return String(r.emp_code) === String(emp.emp_code) && r.status === 'Approved' &&
+        String(r.type).toUpperCase() === 'OD' &&
+        String(r.date) <= today() && today() <= String(r.to_date || r.date);
+    });
+    if (od) return { ok: true, enabled: true, site: 'out duty', distance: best.distance, od: true };
+  }
+  return { ok: soft, enabled: true, soft: soft, site: best.site, distance: best.distance,
+           reason: 'You are about ' + best.distance + ' m from ' + best.site +
+                   ', which allows ' + best.radius + ' m.' };
+}
+
+function demoWebPunch(code, kind, geo) {
+  var fence = demoGeoCheck(empByCode(code), geo);
+  if (!fence.ok) throw new Error(fence.reason);
   var st = demoPunchState(code);
   var n = new Date();
   var time = ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2);
@@ -6980,7 +7144,7 @@ function demoWebPunch(code, kind) {
   row.updated_at = today();
   demoApi('save', { sheet: 'Attendance', row: row });
   mergeAttendance([row]);          /* so the state below sees the punch just made */
-  return { record: row, state: demoPunchState(code) };
+  return { record: row, state: demoPunchState(code), fence: fence };
 }
 </script>
 

@@ -15,11 +15,12 @@ var SHEETS = {
                'pf_applicable', 'esi_applicable', 'tds_monthly', 'pan', 'uan', 'esic_no',
                'bank_account', 'ifsc', 'manager', 'dob', 'gender', 'address', 'notes',
                'updated_at', 'exit_date', 'device_id', 'company', 'shift',
-               'unit', 'wage_type', 'daily_rate', 'da_rate', 'hra_rate'],
+               'unit', 'wage_type', 'daily_rate', 'da_rate', 'hra_rate', 'site'],
   Attendance: ['id', 'date', 'emp_code', 'status', 'in_time', 'out_time', 'hours',
                'remarks', 'updated_at'],
   Holidays:   ['id', 'date', 'name', 'optional'],
   Events:     ['id', 'date', 'name', 'type', 'note'],
+  Sites:      ['id', 'name', 'lat', 'lng', 'radius_m', 'active', 'note'],
   Shifts:     ['id', 'name', 'start_time', 'end_time', 'grace_minutes', 'full_day_hours',
                'half_day_hours', 'weekly_off', 'saturday_policy', 'ot_after_minutes', 'active'],
   LeaveTypes: ['id', 'name', 'paid', 'quota', 'carry_forward', 'max_consecutive', 'notice_days',
@@ -33,7 +34,8 @@ var SHEETS = {
   CtcComponents: ['id', 'seq', 'code', 'name', 'section', 'kind', 'expr', 'taxable',
                   'in_gross', 'in_pf_wage', 'in_esi_wage', 'show_payslip', 'active'],
   CtcValues:    ['id', 'emp_code', 'code', 'value'],
-  Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source', 'imported_at'],
+  Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source',
+               'imported_at', 'lat', 'lng', 'accuracy', 'site', 'distance_m'],
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
                'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note'],
   Payroll:    ['id', 'month', 'emp_code', 'total_days', 'lop_days', 'paid_days',
@@ -90,6 +92,10 @@ var DEFAULT_SETTINGS = {
   import_companies: '',
   register_group_by: 'unit',
   web_punch_enabled: 'yes',
+  geofence_enabled: 'no',
+  geofence_mode: 'block',
+  geofence_accuracy_m: '120',
+  geofence_allow_od: 'yes',
   punch_out_mandatory: 'yes',
   co_payout_enabled: 'yes',
   co_validity_days: '90',
@@ -339,6 +345,7 @@ function bootstrap() {
     payroll:    readSheet('Payroll'),
     holidays:   readSheet('Holidays'),
     events:     readSheet('Events'),
+    sites:      readSheet('Sites'),
     shifts:     readSheet('Shifts'),
     leaveTypes: readSheet('LeaveTypes'),
     requestTypes: readSheet('RequestTypes'),
@@ -847,7 +854,13 @@ function punchState(empCode) {
     }
   });
   open.sort(function (x, y) { return String(y.date).localeCompare(String(x.date)); });
+  var gs = settingsMap();
   return {
+    geofence: {
+      enabled: String(gs.geofence_enabled || 'no').toLowerCase() === 'yes',
+      mode: String(gs.geofence_mode || 'block'),
+      accuracy: parseFloat(gs.geofence_accuracy_m || 120)
+    },
     date: n.date, time: n.time,
     in_time: todayRow ? todayRow.in_time : '',
     out_time: todayRow ? todayRow.out_time : '',
@@ -858,7 +871,82 @@ function punchState(empCode) {
   };
 }
 
-function webPunch(empCode, kind, note) {
+/* ---- geofence ---- */
+
+/** Metres between two points on the earth. */
+function metresBetween(lat1, lng1, lat2, lng2) {
+  var R = 6371000, toRad = Math.PI / 180;
+  var dLat = (lat2 - lat1) * toRad, dLng = (lng2 - lng1) * toRad;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+/**
+ * Is this punch inside a site the employee may punch from?
+ * Runs here, not in the browser, so the check cannot be skipped by the client.
+ */
+function geoCheck(emp, geo) {
+  var st = settingsMap();
+  var on = String(st.geofence_enabled || 'no').toLowerCase() === 'yes';
+  if (!on) return { ok: true, enabled: false };
+
+  var mode = String(st.geofence_mode || 'block').toLowerCase();
+  var soft = mode !== 'block';
+  var maxAcc = parseFloat(st.geofence_accuracy_m || 120);
+
+  if (!geo || geo.lat === undefined || geo.lat === null || geo.lat === '') {
+    return { ok: soft, enabled: true, soft: soft,
+             reason: 'Location is required to punch, and none was sent.' };
+  }
+  if (maxAcc > 0 && geo.accuracy && parseFloat(geo.accuracy) > maxAcc) {
+    return { ok: soft, enabled: true, soft: soft, accuracy: Math.round(parseFloat(geo.accuracy)),
+             reason: 'Location is only accurate to about ' + Math.round(parseFloat(geo.accuracy)) +
+                     ' m; ' + maxAcc + ' m or better is needed. Step outside or turn on precise location.' };
+  }
+
+  var allowed = readSheet('Sites').filter(function (x) {
+    return String(x.active || 'yes').toLowerCase() !== 'no' && x.lat !== '' && x.lng !== '';
+  });
+  var only = String((emp && emp.site) || '').trim();
+  if (only) {
+    var mine = allowed.filter(function (x) { return String(x.name).trim() === only; });
+    if (mine.length) allowed = mine;
+  }
+  if (!allowed.length) {
+    return { ok: soft, enabled: true, soft: soft,
+             reason: 'Geofencing is on but no site has been set up yet.' };
+  }
+
+  var best = null;
+  allowed.forEach(function (x) {
+    var d = metresBetween(parseFloat(geo.lat), parseFloat(geo.lng), parseFloat(x.lat), parseFloat(x.lng));
+    if (!best || d < best.distance) best = { site: x.name, distance: d, radius: parseFloat(x.radius_m || 150) };
+  });
+  if (best.distance <= best.radius) {
+    return { ok: true, enabled: true, site: best.site, distance: best.distance };
+  }
+
+  /* field staff with an approved out-duty for today are allowed to be away */
+  if (String(st.geofence_allow_od || 'yes').toLowerCase() === 'yes' && emp) {
+    var n = nowParts();
+    var od = readSheet('Requests').some(function (r) {
+      return String(r.emp_code) === String(emp.emp_code) && r.status === 'Approved' &&
+        String(r.date) <= n.date && n.date <= String(r.to_date || r.date) &&
+        String(r.type).toUpperCase() === 'OD';
+    });
+    if (od) {
+      return { ok: true, enabled: true, site: 'out duty', distance: best.distance, od: true };
+    }
+  }
+  return {
+    ok: soft, enabled: true, soft: soft, site: best.site, distance: best.distance,
+    reason: 'You are about ' + best.distance + ' m from ' + best.site +
+            ', which allows ' + best.radius + ' m.'
+  };
+}
+
+function webPunch(empCode, kind, note, geo) {
   var st = settingsMap();
   if (String(st.web_punch_enabled || 'yes').toLowerCase() !== 'yes') {
     throw new Error('Punching from the app is switched off.');
@@ -869,6 +957,9 @@ function webPunch(empCode, kind, note) {
     if (String(e.emp_code) === String(empCode)) emp = e;
   });
   if (!emp) throw new Error('That employee code is not in the master.');
+
+  var fence = geoCheck(emp, geo);
+  if (!fence.ok) throw new Error(fence.reason);
 
   var n = nowParts();
   if (readSheet('Payroll').some(function (r) {
@@ -889,7 +980,7 @@ function webPunch(empCode, kind, note) {
     row.out_time = '';
     row.status = 'P';
     row.hours = 0;
-    row.remarks = 'web punch in' + (note ? ' - ' + note : '');
+    row.remarks = 'web punch in' + (fence.site ? ' @ ' + fence.site : '') + (note ? ' - ' + note : '');
   } else if (kind === 'out') {
     if (!row.in_time) throw new Error('Punch in first.');
     if (row.out_time) throw new Error('Already punched out at ' + row.out_time + '.');
@@ -909,7 +1000,10 @@ function webPunch(empCode, kind, note) {
   upsert('Attendance', row);
   appendMany('Punches', [{
     id: newId(), punch_time: n.date + ' ' + n.time, emp_code: empCode, device_id: emp.device_id || '',
-    device: 'web', direction: kind, source: 'web', imported_at: n.stamp
+    device: 'web', direction: kind, source: 'web', imported_at: n.stamp,
+    lat: geo && geo.lat !== undefined ? geo.lat : '', lng: geo && geo.lng !== undefined ? geo.lng : '',
+    accuracy: geo && geo.accuracy ? Math.round(parseFloat(geo.accuracy)) : '',
+    site: fence.site || '', distance_m: fence.distance === undefined ? '' : fence.distance
   }]);
-  return { record: row, state: punchState(empCode) };
+  return { record: row, state: punchState(empCode), fence: fence };
 }
