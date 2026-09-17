@@ -420,6 +420,34 @@ payroll and the register; *Delete* removes them for good and needs you to type D
 already have payslips are excluded from deletion — deleting them would break the payroll audit
 trail, so mark those inactive instead.
 
+### The eSSL "Log Records" report
+
+Both layouts the eSSL software exports are read, and told apart automatically:
+
+- **Employee Wise** — punches grouped under a heading per person
+  (`Employee  LB0113 : Ramesh`).
+- **Device Wise** — one flat table per device, with `Log Date`, `Direction` and `Employee Code`
+  as columns. The `Direction` column is usually blank, which is fine: the first punch of a day is
+  the in, the last is the out.
+
+**Only people already in your Employees master are processed.** A code in the report with no
+matching employee is skipped, counted, and named in the preview — so the units you do not keep
+here simply fall away, and a typo does not quietly create a stranger.
+
+**Upload as often as you like, for any period.** The same day arriving a second time **widens**
+it rather than replacing it: the earliest in and the latest out across everything seen so far
+are kept, and the status and hours are worked out again from the merged pair. So a partial
+export cannot erase a punch you already have, a longer period re-uploaded later just fills in
+the rest, and a day whose times have not changed is not written at all — the preview says how
+many it left alone. A month whose payroll is finalised, and a day already on approved leave, are
+never touched.
+
+Rows are written in **batches of 250**. A month of logs is a few thousand rows; sent as one
+request it is a megabyte of JSON and minutes of script time, and the browser gives up with
+*Failed to fetch* before Apps Script has answered. Batching also means the button counts up
+instead of looking frozen, and if the connection does drop part-way the batches already sent are
+saved — import the same file again and it carries on from where it stopped.
+
 ### The daily routine, until the API or SQL link is live
 
 1. Print the **Log Records (Employee Wise)** report from eSSL for the period you want.

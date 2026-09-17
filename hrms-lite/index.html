@@ -6134,20 +6134,60 @@ function buildEsslReport(sheets, out) {
   });
 
   var punches = [], unknown = {}, seen = {}, employees = 0, range = { min: '', max: '' };
+  var devices = {};
+
+  var keep = function (rawCode, stamp, device) {
+    var want = String(rawCode || '').trim();
+    if (!want) return;
+    var mapped = known[want.toUpperCase()] || known['DEV:' + want] || null;
+    if (!mapped) { unknown[want] = (unknown[want] || 0) + 1; return; }
+    if (!seen[mapped]) { seen[mapped] = 1; employees++; }
+    if (!range.min || stamp.date < range.min) range.min = stamp.date;
+    if (!range.max || stamp.date > range.max) range.max = stamp.date;
+    if (device) devices[device] = (devices[device] || 0) + 1;
+    punches.push({ code: mapped, date: stamp.date, time: stamp.time });
+  };
+
   sheets.forEach(function (sheet) {
     var code = null, label = '';
+    var cols = null, device = '';
     (sheet.rows || []).forEach(function (row) {
-      var nz = (row || []).map(function (v) { return String(v === undefined || v === null ? '' : v).trim(); })
-        .filter(function (v) { return v; });
+      var raw = (row || []).map(function (v) {
+        return String(v === undefined || v === null ? '' : v).trim();
+      });
+      var nz = raw.filter(function (v) { return v; });
       if (!nz.length) return;
+      var lower = raw.map(function (v) { return v.toLowerCase(); });
+
+      /* "Log Records (Device Wise)" puts the employee code in a column and
+         repeats this header once per device. Remember where the columns are. */
+      var dateCol = lower.indexOf('log date'), codeCol = lower.indexOf('employee code');
+      if (dateCol >= 0 && codeCol >= 0) {
+        cols = { date: dateCol, code: codeCol };
+        code = null;
+        return;
+      }
+      var devCol = lower.indexOf('device name');
+      if (devCol >= 0) { device = raw[devCol + 1] || nz[1] || ''; return; }
+
+      /* "Log Records (Employee Wise)" groups the punches under a heading per
+         person instead: "Employee  LB0113 : Ramesh". */
       if (/^Employee\b/i.test(nz[0]) && nz[1] && nz[1].indexOf(':') > 0) {
         label = nz[1].split(':')[0].trim();
         code = known[label.toUpperCase()] || known['DEV:' + label] || null;
         if (!code && unknown[label] === undefined) unknown[label] = 0;
         if (code && !seen[code]) { seen[code] = 1; employees++; }
+        cols = null;
         return;
       }
-      var stamp = esslStamp(nz[0]);
+
+      if (cols) {                                   // device-wise row
+        var dStamp = esslStamp(raw[cols.date]);
+        if (dStamp) keep(raw[cols.code], dStamp, device);
+        return;
+      }
+
+      var stamp = esslStamp(nz[0]);                 // employee-wise row
       if (!stamp) return;
       if (!code) {
         if (label) unknown[label]++;          /* count the punches lost, not the headings */
@@ -6173,12 +6213,15 @@ function buildEsslReport(sheets, out) {
     }
   }
   if (!punches.length && !out.problems.length) {
-    out.problems.push('No punch rows found. Is this the "Log Records (Employee Wise)" report?');
+    out.problems.push('No punch rows found. This reads the eSSL "Log Records" report, ' +
+      'either Employee Wise or Device Wise.');
   }
+  var devNames = Object.keys(devices);
   out.rows = punchesToAttendance(punches, out.problems);
-  out.meta = punches.length + ' punches for ' + employees + ' employees' +
+  out.meta = punches.length + ' punches kept for ' + employees + ' of your employees' +
     (range.min ? ', ' + range.min + ' to ' + range.max : '') +
-    ' across ' + sheets.length + ' sheet(s)';
+    (devNames.length ? ', from ' + devNames.length + ' device(s): ' + devNames.join(', ')
+                     : ' across ' + sheets.length + ' sheet(s)');
   return out;
 }
 
@@ -6285,6 +6328,7 @@ function attRow(code, iso, status, inT, outT, remark) {
 /* First punch in, last punch out, status from hours - the same rule the backend uses. */
 function punchesToAttendance(punches, problems) {
   var full = num(S.settings.full_day_hours || 8), half = num(S.settings.half_day_hours || 4);
+  var unchanged = 0;
   var groups = {};
   punches.forEach(function (p) {
     var key = p.code + '_' + p.date;
@@ -6304,15 +6348,42 @@ function punchesToAttendance(punches, problems) {
       return;
     }
     g.times.sort();
-    var inT = g.times[0], outT = g.times[g.times.length - 1];
-    var hours = g.times.length > 1 ? (minutesOf(outT) - minutesOf(inT)) / 60 : 0;
+    var inT = g.times[0], outT = g.times.length > 1 ? g.times[g.times.length - 1] : '';
+
+    /* The same day can arrive again in a later file - a longer period, a
+       re-export, or a device that was read late. Widen the day rather than
+       replacing it: keep the earliest in and the latest out across everything
+       seen so far, so a second upload can only add punches, never lose them. */
+    var merged = false;
+    if (existing) {
+      var oldIn = hhmm(existing.in_time), oldOut = hhmm(existing.out_time);
+      if (oldIn && (!inT || oldIn < inT)) { inT = oldIn; merged = true; }
+      if (oldOut && (!outT || oldOut > outT)) { outT = oldOut; merged = true; }
+    }
+
+    var pair = inT && outT;
+    var mins = pair ? minutesOf(outT) - minutesOf(inT) : 0;
+    if (mins < 0) mins += 24 * 60;                       // crossed midnight
+    var hours = mins / 60;
+
     var status, remark = 'punch import';
-    if (g.times.length < 2) { status = 'P'; remark = 'single punch, verify'; }
+    if (!pair) { status = 'P'; remark = 'single punch, verify'; }
     else if (hours >= full) status = 'P';
     else if (hours >= half) { status = 'HD'; remark = hours.toFixed(1) + ' h'; }
     else { status = 'A'; remark = 'only ' + hours.toFixed(1) + ' h, verify'; }
-    rows.push(attRow(g.code, g.date, status, inT, g.times.length > 1 ? outT : '', remark));
+    if (merged) remark += ' (updated)';
+
+    /* Identical to what is already there: nothing to write. */
+    if (existing && hhmm(existing.in_time) === inT && hhmm(existing.out_time) === outT &&
+        String(existing.status) === status) {
+      unchanged++;
+      return;
+    }
+    rows.push(attRow(g.code, g.date, status, inT, outT, remark));
   });
+  if (unchanged) {
+    problems.push(unchanged + ' day(s) already held exactly these times and were left alone.');
+  }
   return rows;
 }
 
@@ -6425,13 +6496,41 @@ function renderImportPreview(built) {
     el('imp-go').disabled = !built.rows.length;
 }
 
+/* A month of biometric logs is thousands of rows. Sent as one request it is a
+   megabyte of JSON and minutes of script time, and the browser gives up with
+   "Failed to fetch" before Apps Script ever answers. So it goes in batches,
+   each one small enough to finish comfortably, with the count moving so a slow
+   import looks like progress rather than a hang. */
+var IMPORT_BATCH = 250;
+
+function saveInBatches(sheet, rows, onProgress) {
+  var chunks = [];
+  for (var i = 0; i < rows.length; i += IMPORT_BATCH) {
+    chunks.push(rows.slice(i, i + IMPORT_BATCH));
+  }
+  var done = 0;
+  return chunks.reduce(function (chain, chunk) {
+    return chain.then(function () {
+      return api('saveMany', { sheet: sheet, rows: chunk }).then(function () {
+        done += chunk.length;
+        if (onProgress) onProgress(done, rows.length);
+      });
+    });
+  }, Promise.resolve()).then(function () { return done; });
+}
+
 function runImport() {
   var built = S.importRows;
   if (!built || !built.rows.length) return;
   var btn = el('imp-go');
-  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Importing...';
+  btn.disabled = true;
   var sheet = built.kind === 'employees' ? 'Employees' : 'Attendance';
-  api('saveMany', { sheet: sheet, rows: built.rows }).then(function () {
+  var show = function (done, total) {
+    btn.innerHTML = '<span class="spin"></span>' + done + ' / ' + total;
+  };
+  show(0, built.rows.length);
+
+  saveInBatches(sheet, built.rows, show).then(function () {
     if (built.companies && built.companies.length) {
       return api('saveSettings', { settings: { import_companies: built.companies.join(',') } })
         .then(function (st) { S.settings = st || S.settings; });
@@ -6441,7 +6540,11 @@ function runImport() {
     closeModal();
     reload();
   }).catch(function (e) {
-    btn.disabled = false; btn.textContent = 'Import'; toast(e.message, 'bad');
+    btn.disabled = false; btn.textContent = 'Import';
+    toast(/failed to fetch/i.test(e.message)
+      ? 'Lost contact with the workspace part-way through. The rows sent so far are saved - ' +
+        'import the same file again and it will pick up the rest.'
+      : e.message, 'bad');
   });
 }
 
