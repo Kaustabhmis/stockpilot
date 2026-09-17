@@ -22,6 +22,10 @@ var SHEETS = {
                'half_day_hours', 'weekly_off', 'saturday_policy', 'ot_after_minutes', 'active'],
   LeaveTypes: ['id', 'name', 'paid', 'quota', 'carry_forward', 'max_consecutive', 'notice_days',
                'allow_half_day', 'active'],
+  CtcVariables: ['id', 'code', 'value', 'note'],
+  CtcComponents: ['id', 'seq', 'code', 'name', 'section', 'kind', 'expr', 'taxable',
+                  'in_gross', 'in_pf_wage', 'in_esi_wage', 'show_payslip', 'active'],
+  CtcValues:    ['id', 'emp_code', 'code', 'value'],
   Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source', 'imported_at'],
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
                'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note'],
@@ -185,6 +189,55 @@ function setup() {
     });
   }
 
+  // Seed the salary structure. These are the rules read off the company's own
+  // CTC sheet, so a fresh setup already matches what payroll is expected to do.
+  if (readSheet('CtcVariables').length === 0) {
+    [['basic_pct', '0.60', 'Basic as a share of gross'],
+     ['hra_pct', '0.40', 'HRA as a share of gross'],
+     ['pf_employee_pct', '0.12', 'PF employee share, on basic'],
+     ['pf_employer_pct', '0.13', 'PF employer share, on basic'],
+     ['esi_employee_pct', '0.0075', 'ESI employee share, on gross'],
+     ['esi_employer_pct', '0.0325', 'ESI employer share, on gross'],
+     ['esi_ceiling', '21000', 'No ESI above this monthly gross'],
+     ['leave_pct', '0.32', 'Paid-leave component, share of gross'],
+     ['bonus_months_basic', '1', 'Annual bonus as months of basic']
+    ].forEach(function (v) {
+      appendRow('CtcVariables', { id: newId(), code: v[0], value: v[1], note: v[2] });
+    });
+  }
+  if (readSheet('CtcComponents').length === 0) {
+    [[10, 'gross', 'Gross Salary', 'input', 'input', '0', 'yes', 'yes', 'no', 'no', 'no'],
+     [20, 'basic', 'Basic Salary', 'earning', 'formula', 'gross * basic_pct', 'yes', 'no', 'yes', 'no', 'yes'],
+     [30, 'hra', 'HRA', 'earning', 'formula', 'gross * hra_pct', 'yes', 'no', 'no', 'no', 'yes'],
+     [40, 'conveyance', 'Conveyance allowance', 'earning', 'formula', 'gross - basic - hra', 'yes', 'no', 'no', 'no', 'yes'],
+     [50, 'esi_employee', 'ESIC @0.75% of gross', 'deduction', 'formula',
+      'if(gross <= esi_ceiling, gross * esi_employee_pct, 0)', 'no', 'no', 'no', 'no', 'yes'],
+     [60, 'pf_employee', 'PF @12% of basic', 'deduction', 'formula', 'basic * pf_employee_pct', 'no', 'no', 'no', 'no', 'yes'],
+     [70, 'ptax', 'P.Tax', 'deduction', 'formula',
+      'slab(gross, 10000:0, 15000:110, 25000:130, 40000:150, 99999999:200)', 'no', 'no', 'no', 'no', 'yes'],
+     [80, 'deductions', 'Total deductions', 'summary', 'formula', 'esi_employee + pf_employee + ptax', 'no', 'no', 'no', 'no', 'yes'],
+     [90, 'esi_employer', 'ESIC @3.25% of gross', 'employer', 'formula',
+      'if(gross <= esi_ceiling, gross * esi_employer_pct, 0)', 'no', 'no', 'no', 'no', 'no'],
+     [100, 'pf_employer', 'PF @13% of basic', 'employer', 'formula', 'basic * pf_employer_pct', 'no', 'no', 'no', 'no', 'no'],
+     [110, 'employer_total', 'Company contribution', 'summary', 'formula', 'esi_employer + pf_employer', 'no', 'no', 'no', 'no', 'no'],
+     [120, 'net_pay', 'Net: in hand per month', 'summary', 'formula', 'gross - deductions', 'no', 'no', 'no', 'no', 'yes'],
+     [130, 'pf_total_month', 'PF deposit per month', 'summary', 'formula', 'pf_employee + pf_employer', 'no', 'no', 'no', 'no', 'no'],
+     [140, 'pf_total_year', 'PF deposit per annum', 'summary', 'formula', 'pf_total_month * 12', 'no', 'no', 'no', 'no', 'no'],
+     [150, 'annual_bonus', 'Annual bonus (1 month basic)', 'summary', 'formula', 'basic * bonus_months_basic', 'no', 'no', 'no', 'no', 'no'],
+     [160, 'cost_month', 'Cost per month', 'summary', 'formula', 'gross + employer_total', 'no', 'no', 'no', 'no', 'no'],
+     [170, 'leave_component', 'Paid leave component', 'summary', 'formula', 'gross * leave_pct', 'no', 'no', 'no', 'no', 'no'],
+     [180, 'ctc_year', 'CTC per annum', 'summary', 'formula', 'cost_month * 12 + annual_bonus + leave_component', 'no', 'no', 'no', 'no', 'no'],
+     [190, 'ctc_month', 'Cost to company per month', 'summary', 'formula', 'ctc_year / 12', 'no', 'no', 'no', 'no', 'no'],
+     [200, 'remark', 'Remark', 'info', 'text', '', 'no', 'no', 'no', 'no', 'no']
+    ].forEach(function (c) {
+      appendRow('CtcComponents', {
+        id: newId(), seq: c[0], code: c[1], name: c[2], section: c[3], kind: c[4], expr: c[5],
+        taxable: c[6], in_gross: c[7], in_pf_wage: c[8], in_esi_wage: c[9], show_payslip: c[10],
+        active: 'yes'
+      });
+    });
+  }
+
   // Seed the first admin user
   if (readSheet('Users').length === 0) {
     appendRow('Users', {
@@ -257,6 +310,9 @@ function bootstrap() {
     holidays:   readSheet('Holidays'),
     shifts:     readSheet('Shifts'),
     leaveTypes: readSheet('LeaveTypes'),
+    ctcVariables:  readSheet('CtcVariables'),
+    ctcComponents: readSheet('CtcComponents'),
+    ctcValues:     readSheet('CtcValues'),
     secrets:    secretStatus(),
     users:      readSheet('Users').map(function (u) {
       return { email: u.email, role: u.role, emp_code: u.emp_code, active: u.active };

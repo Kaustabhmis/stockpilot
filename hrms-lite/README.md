@@ -45,10 +45,54 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | **Shifts & attendance** | the shift table, plus the late-mark and overtime rules |
 | **Holidays** | the holiday calendar, per year |
 | **Leave policy** | the leave-type table, plus the sandwich / excess-leave / probation rules |
+| **CTC structure** | salary-structure variables, components and formulas; upload and apply a CTC list |
 | **Payroll rules** | salary divisor, rounding, PF and ESI percentages and ceilings, professional tax |
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
 | **Import data** | manual import of punch logs, attendance, holidays and employees from CSV or Excel |
 | **Account** | change your password |
+
+### CTC / salary structure
+
+**Settings → CTC structure** is where the salary structure itself lives, as three editable tables:
+
+- **Variables** — numbers reused across formulas (`basic_pct`, `esi_ceiling`, `leave_pct` …), so a
+  rate changes in one place.
+- **Components** — the structure. Each row has a code, a display name, a section (input, earning,
+  deduction, employer contribution, totals, notes) and a **kind**:
+  - `formula` — calculated, e.g. `gross * basic_pct`
+  - `input` — typed per employee
+  - `fixed` — the same number for everyone
+  - `text` — a free note per employee (a remark, a grade, a status)
+  Plus flags: taxable, counts toward PF wage, counts toward ESI wage, show on payslip, active.
+- **Per-employee values** — a gross figure, and any override (a bonus that departs from the formula,
+  for instance). Overrides win over formulas.
+
+Formulas may use any component code, any variable, numbers, `+ - * / ( )` and:
+
+```
+if(gross <= esi_ceiling, gross * 0.0075, 0)      a condition
+slab(gross, 10000:0, 15000:110, 25000:130)       bands, first match wins
+min(basic, 15000)  max()  round()  roundto(x, 100)  floor()  ceil()  abs()  sum(a, b, c)
+```
+
+Formulas are **parsed, not executed** — there is no `eval` anywhere, because the text arrives from a
+spreadsheet. Before a structure saves it is checked for unknown names, circular references and
+syntax errors, and a bad row shows its error in place rather than blanking the page.
+
+**Try it** takes a gross (or an employee) and resolves the whole structure live, per month and per
+annum. **Upload CTC list** reads your own CTC spreadsheet — title rows above the header are fine,
+and every sheet in the workbook is read — matching rows to employees on employee code, or on name
+when there is no code column, and picking up any bonus that differs from the formula as an override.
+**Apply to employees** writes the Basic / HRA / Special split back onto the employee master, which
+is what payroll reads. **CTC sheet** exports the whole company in your sheet's shape.
+
+Professional tax comes from the structure's `ptax` component when one exists, so the payslip and the
+CTC sheet cannot disagree; the flat amount in Payroll rules is only a fallback.
+
+The shipped default structure is the one in use today: basic 60% of gross, HRA 40%, PF 12%/13% of
+basic, ESI 0.75%/3.25% of gross up to a ₹21,000 ceiling, a professional-tax slab, annual bonus of
+one month's basic, a paid-leave component at 32% of gross, and CTC per annum =
+cost per month × 12 + bonus + leave.
 
 ### Policies and rules — and where each one bites
 
@@ -231,9 +275,10 @@ attendance register and mark someone absent → generate and finalise payroll �
    paste everything from `apps-script/Code.gs`, and save.
 3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
    dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates ten tabs — `Settings`, `Users`, `Employees`, `Attendance`,
-   `Leave`, `Payroll`, `Holidays`, `Punches`, `Shifts`, `LeaveTypes` — seeds a General shift and
-   the four standard leave types, and creates the first admin login. It is safe to re-run: new
+   spreadsheet). This creates thirteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
+   `Leave`, `Payroll`, `Holidays`, `Punches`, `Shifts`, `LeaveTypes`, `CtcVariables`,
+   `CtcComponents`, `CtcValues` — seeds a General shift, the four standard leave types and the
+   company's salary structure, and creates the first admin login. It is safe to re-run: new
    columns are appended, existing data is left where it is.
 4. **Deploy the web app.** *Deploy → New deployment → type: Web app*.
    - Execute as: **Me**

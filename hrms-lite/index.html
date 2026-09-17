@@ -590,6 +590,7 @@ var S = {
   api: '', demo: false, user: null, view: 'dashboard',
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
   shifts: [], leaveTypes: [], leaveVersion: 0,
+  ctcVariables: [], ctcComponents: [], ctcValues: [],
   attDirty: {}, payDraft: null, attVersion: 0,
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -973,7 +974,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v4';
+var DEMO_KEY = 'hrms_lite_demo_v5';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1004,6 +1005,47 @@ function demoDb() {
         full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun', saturday_policy: '2_4',
         ot_after_minutes: 30, active: 'yes' }
     ],
+    ctcValues: [],
+    ctcVariables: [
+      { id: 'V1', code: 'basic_pct', value: '0.60', note: 'Basic as a share of gross' },
+      { id: 'V2', code: 'hra_pct', value: '0.40', note: 'HRA as a share of gross' },
+      { id: 'V3', code: 'pf_employee_pct', value: '0.12', note: 'PF employee share, on basic' },
+      { id: 'V4', code: 'pf_employer_pct', value: '0.13', note: 'PF employer share, on basic' },
+      { id: 'V5', code: 'esi_employee_pct', value: '0.0075', note: 'ESI employee share, on gross' },
+      { id: 'V6', code: 'esi_employer_pct', value: '0.0325', note: 'ESI employer share, on gross' },
+      { id: 'V7', code: 'esi_ceiling', value: '21000', note: 'No ESI above this monthly gross' },
+      { id: 'V8', code: 'leave_pct', value: '0.32', note: 'Paid-leave component, share of gross' },
+      { id: 'V9', code: 'bonus_months_basic', value: '1', note: 'Annual bonus as months of basic' }
+    ],
+    ctcComponents: [
+      [10, 'gross', 'Gross Salary', 'input', 'input', '0', 'yes', 'no', 'no', 'no'],
+      [20, 'basic', 'Basic Salary', 'earning', 'formula', 'gross * basic_pct', 'yes', 'yes', 'no', 'yes'],
+      [30, 'hra', 'HRA', 'earning', 'formula', 'gross * hra_pct', 'yes', 'no', 'no', 'yes'],
+      [40, 'conveyance', 'Conveyance allowance', 'earning', 'formula', 'gross - basic - hra', 'yes', 'no', 'no', 'yes'],
+      [50, 'esi_employee', 'ESIC @0.75% of gross', 'deduction', 'formula',
+       'if(gross <= esi_ceiling, gross * esi_employee_pct, 0)', 'no', 'no', 'no', 'yes'],
+      [60, 'pf_employee', 'PF @12% of basic', 'deduction', 'formula', 'basic * pf_employee_pct', 'no', 'no', 'no', 'yes'],
+      [70, 'ptax', 'P.Tax', 'deduction', 'formula',
+       'slab(gross, 10000:0, 15000:110, 25000:130, 40000:150, 99999999:200)', 'no', 'no', 'no', 'yes'],
+      [80, 'deductions', 'Total deductions', 'summary', 'formula', 'esi_employee + pf_employee + ptax', 'no', 'no', 'no', 'yes'],
+      [90, 'esi_employer', 'ESIC @3.25% of gross', 'employer', 'formula',
+       'if(gross <= esi_ceiling, gross * esi_employer_pct, 0)', 'no', 'no', 'no', 'no'],
+      [100, 'pf_employer', 'PF @13% of basic', 'employer', 'formula', 'basic * pf_employer_pct', 'no', 'no', 'no', 'no'],
+      [110, 'employer_total', 'Company contribution', 'summary', 'formula', 'esi_employer + pf_employer', 'no', 'no', 'no', 'no'],
+      [120, 'net_pay', 'Net: in hand per month', 'summary', 'formula', 'gross - deductions', 'no', 'no', 'no', 'yes'],
+      [130, 'pf_total_month', 'PF deposit per month', 'summary', 'formula', 'pf_employee + pf_employer', 'no', 'no', 'no', 'no'],
+      [140, 'pf_total_year', 'PF deposit per annum', 'summary', 'formula', 'pf_total_month * 12', 'no', 'no', 'no', 'no'],
+      [150, 'annual_bonus', 'Annual bonus (1 month basic)', 'summary', 'formula', 'basic * bonus_months_basic', 'no', 'no', 'no', 'no'],
+      [160, 'cost_month', 'Cost per month', 'summary', 'formula', 'gross + employer_total', 'no', 'no', 'no', 'no'],
+      [170, 'leave_component', 'Paid leave component', 'summary', 'formula', 'gross * leave_pct', 'no', 'no', 'no', 'no'],
+      [180, 'ctc_year', 'CTC per annum', 'summary', 'formula', 'cost_month * 12 + annual_bonus + leave_component', 'no', 'no', 'no', 'no'],
+      [190, 'ctc_month', 'Cost to company per month', 'summary', 'formula', 'ctc_year / 12', 'no', 'no', 'no', 'no'],
+      [200, 'remark', 'Remark', 'info', 'text', '', 'no', 'no', 'no', 'no']
+    ].map(function (c, i) {
+      return { id: 'C' + i, seq: c[0], code: c[1], name: c[2], section: c[3], kind: c[4], expr: c[5],
+               taxable: c[6], in_gross: 'no', in_pf_wage: c[7], in_esi_wage: c[8], show_payslip: c[9],
+               active: 'yes' };
+    }),
     leaveTypes: [
       { id: 'LT1', name: 'Casual', paid: 'yes', quota: 12, carry_forward: 'no', max_consecutive: 3,
         notice_days: 1, allow_half_day: 'yes', active: 'yes' },
@@ -1113,7 +1155,8 @@ function demoKey(sheet) { return sheet === 'Employees' ? 'emp_code' : (sheet ===
 var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
   Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
-  Shifts: 'shifts', LeaveTypes: 'leaveTypes'
+  Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
+  CtcComponents: 'ctcComponents', CtcValues: 'ctcValues'
 };
 function demoApi(action, p) {
   var db = demoDb(), list, key, i;
@@ -1124,6 +1167,8 @@ function demoApi(action, p) {
       return { settings: db.settings, employees: db.employees, attendance: db.attendance,
                leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users,
                shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
+               ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
+               ctcValues: db.ctcValues || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -1229,6 +1274,9 @@ function reload() {
     S.holidays = d.holidays || [];
     S.shifts = d.shifts || [];
     S.leaveTypes = d.leaveTypes || [];
+    S.ctcVariables = d.ctcVariables || [];
+    S.ctcComponents = d.ctcComponents || [];
+    S.ctcValues = d.ctcValues || [];
     S.secrets = d.secrets || {};
     S.leaveVersion++;
     S.attDirty = {}; S.payDraft = null; S.attVersion++;
@@ -1911,6 +1959,7 @@ function employee360(code) {
         row2('TDS per month', cur() + money(e.tds_monthly)) +
       '</tbody></table></div>' +
     '</div>' +
+    ctcCard(e) +
     '<h3 style="margin:18px 0 8px">Attendance, ' + monthLabel(ym) + '</h3>' +
     '<div class="kpis" style="margin-bottom:8px">' +
       kpi('Present', s.P, '') + kpi('Absent', s.A, 'LOP days') + kpi('Leave', s.L, '') +
@@ -1938,6 +1987,26 @@ function employee360(code) {
                  { label: 'Edit record', onClick: function () { openEmployee(code); } }]
               : [{ label: 'Close', cls: 'ghost', onClick: closeModal }], true);
 }
+/* CTC breakdown on the employee profile. */
+function ctcCard(e) {
+  if (!(S.ctcComponents || []).length) return '';
+  var res = ctcFor(e);
+  var show = res.components.filter(function (c) {
+    return ['input', 'earning', 'deduction', 'employer', 'summary'].indexOf(c.section) >= 0;
+  });
+  return '<h3 style="margin:18px 0 8px">Salary structure</h3>' +
+    '<div class="table-wrap" style="max-height:260px"><table><thead><tr><th>Component</th>' +
+    '<th>Section</th><th class="num-col">Per month</th><th class="num-col">Per annum</th>' +
+    '</tr></thead><tbody>' + show.map(function (c) {
+      var code = String(c.code).trim();
+      var v = res.values[code] || 0;
+      var annual = /year|annum|annual/i.test(code) ? '' : cur() + money(v * 12);
+      return '<tr><td>' + esc(c.name || code) + '</td><td class="sub-line">' + esc(c.section) + '</td>' +
+        '<td class="num-col">' + cur() + money(v) + '</td>' +
+        '<td class="num-col sub-line">' + annual + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
 function row2(a, b) {
   return '<tr><td style="color:var(--text-muted)">' + esc(a) + '</td><td class="num-col">' +
     esc(b === undefined || b === '' ? '—' : b) + '</td></tr>';
@@ -2921,7 +2990,19 @@ function computePay(e, ym, prev) {
     esi = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
     esiEmployer = gross * num(S.settings.esi_employer_pct || 3.25) / 100;
   }
-  var pt = gross > 0 ? num(S.settings.pt_amount || 0) : 0;
+  /* Professional tax is a slab on the full monthly gross, never prorated. If the
+     CTC structure defines a ptax component, that is the single source of truth,
+     so the payslip and the CTC sheet cannot disagree. */
+  var pt = 0;
+  if (gross > 0) {
+    var ptComp = ctcComponentByCode('ptax');
+    if (ptComp) {
+      var ctcRes = computeCtc({ gross: grossOf(e) }, ctcOverridesFor(e.emp_code));
+      pt = num(ctcRes.values.ptax);
+    } else {
+      pt = num(S.settings.pt_amount || 0);
+    }
+  }
   var tds = gross > 0 ? num(e.tds_monthly) : 0;
   var otherDed = prev && prev.other_deduction !== undefined ? num(prev.other_deduction) : 0;
   var totalDed = pf + esi + pt + tds + otherDed;
@@ -3502,7 +3583,7 @@ var PAYROLL_RULES = [
   ['esi_employee_pct', 'ESI employee %', 'number'],
   ['esi_employer_pct', 'ESI employer %', 'number'],
   ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
-  ['pt_amount', 'Professional tax / month', 'number']
+  ['pt_amount', 'Professional tax / month (used only if the CTC structure has no P.Tax slab)', 'number']
 ];
 
 /* Editable policy tables. */
@@ -3512,6 +3593,18 @@ var SHIFT_COLS = [
   ['half_day_hours', 'Half day hrs', 'number'], ['weekly_off', 'Weekly off', 'text'],
   ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt'],
   ['ot_after_minutes', 'OT after min', 'number'], ['active', 'Active', 'select:yes,no']
+];
+var CTC_VAR_COLS = [
+  ['code', 'Variable', 'text'], ['value', 'Value', 'number'], ['note', 'What it means', 'wide']
+];
+var CTC_COMP_COLS = [
+  ['seq', '#', 'number'], ['code', 'Code', 'text'], ['name', 'Shown as', 'text'],
+  ['section', 'Section', 'select:input,earning,deduction,employer,summary,info'],
+  ['kind', 'Kind', 'select:formula,input,fixed,text'],
+  ['expr', 'Formula / value', 'wide'],
+  ['taxable', 'Taxable', 'select:yes,no'], ['in_pf_wage', 'In PF wage', 'select:no,yes'],
+  ['in_esi_wage', 'In ESI wage', 'select:no,yes'], ['show_payslip', 'On payslip', 'select:yes,no'],
+  ['active', 'Active', 'select:yes,no']
 ];
 var LEAVE_TYPE_COLS = [
   ['name', 'Leave type', 'text'], ['paid', 'Paid', 'select:yes,no'],
@@ -3523,7 +3616,7 @@ var LEAVE_TYPE_COLS = [
 function openSettings() {
   var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
     .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
-             ['leaverules', 'Leave policy'], ['payrollrules', 'Payroll rules'],
+             ['leaverules', 'Leave policy'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
              ['integrations', 'Integrations'], ['import', 'Import data'], ['account', 'Account']]);
 
   var body = '<div class="tabs">' + tabs.map(function (t, i) {
@@ -3539,6 +3632,7 @@ function openSettings() {
   '<div class="set-pane" id="stab-shifts" style="display:none">' + shiftsPane() + '</div>' +
   '<div id="stab-holidays" style="display:none">' + holidaysPane() + '</div>' +
   '<div class="set-pane" id="stab-leaverules" style="display:none">' + leaveRulesPane() + '</div>' +
+  '<div id="stab-ctc" style="display:none">' + ctcPane() + '</div>' +
   '<div class="set-pane" id="stab-payrollrules" style="display:none">' + payrollRulesPane() + '</div>' +
   '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' +
   '<div id="stab-import" style="display:none">' + importPane() + '</div>' +
@@ -3551,13 +3645,16 @@ function openSettings() {
   renderHolidays();
   renderPolicyTable('shifts');
   renderPolicyTable('leaveTypes');
+  renderPolicyTable('ctcVariables');
+  renderPolicyTable('ctcComponents');
+  renderCtcPreview();
   renderImportHelp();
   el('imp-any').onchange = function () { if (this.files[0]) onImportFile(this.files[0]); };
 }
 
 function settingsTab(tab) {
   var all = SETTING_GROUPS.map(function (g) { return g.id; })
-    .concat(['shifts', 'holidays', 'leaverules', 'payrollrules', 'integrations', 'import', 'account']);
+    .concat(['shifts', 'holidays', 'leaverules', 'ctc', 'payrollrules', 'integrations', 'import', 'account']);
   all.forEach(function (t) {
     var pane = el('stab-' + t);
     if (pane) pane.style.display = t === tab ? '' : 'none';
@@ -3588,6 +3685,13 @@ var POLICY_TABLES = {
             blank: { name: 'New shift', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
                      full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun',
                      saturday_policy: 'working', ot_after_minutes: 30, active: 'yes' } },
+  ctcVariables: { sheet: 'CtcVariables', cols: CTC_VAR_COLS, state: 'ctcVariables', label: 'variable',
+                  key: 'code', blank: { code: 'new_variable', value: '0', note: '' } },
+  ctcComponents: { sheet: 'CtcComponents', cols: CTC_COMP_COLS, state: 'ctcComponents', label: 'component',
+                   key: 'code', blank: { seq: 999, code: 'new_component', name: 'New component',
+                                         section: 'earning', kind: 'formula', expr: '0', taxable: 'yes',
+                                         in_gross: 'no', in_pf_wage: 'no', in_esi_wage: 'no',
+                                         show_payslip: 'yes', active: 'yes' } },
   leaveTypes: { sheet: 'LeaveTypes', cols: LEAVE_TYPE_COLS, state: 'leaveTypes', label: 'leave type',
                 blank: { name: 'New type', paid: 'yes', quota: 0, carry_forward: 'no',
                          max_consecutive: 0, notice_days: 0, allow_half_day: 'yes', active: 'yes' } }
@@ -3611,9 +3715,11 @@ function renderPolicyTable(kind) {
                 '</option>';
             }).join('') + '</select></td>';
         }
-        return '<td><input type="' + c[2] + '" value="' + esc(v) + '" data-pt="' + kind +
-          '" data-row="' + i + '" data-col="' + c[0] + '" style="width:' +
-          (c[2] === 'number' ? '86px' : '118px') + '"></td>';
+        var width = c[2] === 'number' ? '80px' : (c[2] === 'wide' ? '300px' : '146px');
+        return '<td><input type="' + (c[2] === 'wide' ? 'text' : c[2]) + '" value="' + esc(v) +
+          '" data-pt="' + kind + '" data-row="' + i + '" data-col="' + c[0] +
+          '" style="width:' + width + (c[2] === 'wide' ? ';font-family:ui-monospace,monospace;font-size:.78rem' : '') +
+          '"></td>';
       }).join('') +
       '<td><button class="ghost sm" onclick="removePolicyRow(\'' + kind + '\',' + i + ')">Remove</button></td></tr>';
     }).join('') || '<tr><td colspan="' + (spec.cols.length + 1) + '" class="empty">Nothing set up yet.</td></tr>') +
@@ -3658,13 +3764,18 @@ function removePolicyRow(kind, index) {
 
 function savePolicyTable(kind) {
   var spec = POLICY_TABLES[kind];
-  var rows = collectPolicyRows(kind).filter(function (r) { return String(r.name || '').trim(); });
+  var keyCol = spec.key || 'name';
+  var rows = collectPolicyRows(kind).filter(function (r) { return String(r[keyCol] || '').trim(); });
   if (!rows.length) return toast('Add at least one ' + spec.label, 'bad');
   var names = {};
   for (var i = 0; i < rows.length; i++) {
-    var n = String(rows[i].name).trim().toLowerCase();
-    if (names[n]) return toast('Two rows are both called "' + rows[i].name + '"', 'bad');
+    var n = String(rows[i][keyCol]).trim().toLowerCase();
+    if (names[n]) return toast('Two rows are both called "' + rows[i][keyCol] + '"', 'bad');
     names[n] = 1;
+  }
+  if (kind === 'ctcComponents') {
+    var bad = validateStructure(rows);
+    if (bad) return toast(bad, 'bad');
   }
   api('saveMany', { sheet: spec.sheet, rows: rows }).then(function () {
     return api('bootstrap');
@@ -3672,6 +3783,7 @@ function savePolicyTable(kind) {
     S[spec.state] = d[spec.state] || rows;
     S.leaveVersion++;
     renderPolicyTable(kind);
+    if (kind.indexOf('ctc') === 0) renderCtcPreview();
     toast(spec.label.charAt(0).toUpperCase() + spec.label.slice(1) + 's saved', 'good');
     renderAll();
   }).catch(function (e) { toast(e.message, 'bad'); });
@@ -3719,7 +3831,10 @@ function payrollRulesPane() {
     '&bull; <b>fixed26</b> - a flat 26 days every month, the common factory basis.<br>' +
     '&bull; <b>working</b> - only scheduled working days, so a day of LOP costs more.<br>' +
     'Rates apply to every run from now on. Runs already finalised keep the numbers they were saved ' +
-    'with.</p>';
+    'with.<br><br>' +
+    '<b>Professional tax</b> comes from the <b>ptax</b> component in the CTC structure when one ' +
+    'exists, so the payslip and the CTC sheet always agree. The flat amount above is only a fallback.' +
+    '</p>';
 }
 
 /* ----------------------------- holidays -------------------------- */
@@ -5109,6 +5224,545 @@ function downloadImportTemplate() {
   download('attendance-grid-' + ym + '.csv', toCSV(cols2, S.employees.slice(0, 3).map(function (e) {
     return [e.emp_code].concat(cols2.slice(1).map(function () { return 'P'; }));
   })));
+}
+</script>
+
+<script>
+/* =================================================================
+   CTC / SALARY STRUCTURE
+   Components, variables, formulas, slabs, tax flags and free text,
+   all editable in Settings. Formulas are parsed, never eval()'d,
+   because they arrive from a spreadsheet.
+   ================================================================= */
+
+function ctcTokenize(src) {
+  var t = [], i = 0, s = String(src === undefined || src === null ? '' : src);
+  while (i < s.length) {
+    var c = s[i];
+    if (c === ' ' || c === '\t' || c === '\n') { i++; continue; }
+    if (/[0-9.]/.test(c)) {
+      var j = i;
+      while (j < s.length && /[0-9.]/.test(s[j])) j++;
+      t.push({ t: 'num', v: parseFloat(s.slice(i, j)) });
+      i = j; continue;
+    }
+    if (/[A-Za-z_]/.test(c)) {
+      var k = i;
+      while (k < s.length && /[A-Za-z0-9_]/.test(s[k])) k++;
+      t.push({ t: 'id', v: s.slice(i, k) });
+      i = k; continue;
+    }
+    var two = s.slice(i, i + 2);
+    if (two === '<=' || two === '>=' || two === '==' || two === '!=') { t.push({ t: 'op', v: two }); i += 2; continue; }
+    if ('+-*/()<>,:'.indexOf(c) >= 0) {
+      t.push({ t: (c === '(' || c === ')' || c === ',' || c === ':') ? c : 'op', v: c });
+      i++; continue;
+    }
+    throw new Error('Unexpected character "' + c + '"');
+  }
+  return t;
+}
+
+function ctcParse(src) {
+  var tok = ctcTokenize(src), pos = 0;
+  var peek = function () { return tok[pos]; };
+  var eat = function (type, val) {
+    var x = tok[pos];
+    if (!x || (type && x.t !== type) || (val !== undefined && x.v !== val)) {
+      throw new Error('Formula is incomplete' + (val ? ' - expected "' + val + '"' : ''));
+    }
+    pos++; return x;
+  };
+  function parseExpr() { return parseCmp(); }
+  function parseCmp() {
+    var left = parseAdd(), x = peek();
+    if (x && x.t === 'op' && ['<', '>', '<=', '>=', '==', '!='].indexOf(x.v) >= 0) {
+      pos++; return { n: 'cmp', op: x.v, a: left, b: parseAdd() };
+    }
+    return left;
+  }
+  function parseAdd() {
+    var left = parseMul(), x;
+    while ((x = peek()) && x.t === 'op' && (x.v === '+' || x.v === '-')) {
+      pos++; left = { n: 'bin', op: x.v, a: left, b: parseMul() };
+    }
+    return left;
+  }
+  function parseMul() {
+    var left = parseUnary(), x;
+    while ((x = peek()) && x.t === 'op' && (x.v === '*' || x.v === '/')) {
+      pos++; left = { n: 'bin', op: x.v, a: left, b: parseUnary() };
+    }
+    return left;
+  }
+  function parseUnary() {
+    var x = peek();
+    if (x && x.t === 'op' && x.v === '-') { pos++; return { n: 'neg', a: parseUnary() }; }
+    return parsePrimary();
+  }
+  function parsePrimary() {
+    var x = eat();
+    if (x.t === 'num') return { n: 'num', v: x.v };
+    if (x.t === '(') { var e = parseExpr(); eat(')'); return e; }
+    if (x.t === 'id') {
+      if (peek() && peek().t === '(') {
+        pos++;
+        var args = [];
+        if (peek() && peek().t !== ')') {
+          for (;;) {
+            var a = parseExpr();
+            if (peek() && peek().t === ':') { pos++; a = { n: 'pair', a: a, b: parseExpr() }; }
+            args.push(a);
+            if (peek() && peek().t === ',') { pos++; continue; }
+            break;
+          }
+        }
+        eat(')');
+        return { n: 'call', name: String(x.v).toLowerCase(), args: args };
+      }
+      return { n: 'ref', v: x.v };
+    }
+    throw new Error('Unexpected "' + x.v + '"');
+  }
+  var out = parseExpr();
+  if (pos < tok.length) throw new Error('Unexpected "' + tok[pos].v + '" at the end');
+  return out;
+}
+
+function ctcEvalNode(node, resolve) {
+  switch (node.n) {
+    case 'num': return node.v;
+    case 'ref': return resolve(node.v);
+    case 'neg': return -ctcEvalNode(node.a, resolve);
+    case 'bin': {
+      var a = ctcEvalNode(node.a, resolve), b = ctcEvalNode(node.b, resolve);
+      if (node.op === '+') return a + b;
+      if (node.op === '-') return a - b;
+      if (node.op === '*') return a * b;
+      return b === 0 ? 0 : a / b;
+    }
+    case 'cmp': {
+      var x = ctcEvalNode(node.a, resolve), y = ctcEvalNode(node.b, resolve);
+      if (node.op === '<') return x < y ? 1 : 0;
+      if (node.op === '>') return x > y ? 1 : 0;
+      if (node.op === '<=') return x <= y ? 1 : 0;
+      if (node.op === '>=') return x >= y ? 1 : 0;
+      if (node.op === '==') return x === y ? 1 : 0;
+      return x !== y ? 1 : 0;
+    }
+    case 'pair': return ctcEvalNode(node.a, resolve);
+    case 'call': {
+      var name = node.name;
+      if (name === 'if') {
+        return ctcEvalNode(node.args[0], resolve)
+          ? ctcEvalNode(node.args[1], resolve)
+          : (node.args[2] ? ctcEvalNode(node.args[2], resolve) : 0);
+      }
+      if (name === 'slab') {
+        var base = ctcEvalNode(node.args[0], resolve);
+        for (var i = 1; i < node.args.length; i++) {
+          var pr = node.args[i];
+          if (pr.n !== 'pair') continue;
+          if (base <= ctcEvalNode(pr.a, resolve)) return ctcEvalNode(pr.b, resolve);
+        }
+        return 0;
+      }
+      var v = node.args.map(function (a) { return ctcEvalNode(a, resolve); });
+      switch (name) {
+        case 'min': return Math.min.apply(null, v);
+        case 'max': return Math.max.apply(null, v);
+        case 'round': return Math.round(v[0]);
+        case 'roundto': return Math.round(v[0] / (v[1] || 1)) * (v[1] || 1);
+        case 'floor': return Math.floor(v[0]);
+        case 'ceil': return Math.ceil(v[0]);
+        case 'abs': return Math.abs(v[0]);
+        case 'sum': return v.reduce(function (t, n) { return t + n; }, 0);
+      }
+      throw new Error('There is no function called "' + name + '()"');
+    }
+  }
+  throw new Error('Could not read that formula');
+}
+
+/* ------------------------- the structure ------------------------- */
+function ctcComponents(rows) {
+  return (rows || S.ctcComponents || []).filter(function (c) {
+    return String(c.active || 'yes').toLowerCase() !== 'no' && String(c.code || '').trim();
+  }).sort(function (a, b) { return num(a.seq) - num(b.seq); });
+}
+function ctcComponentByCode(code) {
+  var found = null;
+  (S.ctcComponents || []).forEach(function (c) {
+    if (String(c.code || '').trim() === code && String(c.active || 'yes').toLowerCase() !== 'no') found = c;
+  });
+  return found;
+}
+function ctcVarMap() {
+  var m = {};
+  (S.ctcVariables || []).forEach(function (v) {
+    if (String(v.code || '').trim()) m[String(v.code).trim()] = num(v.value);
+  });
+  return m;
+}
+function ctcOverridesFor(code) {
+  var out = {};
+  (S.ctcValues || []).forEach(function (v) {
+    if (String(v.emp_code) === String(code)) out[String(v.code)] = v.value;
+  });
+  return out;
+}
+
+/**
+ * Work out every component for one set of inputs.
+ * Returns { values, text, errors } - never throws, so one bad formula
+ * shows as an error on its own row instead of blanking the screen.
+ */
+function computeCtc(inputs, overrides, rows) {
+  inputs = inputs || {}; overrides = overrides || {};
+  var comps = ctcComponents(rows), vars = ctcVarMap();
+  var byCode = {};
+  comps.forEach(function (c) { byCode[String(c.code).trim()] = c; });
+  var cache = {}, stack = [], errors = {}, text = {};
+
+  function resolve(name) {
+    name = String(name).trim();
+    if (cache.hasOwnProperty(name)) return cache[name];
+    if (overrides.hasOwnProperty(name) && String(overrides[name]) !== '') return (cache[name] = num(overrides[name]));
+    if (inputs.hasOwnProperty(name)) return (cache[name] = num(inputs[name]));
+    if (vars.hasOwnProperty(name)) return (cache[name] = vars[name]);
+    var c = byCode[name];
+    if (!c) throw new Error('"' + name + '" is not a component or variable');
+    if (stack.indexOf(name) >= 0) throw new Error('Circular formula: ' + stack.concat(name).join(' → '));
+    stack.push(name);
+    var v = 0;
+    try {
+      var kind = String(c.kind || 'formula').toLowerCase();
+      if (kind === 'formula') v = ctcEvalNode(ctcParse(c.expr), resolve);
+      else if (kind === 'fixed') v = num(c.expr);
+      else if (kind === 'input') v = num(overrides[name] !== undefined ? overrides[name] : c.expr);
+      else v = 0;
+    } finally { stack.pop(); }
+    return (cache[name] = v);
+  }
+
+  comps.forEach(function (c) {
+    var code = String(c.code).trim();
+    if (String(c.kind || '').toLowerCase() === 'text') {
+      text[code] = overrides[code] !== undefined ? overrides[code] : (c.expr || '');
+      cache[code] = 0;
+      return;
+    }
+    try { resolve(code); }
+    catch (e) { errors[code] = e.message; cache[code] = 0; }
+  });
+  return { values: cache, text: text, errors: errors, components: comps };
+}
+
+/** The monthly gross a structure should start from for this employee. */
+function ctcInputsFor(e) {
+  var ov = ctcOverridesFor(e.emp_code);
+  return { gross: ov.gross !== undefined && ov.gross !== '' ? num(ov.gross) : grossOf(e) };
+}
+function ctcFor(e) {
+  return computeCtc(ctcInputsFor(e), ctcOverridesFor(e.emp_code));
+}
+
+/** Check a structure before it is saved: unknown names, cycles, bad syntax. */
+function validateStructure(rows) {
+  var test = computeCtc({ gross: 10000 }, {}, rows);
+  var bad = Object.keys(test.errors);
+  if (bad.length) return bad[0] + ': ' + test.errors[bad[0]];
+  return '';
+}
+
+/* ---------------------------- the pane --------------------------- */
+function ctcPane() {
+  return '' +
+  '<h3>Variables</h3>' +
+  '<div class="card-sub">Numbers you can reuse in any formula below, so a rate changes in one place.</div>' +
+  '<div id="policy-ctcVariables"></div>' +
+
+  '<h3 style="margin-top:22px">Components</h3>' +
+  '<div class="card-sub">The salary structure itself. <b>Kind</b> decides where a value comes from: ' +
+  '<b>formula</b> is calculated, <b>input</b> is typed per employee, <b>fixed</b> is the same for ' +
+  'everyone, <b>text</b> is a free note per employee.</div>' +
+  '<div id="policy-ctcComponents"></div>' +
+
+  '<div class="locked-note" style="background:#f1f5f9;color:var(--text-dark);align-items:flex-start;margin-top:14px">' +
+    '<div>&#402;</div><div style="font-weight:500;line-height:1.8">' +
+    'A formula may use any other component code, any variable, numbers, <code>+ - * / ( )</code> and:<br>' +
+    '<code>if(gross &lt;= esi_ceiling, gross * 0.0075, 0)</code> &mdash; a condition<br>' +
+    '<code>slab(gross, 10000:0, 15000:110, 25000:130)</code> &mdash; bands, first match wins<br>' +
+    '<code>min(basic, 15000)</code>, <code>max()</code>, <code>round()</code>, ' +
+    '<code>roundto(x, 100)</code>, <code>floor()</code>, <code>ceil()</code>, <code>abs()</code>, ' +
+    '<code>sum(a, b, c)</code><br>' +
+    'Formulas are parsed, not executed, and are checked for loops and unknown names before they save.' +
+    '</div></div>' +
+
+  '<h3 style="margin-top:22px">Try it</h3>' +
+  '<div class="card-sub">Type a gross, or pick someone, and see the whole structure resolve.</div>' +
+  '<div class="toolbar">' +
+    '<label class="field">Monthly gross<input type="number" id="ctc-try" value="10900" ' +
+      'oninput="renderCtcPreview()" style="width:130px"></label>' +
+    '<label class="field">or an employee<select id="ctc-emp" onchange="ctcPickEmployee()">' +
+      '<option value="">\u2014</option></select></label>' +
+    '<span class="spacer"></span>' +
+    '<button class="ghost sm" onclick="exportCtcSheet()">&#8681; CTC sheet</button>' +
+    '<button class="ghost sm" onclick="el(\'ctc-file\').click()">&#8679; Upload CTC list</button>' +
+    '<button class="ghost sm adm" onclick="applyStructure()">Apply to employees</button>' +
+    '<input type="file" id="ctc-file" accept=".csv,.xlsx,.xls" style="display:none" ' +
+      'onchange="importCtcList(this.files[0])">' +
+  '</div>' +
+  '<div id="ctc-preview"></div>' +
+  '<div id="ctc-import" style="margin-top:12px"></div>';
+}
+
+function ctcPickEmployee() {
+  var code = el('ctc-emp').value;
+  if (!code) return renderCtcPreview();
+  var e = empByCode(code);
+  if (e) el('ctc-try').value = ctcInputsFor(e).gross;
+  renderCtcPreview();
+}
+
+function renderCtcPreview() {
+  var host = el('ctc-preview');
+  if (!host) return;
+  var sel = el('ctc-emp');
+  if (sel && sel.options.length <= 1) {
+    sel.innerHTML = '<option value="">\u2014</option>' + S.employees.slice(0, 500).map(function (e) {
+      return '<option value="' + esc(e.emp_code) + '">' + esc(e.name) + '</option>';
+    }).join('');
+  }
+  var code = sel ? sel.value : '';
+  var overrides = code ? ctcOverridesFor(code) : {};
+  var gross = num(el('ctc-try').value);
+  var out = computeCtc({ gross: gross }, Object.assign({}, overrides, { gross: gross }));
+  var sectionLabel = { input: 'Input', earning: 'Earnings', deduction: 'Deductions',
+                       employer: 'Company contribution', summary: 'Totals', info: 'Notes' };
+  var lastSection = '';
+  host.innerHTML = '<div class="table-wrap" style="max-height:420px"><table><thead><tr>' +
+    '<th>Component</th><th>Kind</th><th>Formula</th><th class="num-col">Value</th>' +
+    '<th class="num-col">Per annum</th></tr></thead><tbody>' +
+    out.components.map(function (c) {
+      var codeStr = String(c.code).trim();
+      var head = '';
+      if (c.section !== lastSection) {
+        lastSection = c.section;
+        head = '<tr style="background:#f8fafc"><td colspan="5" style="font-weight:800;font-size:.72rem;' +
+          'text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">' +
+          esc(sectionLabel[c.section] || c.section) + '</td></tr>';
+      }
+      var err = out.errors[codeStr];
+      var isText = String(c.kind || '').toLowerCase() === 'text';
+      var v = out.values[codeStr] || 0;
+      return head + '<tr><td>' + esc(c.name || codeStr) +
+        '<div class="sub-line">' + esc(codeStr) + '</div></td>' +
+        '<td><span class="badge b-gray">' + esc(c.kind) + '</span></td>' +
+        '<td class="sub-line" style="font-family:ui-monospace,monospace">' +
+          (err ? '<span style="color:var(--danger)">' + esc(err) + '</span>' : esc(c.expr || '')) + '</td>' +
+        '<td class="num-col">' + (isText
+          ? '<span class="sub-line">' + esc(out.text[codeStr] || '') + '</span>'
+          : '<b>' + cur() + money(v) + '</b>') + '</td>' +
+        '<td class="num-col sub-line">' + (isText || /year|annum|annual/i.test(codeStr) ? '' :
+          cur() + money(v * 12)) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+/* Write the structure's split back onto the employee master, which is what
+   payroll reads. Basic and HRA map by code; any other earning is pooled. */
+function applyStructure() {
+  var emps = S.employees.filter(function (e) { return String(e.status || 'Active') === 'Active'; });
+  if (!emps.length) return toast('No active employees', 'bad');
+  var rows = [], changed = 0, preview = [];
+  emps.forEach(function (e) {
+    var res = ctcFor(e);
+    var v = res.values;
+    var gross = ctcInputsFor(e).gross;
+    if (!gross) return;
+    var basic = Math.round(v.basic || 0), hra = Math.round(v.hra || 0);
+    var earnings = 0;
+    res.components.forEach(function (c) {
+      if (c.section === 'earning' && ['basic', 'hra'].indexOf(String(c.code).trim()) < 0) {
+        earnings += num(v[String(c.code).trim()]);
+      }
+    });
+    var special = Math.round(earnings);
+    var before = grossOf(e);
+    if (num(e.basic) === basic && num(e.hra) === hra && num(e.special_allowance) === special) return;
+    changed++;
+    if (preview.length < 8) {
+      preview.push([e.emp_code, e.name, money(before), money(basic), money(hra), money(special),
+                    money(basic + hra + special)]);
+    }
+    rows.push(Object.assign({}, e, {
+      basic: basic, hra: hra, special_allowance: special, other_allowance: 0, updated_at: today()
+    }));
+  });
+  if (!changed) return toast('Every employee already matches the structure');
+  showModal('Apply the structure to ' + changed + ' employee(s)',
+    '<p style="line-height:1.7">This rewrites <b>Basic, HRA and Special allowance</b> on the employee ' +
+    'master from each person\\u2019s monthly gross, because that is what payroll reads. ' +
+    'Gross itself does not change.</p>' +
+    '<div class="table-wrap" style="max-height:260px;margin:12px 0"><table><thead><tr><th>Code</th>' +
+    '<th>Name</th><th class="num-col">Gross</th><th class="num-col">Basic</th><th class="num-col">HRA</th>' +
+    '<th class="num-col">Special</th><th class="num-col">Sum</th></tr></thead><tbody>' +
+    preview.map(function (r) {
+      return '<tr>' + r.map(function (x, i) {
+        return '<td' + (i > 1 ? ' class="num-col"' : '') + '>' + esc(x) + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div>' +
+    (changed > preview.length ? '<div class="sub-line">Showing ' + preview.length + ' of ' + changed + '.</div>' : '') +
+    '<div class="locked-note">&#9888; Finalised payroll runs keep the numbers they were saved with; ' +
+    'this only changes future runs.</div>',
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
+     { label: 'Apply to ' + changed, onClick: function () {
+        api('saveMany', { sheet: 'Employees', rows: rows }).then(function () {
+          rows.forEach(function (r) {
+            var e = empByCode(r.emp_code);
+            if (e) Object.assign(e, r);
+          });
+          closeModal(); toast(rows.length + ' employee(s) updated from the structure', 'good');
+          renderAll();
+        }).catch(function (err) { toast(err.message, 'bad'); });
+     } }], true);
+}
+
+/* ---------------- upload a CTC list (their own sheet) --------------- */
+
+/* Their sheet has title rows above the header, so find the header first. */
+function findHeaderRow(rows, needles) {
+  for (var i = 0; i < Math.min(rows.length, 25); i++) {
+    var h = normHeaders(rows[i] || []);
+    var hit = needles.every(function (n) {
+      return h.some(function (c) { return c.indexOf(n) >= 0; });
+    });
+    if (hit) return i;
+  }
+  return -1;
+}
+
+function importCtcList(file) {
+  if (!file) return;
+  var out = el('ctc-import');
+  out.innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Reading...';
+  readSpreadsheet(file).then(function (sheets) {
+    /* every sheet of the workbook, since these lists are split into sections */
+    var matched = [], unmatched = [], seen = {}, rowsSeen = 0;
+    var byName = {}, byCode = {};
+    S.employees.forEach(function (e) {
+      byCode[String(e.emp_code).trim().toUpperCase()] = e;
+      byName[String(e.name).trim().toUpperCase().replace(/\s+/g, ' ')] = e;
+    });
+
+    sheets.forEach(function (sheet) {
+      var rows = sheet.rows || [];
+      var hi = findHeaderRow(rows, ['name', 'gross']);
+      if (hi < 0) return;
+      var h = normHeaders(rows[hi]);
+      var iName = headerIndex(h, ['name', 'employeename', 'empname']);
+      var iCode = headerIndex(h, ['empcode', 'employeecode', 'code']);
+      var iGross = headerIndex(h, ['grosssalary', 'gross', 'grosspermonth', 'monthlygross']);
+      var iBonus = -1;
+      h.forEach(function (c, n) { if (c.indexOf('annualbonus') >= 0) iBonus = n; });
+      if (iGross < 0 || (iName < 0 && iCode < 0)) return;
+
+      rows.slice(hi + 1).forEach(function (r) {
+        var gross = num(String(r[iGross] || '').replace(/,/g, ''));
+        var nameRaw = iName >= 0 ? String(r[iName] || '').trim() : '';
+        var codeRaw = iCode >= 0 ? String(r[iCode] || '').trim() : '';
+        if (!gross || (!nameRaw && !codeRaw)) return;
+        rowsSeen++;
+        var e = (codeRaw && byCode[codeRaw.toUpperCase()]) ||
+                byName[nameRaw.toUpperCase().replace(/\s+/g, ' ')];
+        if (!e) { unmatched.push(nameRaw || codeRaw); return; }
+        if (seen[e.emp_code]) return;
+        seen[e.emp_code] = 1;
+        var row = { emp_code: e.emp_code, name: e.name, gross: gross, bonus: null };
+        if (iBonus >= 0) {
+          var bonus = num(String(r[iBonus] || '').replace(/,/g, ''));
+          var formula = computeCtc({ gross: gross }, {}).values.annual_bonus || 0;
+          if (bonus && Math.abs(bonus - formula) > 1) row.bonus = bonus;
+        }
+        matched.push(row);
+      });
+    });
+
+    if (!matched.length) {
+      out.innerHTML = '<div class="err show">Found ' + rowsSeen + ' row(s) but matched none to an ' +
+        'employee. The list is matched on employee code, or on name when there is no code column.' +
+        (unmatched.length ? '<br>First few names: ' + unmatched.slice(0, 5).map(esc).join(', ') : '') +
+        '</div>';
+      return;
+    }
+    S._ctcImport = matched;
+    out.innerHTML =
+      '<div class="locked-note" style="background:#d1fae5;color:#065f46">' +
+      matched.length + ' employee(s) matched' +
+      (matched.filter(function (m) { return m.bonus; }).length
+        ? ', ' + matched.filter(function (m) { return m.bonus; }).length + ' with a bonus that differs from the formula' : '') +
+      (unmatched.length ? '. ' + unmatched.length + ' row(s) did not match anyone.' : '.') + '</div>' +
+      (unmatched.length ? '<div class="err show" style="margin-top:8px">Not matched: ' +
+        unmatched.slice(0, 10).map(esc).join(', ') +
+        (unmatched.length > 10 ? ' and ' + (unmatched.length - 10) + ' more' : '') + '</div>' : '') +
+      '<div class="table-wrap" style="max-height:240px;margin-top:10px"><table><thead><tr><th>Code</th>' +
+      '<th>Name</th><th class="num-col">Gross</th><th class="num-col">Basic</th><th class="num-col">HRA</th>' +
+      '<th class="num-col">Net in hand</th><th class="num-col">CTC / year</th><th class="num-col">Bonus</th>' +
+      '</tr></thead><tbody>' +
+      matched.slice(0, 50).map(function (m) {
+        var v = computeCtc({ gross: m.gross }, m.bonus ? { annual_bonus: m.bonus } : {}).values;
+        return '<tr><td>' + esc(m.emp_code) + '</td><td>' + esc(m.name) + '</td>' +
+          '<td class="num-col">' + money(m.gross) + '</td>' +
+          '<td class="num-col">' + money(v.basic) + '</td>' +
+          '<td class="num-col">' + money(v.hra) + '</td>' +
+          '<td class="num-col">' + money(v.net_pay) + '</td>' +
+          '<td class="num-col">' + money(v.ctc_year) + '</td>' +
+          '<td class="num-col">' + (m.bonus ? '<span class="badge b-amber">' + money(m.bonus) + '</span>'
+            : '<span class="sub-line">formula</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div class="toolbar" style="margin-top:10px"><span class="spacer"></span>' +
+      '<button onclick="saveCtcImport()">Save these gross figures</button></div>';
+  }).catch(function (e) {
+    out.innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
+  });
+}
+
+function saveCtcImport() {
+  var list = S._ctcImport || [];
+  if (!list.length) return;
+  var rows = [];
+  list.forEach(function (m) {
+    rows.push({ id: m.emp_code + '_gross', emp_code: m.emp_code, code: 'gross', value: m.gross });
+    if (m.bonus) {
+      rows.push({ id: m.emp_code + '_annual_bonus', emp_code: m.emp_code, code: 'annual_bonus',
+                  value: m.bonus });
+    }
+  });
+  api('saveMany', { sheet: 'CtcValues', rows: rows }).then(function () { return api('bootstrap'); })
+    .then(function (d) {
+      S.ctcValues = d.ctcValues || rows;
+      toast(list.length + ' employee CTC figure(s) saved. Use "Apply to employees" to push the split ' +
+        'into the payroll master.', 'good');
+      renderCtcPreview();
+      el('ctc-import').innerHTML = '';
+    }).catch(function (e) { toast(e.message, 'bad'); });
+}
+
+/* Export the whole company in the shape of the CTC sheet. */
+function exportCtcSheet() {
+  var comps = ctcComponents();
+  var cols = ['emp_code', 'name', 'company'].concat(comps.map(function (c) { return c.name || c.code; }));
+  var rows = S.employees.filter(function (e) { return String(e.status || 'Active') === 'Active'; })
+    .map(function (e) {
+      var res = ctcFor(e);
+      return [e.emp_code, e.name, e.company || ''].concat(comps.map(function (c) {
+        var code = String(c.code).trim();
+        return String(c.kind || '').toLowerCase() === 'text'
+          ? (res.text[code] || '')
+          : Math.round((res.values[code] || 0) * 100) / 100;
+      }));
+    });
+  download('ctc-structure.csv', toCSV(cols, rows));
 }
 </script>
 
