@@ -34,6 +34,7 @@ var SHEETS = {
   CtcComponents: ['id', 'seq', 'code', 'name', 'section', 'kind', 'expr', 'taxable',
                   'in_gross', 'in_pf_wage', 'in_esi_wage', 'show_payslip', 'active'],
   CtcValues:    ['id', 'emp_code', 'code', 'value'],
+  PayslipMail: ['id', 'month', 'emp_code', 'name', 'email', 'sent_at', 'status', 'error', 'sent_by'],
   Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source',
                'imported_at', 'lat', 'lng', 'accuracy', 'site', 'distance_m'],
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
@@ -91,6 +92,16 @@ var DEFAULT_SETTINGS = {
   sync_last_push: '',
   import_companies: '',
   register_group_by: 'unit',
+  payslip_email_enabled: 'yes',
+  payslip_email_attach_pdf: 'yes',
+  payslip_email_subject: 'Payslip for {month} - {company}',
+  payslip_email_message: 'Dear {name},\n\nPlease find your payslip for {month} attached.\n' +
+    'Net pay credited: {net}.\n\nFor any correction please write back to HR within 7 days.\n\n' +
+    'Regards,\n{company}',
+  payslip_email_from_name: '',
+  payslip_email_reply_to: '',
+  payslip_email_cc: '',
+  payslip_email_bcc: '',
   web_punch_enabled: 'yes',
   geofence_enabled: 'no',
   geofence_mode: 'block',
@@ -161,6 +172,9 @@ function route(action, p) {
     case 'testIntegration': return testIntegration();
     case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note);
     case 'punchState':    return punchState(p.emp_code);
+    case 'sendPayslips':  return sendPayslips(p);
+    case 'mailQuota':     return { left: MailApp.getRemainingDailyQuota(), from: senderAddress() };
+    case 'payslipMailLog': return payslipMailLog(p.month);
     default: throw new Error('Unknown action: ' + action);
   }
 }
@@ -1006,4 +1020,109 @@ function webPunch(empCode, kind, note, geo) {
     site: fence.site || '', distance_m: fence.distance === undefined ? '' : fence.distance
   }]);
   return { record: row, state: punchState(empCode), fence: fence };
+}
+
+/* ------------------------------------------------------------------ */
+/* Payslips by email                                                   */
+/* ------------------------------------------------------------------ */
+
+function senderAddress() {
+  try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; }
+}
+
+/**
+ * Sends one batch of payslips. The client builds each mail (subject, plain
+ * text and HTML) so the wording stays in Settings, next to everything else.
+ * Every attempt is written to the PayslipMail tab, so the payroll screen can
+ * show who has already been sent their slip and who bounced.
+ *
+ * items: [{ emp_code, name, to, subject, text, html, filename }]
+ */
+function sendPayslips(p) {
+  var items = (p && p.items) || [];
+  if (!items.length) throw new Error('Nothing to send');
+
+  var quota = MailApp.getRemainingDailyQuota();
+  if (quota <= 0) {
+    throw new Error('This Google account has used its daily email quota. It resets in 24 hours.');
+  }
+
+  var st = settingsMap();
+  var attach = String((p && p.attachPdf) || st.payslip_email_attach_pdf || 'yes') !== 'no';
+  var fromName = String((p && p.senderName) || st.payslip_email_from_name ||
+                        st.company_name || 'HRMS').slice(0, 120);
+  var replyTo = String((p && p.replyTo) || st.payslip_email_reply_to || '').trim();
+  var cc = String((p && p.cc) || st.payslip_email_cc || '').trim();
+  var bcc = String((p && p.bcc) || st.payslip_email_bcc || '').trim();
+  var by = String((p && p.by) || '');
+  var now = new Date();
+  var stamp = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+
+  var sent = [], failed = [], log = [];
+  var used = 0;
+
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i] || {};
+    var to = String(it.to || '').trim();
+    var entry = {
+      id: newId(), month: String(it.month || ''), emp_code: String(it.emp_code || ''),
+      name: String(it.name || ''), email: to, sent_at: stamp, status: 'sent', error: '', sent_by: by
+    };
+
+    if (!/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(to)) {
+      entry.status = 'failed'; entry.error = 'No valid email address on the employee record';
+      failed.push({ emp_code: entry.emp_code, name: entry.name, to: to, error: entry.error });
+      log.push(entry);
+      continue;
+    }
+    if (used >= quota) {
+      entry.status = 'failed'; entry.error = 'Daily email quota reached';
+      failed.push({ emp_code: entry.emp_code, name: entry.name, to: to, error: entry.error });
+      log.push(entry);
+      continue;
+    }
+
+    try {
+      var opts = { name: fromName, htmlBody: String(it.html || '') };
+      if (replyTo) opts.replyTo = replyTo;
+      if (cc) opts.cc = cc;
+      if (bcc) opts.bcc = bcc;
+      if (attach && it.html) {
+        try {
+          var file = String(it.filename || ('payslip-' + entry.emp_code + '-' + entry.month));
+          var pdf = Utilities.newBlob(String(it.html), 'text/html', file + '.html')
+                             .getAs('application/pdf');
+          pdf.setName(file + '.pdf');
+          opts.attachments = [pdf];
+        } catch (convErr) {
+          // PDF conversion is best effort: the payslip is in the mail body anyway.
+          entry.error = 'Sent without PDF: ' + (convErr.message || convErr);
+        }
+      }
+      MailApp.sendEmail(to, String(it.subject || 'Payslip'), String(it.text || ''), opts);
+      used++;
+      sent.push({ emp_code: entry.emp_code, name: entry.name, to: to });
+    } catch (err) {
+      entry.status = 'failed';
+      entry.error = String((err && err.message) || err);
+      failed.push({ emp_code: entry.emp_code, name: entry.name, to: to, error: entry.error });
+    }
+    log.push(entry);
+  }
+
+  if (log.length) appendMany('PayslipMail', log);
+
+  return {
+    sent: sent, failed: failed,
+    quotaLeft: MailApp.getRemainingDailyQuota(),
+    from: senderAddress()
+  };
+}
+
+/** Who has already been sent their payslip for one month. */
+function payslipMailLog(month) {
+  var want = String(month || '');
+  return readSheet('PayslipMail').filter(function (r) {
+    return !want || String(r.month) === want;
+  });
 }

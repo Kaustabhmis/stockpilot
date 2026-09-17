@@ -38,7 +38,7 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 | 1 | **Employees** | Employee master: full profile, salary structure, PF/ESI flags, exit date. Sortable, searchable, filterable. Per-employee 360° view (profile + salary + attendance + leave history + payslips). Validation on save (PAN format, duplicate email, ESI ceiling, dates). Record-completeness flags. CSV import with per-row validation, CSV export |
 | 2 | **Attendance** | Monthly register grid: click to cycle P/A/HD/L/WO/H, double-click for in/out times and remarks, click a date header to fill a column, fill a whole employee-month, fill blank days. Holiday calendar auto-marks H. Late marks and overtime derived from the shift and grace period. Biometric/device CSV import. Locks automatically once payroll is finalised |
 | 3 | **Leave** | Applications with live validation (quota balance, overlapping requests, working-day count that skips weekly offs and holidays). Approve / reject / cancel. **Requests** — out-of-office duty, swipe (missed punch) and compensatory off. Month calendar of who is off when. Per-type balances and a comp-off ledger. Approving writes onto the attendance register; cancelling clears those days |
-| 4 | **Payroll** | Generates from attendance, prorates by paid days, computes PF / ESI / PT / TDS plus employer PF & ESI and CTC. Editable arrears, bonus and other deductions per employee. Month-on-month variance per employee. Draft → finalise → (reopen if needed). Printable payslips, bulk payslip print, bank transfer CSV |
+| 4 | **Payroll** | Generates from attendance, prorates by paid days, computes PF / ESI / PT / TDS plus employer PF & ESI and CTC. Editable arrears, bonus and other deductions per employee. Month-on-month variance per employee. Draft → finalise → (reopen if needed). **Payslips printed** one at a time or for the whole month, **and emailed** to staff as a PDF; bank transfer CSV |
 | 5 | **Reports** | Seven reports, each exportable **and printable**: **salary register unit by unit** (the company's own register layout), wages register, **leave report** (per-employee year balance plus the month's applications), PF/ESI statutory contributions (challan-style, with employer share), year-to-date per employee (the Form 16 base), attendance exceptions (unmarked days, absences, late marks, high OT), joiners & leavers |
 
 ### Reports — printing and the leave report
@@ -74,6 +74,41 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
 | **Import data** | manual import of punch logs, attendance, holidays and employees from CSV or Excel |
 | **Account** | change your password |
+
+### Payslips: printing and emailing
+
+**Print** — the **Payslip** button on any row opens the slip with a **Print** button; **Print all
+payslips** in the toolbar prints the whole month, one slip per page. A4 portrait, the company name
+and address as a letterhead, no rows split across a page break.
+
+**Email** — **Email payslips** in the toolbar sends the month to everyone; the **✉ Email** button
+on a single payslip sends just that one. The payslip goes as a **PDF attachment** and is repeated in
+the body of the mail, so it reads on a phone without opening anything.
+
+Mail leaves from the **Google account that owns the spreadsheet**, so it arrives from your own
+address — no third-party mail service, no extra account, nothing to pay for. Google allows about
+**100 emails a day** on a free Gmail account and **1,500 a day** on Google Workspace.
+
+Before it sends, the dialog tells you exactly what will happen: how many will go, who is being
+**skipped because there is no email address on their record** (named, so you can go and add them),
+and how many were **already sent this month's payslip** — with a checkbox, ticked by default, to
+skip those. So pressing Send twice does not quietly deliver everyone a second copy, and a month with
+more staff than the daily quota can simply be sent again the next day: the ones that already went
+are skipped.
+
+Only a **finalised** run can be emailed. A draft is refused, for one payslip and for the month,
+because a draft number is not the one that reaches the bank.
+
+Every attempt — sent or failed — is written to a **PayslipMail** tab, and the payroll table grows an
+**Emailed** column showing `sent` (hover for the address and the time) or `failed` with the reason.
+Anything that failed is listed after the run, with the address and why.
+
+The subject, the message, the sender name, reply-to, cc and bcc, and whether to attach the PDF, are
+all in **Settings → Payroll rules**. The subject and message take `{name}` `{code}` `{month}`
+`{company}` `{net}` `{gross}` `{paid_days}` `{lop_days}`, filled in per employee.
+
+In the **demo** nothing is emailed anywhere: the send is recorded so you can see the screen work,
+and no mail leaves the browser.
 
 ### The salary register, unit by unit
 
@@ -403,11 +438,14 @@ attendance register and mark someone absent → generate and finalise payroll �
    paste everything from `apps-script/Code.gs`, and save.
 3. **Create the tables.** In the Apps Script editor pick the `setup` function from the
    dropdown and press **Run**. Approve the permission prompt (it only asks for access to this
-   spreadsheet). This creates seventeen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
+   spreadsheet). This creates eighteen tabs — `Settings`, `Users`, `Employees`, `Attendance`,
    `Leave`, `Payroll`, `Holidays`, `Events`, `Sites`, `Punches`, `Shifts`, `LeaveTypes`,
-   `RequestTypes`, `Requests`, `CtcVariables`, `CtcComponents`, `CtcValues` — seeds a General shift, the four standard leave types and the
+   `RequestTypes`, `Requests`, `CtcVariables`, `CtcComponents`, `CtcValues`, `PayslipMail` — seeds a General shift, the four standard leave types and the
    company's salary structure, and creates the first admin login. It is safe to re-run: new
    columns are appended, existing data is left where it is.
+   Re-running `setup` on a sheet that already has data is safe, and is how you pick up the
+   `PayslipMail` tab if you installed an earlier copy. The first time you email a payslip, Apps
+   Script asks once for permission to send mail as you — that is the same consent screen as step 3.
 4. **Deploy the web app.** *Deploy → New deployment → type: Web app*.
    - Execute as: **Me**
    - Who has access: **Anyone**
@@ -503,6 +541,9 @@ cancelled either. **Reopen run** unlocks it when a correction is genuinely neede
   employee per day, about 3,000 rows a year for 10 people).
 - **Light mode only**: the UI ships one theme, matching the rest of the app.
 - **Backups**: *File → Version history* in the sheet, plus the Export CSV button in every module.
+- **Email quota**: payslip mail uses Google's own quota — about 100 a day on free Gmail, 1,500 on
+  Workspace. Over that, the send stops and says so; the rest go the next day and the already-sent
+  ones are skipped.
 - **Security**: the deployment is public-by-URL and authentication is the `Users` tab, which
   suits an internal tool. For anything stricter, set the deployment to "Anyone within
   <your organisation>" instead.

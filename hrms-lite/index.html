@@ -655,7 +655,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <label class="field">Month<input type="month" id="pay-month" onchange="renderPayroll()"></label>
           <span class="spacer"></span>
           <button class="ghost sm" onclick="exportPayroll()">&#8681; Bank CSV</button>
-          <button class="ghost sm" onclick="printAllPayslips()">&#128424; All payslips</button>
+          <button class="ghost sm" onclick="printAllPayslips()">&#128424; Print all payslips</button>
+          <button class="ghost sm adm" onclick="emailAllPayslips()">&#9993; Email payslips</button>
           <button class="ghost sm adm" id="pay-generate" onclick="generatePayroll()">&#9881; Generate from attendance</button>
           <button class="adm" id="pay-save" onclick="savePayroll()" disabled>Finalise run</button>
         </div>
@@ -1118,7 +1119,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v10';
+var DEMO_KEY = 'hrms_lite_demo_v11';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1141,8 +1142,16 @@ function demoDb() {
       essl_device_serial: '', essl_push_enabled: 'no', essl_push_url: '',
       sql_server: 'localhost\\SQLEXPRESS', sql_database: 'etimetracklite1', sql_table: 'DeviceLogs',
       sql_user: 'sa', sync_last_pull: '', sync_last_push: '',
-      leave_types: 'Casual,Sick,Earned,Unpaid', quota_casual: '12', quota_sick: '6', quota_earned: '15'
+      leave_types: 'Casual,Sick,Earned,Unpaid', quota_casual: '12', quota_sick: '6', quota_earned: '15',
+      payslip_email_enabled: 'yes', payslip_email_attach_pdf: 'yes',
+      payslip_email_from_name: '', payslip_email_reply_to: '', payslip_email_cc: '',
+      payslip_email_bcc: '',
+      payslip_email_subject: 'Payslip for {month} - {company}',
+      payslip_email_message: 'Dear {name},\n\nPlease find your payslip for {month} attached.\n' +
+        'Net pay credited: {net}.\n\nFor any correction please write back to HR within 7 days.\n\n' +
+        'Regards,\n{company}'
     },
+    payslipMail: [],
     employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [], events: [],
     requests: [],
     shifts: [
@@ -1390,6 +1399,33 @@ function demoApi(action, p) {
     case 'setSecret':
     case 'secretStatus':
       return { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false };
+    case 'payslipMailLog':
+      return (db.payslipMail || []).filter(function (m) {
+        return !p.month || String(m.month) === String(p.month);
+      });
+    case 'mailQuota':
+      return { left: 100, from: 'demo@example.com' };
+    case 'sendPayslips':
+      /* The demo has no mail server, so it records the send without sending
+         anything, and says so - nothing leaves the browser in demo mode. */
+      db.payslipMail = db.payslipMail || [];
+      var stamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      var out = { sent: [], failed: [], quotaLeft: 100, from: 'demo@example.com' };
+      (p.items || []).forEach(function (it) {
+        var ok = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(String(it.to || ''));
+        db.payslipMail.push({
+          id: 'ML' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
+          month: it.month, emp_code: it.emp_code, name: it.name, email: it.to,
+          sent_at: stamp, status: ok ? 'sent' : 'failed',
+          error: ok ? '' : 'No valid email address on the employee record', sent_by: 'demo'
+        });
+        (ok ? out.sent : out.failed).push({
+          emp_code: it.emp_code, name: it.name, to: it.to,
+          error: ok ? '' : 'No valid email address on the employee record'
+        });
+      });
+      demoSave(db);
+      return out;
     default:
       return {};
   }
@@ -2040,6 +2076,10 @@ function fieldInput(f, value) {
       return '<option value="' + esc(o) + '"' + (String(value || '') === o ? ' selected' : '') + '>' +
         esc(o) + '</option>';
     }).join('') + '</select>';
+  } else if (type === 'textarea') {
+    html = '<textarea data-f="' + name + '" rows="6" style="font:inherit;padding:8px 10px;' +
+      'border:1px solid var(--line);border-radius:8px;resize:vertical;line-height:1.6">' +
+      esc(value === undefined ? '' : value) + '</textarea>';
   } else if (type.indexOf('select:') === 0) {
     html = '<select data-f="' + name + '">' + type.slice(7).split(',').map(function (o) {
       return '<option value="' + esc(o) + '"' + (String(value || '') === o ? ' selected' : '') + '>' +
@@ -2049,7 +2089,8 @@ function fieldInput(f, value) {
     html = '<input data-f="' + name + '" type="' + type + '" value="' + esc(value === undefined ? '' : value) + '"' +
       (readonly ? ' readonly style="background:#f1f5f9"' : '') + '>';
   }
-  return '<label class="field">' + esc(label) + html + '</label>';
+  return '<label class="field"' + (type === 'textarea' ? ' style="grid-column:1/-1"' : '') + '>' +
+    esc(label) + html + '</label>';
 }
 
 function collectFields() {
@@ -3280,6 +3321,13 @@ function currentRun(ym) {
 
 function renderPayroll() {
   var ym = el('pay-month').value || thisMonth();
+  if (S.mailLogMonth !== ym) {
+    S.mailLogMonth = ym;
+    S.mailLog = [];
+    refreshMailLog(ym).then(function () {
+      if (S.mailLogMonth === ym && S.view === 'payroll') renderPayroll();
+    });
+  }
   var run = currentRun(ym);
   var rows = run.rows;
   if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
@@ -3332,7 +3380,7 @@ function renderPayroll() {
     '<th class="num-col">Arrears</th><th class="num-col">Incentive</th><th class="num-col">Gross</th>' +
     '<th class="num-col">PF</th><th class="num-col">ESI</th><th class="num-col">PT</th><th class="num-col">TDS</th>' +
     '<th class="num-col">Advance</th><th class="num-col">Other ded.</th>' +
-    '<th class="num-col">Net pay</th><th class="num-col">Change</th><th></th></tr></thead>';
+    '<th class="num-col">Net pay</th><th class="num-col">Change</th><th>Emailed</th><th></th></tr></thead>';
   var prevById = {};
   prevRun.forEach(function (r) { prevById[r.emp_code] = r; });
 
@@ -3364,12 +3412,13 @@ function renderPayroll() {
       '<td class="num-col">' + cell('other_deduction') + '</td>' +
       '<td class="num-col"><b>' + cur() + money(r.net) + '</b></td>' +
       '<td class="num-col">' + chg + '</td>' +
+      '<td>' + mailBadge(r.emp_code, ym) + '</td>' +
       '<td><button class="ghost sm" onclick="payslip(\'' + esc(r.emp_code) + '\',\'' + esc(r.month) +
         '\')">Payslip</button></td></tr>';
   }).join('');
 
   el('pay-table').innerHTML = head + '<tbody>' + (body ||
-    '<tr><td colspan="18" class="empty">No payroll for ' + esc(monthLabel(ym)) +
+    '<tr><td colspan="19" class="empty">No payroll for ' + esc(monthLabel(ym)) +
     '. Press "Generate from attendance" to build it.</td></tr>') + '</tbody>';
 }
 
@@ -3512,10 +3561,19 @@ function payslip(code, ym) {
   rows.forEach(function (x) { if (String(x.emp_code) === String(code)) r = x; });
   if (!r) return toast('No payroll row for this employee in ' + monthLabel(ym), 'bad');
   var e = empByCode(code) || {};
-  showModal('Payslip', '<div id="payslip-print">' + payslipHtml(r, e) + '</div>', [
+  var buttons = [
     { label: 'Close', cls: 'ghost', onClick: closeModal },
-    { label: 'Print', onClick: function () { printHtml('Payslip', el('payslip-print').innerHTML); } }
-  ]);
+    { label: 'Print', cls: 'ghost', onClick: function () {
+        printHtml('Payslip ' + monthLabel(ym) + ' - ' + (e.name || code),
+                  el('payslip-print').innerHTML);
+      } }
+  ];
+  if (isAdmin() && String(S.settings.payslip_email_enabled || 'yes') !== 'no') {
+    buttons.push({ label: '\u2709 Email', onClick: function () {
+      closeModal(); emailOnePayslip(code, ym);
+    } });
+  }
+  showModal('Payslip', '<div id="payslip-print">' + payslipHtml(r, e) + '</div>', buttons);
 }
 
 function printAllPayslips() {
@@ -3528,21 +3586,257 @@ function printAllPayslips() {
   }).join(''));
 }
 
+/* One payslip document, used for three things: the print window, the PDF
+   attached to the mail, and the HTML body of the mail itself. Styles are
+   inline-safe (no external sheet) because mail clients strip <style> blocks
+   inconsistently - the table layout still reads fine if they do. */
+function payslipCss() {
+  return '@page{size:A4 portrait;margin:14mm 12mm;}' +
+    'body{font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:#0f172a;margin:0;' +
+      'padding:18px;font-size:12px;background:#fff;}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:12px;}' +
+    'td,th{padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:left;}' +
+    'th{background:#f1f5f9;font-size:10px;text-transform:uppercase;letter-spacing:.3px;}' +
+    '.num-col{text-align:right;}' +
+    '.grid2{display:flex;gap:18px;} .grid2>table{flex:1;}' +
+    '.ps-head{text-align:center;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px;}' +
+    '.ps-head h2{font-size:18px;margin:0 0 3px;}' +
+    '.ps-net{background:#f1f5f9;padding:12px;border-radius:8px;display:flex;' +
+      'justify-content:space-between;font-weight:800;font-size:14px;}' +
+    '.payslip{max-width:720px;margin:0 auto;page-break-after:always;}' +
+    '.payslip:last-child{page-break-after:auto;}' +
+    'tr{page-break-inside:avoid;} thead{display:table-header-group;}' +
+    'input,select,button{display:none !important;}';
+}
+
+function payslipDocHtml(title, inner) {
+  return '<!doctype html><html><head><meta charset="utf-8">' +
+    '<title>' + esc(title) + '</title><style>' + payslipCss() + '</style></head><body>' +
+    inner + '</body></html>';
+}
+
 function printHtml(title, inner) {
   var w = window.open('', '_blank');
   if (!w) return toast('Allow pop-ups to print', 'bad');
-  w.document.write('<html><head><title>' + esc(title) + '</title><style>' +
-    'body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}' +
-    'table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px}' +
-    'td,th{padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:left}' +
-    '.num-col{text-align:right}.grid2{display:flex;gap:18px}.grid2>table{flex:1}' +
-    '.ps-head{text-align:center;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px}' +
-    '.ps-net{background:#f1f5f9;padding:12px;border-radius:8px;display:flex;justify-content:space-between;font-weight:800}' +
-    '.payslip{max-width:720px;margin:0 auto}' +
-    '</style></head><body>' + inner + '</body></html>');
+  w.document.write(payslipDocHtml(title, inner));
   w.document.close();
   w.focus();
-  w.print();
+  setTimeout(function () { w.print(); }, 250);
+}
+
+/* ------------------------- payslips by email --------------------- */
+/* Placeholders anyone can use in the subject and message in Settings. */
+function mailFill(tpl, r, e) {
+  var map = {
+    '{name}': e.name || r.emp_code, '{code}': r.emp_code,
+    '{month}': monthLabel(r.month), '{company}': S.settings.company_name || '',
+    '{net}': cur() + money(r.net), '{gross}': cur() + money(r.gross),
+    '{paid_days}': r.paid_days, '{lop_days}': r.lop_days
+  };
+  return String(tpl || '').replace(/\{(name|code|month|company|net|gross|paid_days|lop_days)\}/g,
+    function (m) { return map[m] === undefined ? m : String(map[m]); });
+}
+
+function mailItemFor(r, e) {
+  var subject = mailFill(S.settings.payslip_email_subject ||
+    'Payslip for {month} - {company}', r, e);
+  var text = mailFill(S.settings.payslip_email_message ||
+    'Dear {name},\n\nPlease find your payslip for {month} attached.\nNet pay credited: {net}.',
+    r, e);
+  var body = '<div style="font-family:system-ui,Arial,sans-serif;font-size:13px;color:#0f172a">' +
+    esc(text).replace(/\n/g, '<br>') + '<hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0">' +
+    '</div>' + payslipHtml(r, e);
+  return {
+    emp_code: r.emp_code, name: e.name || r.emp_code, month: r.month,
+    to: String(e.email || '').trim(),
+    subject: subject, text: text,
+    html: payslipDocHtml(subject, body),
+    filename: 'payslip-' + String(r.emp_code).replace(/[^A-Za-z0-9._-]/g, '') + '-' + r.month
+  };
+}
+
+/* Sends in small batches so a big month cannot hit the 6-minute script limit,
+   and so the progress line actually moves. */
+function sendPayslipBatches(items, onProgress) {
+  var size = 20, done = { sent: [], failed: [], quotaLeft: null, from: '' };
+  var chunks = [];
+  for (var i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks.reduce(function (chain, chunk, idx) {
+    return chain.then(function () {
+      return api('sendPayslips', {
+        items: chunk, by: S.user ? S.user.email : '',
+        attachPdf: S.settings.payslip_email_attach_pdf || 'yes'
+      }).then(function (res) {
+        done.sent = done.sent.concat(res.sent || []);
+        done.failed = done.failed.concat(res.failed || []);
+        done.quotaLeft = res.quotaLeft;
+        done.from = res.from || done.from;
+        if (onProgress) onProgress(Math.min((idx + 1) * size, items.length), items.length, done);
+      });
+    });
+  }, Promise.resolve()).then(function () { return done; });
+}
+
+function mailableRows(ym, only) {
+  var run = currentRun(ym);
+  var rows = run.rows;
+  if (only) rows = rows.filter(function (r) { return String(r.emp_code) === String(only); });
+  return { draft: run.draft || !runFinalised(ym), rows: rows };
+}
+
+/* One employee, from the payslip modal. */
+function emailOnePayslip(code, ym) {
+  var run = mailableRows(ym, code);
+  var r = run.rows[0];
+  if (!r) return toast('No payroll row for this employee', 'bad');
+  if (run.draft || String(r.status) === 'Draft') {
+    return toast('Finalise the run before emailing - a draft payslip is not final', 'bad');
+  }
+  var e = empByCode(code) || {};
+  if (!String(e.email || '').trim()) {
+    return toast('No email address on ' + (e.name || code) + "'s record", 'bad');
+  }
+  var item = mailItemFor(r, e);
+  showModal('Email this payslip?',
+    '<p>Send the ' + esc(monthLabel(ym)) + ' payslip to <b>' + esc(item.to) + '</b>?</p>' +
+    '<p style="margin-top:8px;font-size:.8rem;color:var(--text-muted);line-height:1.7">Subject: ' +
+    esc(item.subject) + '<br>' +
+    (String(S.settings.payslip_email_attach_pdf || 'yes') !== 'no'
+      ? 'The payslip goes as a PDF attachment and is repeated in the mail body.'
+      : 'The payslip goes in the mail body.') + '</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Send', onClick: function () {
+        closeModal();
+        toast('Sending...');
+        sendPayslipBatches([item]).then(function (res) {
+          if (res.sent.length) {
+            toast('Payslip emailed to ' + item.to, 'ok');
+            refreshMailLog(ym).then(renderPayroll);
+          } else {
+            toast((res.failed[0] && res.failed[0].error) || 'Could not send', 'bad');
+          }
+        }).catch(function (err) { toast(err.message, 'bad'); });
+      } }
+  ]);
+}
+
+/* Everyone in the month, from the payroll toolbar. */
+function emailAllPayslips() {
+  if (!isAdmin()) return toast('Only an admin can email payslips', 'bad');
+  var ym = el('pay-month').value || thisMonth();
+  var run = mailableRows(ym);
+  if (!run.rows.length) return toast('No payroll run for ' + monthLabel(ym), 'bad');
+  if (run.draft) {
+    return toast('Finalise the ' + monthLabel(ym) + ' run first - draft payslips cannot be emailed', 'bad');
+  }
+
+  var withMail = [], without = [];
+  run.rows.forEach(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    if (String(e.email || '').trim()) withMail.push(mailItemFor(r, e));
+    else without.push({ code: r.emp_code, name: e.name || r.emp_code });
+  });
+
+  var already = (S.mailLog || []).filter(function (m) {
+    return String(m.month) === ym && String(m.status) === 'sent';
+  });
+  var sentCodes = {};
+  already.forEach(function (m) { sentCodes[String(m.emp_code)] = true; });
+  var resend = withMail.filter(function (i) { return sentCodes[String(i.emp_code)]; });
+
+  var html =
+    '<p>Email the <b>' + esc(monthLabel(ym)) + '</b> payslip to <b>' + withMail.length +
+      '</b> employee' + (withMail.length === 1 ? '' : 's') + '.</p>' +
+    (resend.length ? '<p style="color:#b45309;font-size:.82rem">' + resend.length + ' of them were already sent this ' +
+      'month&rsquo;s payslip. Sending again will deliver a second copy.</p>' : '') +
+    (without.length
+      ? '<p style="color:#b45309;font-size:.82rem"><b>' + without.length + ' skipped</b> - no email address on the ' +
+        'record: ' + esc(without.slice(0, 8).map(function (x) { return x.name; }).join(', ')) +
+        (without.length > 8 ? ' and ' + (without.length - 8) + ' more' : '') + '. ' +
+        'Add their address in Employees and send again.</p>'
+      : '') +
+    (resend.length
+      ? '<label style="display:flex;gap:8px;align-items:center;margin:12px 0;font-size:.85rem">' +
+        '<input type="checkbox" id="mail-skip-sent" checked> Skip the ' + resend.length +
+        ' already sent this month</label>'
+      : '') +
+    '<p style="font-size:.78rem;color:var(--text-muted);line-height:1.7">Mail is sent from the ' +
+      'Google account that owns the spreadsheet, so it arrives from your own domain. ' +
+      'Google allows 100 emails a day on a free account and 1,500 on Workspace. ' +
+      'The subject and message are in <b>Settings &rarr; Payroll rules</b>.</p>' +
+    '<div id="mail-progress" style="margin-top:10px;font-size:.85rem"></div>';
+
+  showModal('Email payslips - ' + monthLabel(ym), html, [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Send', onClick: function () {
+        var skip = el('mail-skip-sent') && el('mail-skip-sent').checked;
+        var queue = skip ? withMail.filter(function (i) { return !sentCodes[String(i.emp_code)]; })
+                         : withMail;
+        if (!queue.length) return toast('Nothing left to send', 'bad');
+        var prog = el('mail-progress');
+        prog.innerHTML = 'Sending 0 of ' + queue.length + '...';
+        sendPayslipBatches(queue, function (done, total) {
+          prog.innerHTML = 'Sending ' + done + ' of ' + total + '...';
+        }).then(function (res) {
+          closeModal();
+          var msg = res.sent.length + ' payslip' + (res.sent.length === 1 ? '' : 's') + ' emailed';
+          if (res.failed.length) msg += ', ' + res.failed.length + ' failed';
+          toast(msg, res.failed.length ? 'bad' : 'ok');
+          if (res.failed.length) {
+            showModal('Email results', mailResultHtml(res, without),
+              [{ label: 'Close', cls: 'ghost', onClick: closeModal }]);
+          }
+          refreshMailLog(ym).then(renderPayroll);
+        }).catch(function (err) {
+          prog.innerHTML = '<span style="color:#b91c1c">' + esc(err.message) + '</span>';
+        });
+      } }
+  ]);
+}
+
+function mailResultHtml(res, skipped) {
+  return '<p><b>' + res.sent.length + '</b> sent' +
+    (res.quotaLeft !== null && res.quotaLeft !== undefined
+      ? ' &middot; ' + res.quotaLeft + ' emails left in today&rsquo;s Google quota' : '') +
+    '</p>' +
+    (res.failed.length
+      ? '<h3 style="margin:12px 0 6px">Did not send</h3><table><thead><tr><th>Employee</th>' +
+        '<th>Address</th><th>Why</th></tr></thead><tbody>' +
+        res.failed.map(function (f) {
+          return '<tr><td>' + esc(f.name || f.emp_code) + '</td><td>' + esc(f.to || '-') +
+            '</td><td>' + esc(f.error) + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '') +
+    ((skipped && skipped.length)
+      ? '<p style="font-size:.8rem;color:var(--text-muted)">' + skipped.length +
+        ' had no email address and were skipped.</p>' : '');
+}
+
+/* The sent log, so the payroll table can show who already has their slip. */
+function refreshMailLog(ym) {
+  S.mailLogMonth = ym;
+  return api('payslipMailLog', { month: ym }).then(function (rows) {
+    S.mailLog = rows || [];
+  }).catch(function () { S.mailLog = []; });
+}
+
+function mailBadge(code, ym) {
+  var m = mailStateFor(code, ym);
+  if (!m) return '<span class="sub-line">&mdash;</span>';
+  if (String(m.status) !== 'sent') {
+    return '<span class="badge b-red" title="' + esc(m.error || 'failed') + '">failed</span>';
+  }
+  return '<span class="badge b-green" title="' + esc(String(m.email || '')) + ' on ' +
+    esc(String(m.sent_at || '')) + '">sent</span>';
+}
+
+function mailStateFor(code, ym) {
+  var best = null;
+  (S.mailLog || []).forEach(function (m) {
+    if (String(m.emp_code) !== String(code) || String(m.month) !== String(ym)) return;
+    if (!best || String(m.sent_at) > String(best.sent_at)) best = m;
+  });
+  return best;
 }
 
 function exportPayroll() {
@@ -3861,6 +4155,17 @@ var PAYROLL_RULES = [
   ['pt_amount', 'Professional tax / month (used only if the CTC structure has no P.Tax slab)', 'number']
 ];
 
+var PAYSLIP_MAIL = [
+  ['payslip_email_enabled', 'Show the Email buttons in Payroll', 'select:yes,no'],
+  ['payslip_email_attach_pdf', 'Attach the payslip as a PDF', 'select:yes,no'],
+  ['payslip_email_from_name', 'Shown as sender (blank = company name)', 'text'],
+  ['payslip_email_reply_to', 'Replies go to', 'text'],
+  ['payslip_email_cc', 'Copy every payslip to (cc)', 'text'],
+  ['payslip_email_bcc', 'Blind copy every payslip to (bcc)', 'text'],
+  ['payslip_email_subject', 'Subject', 'text'],
+  ['payslip_email_message', 'Message', 'textarea']
+];
+
 /* Editable policy tables. */
 var SHIFT_COLS = [
   ['name', 'Name', 'text'], ['start_time', 'Start', 'time'], ['end_time', 'End', 'time'],
@@ -4152,7 +4457,23 @@ function payrollRulesPane() {
     'with.<br><br>' +
     '<b>Professional tax</b> comes from the <b>ptax</b> component in the CTC structure when one ' +
     'exists, so the payslip and the CTC sheet always agree. The flat amount above is only a fallback.' +
-    '</p>';
+    '</p>' +
+    '<h3 style="margin-top:24px">Emailing payslips</h3>' +
+    '<div style="font-size:.78rem;color:var(--text-muted);line-height:1.7;margin-bottom:12px">' +
+    'Payroll has an <b>Email payslips</b> button for the whole month and an ' +
+    '<b>Email</b> button on each payslip. Only a finalised run can be emailed. Mail leaves from the ' +
+    'Google account that owns the spreadsheet, so it arrives from your own domain &mdash; nothing is ' +
+    'sent through any third party.</div>' +
+    '<div class="grid2">' + PAYSLIP_MAIL.map(function (f) {
+      return fieldInput(f, S.settings[f[0]]);
+    }).join('') + '</div>' +
+    '<p style="margin-top:12px;font-size:.75rem;color:var(--text-muted);line-height:1.8">' +
+    'You can use <b>{name} {code} {month} {company} {net} {gross} {paid_days} {lop_days}</b> in the ' +
+    'subject and the message; each is filled in per employee.<br>' +
+    'Google allows about <b>100 emails a day</b> on a free Gmail account and <b>1,500</b> on Google ' +
+    'Workspace. A month with more staff than that is sent over two days &mdash; the ones that went ' +
+    'out are marked <b>sent</b> in the payroll table, so pressing Send again the next day picks up ' +
+    'only the rest.</p>';
 }
 
 /* ----------------------------- holidays -------------------------- */
