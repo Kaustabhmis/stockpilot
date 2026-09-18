@@ -498,6 +498,8 @@ hrms-lite/
 ├── netlify.toml                     static hosting config and headers
 ├── apps-script/Code.gs              the backend, runs inside your Google Sheet
 ├── app/icons/                       the app icon, drawn by app/make-icons.py
+├── app/index.html                   the employee phone app (punch, leave, calendar, approvals)
+├── app/app.webmanifest, app-sw.js   makes the employee app installable and offline-capable
 ├── app/android/                     Android project — a WebView wrapper, builds to an APK
 ├── tools/essl-sync.js               biometric sync agent for your office LAN
 ├── tools/essl-sync.config.example.json
@@ -578,6 +580,42 @@ var BRAND = { name: 'BISCS', suffix: 'OS',
 ```
 
 Change those five strings and the whole app follows; no other edit is needed.
+
+## The employee app
+
+`hrms-lite/app/index.html` is a second, separate front end: a phone app for staff, built
+for a thumb rather than a desk. It talks to the same workspace and is bound by the same
+server-side rules, so it can only ever show and change what the person signing in is allowed.
+
+**HR and owners cannot sign into it** — it says so and sends them to the full system in a browser.
+
+Five tabs along the bottom:
+
+| | |
+|---|---|
+| **Punch** | One big button: punch in, then punch out. Today's in, out and hours; the month's present / leave / absent / hours; today's notices. It takes a **fresh location fix at the moment of the punch**, not one from when the screen opened. Days where somebody never punched out are called out with a shortcut to raise a missed punch |
+| **Calendar** | Their own month, colour-coded, with the hours worked on each present day. Tap a day for in, out, hours and the remark — and if it is unmarked or has no punch-out, raise it from there |
+| **Requests** | Apply for **leave**, **OD**, a **missed punch** or a **comp-off**, each with the fields that kind actually needs — a missed punch asks for the in and out times, a comp-off asks whether to take a day off or be paid. Leave shows the balance left per type and counts only working days. Underneath, everything they have asked for, with its status and HR's note |
+| **Team** | **Only appears if people report to them.** Everything of their team's that is waiting, with approve and reject (reject asks for a reason the person will see), the ones already decided, and who reports to them. A badge on the tab counts what is waiting |
+| **Me** | Their profile, statutory details, leave balances, whether punching and the geofence are on, change password, sign out |
+
+### Managers
+
+The `manager` column on the Employees tab is what makes somebody a manager. It is free text, so
+the server matches it against **the manager's employee code first and their name second**, both
+trimmed and case-insensitive — whichever way the sheet was filled in.
+
+A manager's approval powers are narrow and enforced on the server, not in the app:
+
+- They may decide **only** applications from people who report to them. Their own, a colleague's,
+  or another manager's team are all refused.
+- A decision writes exactly four things: the status, who decided, when, and the note. A manager
+  cannot move the dates of a leave they are approving, or change anything else on the row.
+- Approving leave **marks the register** in the same move, skipping weekly offs and holidays
+  unless the sandwich rule is on — so an approved leave can never be one that nobody applied.
+- Already decided, or a month whose payroll is finalised, is refused with the reason.
+- They still see none of their team's salary, attendance or payslips. Their bootstrap carries the
+  team's names, codes and designations, and the applications waiting on them. Nothing else.
 
 ## On a phone: the punch app
 

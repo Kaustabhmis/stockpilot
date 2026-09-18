@@ -11,6 +11,7 @@
   command = """
     mkdir -p site/app
     cp index.html manifest.webmanifest sw.js site/
+    cp app/index.html app/app.webmanifest app/app-sw.js site/app/
     cp -r app/icons site/app/
   """
 

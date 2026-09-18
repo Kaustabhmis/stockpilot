@@ -3,7 +3,7 @@
     <string name="app_name">BISCS OS</string>
 
     <!-- The one line to change when the site moves. Everything else follows. -->
-    <string name="site_url">https://dehrms.netlify.app/</string>
+    <string name="site_url">https://dehrms.netlify.app/app/</string>
 
     <string name="need_location">Location is needed to punch in or out. Turn it on for this app in Settings.</string>
     <string name="offline">No internet. Your punch was not sent — try again once you have signal.</string>

@@ -302,7 +302,10 @@ function hasUsers() {
    person's record, whatever the browser sends. */
 var EMPLOYEE_ACTIONS = {
   bootstrap: 1, changePassword: 1, punchState: 1, webPunch: 1, ping: 1,
-  save: 1, remove: 1
+  save: 1, remove: 1,
+  /* Allowed through to decide(), which then refuses anyone who is not the
+     manager of the person the application belongs to. */
+  decide: 1
 };
 
 /* The only tabs an employee may write to, and only their own rows. */
@@ -356,6 +359,7 @@ function authorize(action, p, caller) {
   var code = String(caller.emp_code || '');
 
   if (action === 'bootstrap' || action === 'ping') return;   // read-only, already scoped
+  if (action === 'decide') return;        // decide() checks the reporting line itself
   if (action === 'changePassword') {
     p.email = caller.email;                        // only ever their own
     return;
@@ -423,7 +427,7 @@ function route(action, p, caller) {
     case 'esslPush':      return esslPush(p.month, p.rows);
     case 'ingestPunches': return ingestPunches(p.punches, p.token, p.source);
     case 'testIntegration': return testIntegration();
-    case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note);
+    case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note, p.geo);
     case 'punchState':    return punchState(p.emp_code);
     case 'sendPayslips':  return sendPayslips(p, caller);
     case 'mailQuota':     return { left: MailApp.getRemainingDailyQuota(), from: senderAddress() };
@@ -431,6 +435,7 @@ function route(action, p, caller) {
     case 'listUsers':     return listUsers();
     case 'saveUser':      return saveUser(p.user, caller);
     case 'removeUser':    return removeUser(p.email, caller);
+    case 'decide':        return decide(p.sheet, p.id, p.status, p.note, caller);
     default: throw new Error('Unknown action: ' + action);
   }
 }
@@ -797,6 +802,9 @@ function bootstrap(caller) {
       /* Staff see the notices that are live today - not the drafts, not the
          expired ones, and not the ones scheduled for next month. */
       notices:     liveNotices(),
+      /* Empty for almost everyone. For someone with people reporting to them,
+         their team and whatever of the team's is waiting on a decision. */
+      inbox:       code ? managerInbox(code) : { isManager: false, team: [], teamLeave: [], teamRequests: [] },
       sites:       [],
       ctcVariables: [],
       ctcComponents: [],
@@ -1714,4 +1722,166 @@ function liveNotices() {
     if (to && to < today) return false;
     return true;
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Managers: who reports to whom, and deciding their requests          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The people who report to one employee.
+ *
+ * The Employees sheet holds "manager" as free text, so it is matched against
+ * the manager's code first and their name second, both trimmed and
+ * case-insensitive. That covers a sheet filled in either way.
+ */
+function reportsTo(empCode) {
+  var code = String(empCode || '').trim().toLowerCase();
+  if (!code) return [];
+  var staff = readSheet('Employees');
+  var me = null;
+  staff.forEach(function (e) {
+    if (String(e.emp_code).trim().toLowerCase() === code) me = e;
+  });
+  var name = me ? String(me.name || '').trim().toLowerCase() : '';
+
+  return staff.filter(function (e) {
+    if (String(e.emp_code).trim().toLowerCase() === code) return false;   // not themselves
+    var m = String(e.manager || '').trim().toLowerCase();
+    if (!m) return false;
+    return m === code || (name && m === name);
+  });
+}
+
+function isManagerOf(managerCode, staffCode) {
+  var want = String(staffCode || '').trim().toLowerCase();
+  return reportsTo(managerCode).some(function (e) {
+    return String(e.emp_code).trim().toLowerCase() === want;
+  });
+}
+
+/** What a manager is handed: their team, and everything of the team's that is waiting. */
+function managerInbox(empCode) {
+  var team = reportsTo(empCode);
+  if (!team.length) return { isManager: false, team: [], teamLeave: [], teamRequests: [] };
+
+  var codes = {};
+  team.forEach(function (e) { codes[String(e.emp_code)] = true; });
+  var mine = function (r) { return codes[String(r.emp_code)]; };
+
+  return {
+    isManager: true,
+    team: team.map(function (e) {
+      return { emp_code: e.emp_code, name: e.name, department: e.department,
+               designation: e.designation, status: e.status };
+    }),
+    teamLeave: readSheet('Leave').filter(mine),
+    teamRequests: readSheet('Requests').filter(mine)
+  };
+}
+
+var DECIDABLE = { Leave: 'decision_note', Requests: 'note' };
+
+/**
+ * Approve, reject or cancel one leave application or request.
+ *
+ * This is the only way a manager can change anything that is not their own,
+ * and it writes exactly four fields - status and who decided it, when, and
+ * why. Nothing else in the row can be touched through here, so a manager
+ * cannot quietly move the dates of a leave they are approving.
+ *
+ * Approving a leave also marks the register, because a leave that is approved
+ * but never lands on attendance is worse than one that was never approved.
+ */
+function decide(sheetName, id, status, note, caller) {
+  var noteCol = DECIDABLE[sheetName];
+  if (!noteCol) throw new Error('Nothing to decide on that sheet.');
+
+  var want = String(status || '');
+  if (['Approved', 'Rejected', 'Cancelled'].indexOf(want) < 0) {
+    throw new Error('A decision must be Approved, Rejected or Cancelled.');
+  }
+
+  var rows = indexed(sheetName), target = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].data.id) === String(id)) { target = rows[i]; break; }
+  }
+  if (!target) throw new Error('That application no longer exists.');
+
+  var owner = String(target.data.emp_code || '');
+  var byHr = isHrOrAbove(caller.role);
+  if (!byHr && !isManagerOf(caller.emp_code, owner)) {
+    throw new Error('Not allowed. You can only decide requests from your own team.');
+  }
+
+  var was = String(target.data.status || 'Pending');
+  if (was !== 'Pending' && !byHr) {
+    throw new Error('This has already been ' + was.toLowerCase() + '.');
+  }
+
+  var month = String(target.data.from_date || target.data.date || '').slice(0, 7);
+  if (month && monthIsLocked(month)) {
+    throw new Error('Payroll for ' + month + ' is finalised, so this cannot be changed now.');
+  }
+
+  var sh = sheet(sheetName), cols = SHEETS[sheetName];
+  var set = function (col, value) {
+    var at = cols.indexOf(col);
+    if (at >= 0) sh.getRange(target.row, at + 1).setValue(value);
+  };
+  set('status', want);
+  set('decided_by', caller.email || '');
+  set('decided_at', nowStamp());
+  if (note) set(noteCol, String(note).slice(0, 500));
+
+  var marked = 0;
+  if (want === 'Approved' && sheetName === 'Leave') {
+    marked = markLeaveOnRegister(target.data);
+  }
+  return { id: id, status: want, days_marked: marked };
+}
+
+function nowStamp() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+}
+
+function monthIsLocked(month) {
+  var locked = false;
+  readSheet('Payroll').forEach(function (r) {
+    if (String(r.month) === String(month) && String(r.status) === 'Finalised') locked = true;
+  });
+  return locked;
+}
+
+/** Weekly offs and holidays are not charged as leave unless the sandwich rule says so. */
+function markLeaveOnRegister(leave) {
+  var st = settingsMap();
+  var sandwich = String(st.sandwich_rule || 'no').toLowerCase() === 'yes';
+  var weeklyOff = String(st.weekly_off || 'Sun').slice(0, 3).toLowerCase();
+  var days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+  var holidays = {};
+  readSheet('Holidays').forEach(function (h) {
+    if (String(h.optional || 'no').toLowerCase() !== 'yes') holidays[String(h.date)] = true;
+  });
+
+  var from = String(leave.from_date || ''), to = String(leave.to_date || from);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return 0;
+
+  var rows = [], cursor = new Date(from + 'T00:00:00'), end = new Date(to + 'T00:00:00');
+  var guard = 0;
+  while (cursor <= end && guard++ < 400) {
+    var iso = Utilities.formatDate(cursor, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var off = days[cursor.getDay()] === weeklyOff || holidays[iso];
+    if (!off || sandwich) {
+      rows.push({
+        id: leave.emp_code + '_' + iso, date: iso, emp_code: leave.emp_code,
+        status: 'L', in_time: '', out_time: '', hours: 0,
+        remarks: 'leave: ' + (leave.type || ''), updated_at: iso
+      });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  if (rows.length) upsertMany('Attendance', rows);
+  return rows.length;
 }
