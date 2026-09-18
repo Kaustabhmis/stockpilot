@@ -129,6 +129,10 @@ Hours are shown as **h:mm**, not decimals, because 8:32 is what a shop floor rea
 from the in and out times when both are there, falling back to the saved `hours` value; a shift
 that crosses midnight is handled, so 22:00 → 06:00 is 8:00 and not minus sixteen hours.
 
+A **unit picker** sits beside the month for the salary register (and only for it — the other
+reports are company-wide by nature). Pick one and the screen, the print and the CSV all narrow to
+that unit, with the note saying which. Handy when each unit head wants their own sheet.
+
 **Export CSV** and **Print** both follow the view you are on: the status export is one column per
 day, the timesheet export is `in`, `out` and `hours` per day plus the totals; print comes out
 landscape with the totals row.
@@ -167,6 +171,27 @@ all in **Settings → Payroll rules**. The subject and message take `{name}` `{c
 
 In the **demo** nothing is emailed anywhere: the send is recorded so you can see the screen work,
 and no mail leaves the browser.
+
+### Printing
+
+Every report, the attendance register in either view, payslips and a department
+list all print through one path: company letterhead, the title and period, a
+*"Printed &lt;date&gt; by &lt;user&gt;"* line, repeating table headers, no row split across a page
+break, and a footer.
+
+**The page decides the density, not the other way round.** A4 landscape gives about 1,040px of
+usable width; a thirty-column salary register wants 1,700px, so the right-hand third used to fall
+off the paper silently. The type and padding now tighten as the table widens — normal up to
+twelve columns, smaller to twenty, smallest past twenty — and the register prints its column
+headings short (*Present*, *PF 12%*, *Net payable*) instead of the long sentences it shows on
+screen. Same columns, same order, all of them on the page.
+
+Every report was measured at true A4 rather than eyeballed: **all eleven printable views now fit
+the page width**, where the salary register previously overflowed by 672px.
+
+The register's unit blocks and its grand total share one column layout, so the totals line up
+under the figures they total — before, each block sized its own columns and the grand total never
+matched.
 
 ### The salary register, unit by unit
 

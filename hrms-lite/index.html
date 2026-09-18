@@ -231,7 +231,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .reg-block{margin-bottom:22px;}
 .reg-title{font-weight:800;font-size:.82rem;letter-spacing:.4px;text-transform:uppercase;
   padding:8px 10px;background:#0f172a;color:#fff;border-radius:7px 7px 0 0;}
-.reg-table{font-size:.72rem;}
+.reg-table{font-size:.72rem;table-layout:fixed;width:1500px;}
 .reg-table th{font-size:.6rem;padding:6px 5px;line-height:1.25;white-space:normal;min-width:52px;vertical-align:bottom;}
 .reg-table td{padding:5px;white-space:nowrap;}
 .reg-total td{background:#f1f5f9;font-weight:800;border-top:2px solid var(--border);}
@@ -760,6 +760,9 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
       <div class="card">
         <div class="toolbar">
           <label class="field">Month<input type="month" id="rep-month" onchange="renderReports()"></label>
+          <label class="field" id="rep-unit-wrap" style="display:none">Unit
+            <select id="rep-unit" onchange="renderReports()"><option value="">All units</option></select>
+          </label>
           <label class="field">Report
             <select id="rep-kind" onchange="renderReports()">
               <option value="register">Salary register (unit-wise)</option>
@@ -4575,6 +4578,9 @@ function registerRows(ym) {
 function renderReports() {
   var ym = el('rep-month').value || thisMonth();
   var kind = el('rep-kind').value;
+  /* The unit picker belongs to the salary register alone - the other reports
+     are company-wide by nature. */
+  el('rep-unit-wrap').style.display = kind === 'register' ? '' : 'none';
   var spec = { register: reportRegister, wages: reportWages, leave: reportLeave,
                statutory: reportStatutory, ytd: reportYtd, exceptions: reportExceptions,
                movement: reportMovement }[kind](ym);
@@ -7846,6 +7852,34 @@ var REGISTER_COLS = [
   'Total Deduction', 'Net Amount Payable',
   'BASIC SALARY', 'HRA', 'TA/SP ALW', 'TOTAL'
 ];
+/* On screen the headings are the company's own wording, straight off their
+   sheet. On paper those sentences are what makes the register 1,700px wide and
+   push two thirds of it off the page, so print uses these instead. Same
+   columns, same order - just the short name for each. */
+var REGISTER_PRINT_COLS = [
+  'SR', 'CODE', 'Name', 'Division', 'Days',
+  'Present', 'Paid hol.', 'Absent', 'Week off', 'Leave',
+  'Final att.', 'Extra', 'Basic', 'HRA', 'TA/SP/OT',
+  'Incentive', 'Arrear', 'Salary earned', 'PF 12%', 'ESIC .75%',
+  'P.Tax', 'I.Tax', 'Advance', 'Other ded.',
+  'Total ded.', 'Net payable',
+  'Basic', 'HRA', 'TA/SP', 'Total'
+];
+/* Every unit block, and the grand total, are separate tables. Left to size
+   themselves each one picks its own column widths, so the grand total never
+   lines up under the figures it totals. One shared column layout fixes that. */
+var REGISTER_WIDTHS = [
+  1.2, 3.0, 6.2, 2.4, 2.0,   2.5, 2.3, 2.2, 2.4, 2.0,
+  2.6, 2.0, 3.4, 3.0, 3.0,   2.8, 2.5, 3.6, 2.8, 2.8,
+  2.2, 2.2, 2.6, 2.6, 3.0,   3.6, 3.0, 2.8, 2.6, 3.2
+];
+function registerColgroup() {
+  var sum = REGISTER_WIDTHS.reduce(function (t, w) { return t + w; }, 0);
+  return '<colgroup>' + REGISTER_WIDTHS.map(function (w) {
+    return '<col style="width:' + (w * 100 / sum).toFixed(3) + '%">';
+  }).join('') + '</colgroup>';
+}
+
 /* the last four repeat the agreed full-month structure, as in the sheet */
 var REGISTER_NUM_FROM = 4;
 
@@ -7911,7 +7945,23 @@ function reportRegister(ym) {
     (units[u] = units[u] || []).push({ e: e, r: r });
   });
 
-  var order = Object.keys(units).sort();
+  /* Keep the picker in step with whatever units actually have people this
+     month, and hold on to the choice if it is still one of them. */
+  var allUnits = Object.keys(units).sort();
+  var pick = el('rep-unit');
+  if (pick) {
+    var chosen = pick.value;
+    if (chosen && allUnits.indexOf(chosen) < 0) chosen = '';
+    pick.innerHTML = '<option value="">All units (' + allUnits.length + ')</option>' +
+      allUnits.map(function (u) {
+        return '<option value="' + esc(u) + '"' + (u === chosen ? ' selected' : '') + '>' +
+          esc(u) + ' (' + units[u].length + ')</option>';
+      }).join('');
+    pick.value = chosen;
+  }
+  var only = pick ? pick.value : '';
+
+  var order = allUnits.filter(function (u) { return !only || u === only; });
   var allRows = [], html = '', grand = null;
   var numeric = function (v) { return typeof v === 'number' ? v : 0; };
 
@@ -7932,7 +7982,8 @@ function reportRegister(ym) {
     html += '<div class="reg-block">' +
       '<div class="reg-title">SALARY REGISTER OF STAFF UNIT-' + esc(u.toUpperCase()) +
         ' FOR THE MONTH OF ' + esc(monthLabel(ym).toUpperCase()) + '</div>' +
-      '<div class="table-wrap" style="max-height:none"><table class="reg-table"><thead><tr>' +
+      '<div class="table-wrap" style="max-height:none"><table class="reg-table">' +
+      registerColgroup() + '<thead><tr>' +
       REGISTER_COLS.map(function (c, i) {
         return '<th' + (i >= REGISTER_NUM_FROM ? ' class="num-col"' : '') + '>' + esc(c) + '</th>';
       }).join('') + '</tr></thead><tbody>' +
@@ -7953,7 +8004,7 @@ function reportRegister(ym) {
     grand[2] = 'GRAND TOTAL (' + run.length + ')';
     allRows.push(grand);
     html += '<div class="reg-block"><div class="table-wrap" style="max-height:none">' +
-      '<table class="reg-table"><tbody><tr class="reg-total">' +
+      '<table class="reg-table">' + registerColgroup() + '<tbody><tr class="reg-total">' +
       grand.map(function (v, i) {
         return '<td' + (i >= REGISTER_NUM_FROM ? ' class="num-col"' : '') + '>' +
           (typeof v === 'number' ? money(v) : esc(v)) + '</td>';
@@ -7968,9 +8019,12 @@ function reportRegister(ym) {
     title: 'Salary register — ' + monthLabel(ym),
     note: (live ? 'Live preview from attendance; this month has not been finalised yet. '
                 : 'From the saved payroll run. ') +
+      (only ? 'Unit ' + only + ' only. ' : 'All ' + allUnits.length + ' units. ') +
       'Grouped by ' + (S.settings.register_group_by || 'unit') +
       '. The last four columns are the agreed monthly structure, not the earned amount.',
-    cols: REGISTER_COLS, rows: allRows, html: html || '<div class="empty">Nobody to show.</div>',
+    cols: REGISTER_COLS, rows: allRows,
+    printHeaders: REGISTER_COLS.map(function (c, i) { return [c, REGISTER_PRINT_COLS[i] || c]; }),
+    html: html || '<div class="empty">Nobody in this unit for ' + esc(monthLabel(ym)) + '.</div>',
     kpis: kpi('Units', order.length, order.join(', ')) +
           kpi('Employees', run.length, 'on salary') +
           kpi('Salary earned', cur() + money(earn), 'before deductions') +
@@ -9067,13 +9121,22 @@ function printReport() {
   var bodyHtml = spec && spec.html
     ? spec.html
     : '<table class="reg-table">' + (el('rep-table') ? el('rep-table').innerHTML : '') + '</table>';
-  var wide = (spec && spec.cols ? spec.cols.length : 0) > 9;
+  var cols = (spec && spec.cols ? spec.cols.length : 0);
+  /* Swap the company's long headings for the short ones, on paper only. */
+  if (spec && spec.printHeaders) {
+    spec.printHeaders.forEach(function (pair) {
+      bodyHtml = bodyHtml.split('<th>' + pair[0] + '</th>').join('<th>' + pair[1] + '</th>')
+                         .split('<th class="num-col">' + pair[0] + '</th>')
+                         .join('<th class="num-col">' + pair[1] + '</th>');
+    });
+  }
 
   printDocument({
     title: (spec && spec.title) || kindName,
     subtitle: (spec && spec.note) || '',
     body: bodyHtml,
-    landscape: wide,
+    landscape: cols > 9,
+    cols: cols,
     fileTitle: kindName + ' ' + ym
   });
 }
@@ -9086,8 +9149,18 @@ function printDocument(opts) {
   var w = window.open('', '_blank');
   if (!w) return toast('Allow pop-ups to print', 'bad');
   var when = new Date();
+
+  /* A4 landscape gives about 1040px of usable width. Thirty columns of rupees
+     do not fit at a comfortable size, so the type and padding tighten as the
+     table gets wider rather than the right-hand columns silently falling off
+     the paper. */
+  var cols = opts.cols || 0;
+  var dense = cols >= 21 ? { td: 6.8, th: 6, pad: '1px 1.5px', name: 62 }
+            : cols >= 15 ? { td: 8.2, th: 7, pad: '2px 3px', name: 90 }
+            : { td: 11, th: 9.5, pad: '4px', name: 0 };
+
   var css =
-    '@page{size:' + (opts.landscape ? 'A4 landscape' : 'A4 portrait') + ';margin:12mm 10mm;}' +
+    '@page{size:' + (opts.landscape ? 'A4 landscape' : 'A4 portrait') + ';margin:12mm 8mm;}' +
     'body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;margin:0;font-size:12px;}' +
     '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;' +
       'padding-bottom:10px;margin-bottom:14px;}' +
@@ -9096,14 +9169,21 @@ function printDocument(opts) {
     '.head .rt b{display:block;font-size:13px;color:#0f172a;}' +
     '.note{font-size:11px;color:#475569;margin-bottom:12px;line-height:1.5;}' +
     'table{width:100%;border-collapse:collapse;margin-bottom:14px;}' +
-    'th{background:#f1f5f9;text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;' +
-      'padding:5px 4px;border-bottom:1.5px solid #cbd5e1;vertical-align:bottom;}' +
-    'td{padding:4px;border-bottom:1px solid #e2e8f0;font-size:11px;}' +
+    'th{background:#f1f5f9;text-align:left;font-size:' + dense.th + 'px;text-transform:uppercase;' +
+      'letter-spacing:.2px;padding:' + dense.pad + ';border-bottom:1.5px solid #cbd5e1;' +
+      'vertical-align:bottom;overflow-wrap:anywhere;}' +
+    'td{padding:' + dense.pad + ';border-bottom:1px solid #e2e8f0;font-size:' + dense.td + 'px;' +
+      'overflow-wrap:anywhere;}' +
+    /* Names are the one text column in a wall of numbers; cap it so one long
+       name cannot widen the whole table. */
+    (dense.name ? 'td:nth-child(3),th:nth-child(3){max-width:' + dense.name + 'px;}' : '') +
+    'table{table-layout:auto;}' +
     '.num-col{text-align:right;}' +
     '.reg-title{font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.4px;' +
       'padding:6px 8px;background:#0f172a;color:#fff;margin-top:10px;}' +
     '.reg-total td{background:#f1f5f9;font-weight:800;border-top:1.5px solid #94a3b8;}' +
     '.reg-block{page-break-inside:auto;margin-bottom:16px;}' +
+    '.reg-table{table-layout:fixed;width:100%;}' +
     'tr{page-break-inside:avoid;} thead{display:table-header-group;}' +
     '.badge{font-size:10px;padding:1px 5px;border-radius:99px;background:#e2e8f0;}' +
     '.table-wrap{max-height:none !important;overflow:visible !important;border:0 !important;}' +
