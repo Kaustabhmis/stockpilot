@@ -1,8 +1,8 @@
 # Builds the employee punch app into an installable APK.
 #
 # GitHub's Linux runners already carry the Android SDK, so nobody needs
-# Android Studio or a build machine. Run it from the Actions tab
-# (Run workflow) and download the APK from the run's Artifacts.
+# Android Studio or a build machine. Actions tab -> Build the Android APK ->
+# Run workflow, then download the APK from the run's Artifacts.
 name: Build the Android APK
 
 on:
@@ -31,8 +31,14 @@ jobs:
       - name: Set up the Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Pinned because the Android plugin below needs 8.7 or newer.
+          gradle-version: '8.9'
+
       - name: Point the app at the live site
-        # Keeps the URL in one place: change it here or in strings.xml.
+        # One place for the URL: this repository variable, or strings.xml.
         env:
           SITE_URL: ${{ vars.SITE_URL }}
         run: |
@@ -42,20 +48,25 @@ jobs:
           fi
           grep site_url app/src/main/res/values/strings.xml
 
-      - name: Build
-        run: |
-          chmod +x ./gradlew 2>/dev/null || true
-          gradle wrapper --gradle-version 8.7 --no-daemon
-          ./gradlew assembleRelease --no-daemon --stacktrace
+      # Debug first: it is the one that cannot fail for signing reasons, so
+      # there is always something to install even if the release build trips.
+      - name: Build the debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Name it by run number
+      - name: Build the release APK
+        continue-on-error: true
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Collect the APKs
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/*.apk "out/biscs-os-${{ github.run_number }}.apk"
+          find app/build/outputs/apk -name '*.apk' -print -exec sh -c \
+            'cp "$1" "out/biscs-os-$(basename $(dirname $1))-${{ github.run_number }}.apk"' _ {} \;
           ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
           name: biscs-os-apk
           path: hrms-lite/app/android/out/*.apk
+          if-no-files-found: error
           retention-days: 90
