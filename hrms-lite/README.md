@@ -913,6 +913,25 @@ cancelled either. **Reopen run** unlocks it when a correction is genuinely neede
 
 ## Notes and limits
 
+- **Speed.** Apps Script charges by how much of a sheet you pull back, so the code is written to
+  pull as little as possible:
+  - **Each tab is read once per request.** Building one screen used to read `Employees` fifty
+    times and `ApprovalLevels` once per leave row — 719 round trips for a single sign-in. It is
+    now 9.
+  - **Attendance is read in a window, not in full.** One row per person per working day means a
+    year of 500 people is 125,000 rows, and dragging all of it down to show this month is what
+    makes an HRMS feel slow. Sign-in reads the most recent `bootstrap_attendance_days` (default
+    150) worth; older months are still there and are read when a report asks for them. Without
+    this, every year the system gets slower.
+  - **Saving one row finds it by searching, not by reading.** Recording a punch used to pull all
+    125,000 attendance rows back to locate the one row to overwrite. Sheets' own text search
+    returns the row number and only that row is read — a punch went from 170,000 rows to 45,000,
+    and the search is restricted to the key column and matched whole-cell, so `E1` never matches
+    `E10`.
+  - The punch screen reads a six-week window rather than the whole history.
+  - Imports were already bulk: read once, merge in memory, write back in one call.
+
+  If a tab ever does need reading in full on sign-in, set `bootstrap_attendance_days` to `0`.
 - **Concurrency**: writes take an Apps Script lock, so two people saving at once is safe.
 - **Bulk writes**: imports read the tab once, merge in memory and write back in a single call. Row
   by row would be O(n²) and would time out on a 500-employee master or a month of punches.

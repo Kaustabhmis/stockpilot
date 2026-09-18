@@ -98,6 +98,7 @@ var DEFAULT_SETTINGS = {
   sync_last_push: '',
   import_companies: '',
   register_group_by: 'unit',
+  bootstrap_attendance_days: '150',
   payslip_email_enabled: 'yes',
   payslip_email_attach_pdf: 'yes',
   payslip_email_subject: 'Payslip for {month} - {company}',
@@ -148,6 +149,7 @@ function handle(action, payload, callback, token) {
   try {
     /* Who is calling, and may they do this? Both are decided here, on the
        server. The browser hides buttons as a courtesy; this is the fence. */
+    clearReadCache();
     var caller = authenticate(action, token);
     authorize(action, payload || {}, caller);
 
@@ -746,8 +748,8 @@ function stamped(sheetName) {
   };
 }
 
-function onlyMine(sheetName, code) {
-  return readSheet(sheetName).filter(function (r) {
+function onlyMine(sheetName, code, tailRows) {
+  return readSheet(sheetName, tailRows).filter(function (r) {
     return String(r.emp_code) === String(code);
   });
 }
@@ -761,6 +763,21 @@ function onlyMine(sheetName, code) {
  * point that decides it: filtering in the browser would still have sent every
  * salary in the company down the wire.
  */
+/**
+ * How much attendance history a screen actually needs on open.
+ *
+ * The dashboard shows this month and the last fortnight; the register shows one
+ * month; payroll works a month at a time. Older months are still there and are
+ * read when a report asks for them - this only bounds what every sign-in drags
+ * down. One row per person per working day, so the window is sized from
+ * headcount.
+ */
+function attendanceWindow(people) {
+  var days = parseInt(settingsMap().bootstrap_attendance_days || '150', 10);
+  if (!(days > 0)) return 0;                       // 0 = no limit, read it all
+  return Math.max(2000, Math.ceil((people || 1) * days * 1.15));
+}
+
 function bootstrap(caller) {
   if (caller && isHrOrAbove(caller.role)) {
     var owner = isOwner(caller.role);
@@ -768,7 +785,7 @@ function bootstrap(caller) {
       role: owner ? 'owner' : 'hr',
       settings:   owner ? settingsMap() : hrSettings(),
       employees:  readSheet('Employees'),
-      attendance: readSheet('Attendance'),
+      attendance: readSheet('Attendance', attendanceWindow(readSheet('Employees').length)),
       leave:      readSheet('Leave').map(stamped('Leave')),
       payroll:    readSheet('Payroll'),
       holidays:   readSheet('Holidays'),
@@ -801,11 +818,10 @@ function bootstrap(caller) {
       role: 'employee',
       settings:    employeeSettings(),
       employees:   me ? [me] : [],
-      attendance:  code ? onlyMine('Attendance', code) : [],
+      attendance:  code ? onlyMine('Attendance', code, attendanceWindow(readSheet('Employees').length)) : [],
       leave:       code ? onlyMine('Leave', code).map(stamped('Leave')) : [],
       payroll:     code ? onlyMine('Payroll', code) : [],
       requests:    code ? onlyMine('Requests', code).map(stamped('Requests')) : [],
-      punches:     code ? onlyMine('Punches', code) : [],
       ctcValues:   code ? onlyMine('CtcValues', code) : [],
       holidays:    readSheet('Holidays'),
       events:      readSheet('Events'),
@@ -837,8 +853,15 @@ function sheet(name) {
   return sh;
 }
 
-function readSheet(name) {
-  return indexed(name).map(function (x) { return x.data; });
+function readSheet(name, tailRows) {
+  return indexed(name, tailRows).map(function (x) { return x.data; });
+}
+
+/* A write invalidates what this request has cached for that tab. */
+function touched(name) {
+  Object.keys(READ_CACHE).forEach(function (k) {
+    if (k.indexOf(name + '|') === 0) delete READ_CACHE[k];
+  });
 }
 
 /**
@@ -846,21 +869,56 @@ function readSheet(name) {
  * Writers must use this - readSheet() skips blank rows, so its array
  * index would point at the wrong sheet row once a gap exists.
  */
-function indexed(name) {
+/**
+ * Every tab this request has already read.
+ *
+ * One call used to read Employees fifty times and ApprovalLevels once per
+ * leave row - seven hundred round trips to build one screen. A request is a
+ * single short-lived execution, so reading a tab twice inside it is pure
+ * waste. Cleared at the start of every request in handle().
+ */
+var READ_CACHE = {};
+function clearReadCache() { READ_CACHE = {}; }
+
+/**
+ * tailRows, when given, reads only the last N data rows instead of the whole
+ * tab. Attendance grows by one row per person per day - a year of 500 people
+ * is 125,000 rows, and pulling all of it to show this month is what makes the
+ * app feel slow. Rows are appended in date order, so the recent ones are at
+ * the end.
+ */
+function indexed(name, tailRows) {
+  var key = name + '|' + (tailRows || 0);
+  if (READ_CACHE[key]) return READ_CACHE[key];
+
   var sh = sheet(name);
   var headers = SHEETS[name];
   var lastRow = sh.getLastRow();
-  if (lastRow < 2) return [];
-  var values = sh.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  if (lastRow < 2) return (READ_CACHE[key] = []);
+
+  var first = 2, count = lastRow - 1;
+  if (tailRows && count > tailRows) { first = lastRow - tailRows + 1; count = tailRows; }
+
+  var values = sh.getRange(first, 1, count, headers.length).getValues();
   var tz = Session.getScriptTimeZone();
   var out = [];
   values.forEach(function (r, i) {
     if (r.join('') === '') return;
     var obj = {};
     headers.forEach(function (h, c) { obj[h] = normalize(r[c], h, tz); });
-    out.push({ row: i + 2, data: obj });
+    out.push({ row: i + first, data: obj });
   });
+  READ_CACHE[key] = out;
   return out;
+}
+
+/** One row by its key, without dragging the whole tab back. */
+function findRow(name, key, value) {
+  var rows = indexed(name);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].data[key]) === String(value)) return rows[i];
+  }
+  return null;
 }
 
 /**
@@ -897,7 +955,28 @@ function normalize(value, header, tz) {
 
 function keyColumn(name) { return name === 'Employees' ? 'emp_code' : (name === 'Users' ? 'email' : 'id'); }
 
+/**
+ * Where a row with this key lives, without reading the tab.
+ *
+ * Saving one punch used to pull all 125,000 attendance rows back just to find
+ * the one row to overwrite. A text search runs inside Sheets and returns the
+ * row number; only that row is then read. Restricted to the key column and
+ * matching the whole cell, so "E1" never matches "E10" or a remark.
+ */
+function rowNumberOf(name, key, value) {
+  var sh = sheet(name);
+  var at = SHEETS[name].indexOf(key);
+  var lastRow = sh.getLastRow();
+  if (at < 0 || lastRow < 2) return 0;
+  var hit = sh.getRange(2, at + 1, lastRow - 1, 1)
+              .createTextFinder(String(value))
+              .matchEntireCell(true)
+              .findNext();
+  return hit ? hit.getRow() : 0;
+}
+
 function upsert(name, row) {
+  touched(name);
   var headers = SHEETS[name];
   var key = keyColumn(name);
   if (name === 'Employees' && !String(row.emp_code || '').trim()) {
@@ -905,18 +984,21 @@ function upsert(name, row) {
   }
   if (!row[key]) row[key] = newId();
   var sh = sheet(name);
-  var rows = indexed(name);
-  var line = headers.map(function (h) { return row[h] === undefined ? '' : row[h]; });
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].data[key]) === String(row[key])) {
-      // keep values the caller did not send
-      var prev = rows[i].data;
-      line = headers.map(function (h) { return row[h] === undefined ? prev[h] : row[h]; });
-      sh.getRange(rows[i].row, 1, 1, headers.length).setValues([line]);
-      return row;
-    }
+
+  var at = rowNumberOf(name, key, row[key]);
+  if (at) {
+    /* Read back just that row, so fields the caller left out keep their
+       current values instead of being blanked. */
+    var prevLine = sh.getRange(at, 1, 1, headers.length).getValues()[0];
+    var tz = Session.getScriptTimeZone();
+    var prev = {};
+    headers.forEach(function (h, c) { prev[h] = normalize(prevLine[c], h, tz); });
+    sh.getRange(at, 1, 1, headers.length).setValues([
+      headers.map(function (h) { return row[h] === undefined ? prev[h] : row[h]; })
+    ]);
+    return row;
   }
-  sh.appendRow(line);
+  sh.appendRow(headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
   return row;
 }
 
@@ -926,6 +1008,7 @@ function upsert(name, row) {
  * employees, or a month of biometric punches).
  */
 function upsertMany(name, rows) {
+  touched(name);
   rows = rows || [];
   if (!rows.length) return { saved: 0 };
   var headers = SHEETS[name], key = keyColumn(name);
@@ -963,6 +1046,7 @@ function upsertMany(name, rows) {
 
 /** Append-only, for the raw punch log - never keyed, never rewritten. */
 function appendMany(name, rows) {
+  touched(name);
   rows = rows || [];
   if (!rows.length) return { added: 0 };
   var headers = SHEETS[name], sh = sheet(name);
@@ -991,12 +1075,14 @@ function trimPunches() {
 }
 
 function appendRow(name, row) {
+  touched(name);
   var headers = SHEETS[name];
   sheet(name).appendRow(headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
   return row;
 }
 
 function removeRow(name, id) {
+  touched(name);
   var key = keyColumn(name);
   var rows = indexed(name);
   var sh = sheet(name);
@@ -1007,6 +1093,7 @@ function removeRow(name, id) {
 }
 
 function removeMany(name, ids) {
+  touched(name);
   var key = keyColumn(name);
   var wanted = {};
   (ids || []).forEach(function (id) { wanted[String(id)] = true; });
@@ -1332,11 +1419,17 @@ function nowParts() {
   };
 }
 
+/* Punching needs today's row and any recent day left open - not the year.
+   Sized from headcount so it holds roughly the last six weeks. */
+function punchWindow() {
+  return Math.max(1000, readSheet('Employees').length * 45);
+}
+
 /** Today's punch record plus any earlier day left open. */
 function punchState(empCode) {
   if (!empCode) throw new Error('No employee is linked to this login.');
   var n = nowParts();
-  var rows = readSheet('Attendance').filter(function (a) {
+  var rows = readSheet('Attendance', punchWindow()).filter(function (a) {
     return String(a.emp_code) === String(empCode);
   });
   var todayRow = null, open = [];
@@ -1463,7 +1556,7 @@ function webPunch(empCode, kind, note, geo) {
 
   var id = empCode + '_' + n.date;
   var row = null;
-  readSheet('Attendance').forEach(function (a) { if (String(a.id) === id) row = a; });
+  readSheet('Attendance', punchWindow()).forEach(function (a) { if (String(a.id) === id) row = a; });
   row = row || { id: id, date: n.date, emp_code: empCode, status: '', in_time: '', out_time: '',
                  hours: 0, remarks: '' };
 
