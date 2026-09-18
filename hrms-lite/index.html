@@ -71,12 +71,41 @@ body{background:var(--bg-main);color:var(--text-dark);display:flex;height:100vh;
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;}
 .toolbar .spacer{flex:1;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px;margin-bottom:18px;}
-.kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;}
-.kpi .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:700;}
-.kpi .value{font-size:1.55rem;font-weight:800;margin-top:6px;line-height:1.15;}
-.kpi .hint{font-size:.72rem;color:var(--text-muted);margin-top:4px;}
+/* KPI tiles.
+   The colour carries the state and sits in the tint, the rule down the side and
+   the icon. The number itself stays in ink: a big figure in a mid-tone status
+   colour loses contrast against a pale card, and the icon plus the label mean
+   the state never depends on colour alone. */
+.kpi{position:relative;background:var(--bg-card);border:1px solid var(--border);
+  border-left:4px solid var(--k-accent,var(--text-soft));border-radius:10px;
+  padding:14px 16px 14px 15px;overflow:hidden;transition:transform .12s,box-shadow .12s;}
+.kpi::after{content:'';position:absolute;inset:0;background:var(--k-accent,transparent);
+  opacity:.055;pointer-events:none;}
+.kpi .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);
+  font-weight:700;display:flex;align-items:center;gap:7px;position:relative;z-index:1;}
+.kpi .label .ic{width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center;
+  font-size:.8rem;background:var(--k-accent,var(--border));color:#fff;}
+.kpi .value{font-size:1.55rem;font-weight:800;margin-top:8px;line-height:1.15;
+  color:var(--text-dark);position:relative;z-index:1;}
+.kpi .hint{font-size:.72rem;color:var(--text-muted);margin-top:4px;position:relative;z-index:1;}
 .kpi.hero .value{font-size:2.1rem;}
-.kpi.tap{cursor:pointer;} .kpi.tap:hover{border-color:var(--primary);}
+svg .pickable{cursor:pointer;}
+svg .pickable:hover{opacity:.82;}
+svg text.pickable{text-decoration:underline;text-underline-offset:2px;}
+.kpi.tap{cursor:pointer;}
+.kpi.tap:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(15,23,42,.10);}
+.kpi.tap::before{content:'\203A';position:absolute;right:12px;top:12px;color:var(--k-accent,var(--text-soft));
+  font-size:1.1rem;font-weight:700;opacity:.45;z-index:1;}
+
+/* Status colours are reserved: they mean a state, never a series. Only three
+   are used - adding the fourth (serious, #ec835a) puts it next to warning at a
+   normal-vision delta of 13.6, below the 15 floor, so the two would be hard to
+   tell apart. Informational tiles borrow two categorical slots instead.
+   Validated together: CVD and normal-vision separation both pass; warning sits
+   under 3:1 on this surface by design, which the icon and label cover. */
+.k-good{--k-accent:#0ca30c;} .k-warn{--k-accent:#fab219;}
+.k-critical{--k-accent:#d03b3b;}
+.k-blue{--k-accent:#2a78d6;} .k-violet{--k-accent:#4a3aa7;}
 
 table{width:100%;border-collapse:collapse;font-size:.85rem;}
 th{text-align:left;padding:10px;background:#f8fafc;border-bottom:2px solid var(--border);font-size:.68rem;
@@ -531,7 +560,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
         </div>
         <div class="card">
           <h3>Headcount by department</h3>
-          <div class="card-sub">Active employees and their monthly gross</div>
+          <div class="card-sub">Click a department to open the list &mdash; then print or export it</div>
           <div class="chart" id="dash-dept-chart"></div>
         </div>
         <div class="card">
@@ -1182,7 +1211,7 @@ function stackedColumnChart(id, rows, series) {
 }
 
 /* Horizontal bars, single hue (sequential) with direct value labels */
-function barChart(id, rows) {
+function barChart(id, rows, onPick) {
   if (!rows.length) { el(id).innerHTML = '<div class="chart-empty">No data yet.</div>'; return; }
   var rowH = 24, W = 400, H = rows.length * rowH + 8, labelW = 96, valW = 54;
   var plotW = W - labelW - valW;
@@ -1191,15 +1220,29 @@ function barChart(id, rows) {
   rows.forEach(function (r, i) {
     var y = i * rowH + 4, bh = 14;
     var w = Math.max(2, plotW * r.value / max);
-    svg += '<text class="axis-text" x="0" y="' + (y + bh - 3) + '">' + esc(r.label) + '</text>' +
-      '<rect class="mark" x="' + labelW + '" y="' + y + '" width="' + (w - 4) + '" height="' + bh +
-      '" fill="var(--seq-450)" data-tip="' + esc('<b>' + r.label + '</b><br>' + r.tip) + '"/>' +
-      '<rect class="mark" x="' + (labelW + w - 4) + '" y="' + y + '" width="4" height="' + bh +
-      '" rx="2" fill="var(--seq-450)" data-tip="' + esc('<b>' + r.label + '</b><br>' + r.tip) + '"/>' +
-      '<text class="val-text" x="' + (labelW + w + 7) + '" y="' + (y + bh - 3) + '">' + esc(r.valueLabel) + '</text>';
+    var tip = esc('<b>' + r.label + '</b><br>' + r.tip + (onPick ? '<br>Click to open the list' : ''));
+    var pick = onPick ? ' class="pickable" data-pick="' + esc(r.label) + '"' : '';
+    /* A hit strip across the whole row, so the target is the row and not a
+       14px bar - and it carries the tooltip for the empty space too. */
+    svg += '<rect x="0" y="' + (y - 3) + '" width="' + W + '" height="' + (bh + 6) +
+        '" fill="transparent"' + (onPick ? ' class="pickable hit" data-pick="' + esc(r.label) + '"' : '') +
+        ' data-tip="' + tip + '"/>' +
+      '<text class="axis-text" x="0" y="' + (y + bh - 3) + '"' + pick + '>' + esc(r.label) + '</text>' +
+      '<rect x="' + labelW + '" y="' + y + '" width="' + (w - 4) + '" height="' + bh +
+      '" fill="var(--seq-450)" data-tip="' + tip + '"' + pick + '/>' +
+      '<rect x="' + (labelW + w - 4) + '" y="' + y + '" width="4" height="' + bh +
+      '" rx="2" fill="var(--seq-450)" data-tip="' + tip + '"' + pick + '/>' +
+      '<text class="val-text" x="' + (labelW + w + 7) + '" y="' + (y + bh - 3) + '"' + pick + '>' +
+      esc(r.valueLabel) + '</text>';
   });
   svg += '</svg>';
   mountChart(id, svg);
+  if (onPick) {
+    el(id).querySelectorAll('[data-pick]').forEach(function (n) {
+      n.style.cursor = 'pointer';
+      n.onclick = function () { onPick(n.getAttribute('data-pick')); };
+    });
+  }
 }
 
 /* Columns, single hue, last value direct-labelled */
@@ -2058,10 +2101,12 @@ function activeEmployees() {
 function grossOf(e) {
   return num(e.basic) + num(e.hra) + num(e.special_allowance) + num(e.other_allowance);
 }
-function kpi(label, value, hint, onClick, cls) {
+function kpi(label, value, hint, onClick, cls, icon) {
   return '<div class="kpi ' + (cls || '') + (onClick ? ' tap' : '') + '"' +
     (onClick ? ' onclick="' + onClick + '"' : '') + '>' +
-    '<div class="label">' + esc(label) + '</div><div class="value">' + value + '</div>' +
+    '<div class="label">' + (icon ? '<span class="ic">' + icon + '</span>' : '') +
+      esc(label) + '</div>' +
+    '<div class="value">' + value + '</div>' +
     '<div class="hint">' + esc(hint || '') + '</div></div>';
 }
 </script>
@@ -2110,29 +2155,35 @@ function renderDashboard() {
   var offNote = hol ? 'holiday: ' + hol.name : 'weekly off';
 
   el('dash-kpis').innerHTML =
+    /* A tile goes green only when its number is good news, and red only when it
+       is bad - so a wall of red means something is actually wrong. "Nobody
+       absent" is green; three absent is not. */
     kpi('Headcount', counts.headcount,
         monthlyCost ? shortMoney(monthlyCost) + ' monthly gross' : 'active employees',
-        "showPeople('headcount')", 'hero') +
+        "showPeople('headcount')", 'hero k-blue', '&#128101;') +
     kpi('Present ' + dayLabel, dash(counts.present),
         nonWorking ? offNote : counts.headcount ? Math.round(counts.present * 100 / counts.headcount) + '% of headcount' : '',
-        "showPeople('present')") +
+        "showPeople('present')", 'k-good', '&#10003;') +
     kpi('Absent ' + dayLabel, dash(counts.absent),
         nonWorking ? offNote : (counts.absent ? 'unpaid unless marked otherwise' : 'nobody absent'),
-        "showPeople('absent')") +
+        "showPeople('absent')", counts.absent ? 'k-critical' : 'k-good', '&#10005;') +
     kpi('Late coming ' + dayLabel, dash(counts.late),
         nonWorking ? offNote : 'in after ' + (S.settings.shift_start || '09:30') + ' + ' +
         (S.settings.grace_minutes || 15) + ' min grace',
-        "showPeople('late')") +
+        "showPeople('late')", counts.late ? 'k-warn' : 'k-good', '&#9200;') +
     kpi('On leave ' + dayLabel, dash(counts.leave),
         nonWorking ? offNote : (counts.leave ? 'approved leave' : 'nobody on leave'),
-        "showPeople('leave')") +
+        "showPeople('leave')", 'k-blue', '&#127796;') +
     kpi('Not marked ' + dayLabel, dash(counts.unmarked),
         nonWorking ? offNote : (counts.unmarked ? 'will be paid as LOP' : 'attendance complete'),
-        "showPeople('unmarked')") +
-    kpi('Pending approvals', pending.length, pending.length ? 'waiting on you' : 'nothing waiting', "go('leave')") +
-    kpi('LOP this month', lopMonth, 'days of unpaid absence', "go('attendance')") +
+        "showPeople('unmarked')", counts.unmarked ? 'k-warn' : 'k-good', '&#9633;') +
+    kpi('Pending approvals', pending.length, pending.length ? 'waiting on you' : 'nothing waiting',
+        "go('leave')", pending.length ? 'k-warn' : 'k-good', '&#128203;') +
+    kpi('LOP this month', lopMonth, 'days of unpaid absence',
+        "go('attendance')", lopMonth ? 'k-critical' : 'k-good', '&#8722;') +
     kpi('Last net payout', lastRunMonth ? shortMoney(lastRunNet) : '&mdash;',
-        lastRunMonth ? monthLabel(lastRunMonth) + ' run' : 'no payroll saved yet', "go('payroll')");
+        lastRunMonth ? monthLabel(lastRunMonth) + ' run' : 'no payroll saved yet',
+        "go('payroll')", 'k-violet', '&#8377;');
 
   /* --- attendance, last 14 calendar days --- */
   el('dash-att-legend').innerHTML = ['P', 'L', 'A'].map(function (k) {
@@ -2171,7 +2222,7 @@ function renderDashboard() {
   }).map(function (d) {
     return { label: d, value: byDept[d].n, valueLabel: byDept[d].n,
              tip: byDept[d].n + ' people &middot; ' + shortMoney(byDept[d].cost) + ' / month' };
-  }));
+  }), showDepartment);
 
   /* --- payroll cost trend --- */
   var months = {};
@@ -5300,6 +5351,84 @@ function removeApprovalStep(id) {
         }).catch(function (e) { toast(e.message, 'bad'); });
       } }
   ]);
+}
+
+/* ------------------------ department list ------------------------ */
+/* Clicking a bar on the dashboard opens everyone in that department, ready to
+   print or export - the list a supervisor actually asks for. */
+function showDepartment(dept) {
+  var want = String(dept || '');
+  var people = activeEmployees().filter(function (e) {
+    return String(e.department || '(none)') === want;
+  }).sort(function (a, b) { return String(a.name) < String(b.name) ? -1 : 1; });
+
+  var iso = dashDate();
+  var total = people.reduce(function (t, e) { return t + grossOf(e); }, 0);
+  var here = 0, off = 0;
+  people.forEach(function (e) {
+    var st = statusOf(iso.slice(0, 7), e.emp_code, +iso.slice(8));
+    if (st === 'P' || st === 'OD' || st === 'CO' || st === 'HD') here++;
+    else if (st === 'L' || st === 'A') off++;
+  });
+
+  S.deptList = { dept: want, people: people, iso: iso };
+
+  var body =
+    '<div class="kpis" style="margin-bottom:14px">' +
+      kpi('People', people.length, 'on the active roll', '', 'k-blue', '&#128101;') +
+      kpi('In today', here, 'present, OD or comp-off', '', 'k-good', '&#10003;') +
+      kpi('Away', off, 'absent or on leave', '', off ? 'k-warn' : 'k-good', '&#10005;') +
+      kpi('Monthly gross', shortMoney(total), 'for this department', '', 'k-violet', '&#8377;') +
+    '</div>' +
+    '<div class="table-wrap" style="max-height:52vh"><table id="dept-table">' +
+    '<thead><tr><th>Code</th><th>Name</th><th>Designation</th><th>Shift</th>' +
+    '<th>Joined</th><th>Today</th><th class="num-col">Monthly gross</th></tr></thead><tbody>' +
+    (people.map(function (e) {
+      var st = statusOf(iso.slice(0, 7), e.emp_code, +iso.slice(8)) || '\u2014';
+      return '<tr><td>' + esc(e.emp_code) + '</td>' +
+        '<td><a href="#" onclick="closeModal();employee360(\'' + esc(e.emp_code) +
+          '\');return false;">' + esc(e.name) + '</a></td>' +
+        '<td>' + esc(e.designation || '\u2014') + '</td>' +
+        '<td>' + esc(e.shift || S.settings.default_shift || '\u2014') + '</td>' +
+        '<td>' + esc(e.doj || '\u2014') + '</td>' +
+        '<td><span class="badge ' + (STATUS_BADGE[st] || 'b-gray') + '">' + esc(st) + '</span></td>' +
+        '<td class="num-col">' + money(grossOf(e)) + '</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="empty">Nobody in this department.</td></tr>') +
+    '</tbody></table></div>';
+
+  showModal(want + ' \u2014 ' + people.length + ' people', body, [
+    { label: 'Close', cls: 'ghost', onClick: closeModal },
+    { label: '\u2193 Export CSV', cls: 'ghost', onClick: exportDepartment },
+    { label: '\u2399 Print', onClick: printDepartment }
+  ], true);
+}
+
+var STATUS_BADGE = { P: 'b-green', OD: 'b-violet', CO: 'b-violet', HD: 'b-amber',
+                     L: 'b-blue', A: 'b-red', WO: 'b-gray', H: 'b-gray' };
+
+function printDepartment() {
+  var d = S.deptList;
+  if (!d) return;
+  var table = el('dept-table');
+  if (!table) return toast('Nothing to print', 'bad');
+  printDocument({
+    title: d.dept + ' \u2014 department list',
+    subtitle: d.people.length + ' people on the active roll. Today column is ' + d.iso + '.',
+    landscape: false,
+    body: table.outerHTML
+  });
+}
+
+function exportDepartment() {
+  var d = S.deptList;
+  if (!d || !d.people.length) return toast('Nothing to export', 'bad');
+  var cols = ['emp_code', 'name', 'designation', 'department', 'shift', 'doj',
+              'phone', 'email', 'monthly_gross'];
+  download('department-' + d.dept.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase() + '.csv',
+    toCSV(cols, d.people.map(function (e) {
+      return [e.emp_code, e.name, e.designation || '', e.department || '',
+              e.shift || '', e.doj || '', e.phone || '', e.email || '', grossOf(e)];
+    })));
 }
 
 /* --------------------------- notice board ------------------------ */

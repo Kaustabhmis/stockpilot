@@ -11,7 +11,11 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 
 - A **live clock** with the date and the configured shift
 - An **as-on date** picker: every attendance tile below reflects the day you pick, not just today
-- Nine KPI tiles. The first six — **headcount, present, absent, late coming, on leave, not marked** —
+- Nine KPI tiles, **coloured by what the number means**: green when it is good news (nobody
+  absent), amber when it wants attention (late marks, approvals waiting), red when it is costing
+  money (LOP), blue for plain facts. Each carries an icon and a label, so the state never depends
+  on colour alone, and the figure itself stays in ink for contrast. Only three status colours are
+  used — the fourth sits too close to amber to tell apart. The first six — **headcount, present, absent, late coming, on leave, not marked** —
   are **clickable**: each opens the list of the employees behind that number, with the detail that
   matters for it (in/out times, minutes late, leave type, remarks) and a link into the full
   employee profile or the attendance register. The rest: pending approvals, LOP this month,
@@ -21,8 +25,10 @@ own and links into them. The sidebar keeps the five numbered under a "Modules" h
 - **Needs your attention** — the only list that matters: pending approvals, unmarked attendance
   days, a month whose payroll has not been run, employee records missing PAN/UAN/bank details.
   Each row clicks through to the module that fixes it
-- Three charts: attendance over the last 14 working days (stacked), headcount by department,
-  payroll cost across the last six saved runs — all with hover detail
+- Three charts: attendance over the last 14 working days (stacked), **headcount by department —
+  click a bar** to open everyone in it, and payroll cost across the last six saved runs. The
+  department list shows each person's designation, shift, joining date, today's status and monthly
+  gross, with its own **Print** and **Export CSV**, and a name opens that employee's full record
 - Who is out on the selected day, and birthdays / work anniversaries in the next 30 days
 - A **company calendar** — the month grid from the old BISCS HRMS, on live data: holidays (applied
   and optional shown apart), approved leave with the person and type, birthdays, work anniversaries
