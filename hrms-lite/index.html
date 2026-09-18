@@ -797,6 +797,7 @@ var S = {
   shifts: [], leaveTypes: [], leaveVersion: 0,
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
   requestTypes: [], requests: [], punch: null, sites: [], notices: [], noticesExpanded: false,
+  approvalLevels: [],
   attDirty: {}, payDraft: null, attVersion: 0, attView: 'status',
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -1243,7 +1244,7 @@ function shortMoney(v) {
 
 <script>
 /* ------------------------- demo data store ---------------------- */
-var DEMO_KEY = 'hrms_lite_demo_v13';
+var DEMO_KEY = 'hrms_lite_demo_v14';
 
 function demoDb() {
   var raw = localStorage.getItem(DEMO_KEY);
@@ -1275,7 +1276,7 @@ function demoDb() {
         'Net pay credited: {net}.\n\nFor any correction please write back to HR within 7 days.\n\n' +
         'Regards,\n{company}'
     },
-    payslipMail: [],
+    payslipMail: [], approvalLevels: [],
     notices: [
       { id: 'NT1', title: 'Diwali holiday - factory closed', level: 'important', pinned: 'yes',
         body: 'Units 1, 2 and 3 will be closed for Diwali. Security and boiler staff work to the ' +
@@ -1473,8 +1474,36 @@ var SHEET_TO_LIST = {
   Employees: 'employees', Attendance: 'attendance', Leave: 'leave',
   Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
   Events: 'events', Sites: 'sites', RequestTypes: 'requestTypes', Requests: 'requests', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
-  CtcComponents: 'ctcComponents', CtcValues: 'ctcValues', Notices: 'notices'
+  CtcComponents: 'ctcComponents', CtcValues: 'ctcValues', Notices: 'notices',
+  ApprovalLevels: 'approvalLevels'
 };
+/* The demo has no server to work out where an application has got to, so the
+   same rules are applied here. Kept deliberately small and next to the demo
+   data it serves. */
+function demoChain(db, kind) {
+  var rows = (db.approvalLevels || []).filter(function (r) {
+    if (String(r.active || 'yes') === 'no') return false;
+    var to = String(r.applies_to || 'all').toLowerCase();
+    return to === 'all' || to === String(kind || '').toLowerCase();
+  }).sort(function (a, b) { return num(a.level) - num(b.level); });
+  if (!rows.length) return [{ approver: 'manager_or_hr', label: 'Manager or HR' }];
+  return rows;
+}
+function demoStamp(db, sheetName) {
+  return function (r) {
+    var chain = demoChain(db, sheetName === 'Leave' ? 'leave' : String(r.type || '').toLowerCase());
+    var at = Math.max(1, Math.min(num(r.level) || 1, chain.length));
+    var stage = chain[at - 1] || {};
+    r._step = at; r._steps = chain.length;
+    r._waiting_on = stage.label || approverLabel(stage.approver);
+    r._signed = String(r.approvals || '').split('|').filter(Boolean).map(function (part) {
+      var bits = part.split('~');
+      return { level: num(bits[0]), by: bits[1] || '', at: bits[2] || '', note: bits[3] || '' };
+    });
+    return r;
+  };
+}
+
 function demoApi(action, p) {
   var db = demoDb(), list, key, i;
   switch (action) {
@@ -1495,7 +1524,7 @@ function demoApi(action, p) {
                  ctcValues: db.ctcValues || [], events: db.events || [],
                  requestTypes: db.requestTypes || [], requests: db.requests || [],
                  sites: db.sites || [], users: [], secrets: {},
-                 notices: db.notices || [] };
+                 notices: db.notices || [], approvalLevels: db.approvalLevels || [] };
       }
       if (!S.user || !(S.user.role === 'admin' || S.user.role === 'owner')) {
         var code = String((S.user && S.user.emp_code) || '');
@@ -1517,15 +1546,19 @@ function demoApi(action, p) {
                  shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                  requestTypes: db.requestTypes || [],
                  notices: (db.notices || []).filter(function (n) { return noticeLive(n); }),
+                 approvalLevels: db.approvalLevels || [],
                  sites: [], ctcVariables: [], ctcComponents: [], users: [], secrets: {} };
       }
       return { role: 'owner', settings: db.settings, employees: db.employees, attendance: db.attendance,
-               leave: db.leave, payroll: db.payroll, holidays: db.holidays, users: db.users,
+               leave: (db.leave || []).map(demoStamp(db, 'Leave')),
+               payroll: db.payroll, holidays: db.holidays, users: db.users,
                shifts: db.shifts || [], leaveTypes: db.leaveTypes || [],
                ctcVariables: db.ctcVariables || [], ctcComponents: db.ctcComponents || [],
                ctcValues: db.ctcValues || [], events: db.events || [],
-               requestTypes: db.requestTypes || [], requests: db.requests || [],
+               requestTypes: db.requestTypes || [],
+               requests: (db.requests || []).map(demoStamp(db, 'Requests')),
                sites: db.sites || [], notices: db.notices || [],
+               approvalLevels: db.approvalLevels || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -1606,6 +1639,34 @@ function demoApi(action, p) {
       });
       demoSave(db);
       return { removed: p.email };
+    case 'decide':
+      var sheetName = p.sheet, want = String(p.status || '');
+      var target = null;
+      (db[SHEET_TO_LIST[sheetName]] || []).forEach(function (x) {
+        if (String(x.id) === String(p.id)) target = x;
+      });
+      if (!target) throw new Error('That application no longer exists.');
+      if (String(target.status || 'Pending') !== 'Pending') {
+        throw new Error('This has already been ' + String(target.status).toLowerCase() + '.');
+      }
+      var chain2 = demoChain(db, sheetName === 'Leave' ? 'leave' : String(target.type || '').toLowerCase());
+      var at2 = Math.max(1, Math.min(num(target.level) || 1, chain2.length));
+      var last2 = at2 >= chain2.length;
+      var signedList = String(target.approvals || '').split('|').filter(Boolean);
+      signedList.push([at2, (S.user && S.user.email) || 'demo', today(),
+                       String(p.note || '').replace(/[|~]/g, ' ')].join('~'));
+      target.approvals = signedList.join('|');
+      target.status = want === 'Approved' ? (last2 ? 'Approved' : 'Pending') : want;
+      target.level = (want === 'Approved' && !last2) ? at2 + 1 : at2;
+      target.decided_by = (S.user && S.user.email) || 'demo';
+      target.decided_at = today();
+      if (p.note) target[sheetName === 'Leave' ? 'decision_note' : 'note'] = p.note;
+      demoSave(db);
+      var nextStage = chain2[target.level - 1] || {};
+      return { id: p.id, status: target.status, days_marked: 0,
+               cleared: at2, total: chain2.length, done: target.status !== 'Pending',
+               next: target.status === 'Pending'
+                 ? (nextStage.label || approverLabel(nextStage.approver)) : '' };
     case 'payslipMailLog':
       return (db.payslipMail || []).filter(function (m) {
         return !p.month || String(m.month) === String(p.month);
@@ -1783,6 +1844,7 @@ function reload() {
     S.ctcComponents = d.ctcComponents || [];
     S.ctcValues = d.ctcValues || [];
     S.notices = d.notices || [];
+    S.approvalLevels = d.approvalLevels || [];
     S.secrets = d.secrets || {};
     S.leaveVersion++;
     S.attDirty = {}; S.payDraft = null; S.attVersion++;
@@ -3515,8 +3577,8 @@ function renderLeave() {
     return '<tr><td>' + esc(empName(l.emp_code)) + '<div class="sub-line">' + esc(l.emp_code) + '</div></td>' +
       '<td>' + esc(l.type) + '</td><td>' + esc(l.from_date) + '</td><td>' + esc(l.to_date) + '</td>' +
       '<td class="num-col">' + esc(l.days) + '</td><td>' + esc(l.reason || '-') + '</td>' +
-      '<td><span class="badge ' + cls + '">' + esc(l.status) + '</span></td>' +
-      '<td class="sub-line">' + esc(l.decided_by || '-') + '</td>' +
+      '<td><span class="badge ' + cls + '">' + esc(l.status) + '</span>' + stageNote(l) + '</td>' +
+      '<td class="sub-line">' + esc(l.decided_by || '-') + signedNote(l) + '</td>' +
       '<td style="white-space:nowrap">' + actions + '</td></tr>';
   }).join('');
   el('leave-table').innerHTML = head + '<tbody>' + (body ||
@@ -3692,6 +3754,25 @@ function submitLeave() {
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
+/* "Pending" on its own says nothing when three people have to sign. This adds
+   the step, and who it is sitting with. */
+function stageNote(row) {
+  if (String(row.status || 'Pending') !== 'Pending') return '';
+  var steps = num(row._steps) || 1;
+  if (steps < 2) return '';
+  return '<div class="sub-line">Step ' + (num(row._step) || 1) + ' of ' + steps +
+    ' \u00b7 with ' + esc(row._waiting_on || '') + '</div>';
+}
+
+/* Who has signed so far, for the detail views. */
+function signedNote(row) {
+  var list = row._signed || [];
+  if (!list.length) return '';
+  return '<div class="sub-line">' + list.map(function (a) {
+    return 'Step ' + a.level + ': ' + esc(a.by) + (a.note ? ' \u2014 ' + esc(a.note) : '');
+  }).join('<br>') + '</div>';
+}
+
 function decideLeave(id, decision) {
   var l = null;
   S.leave.forEach(function (x) { if (String(x.id) === String(id)) l = x; });
@@ -3700,14 +3781,16 @@ function decideLeave(id, decision) {
     return toast('Payroll for ' + monthLabel(String(l.from_date).slice(0, 7)) +
       ' is finalised. Reopen that run before approving leave inside it.', 'bad');
   }
-  var row = Object.assign({}, l, { status: decision, decided_by: S.user.email, decided_at: today() });
-  api('save', { sheet: 'Leave', row: row }).then(function () {
-    Object.assign(l, row);
+  /* Through decide(), so an approval clears one step of the chain rather than
+     jumping straight to the end. The server marks the register itself once the
+     last step is cleared. */
+  api('decide', { sheet: 'Leave', id: id, status: decision }).then(function (res) {
     S.leaveVersion++;
-    if (decision === 'Approved') return writeLeaveToAttendance(row, 'L');
-  }).then(function () {
-    toast('Leave ' + decision.toLowerCase(), 'good');
-    renderLeave(); renderAttendance(); renderReports(); renderDashboard();
+    toast(res.done
+      ? 'Leave ' + String(res.status).toLowerCase() +
+        (res.days_marked ? ' \u00b7 ' + res.days_marked + ' day(s) marked' : '')
+      : 'Step ' + res.cleared + ' of ' + res.total + ' cleared \u00b7 now with ' + res.next, 'good');
+    return reload();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
@@ -4782,7 +4865,7 @@ function openSettings() {
   var tabs = SETTING_GROUPS.map(function (g) { return [g.id, g.label]; })
     .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
              ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
-             ['notices', 'Notice board']])
+             ['notices', 'Notice board'], ['approvals', 'Approvals']])
     .concat(owner ? [['accounts', 'Accounts'], ['integrations', 'Integrations']] : [])
     .concat([['import', 'Import data'], ['account', 'Account']]);
 
@@ -4803,6 +4886,7 @@ function openSettings() {
   '<div id="stab-ctc" style="display:none">' + ctcPane() + '</div>' +
   '<div class="set-pane" id="stab-payrollrules" style="display:none">' + payrollRulesPane() + '</div>' +
   '<div id="stab-notices" style="display:none">' + noticesPane() + '</div>' +
+  '<div id="stab-approvals" style="display:none">' + approvalsPane() + '</div>' +
   (owner ? '<div id="stab-accounts" style="display:none">' + accountsPane() + '</div>' +
            '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' : '') +
   '<div id="stab-import" style="display:none">' + importPane() + '</div>' +
@@ -4822,6 +4906,7 @@ function openSettings() {
   renderCtcPreview();
   renderImportHelp();
   renderNotices();
+  renderApprovals();
   if (owner) { renderAccounts(); refreshUsers(); }
   el('imp-any').onchange = function () { if (this.files[0]) onImportFile(this.files[0]); };
 }
@@ -5028,6 +5113,193 @@ function leaveRulesPane() {
     '<b>Sandwich rule:</b> with it on, a weekly off or holiday that falls inside a leave block is ' +
     'charged as leave too.<br><b>Beyond the quota:</b> days past the annual quota are marked unpaid ' +
     'and become LOP in payroll, rather than quietly being paid.</p>';
+}
+
+/* -------------------------- approval chains ---------------------- */
+/* Who has to sign, and in what order. An empty list means the old behaviour:
+   one step that the reporting manager or HR can clear. */
+
+var APPROVER_CHOICES = [
+  ['manager', 'The reporting manager'],
+  ['hr', 'HR (anyone with an HR or owner login)'],
+  ['owner', 'The owner only'],
+  ['manager_or_hr', 'Manager or HR - whoever gets there first']
+];
+
+function approvalKinds() {
+  var out = [['all', 'Everything']];
+  out.push(['leave', 'Leave']);
+  (S.requestTypes || []).forEach(function (t) {
+    out.push([String(t.code || '').toLowerCase(), t.name || t.code]);
+  });
+  return out;
+}
+
+function approverLabel(spec) {
+  var v = String(spec || '');
+  var hit = APPROVER_CHOICES.filter(function (c) { return c[0] === v; })[0];
+  if (hit) return hit[1];
+  if (v.indexOf('emp:') === 0) {
+    var e = empByCode(v.slice(4));
+    return (e ? e.name + ' (' + e.emp_code + ')' : v.slice(4)) + ' \u2014 by name';
+  }
+  return v;
+}
+
+function approvalsPane() {
+  return '<div class="toolbar">' +
+    '<span class="sub-line" style="max-width:640px">Add a step for every person who has to sign. ' +
+    'They are asked <b>in order</b>: step 1 first, and the application only reaches step 2 once ' +
+    'step 1 has approved it. A rejection at any step ends it there.</span>' +
+    '<span class="spacer"></span>' +
+    '<button class="sm" onclick="addApprovalStep()">+ Add step</button>' +
+    '</div>' +
+    '<div id="appr-list"></div>' +
+    '<div style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.9">' +
+    'With <b>no steps at all</b>, an application needs one approval from either the reporting ' +
+    'manager or HR &mdash; which is how this worked before.<br>' +
+    'A step set to <b>Everything</b> applies to leave and to every kind of request. Add steps ' +
+    'against a specific kind to give that kind its own chain: leave might need manager, then HR, ' +
+    'then the unit head, while a missed punch needs only the manager.<br>' +
+    '<b>The register is only marked when the last step approves</b>, so a leave half way up the ' +
+    'chain changes nothing yet.</div>';
+}
+
+function renderApprovals() {
+  var host = el('appr-list');
+  if (!host) return;
+  var rows = (S.approvalLevels || []).slice().sort(function (a, b) {
+    var k = String(a.applies_to) < String(b.applies_to) ? -1 : (String(a.applies_to) > String(b.applies_to) ? 1 : 0);
+    return k || (num(a.level) - num(b.level));
+  });
+  var kinds = approvalKinds();
+  var kindName = function (k) {
+    var hit = kinds.filter(function (x) { return x[0] === String(k).toLowerCase(); })[0];
+    return hit ? hit[1] : k;
+  };
+
+  /* Grouped by what they apply to, because that is how you read a chain. */
+  var groups = {};
+  rows.forEach(function (r) {
+    var k = String(r.applies_to || 'all').toLowerCase();
+    (groups[k] = groups[k] || []).push(r);
+  });
+
+  host.innerHTML = rows.length
+    ? Object.keys(groups).map(function (k) {
+        return '<h3 style="margin:16px 0 8px;font-size:.9rem">' + esc(kindName(k)) + '</h3>' +
+          '<div class="table-wrap" style="max-height:none"><table><thead><tr>' +
+          '<th style="width:70px">Step</th><th>Who signs</th><th>Shown as</th>' +
+          '<th style="width:80px">Active</th><th></th></tr></thead><tbody>' +
+          groups[k].map(function (r, i) {
+            return '<tr><td><b>' + (i + 1) + '</b></td>' +
+              '<td>' + esc(approverLabel(r.approver)) + '</td>' +
+              '<td>' + esc(r.label || '') + '</td>' +
+              '<td>' + (String(r.active || 'yes') === 'no'
+                ? '<span class="badge b-gray">off</span>' : '<span class="badge b-green">on</span>') + '</td>' +
+              '<td><button class="ghost sm" onclick="addApprovalStep(\'' + esc(r.id) + '\')">Edit</button> ' +
+              '<button class="ghost sm" onclick="removeApprovalStep(\'' + esc(r.id) + '\')">Remove</button></td></tr>';
+          }).join('') + '</tbody></table></div>';
+      }).join('')
+    : '<div class="empty">No steps set up. One approval from the reporting manager or HR is ' +
+      'all an application needs.</div>';
+}
+
+function addApprovalStep(id) {
+  var r = (S.approvalLevels || []).filter(function (x) { return String(x.id) === String(id); })[0];
+  var isNew = !r;
+  r = r || { applies_to: 'all', level: (S.approvalLevels || []).length + 1,
+             approver: 'manager', label: '', active: 'yes' };
+  var staff = (S.employees || []).slice().sort(function (a, b) {
+    return String(a.name) < String(b.name) ? -1 : 1;
+  });
+
+  showModal(isNew ? 'Add an approval step' : 'Edit the step',
+    '<div id="appr-err"></div><div class="grid2">' +
+    '<label class="field">Applies to<select id="ap-kind">' +
+      approvalKinds().map(function (k) {
+        return '<option value="' + esc(k[0]) + '"' +
+          (String(r.applies_to).toLowerCase() === k[0] ? ' selected' : '') + '>' + esc(k[1]) + '</option>';
+      }).join('') + '</select></label>' +
+    '<label class="field">Step number<input type="number" id="ap-level" min="1" max="9" value="' +
+      esc(r.level || 1) + '"></label>' +
+    '<label class="field" style="grid-column:1/-1">Who signs<select id="ap-who" onchange="approverPicked()">' +
+      APPROVER_CHOICES.map(function (c) {
+        return '<option value="' + c[0] + '"' + (String(r.approver) === c[0] ? ' selected' : '') + '>' +
+          esc(c[1]) + '</option>';
+      }).join('') +
+      '<option value="emp"' + (String(r.approver).indexOf('emp:') === 0 ? ' selected' : '') + '>' +
+      'One named person&hellip;</option></select></label>' +
+    '<label class="field" style="grid-column:1/-1" id="ap-emp-wrap">Which person<select id="ap-emp">' +
+      staff.map(function (e) {
+        return '<option value="' + esc(e.emp_code) + '"' +
+          (String(r.approver) === 'emp:' + e.emp_code ? ' selected' : '') + '>' +
+          esc(e.name) + ' (' + esc(e.emp_code) + ')</option>';
+      }).join('') + '</select></label>' +
+    '<label class="field" style="grid-column:1/-1">Shown as (optional)' +
+      '<input id="ap-label" value="' + esc(r.label || '') + '" placeholder="e.g. Unit head"></label>' +
+    '<label class="field">Active<select id="ap-active">' +
+      '<option value="yes"' + (String(r.active) !== 'no' ? ' selected' : '') + '>Yes</option>' +
+      '<option value="no"' + (String(r.active) === 'no' ? ' selected' : '') + '>No</option>' +
+      '</select></label>' +
+    '</div>' +
+    '<p style="margin-top:12px;font-size:.78rem;color:var(--text-muted);line-height:1.7">' +
+    'Steps run in number order. If two steps share a number the order between them is not ' +
+    'defined, so give each one its own.</p>',
+    [
+      { label: 'Cancel', cls: 'ghost', onClick: function () { reopenSettings('approvals'); } },
+      { label: isNew ? 'Add the step' : 'Save', onClick: function () { saveApprovalStep(r, isNew); } }
+    ]);
+  approverPicked();
+}
+
+function approverPicked() {
+  var wrap = el('ap-emp-wrap');
+  if (wrap) wrap.style.display = el('ap-who').value === 'emp' ? '' : 'none';
+}
+
+function saveApprovalStep(existing, isNew) {
+  var who = el('ap-who').value;
+  var approver = who === 'emp' ? 'emp:' + el('ap-emp').value : who;
+  if (who === 'emp' && !el('ap-emp').value) {
+    el('appr-err').innerHTML = '<div class="err show">Pick the person who signs.</div>';
+    return;
+  }
+  var row = Object.assign({}, existing, {
+    id: existing.id || 'AL' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+    applies_to: el('ap-kind').value,
+    level: Math.max(1, num(el('ap-level').value) || 1),
+    approver: approver,
+    label: el('ap-label').value.trim(),
+    active: el('ap-active').value
+  });
+  api('save', { sheet: 'ApprovalLevels', row: row }).then(function () {
+    S.approvalLevels = (S.approvalLevels || []).filter(function (x) {
+      return String(x.id) !== String(row.id);
+    });
+    S.approvalLevels.push(row);
+    toast(isNew ? 'Step added' : 'Step saved', 'ok');
+    reopenSettings('approvals');
+  }).catch(function (e) {
+    el('appr-err').innerHTML = '<div class="err show">' + esc(e.message) + '</div>';
+  });
+}
+
+function removeApprovalStep(id) {
+  showModal('Remove this step?',
+    '<p>Applications will skip it from now on. Anything already part way up the chain keeps the ' +
+    'approvals it has.</p>', [
+    { label: 'Keep it', cls: 'ghost', onClick: function () { reopenSettings('approvals'); } },
+    { label: 'Remove', onClick: function () {
+        api('remove', { sheet: 'ApprovalLevels', id: id }).then(function () {
+          S.approvalLevels = (S.approvalLevels || []).filter(function (x) {
+            return String(x.id) !== String(id);
+          });
+          toast('Step removed', 'ok');
+          reopenSettings('approvals');
+        }).catch(function (e) { toast(e.message, 'bad'); });
+      } }
+  ]);
 }
 
 /* --------------------------- notice board ------------------------ */
@@ -7939,9 +8211,9 @@ function renderRequests() {
       '<td>' + esc(t.name) + '<div class="sub-line">' + esc(r.type) + '</div></td>' +
       '<td>' + esc(r.date) + '</td><td>' + detail + '</td>' +
       '<td>' + esc(r.reason || '-') + '</td>' +
-      '<td><span class="badge ' + cls + '">' + esc(r.status) + '</span>' +
+      '<td><span class="badge ' + cls + '">' + esc(r.status) + '</span>' + stageNote(r) +
         (r.note ? '<div class="sub-line">' + esc(r.note) + '</div>' : '') + '</td>' +
-      '<td class="sub-line">' + esc(r.decided_by || '-') + '</td>' +
+      '<td class="sub-line">' + esc(r.decided_by || '-') + signedNote(r) + '</td>' +
       '<td style="white-space:nowrap">' + actions + '</td></tr>';
   }).join('');
   el('req-table').innerHTML = head + '<tbody>' + (body ||
@@ -8133,13 +8405,18 @@ function decideRequest(id, decision) {
   if (monthLocked(String(r.date).slice(0, 7))) {
     return toast('Payroll for ' + monthLabel(String(r.date).slice(0, 7)) + ' is finalised - reopen it first', 'bad');
   }
-  var row = Object.assign({}, r, { status: decision, decided_by: S.user.email, decided_at: today() });
-  api('save', { sheet: 'Requests', row: row }).then(function () {
-    Object.assign(r, row);
-    if (decision === 'Approved') return applyRequest(r);
-  }).then(function () {
-    toast('Request ' + decision.toLowerCase(), 'good');
-    renderRequests(); renderAttendance(); renderPayroll(); renderDashboard();
+  api('decide', { sheet: 'Requests', id: id, status: decision }).then(function (res) {
+    if (!res.done) {
+      toast('Step ' + res.cleared + ' of ' + res.total + ' cleared \u00b7 now with ' + res.next, 'good');
+      return reload();
+    }
+    /* Only a fully approved request touches the register, and what it does
+       there depends on its kind, which is worked out here. */
+    Object.assign(r, { status: res.status });
+    return Promise.resolve(res.status === 'Approved' ? applyRequest(r) : null).then(function () {
+      toast('Request ' + String(res.status).toLowerCase(), 'good');
+      return reload();
+    });
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 

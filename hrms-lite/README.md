@@ -71,6 +71,7 @@ Everything configurable lives in one modal, not a sixth module. Eight tabs:
 | **Requests** | the request-type table (OD, swipe, comp-off) and the comp-off rules |
 | **CTC structure** | salary-structure variables, components and formulas; upload and apply a CTC list |
 | **Notice board** | what everyone sees at the top of their dashboard |
+| **Approvals** | who signs an application, and in what order |
 | **Payroll rules** | salary divisor, rounding, PF and ESI percentages and ceilings, professional tax |
 | **Integrations** | the workspace API URL, eSSL/biometric pull and push, SQL agent settings, stored credentials, test/pull/push actions |
 | **Import data** | manual import of punch logs, attendance, holidays and employees from CSV or Excel |
@@ -530,7 +531,7 @@ attendance register and mark someone absent → generate and finalise payroll �
 
    It creates eighteen tabs — `Settings`, `Users`, `Employees`, `Attendance`, `Leave`, `Payroll`,
    `Holidays`, `Events`, `Sites`, `Punches`, `Shifts`, `LeaveTypes`, `RequestTypes`, `Requests`,
-   `CtcVariables`, `CtcComponents`, `CtcValues`, `Notices`, `PayslipMail` — seeds a General shift, the four
+   `CtcVariables`, `CtcComponents`, `CtcValues`, `Notices`, `ApprovalLevels`, `PayslipMail` — seeds a General shift, the four
    standard leave types and the company's salary structure, generates the key that signs logins,
    and creates the first admin account.
 
@@ -598,6 +599,43 @@ Five tabs along the bottom:
 | **Requests** | Apply for **leave**, **OD**, a **missed punch** or a **comp-off**, each with the fields that kind actually needs — a missed punch asks for the in and out times, a comp-off asks whether to take a day off or be paid. Leave shows the balance left per type and counts only working days. Underneath, everything they have asked for, with its status and HR's note |
 | **Team** | **Only appears if people report to them.** Everything of their team's that is waiting, with approve and reject (reject asks for a reason the person will see), the ones already decided, and who reports to them. A badge on the tab counts what is waiting |
 | **Me** | Their profile, statutory details, leave balances, whether punching and the geofence are on, change password, sign out |
+
+### Approval chains
+
+*Settings → Approvals.* Add a step for everybody who has to sign. They are asked **in order**:
+step 1 first, and the application only reaches step 2 once step 1 has approved it.
+
+Each step says who signs — **the reporting manager**, **HR**, **the owner**, **one named person**
+(picked from your staff, for a unit head or a director), or **manager or HR, whoever gets there
+first** — and what to call that step on screen.
+
+A step set to **Everything** covers leave and every kind of request. Add steps against a
+particular kind to give that kind its own chain: leave might need manager → HR → unit head, while
+a missed punch needs only the manager.
+
+**With no steps configured at all**, an application needs one approval from either the reporting
+manager or HR — exactly how it worked before chains existed. Upgrading and changing nothing
+changes nothing.
+
+What the server enforces:
+
+- **Only the current step's approver can act.** HR trying to sign before the manager is refused
+  with *"Step 1 of 3 is with Reporting manager"*. So is the applicant, and so is a later
+  approver trying to jump the queue.
+- **The register is only marked when the last step approves.** A leave half way up the chain has
+  changed nothing yet.
+- **A rejection at any step ends it there** — there is no point sending a refused request further
+  up, and it cannot be revived by a later approver.
+- Every signature is kept: which step, who, when, and their note. Both screens show it.
+
+Both front ends show where something stands rather than a bare "Pending":
+
+- The **web app** adds *"Step 2 of 3 · with HR department"* under the status, and lists who has
+  already signed.
+- The **phone app** draws a row of dots — filled for cleared steps, amber for the one it is
+  sitting on — with the same line underneath. A manager's Team tab splits into **what is waiting
+  on them** (with Approve and Reject) and **further up the chain** (shown, but not theirs to
+  clear), and the tab badge counts only their own.
 
 ### Managers
 

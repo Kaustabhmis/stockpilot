@@ -31,18 +31,20 @@ var SHEETS = {
                  'validity_days', 'allow_half', 'active'],
   Requests:     ['id', 'emp_code', 'type', 'date', 'to_date', 'in_time', 'out_time', 'reason',
                  'mode', 'adjust_date', 'days', 'status', 'applied_at', 'decided_by',
-                 'decided_at', 'note'],
+                 'decided_at', 'note', 'level', 'approvals'],
   CtcVariables: ['id', 'code', 'value', 'note'],
   CtcComponents: ['id', 'seq', 'code', 'name', 'section', 'kind', 'expr', 'taxable',
                   'in_gross', 'in_pf_wage', 'in_esi_wage', 'show_payslip', 'active'],
   CtcValues:    ['id', 'emp_code', 'code', 'value'],
   Notices:    ['id', 'title', 'body', 'level', 'start_date', 'end_date', 'pinned', 'active',
                'created_by', 'created_at'],
+  ApprovalLevels: ['id', 'applies_to', 'level', 'approver', 'label', 'active'],
   PayslipMail: ['id', 'month', 'emp_code', 'name', 'email', 'sent_at', 'status', 'error', 'sent_by'],
   Punches:    ['id', 'punch_time', 'emp_code', 'device_id', 'device', 'direction', 'source',
                'imported_at', 'lat', 'lng', 'accuracy', 'site', 'distance_m'],
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
-               'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note'],
+               'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note',
+               'level', 'approvals'],
   Payroll:    ['id', 'month', 'emp_code', 'total_days', 'lop_days', 'paid_days',
                'basic', 'hra', 'special_allowance', 'other_allowance', 'gross',
                'pf', 'esi', 'pt', 'tds', 'other_deduction', 'total_deduction', 'net',
@@ -734,6 +736,16 @@ function employeeSettings() {
   return out;
 }
 
+/* Tags a row with where it has got to, so a screen can say "waiting on HR"
+   instead of just "Pending". */
+function stamped(sheetName) {
+  return function (r) {
+    var p = progressOf(sheetName, r);
+    r._step = p.at; r._steps = p.total; r._waiting_on = p.waitingOn; r._signed = p.signed;
+    return r;
+  };
+}
+
 function onlyMine(sheetName, code) {
   return readSheet(sheetName).filter(function (r) {
     return String(r.emp_code) === String(code);
@@ -757,7 +769,7 @@ function bootstrap(caller) {
       settings:   owner ? settingsMap() : hrSettings(),
       employees:  readSheet('Employees'),
       attendance: readSheet('Attendance'),
-      leave:      readSheet('Leave'),
+      leave:      readSheet('Leave').map(stamped('Leave')),
       payroll:    readSheet('Payroll'),
       holidays:   readSheet('Holidays'),
       events:     readSheet('Events'),
@@ -765,11 +777,12 @@ function bootstrap(caller) {
       shifts:     readSheet('Shifts'),
       leaveTypes: readSheet('LeaveTypes'),
       requestTypes: readSheet('RequestTypes'),
-      requests:    readSheet('Requests'),
+      requests:    readSheet('Requests').map(stamped('Requests')),
       ctcVariables:  readSheet('CtcVariables'),
       ctcComponents: readSheet('CtcComponents'),
       ctcValues:     readSheet('CtcValues'),
       notices:       readSheet('Notices'),
+      approvalLevels: readSheet('ApprovalLevels'),
       /* The accounts and the integration keys are the owner's alone. */
       secrets: owner ? secretStatus() : {},
       users:   owner ? listUsers() : []
@@ -789,9 +802,9 @@ function bootstrap(caller) {
       settings:    employeeSettings(),
       employees:   me ? [me] : [],
       attendance:  code ? onlyMine('Attendance', code) : [],
-      leave:       code ? onlyMine('Leave', code) : [],
+      leave:       code ? onlyMine('Leave', code).map(stamped('Leave')) : [],
       payroll:     code ? onlyMine('Payroll', code) : [],
-      requests:    code ? onlyMine('Requests', code) : [],
+      requests:    code ? onlyMine('Requests', code).map(stamped('Requests')) : [],
       punches:     code ? onlyMine('Punches', code) : [],
       ctcValues:   code ? onlyMine('CtcValues', code) : [],
       holidays:    readSheet('Holidays'),
@@ -802,6 +815,7 @@ function bootstrap(caller) {
       /* Staff see the notices that are live today - not the drafts, not the
          expired ones, and not the ones scheduled for next month. */
       notices:     liveNotices(),
+      approvalLevels: readSheet('ApprovalLevels'),
       /* Empty for almost everyone. For someone with people reporting to them,
          their team and whatever of the team's is waiting on a decision. */
       inbox:       code ? managerInbox(code) : { isManager: false, team: [], teamLeave: [], teamRequests: [] },
@@ -1769,29 +1783,154 @@ function managerInbox(empCode) {
   team.forEach(function (e) { codes[String(e.emp_code)] = true; });
   var mine = function (r) { return codes[String(r.emp_code)]; };
 
+  /* Each item carries where it stands, and whether this particular person is
+     the one it is waiting on right now. A manager at step 1 of 3 should not
+     see step 2 as theirs to clear. */
+  var caller = { role: 'employee', emp_code: empCode, email: '' };
+  var withProgress = function (sheetName) {
+    return function (r) {
+      var p = progressOf(sheetName, r);
+      r._step = p.at;
+      r._steps = p.total;
+      r._waiting_on = p.waitingOn;
+      r._signed = p.signed;
+      r._mine = String(r.status || 'Pending') === 'Pending' &&
+                canClear(p.stage, caller, r.emp_code);
+      return r;
+    };
+  };
+
   return {
     isManager: true,
     team: team.map(function (e) {
       return { emp_code: e.emp_code, name: e.name, department: e.department,
                designation: e.designation, status: e.status };
     }),
-    teamLeave: readSheet('Leave').filter(mine),
-    teamRequests: readSheet('Requests').filter(mine)
+    teamLeave: readSheet('Leave').filter(mine).map(withProgress('Leave')),
+    teamRequests: readSheet('Requests').filter(mine).map(withProgress('Requests'))
   };
 }
 
 var DECIDABLE = { Leave: 'decision_note', Requests: 'note' };
 
+/* ------------------------------------------------------------------ */
+/* Approval chains                                                     */
+/* ------------------------------------------------------------------ */
+
 /**
- * Approve, reject or cancel one leave application or request.
+ * The stages an application passes through, in order.
  *
- * This is the only way a manager can change anything that is not their own,
- * and it writes exactly four fields - status and who decided it, when, and
- * why. Nothing else in the row can be touched through here, so a manager
- * cannot quietly move the dates of a leave they are approving.
+ * An empty ApprovalLevels sheet means one stage that either the reporting
+ * manager or HR can clear - exactly how it behaved before chains existed, so
+ * nothing breaks by upgrading and doing nothing.
  *
- * Approving a leave also marks the register, because a leave that is approved
- * but never lands on attendance is worse than one that was never approved.
+ * applies_to is "leave", the request code (od / swipe / co), or "all".
+ * approver is one of:
+ *    manager   - whoever the applicant reports to
+ *    hr        - any HR or owner account
+ *    owner     - an owner account only
+ *    emp:CODE  - one named employee, whoever that is
+ */
+function approvalChain(kind) {
+  var want = String(kind || '').toLowerCase();
+  var rows = readSheet('ApprovalLevels').filter(function (r) {
+    if (String(r.active || 'yes').toLowerCase() === 'no') return false;
+    var to = String(r.applies_to || 'all').toLowerCase();
+    return to === 'all' || to === want;
+  });
+  if (!rows.length) {
+    return [{ level: 1, approver: 'manager_or_hr', label: 'Manager or HR' }];
+  }
+  rows.sort(function (a, b) { return num(a.level) - num(b.level); });
+  return rows.map(function (r, i) {
+    return { level: i + 1, approver: String(r.approver || 'hr').toLowerCase().trim(),
+             label: String(r.label || '') };
+  });
+}
+
+function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+/** What kind of thing is this row, for chain purposes. */
+function kindOf(sheetName, row) {
+  return sheetName === 'Leave' ? 'leave' : String(row.type || '').toLowerCase();
+}
+
+/** May this caller clear this particular stage, for this applicant? */
+function canClear(stage, caller, ownerCode) {
+  var who = String(stage.approver || '');
+  if (who === 'hr') return isHrOrAbove(caller.role);
+  if (who === 'owner') return isOwner(caller.role);
+  if (who === 'manager') return isManagerOf(caller.emp_code, ownerCode);
+  if (who === 'manager_or_hr') {
+    return isHrOrAbove(caller.role) || isManagerOf(caller.emp_code, ownerCode);
+  }
+  if (who.indexOf('emp:') === 0) {
+    return String(caller.emp_code || '').trim().toLowerCase() ===
+           who.slice(4).trim().toLowerCase();
+  }
+  return false;
+}
+
+/** A readable name for a stage, for the screens. */
+function stageLabel(stage) {
+  if (stage.label) return stage.label;
+  var who = String(stage.approver || '');
+  if (who === 'hr') return 'HR';
+  if (who === 'owner') return 'Management';
+  if (who === 'manager') return 'Reporting manager';
+  if (who === 'manager_or_hr') return 'Manager or HR';
+  if (who.indexOf('emp:') === 0) return nameOfCode(who.slice(4));
+  return who;
+}
+
+function nameOfCode(code) {
+  var want = String(code || '').trim().toLowerCase(), out = String(code || '');
+  readSheet('Employees').forEach(function (e) {
+    if (String(e.emp_code).trim().toLowerCase() === want) out = e.name || out;
+  });
+  return out;
+}
+
+/**
+ * Where an application currently stands: which stage it is on, who has
+ * already signed it, and how many stages there are in total.
+ */
+function progressOf(sheetName, row) {
+  var chain = approvalChain(kindOf(sheetName, row));
+  var at = Math.max(1, Math.min(num(row.level) || 1, chain.length));
+  var stage = chain[at - 1];
+  return {
+    chain: chain, total: chain.length, at: at, stage: stage,
+    waitingOn: stageLabel(stage),
+    signed: parseApprovals(row.approvals)
+  };
+}
+
+function parseApprovals(text) {
+  var out = [];
+  String(text || '').split('|').forEach(function (part) {
+    if (!part.trim()) return;
+    var bits = part.split('~');            // level ~ who ~ when ~ note
+    out.push({ level: num(bits[0]), by: bits[1] || '', at: bits[2] || '', note: bits[3] || '' });
+  });
+  return out;
+}
+function writeApprovals(list) {
+  return list.map(function (a) {
+    return [a.level, a.by, a.at, String(a.note || '').replace(/[|~]/g, ' ')].join('~');
+  }).join('|');
+}
+
+/**
+ * Approve, reject or cancel one application, one stage at a time.
+ *
+ * Approving clears the current stage only. If more stages follow, the
+ * application stays Pending and moves to the next one; the last stage is what
+ * finally makes it Approved and marks the register. A rejection at any stage
+ * ends it there - there is no point sending a refused request further up.
+ *
+ * Only the four decision fields are ever written, so somebody approving a
+ * leave cannot quietly change its dates on the way through.
  */
 function decide(sheetName, id, status, note, caller) {
   var noteCol = DECIDABLE[sheetName];
@@ -1807,38 +1946,51 @@ function decide(sheetName, id, status, note, caller) {
     if (String(rows[i].data.id) === String(id)) { target = rows[i]; break; }
   }
   if (!target) throw new Error('That application no longer exists.');
+  var row = target.data;
 
-  var owner = String(target.data.emp_code || '');
-  var byHr = isHrOrAbove(caller.role);
-  if (!byHr && !isManagerOf(caller.emp_code, owner)) {
-    throw new Error('Not allowed. You can only decide requests from your own team.');
-  }
+  var was = String(row.status || 'Pending');
+  if (was !== 'Pending') throw new Error('This has already been ' + was.toLowerCase() + '.');
 
-  var was = String(target.data.status || 'Pending');
-  if (was !== 'Pending' && !byHr) {
-    throw new Error('This has already been ' + was.toLowerCase() + '.');
-  }
-
-  var month = String(target.data.from_date || target.data.date || '').slice(0, 7);
+  var month = String(row.from_date || row.date || '').slice(0, 7);
   if (month && monthIsLocked(month)) {
     throw new Error('Payroll for ' + month + ' is finalised, so this cannot be changed now.');
   }
+
+  var p = progressOf(sheetName, row);
+  if (!canClear(p.stage, caller, row.emp_code)) {
+    throw new Error('Not allowed. Step ' + p.at + ' of ' + p.total +
+                    ' is with ' + p.waitingOn + '.');
+  }
+
+  var signed = p.signed;
+  signed.push({ level: p.at, by: caller.email || '', at: nowStamp(), note: note || '' });
+
+  var last = p.at >= p.total;
+  var finalStatus = want === 'Approved' ? (last ? 'Approved' : 'Pending') : want;
+  var nextLevel = (want === 'Approved' && !last) ? p.at + 1 : p.at;
 
   var sh = sheet(sheetName), cols = SHEETS[sheetName];
   var set = function (col, value) {
     var at = cols.indexOf(col);
     if (at >= 0) sh.getRange(target.row, at + 1).setValue(value);
   };
-  set('status', want);
+  set('status', finalStatus);
+  set('level', nextLevel);
+  set('approvals', writeApprovals(signed));
   set('decided_by', caller.email || '');
   set('decided_at', nowStamp());
   if (note) set(noteCol, String(note).slice(0, 500));
 
   var marked = 0;
-  if (want === 'Approved' && sheetName === 'Leave') {
-    marked = markLeaveOnRegister(target.data);
-  }
-  return { id: id, status: want, days_marked: marked };
+  if (finalStatus === 'Approved' && sheetName === 'Leave') marked = markLeaveOnRegister(row);
+
+  var after = approvalChain(kindOf(sheetName, row));
+  return {
+    id: id, status: finalStatus, days_marked: marked,
+    cleared: p.at, total: p.total,
+    done: finalStatus !== 'Pending',
+    next: finalStatus === 'Pending' ? stageLabel(after[nextLevel - 1]) : ''
+  };
 }
 
 function nowStamp() {

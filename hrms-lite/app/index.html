@@ -171,6 +171,16 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
   color:#fff;font-size:.58rem;min-width:16px;height:16px;border-radius:99px;
   display:grid;place-items:center;padding:0 4px;}
 
+/* How far up the approval chain something has got. */
+.steps{display:flex;align-items:center;gap:8px;margin-top:9px;}
+.steps .dots{display:flex;gap:4px;flex:none;}
+.steps .dots i{width:9px;height:9px;border-radius:50%;background:var(--line);display:block;}
+.steps .dots i.on{background:var(--green);}
+.steps .dots i.now{background:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.2);}
+.steps .dots i.off{background:var(--red);}
+.steps span{font-size:.72rem;color:var(--muted);}
+.signed{margin-top:6px;font-size:.7rem;color:var(--green);line-height:1.6;}
+
 /* ---------------- sheet / dialog ---------------- */
 .sheet{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:60;display:none;
   align-items:flex-end;}
@@ -457,8 +467,10 @@ function render() {
 
 function pendingForMe() {
   if (!S.inbox.isManager) return 0;
-  var p = function (r) { return String(r.status || 'Pending') === 'Pending'; };
-  return S.inbox.teamLeave.filter(p).length + S.inbox.teamRequests.filter(p).length;
+  /* Only what is at this person's step. Something sitting with HR two steps
+     up is not theirs to chase. */
+  var mine = function (r) { return String(r.status || 'Pending') === 'Pending' && r._mine; };
+  return S.inbox.teamLeave.filter(mine).length + S.inbox.teamRequests.filter(mine).length;
 }
 </script>
 
@@ -734,12 +746,14 @@ function renderRequests() {
   S.leave.forEach(function (l) {
     mine.push({ kind: 'Leave', label: l.type || 'Leave', from: l.from_date, to: l.to_date,
                 days: l.days, status: l.status || 'Pending', reason: l.reason,
-                note: l.decision_note, at: l.applied_at || l.from_date });
+                note: l.decision_note, at: l.applied_at || l.from_date,
+                step: l._step, steps: l._steps, waitingOn: l._waiting_on, signed: l._signed });
   });
   S.reqs.forEach(function (r) {
     mine.push({ kind: 'Request', label: reqName(r.type), from: r.date, to: r.to_date || r.date,
                 days: r.days, status: r.status || 'Pending', reason: r.reason,
-                note: r.note, at: r.applied_at || r.date });
+                note: r.note, at: r.applied_at || r.date,
+                step: r._step, steps: r._steps, waitingOn: r._waiting_on, signed: r._signed });
   });
   mine.sort(function (a, b) { return String(b.at) < String(a.at) ? -1 : 1; });
 
@@ -766,8 +780,35 @@ function itemHtml(x) {
       '<span class="tag ' + esc(x.status) + '">' + esc(x.status) + '</span></div>' +
     '<div class="meta">' + esc(span) + (x.days ? ' · ' + x.days + ' day' + (num(x.days) === 1 ? '' : 's') : '') +
       (x.reason ? '<br>' + esc(x.reason) : '') +
-      (x.note ? '<br><i>HR: ' + esc(x.note) + '</i>' : '') +
-    '</div></div>';
+      (x.note ? '<br><i>' + esc(x.note) + '</i>' : '') +
+    '</div>' +
+    stepsHtml(x) +
+    '</div>';
+}
+
+/* A little ladder showing how far up the chain something has got, so nobody
+   has to ask HR where their leave is sitting. */
+function stepsHtml(x) {
+  var total = num(x.steps) || 1;
+  if (total < 2) return '';
+  var at = num(x.step) || 1;
+  var done = String(x.status) === 'Approved';
+  var stopped = String(x.status) === 'Rejected' || String(x.status) === 'Cancelled';
+  var dots = '';
+  for (var i = 1; i <= total; i++) {
+    var cls = done || i < at ? 'on' : (i === at && !stopped ? 'now' : '');
+    if (stopped && i === at) cls = 'off';
+    dots += '<i class="' + cls + '"></i>';
+  }
+  return '<div class="steps"><div class="dots">' + dots + '</div>' +
+    '<span>' + (done ? 'Approved by all ' + total + ' steps'
+      : stopped ? String(x.status) + ' at step ' + at
+      : 'Step ' + at + ' of ' + total + ' · with ' + esc(x.waitingOn || '')) + '</span></div>' +
+    ((x.signed && x.signed.length)
+      ? '<div class="signed">' + x.signed.map(function (a) {
+          return '✓ ' + esc(a.by) + (a.note ? ' – ' + esc(a.note) : '');
+        }).join('<br>') + '</div>'
+      : '');
 }
 function fmtDate(iso) {
   if (!iso) return '';
@@ -928,22 +969,27 @@ function renderTeam() {
     el('v-team').innerHTML = '<div class="empty">Nobody reports to you.</div>';
     return;
   }
-  var waiting = [], decided = [];
+  var waiting = [], elsewhere = [], decided = [];
+  var place = function (x, row) {
+    if (String(row.status || 'Pending') !== 'Pending') decided.push(x);
+    else if (row._mine) waiting.push(x);
+    else elsewhere.push(x);          // pending, but at somebody else's step
+  };
   (S.inbox.teamLeave || []).forEach(function (l) {
-    (String(l.status || 'Pending') === 'Pending' ? waiting : decided).push({
-      sheet: 'Leave', id: l.id, who: l.emp_code, label: l.type || 'Leave',
+    place({ sheet: 'Leave', id: l.id, who: l.emp_code, label: l.type || 'Leave',
       from: l.from_date, to: l.to_date, days: l.days, reason: l.reason,
-      status: l.status || 'Pending', at: l.applied_at || l.from_date });
+      status: l.status || 'Pending', at: l.applied_at || l.from_date,
+      step: l._step, steps: l._steps, waitingOn: l._waiting_on, signed: l._signed }, l);
   });
   (S.inbox.teamRequests || []).forEach(function (r) {
-    (String(r.status || 'Pending') === 'Pending' ? waiting : decided).push({
-      sheet: 'Requests', id: r.id, who: r.emp_code, label: reqName(r.type),
+    place({ sheet: 'Requests', id: r.id, who: r.emp_code, label: reqName(r.type),
       from: r.date, to: r.to_date || r.date, days: r.days, reason: r.reason,
       status: r.status || 'Pending', at: r.applied_at || r.date,
-      times: (r.in_time || r.out_time) ? (hhmm(r.in_time) || '--') + ' to ' + (hhmm(r.out_time) || '--') : '' });
+      step: r._step, steps: r._steps, waitingOn: r._waiting_on, signed: r._signed,
+      times: (r.in_time || r.out_time) ? (hhmm(r.in_time) || '--') + ' to ' + (hhmm(r.out_time) || '--') : '' }, r);
   });
   var byDate = function (a, b) { return String(b.at) < String(a.at) ? -1 : 1; };
-  waiting.sort(byDate); decided.sort(byDate);
+  waiting.sort(byDate); elsewhere.sort(byDate); decided.sort(byDate);
 
   el('v-team').innerHTML =
     '<h2 class="vt">My team</h2>' +
@@ -951,7 +997,11 @@ function renderTeam() {
       (waiting.length ? ' · ' + waiting.length + ' waiting on you' : '') + '.</p>' +
     (waiting.length
       ? waiting.map(function (x) { return decideCard(x, true); }).join('')
-      : '<div class="empty">Nothing waiting. </div>') +
+      : '<div class="empty">Nothing waiting on you. </div>') +
+    (elsewhere.length
+      ? '<h3 style="margin:20px 0 10px;font-size:.9rem;color:var(--muted)">Further up the chain</h3>' +
+        elsewhere.map(function (x) { return decideCard(x, false); }).join('')
+      : '') +
     (decided.length
       ? '<h3 style="margin:20px 0 10px;font-size:.9rem;color:var(--muted)">Already decided</h3>' +
         decided.slice(0, 12).map(function (x) { return decideCard(x, false); }).join('')
@@ -973,6 +1023,7 @@ function decideCard(x, open) {
       (x.days ? ' · ' + x.days + ' day' + (num(x.days) === 1 ? '' : 's') : '') +
       (x.times ? '<br>' + esc(x.times) : '') +
       (x.reason ? '<br>' + esc(x.reason) : '') + '</div>' +
+    stepsHtml(x) +
     (open
       ? '<div class="acts">' +
           '<button class="yes" onclick="decide(\'' + esc(x.sheet) + '\',\'' + esc(x.id) + '\',\'Approved\')">Approve</button>' +
@@ -990,9 +1041,11 @@ function decide(sheet, id, status, note) {
     .then(function (res) {
       S.busy = false;
       closeSheet();
-      toast(status === 'Approved'
-        ? 'Approved' + (res.days_marked ? ' · ' + res.days_marked + ' day(s) marked' : '')
-        : 'Rejected', 'good');
+      toast(status !== 'Approved' ? 'Rejected'
+        : res.done
+          ? 'Approved' + (res.days_marked ? ' · ' + res.days_marked + ' day(s) marked' : '')
+          : 'Step ' + res.cleared + ' of ' + res.total + ' · now with ' + res.next,
+        'good');
       return reload();
     }).catch(function (e) { S.busy = false; toast(e.message, 'bad'); });
 }
