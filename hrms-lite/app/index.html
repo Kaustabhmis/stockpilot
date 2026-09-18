@@ -23,7 +23,9 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
-  overscroll-behavior-y:none;}
+  overscroll-behavior-y:none;overflow-x:hidden;}
+/* A phone screen is the hard limit: nothing sideways, ever. */
+#app,.view{max-width:100%;}
 button,input,select,textarea{font:inherit;color:inherit;}
 button{border:0;background:none;cursor:pointer;}
 .hide{display:none !important;}
@@ -101,7 +103,11 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .geo.bad{color:var(--red);font-weight:600;}
 .geo.ok{color:var(--green);}
 
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px;}
+/* Four across a 320px phone leaves 70px a tile, which breaks "82:03" over two
+   lines. Two rows of two is better than a number you have to reassemble. */
+@media (max-width:379px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr));} }
+.kpi b{white-space:nowrap;font-size:clamp(1rem,4.6vw,1.25rem);}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;
   padding:11px 8px;text-align:center;}
 .kpi b{display:block;font-size:1.25rem;font-weight:800;}
@@ -112,14 +118,18 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .cal-top b{flex:1;text-align:center;font-size:1rem;}
 .cal-top button{width:38px;height:38px;border-radius:10px;background:var(--card);
   border:1px solid var(--line);font-size:1.1rem;}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+/* minmax(0,1fr), not 1fr: a plain 1fr track will not shrink below the width of
+   what is inside it, so the hours on each day pushed the month grid off the
+   side of the phone. */
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;}
 .cal .dow{text-align:center;font-size:.64rem;color:var(--muted);font-weight:700;
   text-transform:uppercase;padding-bottom:4px;}
 .cal .d{aspect-ratio:1;border-radius:9px;background:var(--card);border:1px solid var(--line);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   font-size:.82rem;font-weight:700;position:relative;}
 .cal .d.empty{background:none;border:0;}
-.cal .d small{font-size:.54rem;font-weight:700;letter-spacing:.2px;margin-top:1px;}
+.cal .d small{font-size:.54rem;font-weight:700;letter-spacing:.2px;margin-top:1px;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .cal .d.P{background:#d1fae5;border-color:#a7f3d0;color:#065f46;}
 .cal .d.A{background:#fee2e2;border-color:#fecaca;color:#991b1b;}
 .cal .d.HD{background:#fef3c7;border-color:#fde68a;color:#92400e;}
