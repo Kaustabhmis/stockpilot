@@ -139,6 +139,9 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;}
 .grid-half{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;}
 .field-err{font-size:.7rem;color:var(--danger);font-weight:600;text-transform:none;letter-spacing:0;}
+/* A date box that means "the week around this date" has to say so. */
+.hint-line{font-size:.62rem;font-weight:600;color:var(--text-soft);text-transform:none;letter-spacing:0;}
+.hint-line:empty{display:none;}
 
 .badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:.7rem;font-weight:700;white-space:nowrap;}
 .b-green{background:#d1fae5;color:#065f46;} .b-red{background:#fee2e2;color:#991b1b;}
@@ -762,6 +765,14 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <label class="field" id="rep-month-wrap">Month<input type="month" id="rep-month" onchange="renderReports()"></label>
           <label class="field" id="rep-date-wrap" style="display:none">Date
             <input type="date" id="rep-date" onchange="renderReports()">
+            <small id="rep-date-note" class="hint-line"></small>
+          </label>
+          <label class="field" id="rep-who-wrap" style="display:none">People
+            <select id="rep-who" onchange="renderReports()">
+              <option value="">Staff and workers</option>
+              <option value="staff">Staff only (salary)</option>
+              <option value="worker">Workers only (wages)</option>
+            </select>
           </label>
           <label class="field" id="rep-unit-wrap" style="display:none">Unit
             <select id="rep-unit" onchange="renderReports()"><option value="">All units</option></select>
@@ -769,6 +780,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <label class="field">Report
             <select id="rep-kind" onchange="renderReports()">
               <option value="daily">Daily attendance (one day, everyone)</option>
+              <option value="weekly">Weekly attendance (one week, everyone)</option>
               <option value="register" selected>Salary register (unit-wise)</option>
               <option value="wages">Wages register</option>
               <option value="leave">Leave report</option>
@@ -4581,26 +4593,30 @@ function registerRows(ym) {
 
 function renderReports() {
   var kind = el('rep-kind').value;
-  var daily = kind === 'daily';
+  var daily = kind === 'daily', weekly = kind === 'weekly';
+  var byDate = daily || weekly;
 
-  /* The daily muster is one day, not one month, so it gets a date picker and
-     the month picker steps aside. Everything else is a month report. */
-  if (daily && !el('rep-date').value) el('rep-date').value = today();
+  /* The muster reports cover a day or a week, not a month, so they get a date
+     picker and the month picker steps aside. Everything else is a month. */
+  if (byDate && !el('rep-date').value) el('rep-date').value = today();
   var iso = el('rep-date').value || today();
-  var ym = daily ? iso.slice(0, 7) : (el('rep-month').value || thisMonth());
-  el('rep-date-wrap').style.display = daily ? '' : 'none';
-  el('rep-month-wrap').style.display = daily ? 'none' : '';
-  /* Unit-wise matters on the muster too - one sheet per unit for the gate. */
-  el('rep-unit-wrap').style.display = (kind === 'register' || daily) ? '' : 'none';
+  var ym = byDate ? iso.slice(0, 7) : (el('rep-month').value || thisMonth());
+  el('rep-date-wrap').style.display = byDate ? '' : 'none';
+  el('rep-month-wrap').style.display = byDate ? 'none' : '';
+  el('rep-date-note').textContent = weekly ? 'any day in the week' : '';
+  /* Unit-wise matters on the muster too - one sheet per unit for the gate -
+     and so does staff against workers, who are paid on different rules. */
+  el('rep-unit-wrap').style.display = (kind === 'register' || byDate) ? '' : 'none';
+  el('rep-who-wrap').style.display = byDate ? '' : 'none';
 
-  var spec = daily ? reportDaily(iso)
+  var spec = daily ? reportDaily(iso) : weekly ? reportWeekly(iso)
     : { register: reportRegister, wages: reportWages, leave: reportLeave,
         statutory: reportStatutory, ytd: reportYtd, exceptions: reportExceptions,
         movement: reportMovement }[kind](ym);
   LAST_SPEC = spec;
 
   if (spec.html) {                       /* grouped registers render themselves */
-    LAST_REPORT = { name: kind + '-' + (daily ? iso : ym), cols: spec.cols, rows: spec.rows };
+    LAST_REPORT = { name: kind + '-' + (weekly ? weekStart(iso) : byDate ? iso : ym), cols: spec.cols, rows: spec.rows };
     el('rep-title').textContent = spec.title;
     el('rep-note').textContent = spec.note;
     el('rep-kpis').innerHTML = spec.kpis || '';
@@ -4613,7 +4629,7 @@ function renderReports() {
     el('rep-table').outerHTML = '<table id="rep-table"></table>';
   }
 
-  LAST_REPORT = { name: kind + '-' + (daily ? iso : ym), cols: spec.cols, rows: spec.rows };
+  LAST_REPORT = { name: kind + '-' + (weekly ? weekStart(iso) : byDate ? iso : ym), cols: spec.cols, rows: spec.rows };
   el('rep-title').textContent = spec.title;
   el('rep-note').textContent = spec.note;
   el('rep-kpis').innerHTML = spec.kpis || '';
@@ -4643,6 +4659,55 @@ function renderReports() {
 var DAY_WORDS = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'On leave', OD: 'Out duty',
                   CO: 'Comp-off', WO: 'Weekly off', H: 'Holiday' };
 
+/* Staff are on a monthly salary, workers on a daily wage. It is the same
+   division payroll already makes - "Paid as" on the employee record. */
+function isWorker(e) { return String(e.wage_type || 'Salary') === 'Wages'; }
+function personType(e) { return isWorker(e) ? 'Worker' : 'Staff'; }
+
+/* Whoever the muster is being taken for: everybody, staff only, workers only. */
+function chosenPeople(iso) {
+  var who = el('rep-who') ? el('rep-who').value : '';
+  var list = activeEmployees().filter(function (e) {
+    return (!e.doj || String(e.doj) <= iso) &&     /* not yet joined is not absent */
+           (!who || (who === 'worker') === isWorker(e));
+  });
+  list.sort(function (a, b) {
+    return String(a.department || '').localeCompare(String(b.department || '')) ||
+           String(a.name).localeCompare(String(b.name));
+  });
+  return { list: list, who: who,
+           label: who === 'staff' ? 'Staff' : who === 'worker' ? 'Workers' : '' };
+}
+
+/* The unit picker, filtered to whoever is on this report, and the choice kept
+   if that unit still has people on it. */
+function applyUnitFilter(list) {
+  var counts = {};
+  list.forEach(function (e) { var u = unitOf(e); counts[u] = (counts[u] || 0) + 1; });
+  var only = fillUnitPicker(counts);
+  return { list: only ? list.filter(function (e) { return unitOf(e) === only; }) : list,
+           only: only };
+}
+
+/* How a day sits on the report: its letter, its hours and its flags, with the
+   two things we refuse to guess at left blank. */
+function dayFacts(ym, code, d) {
+  var rec = recordFor(ym, code, d);
+  var st = statusOf(ym, code, d);
+  var onDuty = st === 'P' || st === 'HD' || st === 'OD' || st === 'CO';
+  /* A day marked absent or on leave was not worked, whatever hours an older
+     row or an import left behind on it; and a day punched in but never out
+     has no honest total until somebody closes it. */
+  var open = !!(rec && rec.in_time && !rec.out_time);
+  var working = st === 'P' || st === 'HD';
+  return {
+    rec: rec, st: st, open: open, onDuty: onDuty,
+    mins: (onDuty && !open) ? workedMinutes(rec) : null,
+    late: working ? lateMinutes(rec, code) : 0,
+    ot: working ? otMinutes(rec, code) : 0
+  };
+}
+
 /* Keep the unit picker in step with whoever is actually on the sheet, and hold
    the choice if that unit still exists. The salary register builds its own
    from the payroll run; the muster has no run to build from. */
@@ -4671,71 +4736,58 @@ function longDate(iso) {
   return days[dt.getDay()] + ', ' + (+p[2]) + ' ' + mon[+p[1] - 1] + ' ' + p[0];
 }
 
-/* One day, everybody: the muster roll the supervisor actually wants - who came,
-   when they came, who is missing, and what nobody has marked yet. */
+/* One day, everybody: the muster roll the supervisor actually wants - who
+   came, when they came, who is missing, and what nobody has marked yet. */
 function reportDaily(iso) {
   var ym = iso.slice(0, 7), d = parseInt(iso.slice(8), 10);
-  var emps = activeEmployees().filter(function (e) {
-    return !e.doj || String(e.doj) <= iso;          /* not yet joined is not absent */
-  });
+  var who = chosenPeople(iso);
+  var f = applyUnitFilter(who.list);
+  var emps = f.list;
 
-  var counts = {};
-  emps.forEach(function (e) { var u = unitOf(e); counts[u] = (counts[u] || 0) + 1; });
-  var only = fillUnitPicker(counts);
-  if (only) emps = emps.filter(function (e) { return unitOf(e) === only; });
-
-  emps.sort(function (a, b) {
-    return String(a.department || '').localeCompare(String(b.department || '')) ||
-           String(a.name).localeCompare(String(b.name));
-  });
-
-  var k = { on: 0, A: 0, L: 0, late: 0, blank: 0, mins: 0 };
+  var k = { on: 0, A: 0, L: 0, late: 0, blank: 0, mins: 0, staff: 0, worker: 0 };
   var rows = emps.map(function (e) {
-    var rec = recordFor(ym, e.emp_code, d);
-    var st = statusOf(ym, e.emp_code, d);
-    /* A day marked absent or on leave was not worked, whatever hours an older
-       row or an import left behind on it. */
-    var onDuty = st === 'P' || st === 'HD' || st === 'OD' || st === 'CO';
-    var open = rec && rec.in_time && !rec.out_time;
-    /* An unclosed day has no hours to report either - the total on the row
-       would be whatever the last import happened to leave there. */
-    var mins = (onDuty && !open) ? workedMinutes(rec) : null;
-    var working = st === 'P' || st === 'HD';
-    var late = working ? lateMinutes(rec, e.emp_code) : 0;
-    var ot = working ? otMinutes(rec, e.emp_code) : 0;
+    var x = dayFacts(ym, e.emp_code, d);
 
-    if (!st) k.blank++;
-    else if (st === 'A') k.A++;
-    else if (st === 'L') k.L++;
-    else if (st !== 'WO' && st !== 'H') k.on++;
-    if (late) k.late++;
-    if (mins) k.mins += mins;
+    if (!x.st) k.blank++;
+    else if (x.st === 'A') k.A++;
+    else if (x.st === 'L') k.L++;
+    else if (x.st !== 'WO' && x.st !== 'H') {
+      k.on++;
+      if (isWorker(e)) k.worker++; else k.staff++;
+    }
+    if (x.late) k.late++;
+    if (x.mins) k.mins += x.mins;
 
     /* Punched in and never out is the one thing worth seeing today, while the
        person is still on the premises to ask. */
-    var note = String((rec && rec.remarks) || '');
-    if (open && st !== 'WO' && st !== 'H') {
+    var note = String((x.rec && x.rec.remarks) || '');
+    if (x.open && x.st !== 'WO' && x.st !== 'H') {
       note = (note ? note + ' - ' : '') + 'no punch out';
     }
 
-    return [e.emp_code, e.name, e.department || unitOf(e), DAY_WORDS[st] || 'Not marked',
-            hhmm(rec && rec.in_time) || '-', hhmm(rec && rec.out_time) || '-',
-            mins ? hoursText(mins) : '-', late || '', ot || '', note];
+    return [e.emp_code, e.name, e.department || unitOf(e), personType(e),
+            DAY_WORDS[x.st] || 'Not marked',
+            hhmm(x.rec && x.rec.in_time) || '-', hhmm(x.rec && x.rec.out_time) || '-',
+            x.mins ? hoursText(x.mins) : '-', x.late || '', x.ot || '', note];
   });
 
   var hol = holidayOn(iso);
   var due = k.on + k.A + k.L + k.blank;
   return {
-    title: 'Daily attendance - ' + longDate(iso) + (only ? ' - ' + only : ''),
+    title: 'Daily attendance - ' + longDate(iso) +
+      (who.label ? ' - ' + who.label : '') + (f.only ? ' - ' + f.only : ''),
     note: (hol ? 'Holiday: ' + (hol.name || hol) + '. ' : '') +
       'Everyone on the rolls that day, with in time, out time and hours worked. ' +
       '"Not marked" means nobody has entered the day and no punch has come in from the ' +
       'device - it is paid as LOP until someone marks it.',
-    cols: ['Code', 'Name', 'Department', 'Status', 'In', 'Out', 'Hours',
+    cols: ['Code', 'Name', 'Department', 'Paid as', 'Status', 'In', 'Out', 'Hours',
            'Late (min)', 'OT (min)', 'Remarks'],
-    numFrom: 4, textCols: [9], rows: rows, emptyLabel: longDate(iso),
+    numFrom: 5, textCols: [10], rows: rows, emptyLabel: longDate(iso),
+    printHeaders: [['Department', 'Dept'], ['Late (min)', 'Late'], ['OT (min)', 'OT']],
     kpis:
-      kpi('On duty', k.on, due ? Math.round(k.on * 100 / due) + '% of those due in' : '',
+      kpi('On duty', k.on,
+          who.who ? (due ? Math.round(k.on * 100 / due) + '% of those due in' : '')
+                  : k.staff + ' staff, ' + k.worker + ' workers',
           '', 'k-good', '&#10003;') +
       kpi('Absent', k.A, k.A ? 'unpaid unless marked otherwise' : 'nobody absent',
           '', k.A ? 'k-critical' : 'k-good', '&#10005;') +
@@ -4744,6 +4796,96 @@ function reportDaily(iso) {
       kpi('Not marked', k.blank, k.blank ? 'will be paid as LOP' : 'day is complete',
           '', k.blank ? 'k-warn' : 'k-good', '&#9633;') +
       kpi('Hours worked', hoursText(k.mins), 'everyone, this day', '', 'k-violet', '&#8721;')
+  };
+}
+
+/** The Monday on or before a date, as an ISO string. */
+function weekStart(iso) {
+  var p = String(iso).split('-');
+  var dt = new Date(+p[0], +p[1] - 1, +p[2]);
+  if (isNaN(dt.getTime())) dt = new Date();
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));     /* Sunday counts as day 7 */
+  return isoOf(dt);
+}
+function isoOf(dt) {
+  return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) +
+    '-' + ('0' + dt.getDate()).slice(-2);
+}
+function addDays(iso, n) {
+  var p = String(iso).split('-');
+  var dt = new Date(+p[0], +p[1] - 1, +p[2]);
+  dt.setDate(dt.getDate() + n);
+  return isoOf(dt);
+}
+
+/* One week, everybody: seven days across the page, so a supervisor can see a
+   pattern - the same person short every Monday - that a daily sheet hides. */
+function reportWeekly(iso) {
+  var from = weekStart(iso);
+  var days = [];
+  for (var i = 0; i < 7; i++) days.push(addDays(from, i));
+  var to = days[6];
+  var DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  var who = chosenPeople(to);
+  var f = applyUnitFilter(who.list);
+  var emps = f.list;
+
+  var k = { P: 0, A: 0, L: 0, late: 0, blank: 0, mins: 0, ot: 0 };
+  var rows = emps.map(function (e) {
+    var r = [e.emp_code, e.name, e.department || unitOf(e), personType(e)];
+    var t = { P: 0, A: 0, L: 0, late: 0, blank: 0, mins: 0 };
+
+    days.forEach(function (day) {
+      /* Nobody is absent before they joined or after they left. */
+      if ((e.doj && String(e.doj) > day) || (e.exit_date && String(e.exit_date) < day)) {
+        r.push('-');
+        return;
+      }
+      var x = dayFacts(day.slice(0, 7), e.emp_code, parseInt(day.slice(8), 10));
+      if (!x.st) { t.blank++; k.blank++; }
+      else if (x.st === 'A') { t.A++; k.A++; }
+      else if (x.st === 'L') { t.L++; k.L++; }
+      else if (x.st === 'P') { t.P++; k.P++; }
+      else if (x.st === 'HD') { t.P += 0.5; k.P += 0.5; }
+      if (x.late) { t.late++; k.late++; }
+      if (x.mins) { t.mins += x.mins; k.mins += x.mins; }
+      k.ot += x.ot;
+
+      /* The letter says what kind of day it was, the time says how much of it
+         was worked - both, because either alone leaves a question. */
+      r.push(x.st ? (x.mins ? x.st + ' ' + hoursText(x.mins) : x.st) : '?');
+    });
+
+    /* Zeros in a seventeen-column grid are noise. Blank them so the eye lands
+       on the person who was actually absent, late or unmarked. */
+    r.push(t.P, t.A || '', t.L || '', t.late || '', t.blank || '', hoursText(t.mins));
+    return r;
+  });
+
+  var head = days.map(function (day, i) { return DOW[i] + ' ' + (+day.slice(8)); });
+  var span = longDate(from).replace(/^\w+, /, '') + ' to ' + longDate(to).replace(/^\w+, /, '');
+  return {
+    title: 'Weekly attendance - ' + span +
+      (who.label ? ' - ' + who.label : '') + (f.only ? ' - ' + f.only : ''),
+    note: 'Monday to Sunday. Each cell is the day\'s status and the hours worked on it: ' +
+      'P present, A absent, HD half day, L leave, OD out duty, CO comp-off, WO weekly off, ' +
+      'H holiday, ? nobody has marked it yet, - not on the rolls that day.',
+    cols: ['Code', 'Name', 'Department', 'Paid as'].concat(head)
+      .concat(['Present', 'Absent', 'Leave', 'Late', 'Unmarked', 'Hours']),
+    numFrom: 4, rows: rows, emptyLabel: span,
+    printHeaders: [['Department', 'Dept'], ['Present', 'P'], ['Absent', 'A'],
+                   ['Leave', 'L'], ['Unmarked', '?']],
+    kpis:
+      kpi('Present days', k.P, 'across the week', '', 'k-good', '&#10003;') +
+      kpi('Absent days', k.A, k.A ? 'unpaid unless marked otherwise' : 'nobody absent',
+          '', k.A ? 'k-critical' : 'k-good', '&#10005;') +
+      kpi('Leave days', k.L, 'approved leave', '', 'k-blue', '&#127796;') +
+      kpi('Late marks', k.late, 'in after the shift grace', '', k.late ? 'k-warn' : 'k-good', '&#9200;') +
+      kpi('Unmarked days', k.blank, k.blank ? 'will be paid as LOP' : 'week is complete',
+          '', k.blank ? 'k-warn' : 'k-good', '&#9633;') +
+      kpi('Hours worked', hoursText(k.mins), hoursText(k.ot) + ' of it overtime',
+          '', 'k-violet', '&#8721;')
   };
 }
 
@@ -9240,8 +9382,8 @@ function printReport() {
   var spec = LAST_SPEC;
   var kindSel = el('rep-kind');
   /* The muster is filed by the day it covers, not by month. */
-  var ym = kindSel.value === 'daily'
-    ? (el('rep-date').value || today())
+  var ym = kindSel.value === 'weekly' ? weekStart(el('rep-date').value || today())
+    : kindSel.value === 'daily' ? (el('rep-date').value || today())
     : (el('rep-month').value || thisMonth());
   var kindName = kindSel.options[kindSel.selectedIndex].text;
   var bodyHtml = spec && spec.html
