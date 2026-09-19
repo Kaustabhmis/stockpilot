@@ -7,7 +7,7 @@
  * Copy the /exec URL into the API URL box on the HRMS Lite login screen.
  */
 
-var VERSION = 2;
+var VERSION = 3;
 
 var SHEETS = {
   Settings:   ['key', 'value'],
@@ -433,6 +433,7 @@ function route(action, p, caller) {
     case 'testIntegration': return testIntegration();
     case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note, p.geo);
     case 'punchState':    return punchState(p.emp_code);
+    case 'punchLog':      return punchLog(p.from, p.to);
     case 'sendPayslips':  return sendPayslips(p, caller);
     case 'mailQuota':     return { left: MailApp.getRemainingDailyQuota(), from: senderAddress() };
     case 'payslipMailLog': return payslipMailLog(p.month);
@@ -1423,6 +1424,41 @@ function nowParts() {
    Sized from headcount so it holds roughly the last six weeks. */
 function punchWindow() {
   return Math.max(1000, readSheet('Employees').length * 45);
+}
+
+/**
+ * The machine's own record for a day, or a span of days: every punch as it
+ * came off the device, before attendance settled it into an in and an out.
+ * This is what settles an argument about a day - the attendance row is a
+ * conclusion, the punch log is the evidence.
+ *
+ * Not in bootstrap, and deliberately so: the punch tab is the biggest one in
+ * the book, and almost every screen needs none of it. It is fetched for the
+ * days actually asked for. HR and above only - the router refuses everyone
+ * else before this runs.
+ */
+function punchLog(from, to) {
+  var a = String(from || '').slice(0, 10);
+  var b = String(to || from || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(a)) throw new Error('Pick a date first.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(b)) b = a;
+  if (b < a) { var swap = a; a = b; b = swap; }
+
+  var rows = readSheet('Punches', punchWindow());
+  /* The tail read covers recent days. Asking for an older one has to read the
+     whole tab - reporting an empty day would be a lie, not a saving. */
+  if (rows.length && String(rows[0].punch_time).slice(0, 10) > a) {
+    rows = readSheet('Punches');
+  }
+  var out = rows.filter(function (r) {
+    var d = String(r.punch_time).slice(0, 10);
+    return d >= a && d <= b;
+  });
+  out.sort(function (x, y) {
+    return String(x.punch_time).localeCompare(String(y.punch_time)) ||
+           String(x.emp_code).localeCompare(String(y.emp_code));
+  });
+  return { from: a, to: b, rows: out };
 }
 
 /** Today's punch record plus any earlier day left open. */

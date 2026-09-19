@@ -767,6 +767,10 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             <input type="date" id="rep-date" onchange="renderReports()">
             <small id="rep-date-note" class="hint-line"></small>
           </label>
+          <label class="field" id="rep-date2-wrap" style="display:none">To
+            <input type="date" id="rep-date2" onchange="renderReports()">
+            <small class="hint-line">same date for one day</small>
+          </label>
           <label class="field" id="rep-who-wrap" style="display:none">People
             <select id="rep-who" onchange="renderReports()">
               <option value="">Staff and workers</option>
@@ -781,6 +785,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             <select id="rep-kind" onchange="renderReports()">
               <option value="daily">Daily attendance (one day, everyone)</option>
               <option value="weekly">Weekly attendance (one week, everyone)</option>
+              <option value="monthly">Monthly attendance (one month, everyone)</option>
+              <option value="punches">Punch log (date-wise, from the device)</option>
               <option value="register" selected>Salary register (unit-wise)</option>
               <option value="wages">Wages register</option>
               <option value="leave">Leave report</option>
@@ -1497,6 +1503,24 @@ function demoDb() {
   [addMonths(ym, -3), addMonths(ym, -2), addMonths(ym, -1)].forEach(function (m) { seedMonth(m, true); });
   seedMonth(ym, false);
 
+  /* The punch log is the machine's own record, so the demo builds it from the
+     days it just marked: an IN and an OUT per worked day, a fortnight back -
+     enough to try the report without pretending to a year of device history. */
+  db.punches = [];
+  db.attendance.forEach(function (a) {
+    if (a.date < addDays(today(), -14)) return;
+    var e = db.employees.filter(function (x) { return x.emp_code === a.emp_code; })[0] || {};
+    [['in', a.in_time], ['out', a.out_time]].forEach(function (pair) {
+      if (!pair[1]) return;
+      db.punches.push({
+        id: a.emp_code + '_' + a.date + '_' + pair[0], punch_time: a.date + ' ' + pair[1] + ':00',
+        emp_code: a.emp_code, device_id: e.device_id || '', device: 'Main gate',
+        direction: pair[0], source: 'essl-import', imported_at: a.date + ' 19:00:00',
+        lat: '', lng: '', accuracy: '', site: '', distance_m: ''
+      });
+    });
+  });
+
   db.leave = [
     { id: 'LV1', emp_code: 'EMP0002', type: 'Casual', from_date: dateStr(ym, 12), to_date: dateStr(ym, 13),
       days: 2, reason: 'Family function', status: 'Pending', applied_at: today(),
@@ -1665,6 +1689,20 @@ function demoApi(action, p) {
       Object.assign(db.settings, p.settings || {}); demoSave(db); return db.settings;
     case 'changePassword':
       return { changed: true };
+    case 'punchLog':
+      /* The demo answers this the way the server does - the same filter, the
+         same shape - so the punch report can be tried before the sheet is
+         connected. */
+      var pa = String(p.from || '').slice(0, 10), pb = String(p.to || p.from || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(pa)) throw new Error('Pick a date first.');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(pb)) pb = pa;
+      if (pb < pa) { var sw = pa; pa = pb; pb = sw; }
+      return { from: pa, to: pb, rows: (db.punches || []).filter(function (r) {
+        var d = String(r.punch_time).slice(0, 10);
+        return d >= pa && d <= pb;
+      }).sort(function (x, y) {
+        return String(x.punch_time).localeCompare(String(y.punch_time));
+      }) };
     case 'ping':
       return { service: 'HRMS Lite (demo)', version: 1 };
     case 'setSecret':
@@ -4594,29 +4632,43 @@ function registerRows(ym) {
 function renderReports() {
   var kind = el('rep-kind').value;
   var daily = kind === 'daily', weekly = kind === 'weekly';
-  var byDate = daily || weekly;
+  var monthly = kind === 'monthly', punches = kind === 'punches';
+  var byDate = daily || weekly || punches;
+  var muster = byDate || monthly;
 
-  /* The muster reports cover a day or a week, not a month, so they get a date
-     picker and the month picker steps aside. Everything else is a month. */
+  /* A day, a week and the punch log are picked by date; everything else -
+     the monthly muster included - is picked by month. */
   if (byDate && !el('rep-date').value) el('rep-date').value = today();
   var iso = el('rep-date').value || today();
+  /* The span reads as a span even for one day: both boxes filled, rather than
+     an empty second box the reader has to interpret. */
+  if (punches && !el('rep-date2').value) el('rep-date2').value = iso;
+  var upto = punches ? (el('rep-date2').value || iso) : iso;
+  /* A span typed back to front is a span, not an error: read it the way it
+     was meant, so the heading and the file name do not come out reversed. */
+  if (punches && upto < iso) { var flip = iso; iso = upto; upto = flip; }
   var ym = byDate ? iso.slice(0, 7) : (el('rep-month').value || thisMonth());
   el('rep-date-wrap').style.display = byDate ? '' : 'none';
   el('rep-month-wrap').style.display = byDate ? 'none' : '';
+  el('rep-date2-wrap').style.display = punches ? '' : 'none';
   el('rep-date-note').textContent = weekly ? 'any day in the week' : '';
   /* Unit-wise matters on the muster too - one sheet per unit for the gate -
      and so does staff against workers, who are paid on different rules. */
-  el('rep-unit-wrap').style.display = (kind === 'register' || byDate) ? '' : 'none';
-  el('rep-who-wrap').style.display = byDate ? '' : 'none';
+  el('rep-unit-wrap').style.display = (kind === 'register' || muster) ? '' : 'none';
+  el('rep-who-wrap').style.display = muster ? '' : 'none';
 
-  var spec = daily ? reportDaily(iso) : weekly ? reportWeekly(iso)
-    : { register: reportRegister, wages: reportWages, leave: reportLeave,
+  var spec;
+  if (punches) spec = punchSpec(iso, upto);
+  else if (daily) spec = reportDaily(iso);
+  else if (weekly) spec = reportWeekly(iso);
+  else if (monthly) spec = reportMonthly(ym);
+  else spec = { register: reportRegister, wages: reportWages, leave: reportLeave,
         statutory: reportStatutory, ytd: reportYtd, exceptions: reportExceptions,
         movement: reportMovement }[kind](ym);
   LAST_SPEC = spec;
 
   if (spec.html) {                       /* grouped registers render themselves */
-    LAST_REPORT = { name: kind + '-' + (weekly ? weekStart(iso) : byDate ? iso : ym), cols: spec.cols, rows: spec.rows };
+    LAST_REPORT = { name: kind + '-' + (weekly ? weekStart(iso) : punches && upto !== iso ? iso + '_' + upto : byDate ? iso : ym), cols: spec.cols, rows: spec.rows };
     el('rep-title').textContent = spec.title;
     el('rep-note').textContent = spec.note;
     el('rep-kpis').innerHTML = spec.kpis || '';
@@ -4629,7 +4681,7 @@ function renderReports() {
     el('rep-table').outerHTML = '<table id="rep-table"></table>';
   }
 
-  LAST_REPORT = { name: kind + '-' + (weekly ? weekStart(iso) : byDate ? iso : ym), cols: spec.cols, rows: spec.rows };
+  LAST_REPORT = { name: kind + '-' + (weekly ? weekStart(iso) : punches && upto !== iso ? iso + '_' + upto : byDate ? iso : ym), cols: spec.cols, rows: spec.rows };
   el('rep-title').textContent = spec.title;
   el('rep-note').textContent = spec.note;
   el('rep-kpis').innerHTML = spec.kpis || '';
@@ -4702,6 +4754,8 @@ function dayFacts(ym, code, d) {
   var working = st === 'P' || st === 'HD';
   return {
     rec: rec, st: st, open: open, onDuty: onDuty,
+    /* A day that has not happened yet is not an unmarked day. */
+    future: dateStr(ym, d) > today(),
     mins: (onDuty && !open) ? workedMinutes(rec) : null,
     late: working ? lateMinutes(rec, code) : 0,
     ot: working ? otMinutes(rec, code) : 0
@@ -4748,7 +4802,8 @@ function reportDaily(iso) {
   var rows = emps.map(function (e) {
     var x = dayFacts(ym, e.emp_code, d);
 
-    if (!x.st) k.blank++;
+    if (!x.st && x.future) { /* the day has not happened yet */ }
+    else if (!x.st) k.blank++;
     else if (x.st === 'A') k.A++;
     else if (x.st === 'L') k.L++;
     else if (x.st !== 'WO' && x.st !== 'H') {
@@ -4766,7 +4821,7 @@ function reportDaily(iso) {
     }
 
     return [e.emp_code, e.name, e.department || unitOf(e), personType(e),
-            DAY_WORDS[x.st] || 'Not marked',
+            DAY_WORDS[x.st] || (x.future ? 'Not yet' : 'Not marked'),
             hhmm(x.rec && x.rec.in_time) || '-', hhmm(x.rec && x.rec.out_time) || '-',
             x.mins ? hoursText(x.mins) : '-', x.late || '', x.ot || '', note];
   });
@@ -4797,6 +4852,19 @@ function reportDaily(iso) {
           '', k.blank ? 'k-warn' : 'k-good', '&#9633;') +
       kpi('Hours worked', hoursText(k.mins), 'everyone, this day', '', 'k-violet', '&#8721;')
   };
+}
+
+/**
+ * Column widths for a day-grid report, as percentages: the name columns get
+ * what they need, the totals get what they need, and the days share the rest
+ * evenly - so a 28-day February and a 31-day March print the same width.
+ */
+function gridWidths(days, lead, tail) {
+  var used = lead.concat(tail).reduce(function (t, w) { return t + w; }, 0);
+  var each = (100 - used) / days;
+  var out = lead.slice();
+  for (var i = 0; i < days; i++) out.push(each);
+  return out.concat(tail).map(function (w) { return w.toFixed(2) + '%'; });
 }
 
 /** The Monday on or before a date, as an ISO string. */
@@ -4843,6 +4911,7 @@ function reportWeekly(iso) {
         return;
       }
       var x = dayFacts(day.slice(0, 7), e.emp_code, parseInt(day.slice(8), 10));
+      if (x.future && !x.st) { r.push(''); return; }
       if (!x.st) { t.blank++; k.blank++; }
       else if (x.st === 'A') { t.A++; k.A++; }
       else if (x.st === 'L') { t.L++; k.L++; }
@@ -4870,12 +4939,13 @@ function reportWeekly(iso) {
       (who.label ? ' - ' + who.label : '') + (f.only ? ' - ' + f.only : ''),
     note: 'Monday to Sunday. Each cell is the day\'s status and the hours worked on it: ' +
       'P present, A absent, HD half day, L leave, OD out duty, CO comp-off, WO weekly off, ' +
-      'H holiday, ? nobody has marked it yet, - not on the rolls that day.',
+      'H holiday, ? nobody has marked it yet, - not on the rolls that day, blank not yet happened.',
     cols: ['Code', 'Name', 'Department', 'Paid as'].concat(head)
       .concat(['Present', 'Absent', 'Leave', 'Late', 'Unmarked', 'Hours']),
     numFrom: 4, rows: rows, emptyLabel: span,
-    printHeaders: [['Department', 'Dept'], ['Present', 'P'], ['Absent', 'A'],
-                   ['Leave', 'L'], ['Unmarked', '?']],
+    printHeaders: [['Department', 'Dept'], ['Paid as', 'Type'], ['Present', 'P'],
+                   ['Absent', 'A'], ['Leave', 'L'], ['Unmarked', '?']],
+    printColWidths: gridWidths(7, [7, 13, 9, 5], [3.2, 3.2, 3.2, 3.2, 3.2, 5.4]),
     kpis:
       kpi('Present days', k.P, 'across the week', '', 'k-good', '&#10003;') +
       kpi('Absent days', k.A, k.A ? 'unpaid unless marked otherwise' : 'nobody absent',
@@ -4886,6 +4956,179 @@ function reportWeekly(iso) {
           '', k.blank ? 'k-warn' : 'k-good', '&#9633;') +
       kpi('Hours worked', hoursText(k.mins), hoursText(k.ot) + ' of it overtime',
           '', 'k-violet', '&#8721;')
+  };
+}
+
+/* One month, everybody, in the same shape as the week: a letter a day across
+   the page and the totals that matter on the right. The attendance screen
+   marks the month; this reports it, with the unit and staff/worker filters
+   the other reports have. */
+function reportMonthly(ym) {
+  var dim = daysInMonth(ym);
+  var last = dateStr(ym, dim);
+  var who = chosenPeople(last);
+  var f = applyUnitFilter(who.list);
+  var emps = f.list;
+
+  var k = { P: 0, A: 0, L: 0, late: 0, blank: 0, mins: 0, ot: 0, lop: 0 };
+  var rows = emps.map(function (e) {
+    var r = [e.emp_code, e.name, e.department || unitOf(e), personType(e)];
+    var t = { P: 0, A: 0, L: 0, late: 0, blank: 0, mins: 0 };
+
+    for (var d = 1; d <= dim; d++) {
+      var day = dateStr(ym, d);
+      /* Nobody is absent before they joined or after they left. */
+      if ((e.doj && String(e.doj) > day) || (e.exit_date && String(e.exit_date) < day)) {
+        r.push('-');
+        continue;
+      }
+      var x = dayFacts(ym, e.emp_code, d);
+      if (x.future && !x.st) { r.push(''); continue; }
+      if (!x.st) { t.blank++; k.blank++; }
+      else if (x.st === 'A') { t.A++; k.A++; }
+      else if (x.st === 'L') { t.L++; k.L++; }
+      else if (x.st === 'P') { t.P++; k.P++; }
+      else if (x.st === 'HD') { t.P += 0.5; k.P += 0.5; }
+      if (x.late) { t.late++; k.late++; }
+      if (x.mins) { t.mins += x.mins; k.mins += x.mins; }
+      k.ot += x.ot;
+      /* A month is thirty-one columns wide. There is room for the letter and
+         nothing else - the hours go in the total at the end of the row, and
+         the day-by-day times are a click away on the Attendance screen. */
+      r.push(x.st || '?');
+    }
+    /* Pad a short month so every row has the same number of cells. */
+    for (var pad = dim; pad < 31; pad++) r.push('');
+
+    var s = attStats(ym, e.emp_code);
+    k.lop += s.lop;
+    r.push(t.P, t.A || '', t.L || '', t.late || '', t.blank || '', hoursText(t.mins), s.lop || '', s.paid);
+    return r;
+  });
+
+  var head = [];
+  for (var d2 = 1; d2 <= 31; d2++) head.push(String(d2));
+  return {
+    title: 'Monthly attendance - ' + monthLabel(ym) +
+      (who.label ? ' - ' + who.label : '') + (f.only ? ' - ' + f.only : ''),
+    note: 'One letter a day: P present, A absent, HD half day, L leave, OD out duty, ' +
+      'CO comp-off, WO weekly off, H holiday, ? nobody has marked it yet, - not on the ' +
+      'rolls that day, blank not yet happened. LOP counts unmarked days, absences, unpaid leave and the half days ' +
+      'the late-mark rule costs, so it is what payroll will deduct.',
+    cols: ['Code', 'Name', 'Department', 'Paid as'].concat(head)
+      .concat(['P', 'A', 'L', 'Late', '?', 'Hours', 'LOP', 'Paid days']),
+    numFrom: 4, rows: rows, emptyLabel: monthLabel(ym),
+    printHeaders: [['Department', 'Dept'], ['Paid as', 'Type'], ['Paid days', 'Paid']],
+    printColWidths: gridWidths(31, [4.8, 8.6, 5.6, 3.2], [2.6, 2.4, 2.4, 2.8, 2.4, 4.4, 2.6, 3]),
+    kpis:
+      kpi('Present days', k.P, 'across ' + monthLabel(ym), '', 'k-good', '&#10003;') +
+      kpi('Absent days', k.A, k.A ? 'unpaid unless marked otherwise' : 'nobody absent',
+          '', k.A ? 'k-critical' : 'k-good', '&#10005;') +
+      kpi('Leave days', k.L, 'approved leave', '', 'k-blue', '&#127796;') +
+      kpi('Late marks', k.late, 'in after the shift grace', '', k.late ? 'k-warn' : 'k-good', '&#9200;') +
+      kpi('Unmarked days', k.blank, k.blank ? 'will be paid as LOP' : 'month is complete',
+          '', k.blank ? 'k-warn' : 'k-good', '&#9633;') +
+      kpi('LOP days', Math.round(k.lop * 100) / 100, 'what payroll will deduct',
+          '', k.lop ? 'k-critical' : 'k-good', '&#8722;')
+  };
+}
+
+/* ---------------- the punch log ----------------
+   The other reports read attendance, which is a conclusion: one in, one out,
+   a status. This reads the punches themselves, as they came off the device.
+   It is what settles an argument about a day.
+
+   Punches are the biggest tab in the book and no screen but this one needs
+   them, so they are never loaded with everything else - only the days asked
+   for, and only once per span. */
+var PUNCH_CACHE = { key: '', rows: [], error: '', loading: '' };
+
+function punchSpec(from, to) {
+  var key = from + '|' + to;
+  if (PUNCH_CACHE.key === key) return reportPunches(from, to, PUNCH_CACHE.rows, PUNCH_CACHE.error);
+
+  if (PUNCH_CACHE.loading !== key) {
+    PUNCH_CACHE.loading = key;
+    api('punchLog', { from: from, to: to }).then(function (d) {
+      PUNCH_CACHE = { key: key, rows: (d && d.rows) || [], error: '', loading: '' };
+      if (el('rep-kind').value === 'punches') renderReports();
+    }).catch(function (err) {
+      PUNCH_CACHE = { key: key, rows: [], error: err.message || String(err), loading: '' };
+      if (el('rep-kind').value === 'punches') renderReports();
+    });
+  }
+  return {
+    title: 'Punch log - ' + punchSpan(from, to),
+    note: 'Reading the punches off the workspace...',
+    cols: PUNCH_COLS, numFrom: 5, textCols: [8], rows: [],
+    emptyLabel: punchSpan(from, to) + ' (still loading)'
+  };
+}
+
+var PUNCH_COLS = ['Date', 'Time', 'Code', 'Name', 'Paid as', 'Punch', 'Device', 'Source', 'Where'];
+
+function punchSpan(from, to) {
+  var a = longDate(from).replace(/^\w+, /, '');
+  return from === to ? longDate(from) : a + ' to ' + longDate(to).replace(/^\w+, /, '');
+}
+
+function reportPunches(from, to, raw, error) {
+  var who = el('rep-who') ? el('rep-who').value : '';
+  var counts = {}, seen = {}, unknown = 0, first = '', last = '';
+
+  /* The unit picker is built from the people who actually punched, so it never
+     offers a unit with nothing behind it. */
+  (raw || []).forEach(function (r) {
+    var e = empByCode(r.emp_code);
+    if (e) { counts[unitOf(e)] = (counts[unitOf(e)] || 0) + 1; }
+  });
+  var only = fillUnitPicker(counts);
+
+  var rows = [];
+  (raw || []).forEach(function (r) {
+    var e = empByCode(r.emp_code);
+    /* A punch from a code that is not on the list is the one thing a filtered
+       view would hide, so it is only ever dropped by an explicit filter. */
+    if (!e) { if (who || only) return; unknown++; }
+    else {
+      if (who && (who === 'worker') !== isWorker(e)) return;
+      if (only && unitOf(e) !== only) return;
+    }
+    var stamp = String(r.punch_time || '');
+    var date = stamp.slice(0, 10), time = stamp.slice(11, 16);
+    if (!first || stamp < first) first = stamp;
+    if (!last || stamp > last) last = stamp;
+    seen[r.emp_code] = 1;
+
+    var where = r.site ? (r.site + (r.distance_m ? ' (' + Math.round(num(r.distance_m)) + ' m)' : ''))
+              : (r.lat && r.lng ? num(r.lat).toFixed(4) + ', ' + num(r.lng).toFixed(4) : '');
+    rows.push([date, time, r.emp_code, e ? e.name : 'not on the list',
+               e ? personType(e) : '-',
+               String(r.direction || '').toUpperCase() || '-',
+               r.device || r.device_id || '-', r.source || '-', where]);
+  });
+
+  return {
+    title: 'Punch log - ' + punchSpan(from, to),
+    note: error
+      ? 'Could not read the punches: ' + error
+      : 'Every punch as it came off the device, in the order it happened - before ' +
+        'attendance settled it into an in and an out. A code with no employee behind it ' +
+        'is shown as "not on the list": it is usually a card enrolled on the machine but ' +
+        'never added here.',
+    cols: PUNCH_COLS, numFrom: 5, textCols: [8], rows: rows,
+    emptyLabel: punchSpan(from, to) + ' - no punch reached the workspace',
+    printHeaders: [['Paid as', 'Type']],
+    kpis:
+      kpi('Punches', rows.length, from === to ? 'on this day' : 'over the span',
+          '', 'k-blue', '&#9210;') +
+      kpi('People', Object.keys(seen).length, 'punched at least once', '', 'k-good', '&#128101;') +
+      kpi('First punch', first ? first.slice(11, 16) : '—', first ? first.slice(0, 10) : 'nothing yet',
+          '', 'k-violet', '&#9200;') +
+      kpi('Last punch', last ? last.slice(11, 16) : '—', last ? last.slice(0, 10) : 'nothing yet',
+          '', 'k-violet', '&#9203;') +
+      kpi('Unknown codes', unknown, unknown ? 'enrolled on the device, not here' : 'every punch matched',
+          '', unknown ? 'k-warn' : 'k-good', '&#9633;')
   };
 }
 
@@ -9399,6 +9642,15 @@ function printReport() {
     });
   }
 
+  if (spec && spec.printColWidths) {
+    var group = '<colgroup>' + spec.printColWidths.map(function (w) {
+      return '<col style="width:' + w + '">';
+    }).join('') + '</colgroup>';
+    bodyHtml = '<div class="grid-print">' +
+      bodyHtml.replace('<table class="reg-table">', '<table class="reg-table">' + group) +
+      '</div>';
+  }
+
   printDocument({
     title: (spec && spec.title) || kindName,
     subtitle: (spec && spec.note) || '',
@@ -9458,6 +9710,13 @@ function printDocument(opts) {
     '.sub-line{font-size:9.5px;color:#64748b;}' +
     '.empty{text-align:center;color:#64748b;padding:14px;}' +
     'input,select,button{display:none !important;}' +
+    /* A day-grid report - a letter a day across the page. Every column is
+       given its width up front, because the default "wrap anywhere" turns a
+       name into "Rame sh Kuma r" and an hours total into "220:5 6". */
+    '.grid-print table{table-layout:fixed;}' +
+    '.grid-print th,.grid-print td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' +
+      'overflow-wrap:normal;}' +
+    '.grid-print td:nth-child(n+5){text-align:center;}' +
     /* the attendance register printed as a grid */
     '.att-print table{table-layout:fixed;}' +
     '.att-print th,.att-print td{border:1px solid #cbd5e1;padding:2px 1px;text-align:center;' +
