@@ -759,13 +759,17 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
     <section class="view" id="view-reports">
       <div class="card">
         <div class="toolbar">
-          <label class="field">Month<input type="month" id="rep-month" onchange="renderReports()"></label>
+          <label class="field" id="rep-month-wrap">Month<input type="month" id="rep-month" onchange="renderReports()"></label>
+          <label class="field" id="rep-date-wrap" style="display:none">Date
+            <input type="date" id="rep-date" onchange="renderReports()">
+          </label>
           <label class="field" id="rep-unit-wrap" style="display:none">Unit
             <select id="rep-unit" onchange="renderReports()"><option value="">All units</option></select>
           </label>
           <label class="field">Report
             <select id="rep-kind" onchange="renderReports()">
-              <option value="register">Salary register (unit-wise)</option>
+              <option value="daily">Daily attendance (one day, everyone)</option>
+              <option value="register" selected>Salary register (unit-wise)</option>
               <option value="wages">Wages register</option>
               <option value="leave">Leave report</option>
               <option value="statutory">PF / ESI statutory contributions</option>
@@ -4576,18 +4580,27 @@ function registerRows(ym) {
 }
 
 function renderReports() {
-  var ym = el('rep-month').value || thisMonth();
   var kind = el('rep-kind').value;
-  /* The unit picker belongs to the salary register alone - the other reports
-     are company-wide by nature. */
-  el('rep-unit-wrap').style.display = kind === 'register' ? '' : 'none';
-  var spec = { register: reportRegister, wages: reportWages, leave: reportLeave,
-               statutory: reportStatutory, ytd: reportYtd, exceptions: reportExceptions,
-               movement: reportMovement }[kind](ym);
+  var daily = kind === 'daily';
+
+  /* The daily muster is one day, not one month, so it gets a date picker and
+     the month picker steps aside. Everything else is a month report. */
+  if (daily && !el('rep-date').value) el('rep-date').value = today();
+  var iso = el('rep-date').value || today();
+  var ym = daily ? iso.slice(0, 7) : (el('rep-month').value || thisMonth());
+  el('rep-date-wrap').style.display = daily ? '' : 'none';
+  el('rep-month-wrap').style.display = daily ? 'none' : '';
+  /* Unit-wise matters on the muster too - one sheet per unit for the gate. */
+  el('rep-unit-wrap').style.display = (kind === 'register' || daily) ? '' : 'none';
+
+  var spec = daily ? reportDaily(iso)
+    : { register: reportRegister, wages: reportWages, leave: reportLeave,
+        statutory: reportStatutory, ytd: reportYtd, exceptions: reportExceptions,
+        movement: reportMovement }[kind](ym);
   LAST_SPEC = spec;
 
   if (spec.html) {                       /* grouped registers render themselves */
-    LAST_REPORT = { name: kind + '-' + ym, cols: spec.cols, rows: spec.rows };
+    LAST_REPORT = { name: kind + '-' + (daily ? iso : ym), cols: spec.cols, rows: spec.rows };
     el('rep-title').textContent = spec.title;
     el('rep-note').textContent = spec.note;
     el('rep-kpis').innerHTML = spec.kpis || '';
@@ -4600,18 +4613,21 @@ function renderReports() {
     el('rep-table').outerHTML = '<table id="rep-table"></table>';
   }
 
-  LAST_REPORT = { name: kind + '-' + ym, cols: spec.cols, rows: spec.rows };
+  LAST_REPORT = { name: kind + '-' + (daily ? iso : ym), cols: spec.cols, rows: spec.rows };
   el('rep-title').textContent = spec.title;
   el('rep-note').textContent = spec.note;
   el('rep-kpis').innerHTML = spec.kpis || '';
 
   var alignRight = spec.numFrom === undefined ? 2 : spec.numFrom;
+  /* A column of words sitting past the numbers still reads left to right. */
+  var textCols = spec.textCols || [];
+  var numeric = function (i) { return i >= alignRight && textCols.indexOf(i) < 0; };
   var head = '<thead><tr>' + spec.cols.map(function (c, i) {
-    return '<th' + (i >= alignRight ? ' class="num-col"' : '') + '>' + esc(c) + '</th>';
+    return '<th' + (numeric(i) ? ' class="num-col"' : '') + '>' + esc(c) + '</th>';
   }).join('') + '</tr></thead>';
   var body = spec.rows.map(function (r) {
     return '<tr>' + r.map(function (v, i) {
-      return '<td' + (i >= alignRight ? ' class="num-col"' : '') + '>' + (spec.raw ? v : esc(v)) + '</td>';
+      return '<td' + (numeric(i) ? ' class="num-col"' : '') + '>' + (spec.raw ? v : esc(v)) + '</td>';
     }).join('') + '</tr>';
   }).join('');
   var foot = spec.total ? '<tr style="background:#f8fafc;font-weight:800">' + spec.total.map(function (v, i) {
@@ -4619,9 +4635,116 @@ function renderReports() {
   }).join('') + '</tr>' : '';
   el('rep-table').innerHTML = head + '<tbody>' + (body ||
     '<tr><td colspan="' + spec.cols.length + '" class="empty">Nothing to show for ' +
-    esc(monthLabel(ym)) + '.</td></tr>') + foot + '</tbody>';
+    esc(spec.emptyLabel || monthLabel(ym)) + '.</td></tr>') + foot + '</tbody>';
 
   renderReportSideTables(ym);
+}
+
+var DAY_WORDS = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'On leave', OD: 'Out duty',
+                  CO: 'Comp-off', WO: 'Weekly off', H: 'Holiday' };
+
+/* Keep the unit picker in step with whoever is actually on the sheet, and hold
+   the choice if that unit still exists. The salary register builds its own
+   from the payroll run; the muster has no run to build from. */
+function fillUnitPicker(counts) {
+  var pick = el('rep-unit');
+  if (!pick) return '';
+  var names = Object.keys(counts).sort();
+  var chosen = pick.value;
+  if (chosen && names.indexOf(chosen) < 0) chosen = '';
+  pick.innerHTML = '<option value="">All units (' + names.length + ')</option>' +
+    names.map(function (u) {
+      return '<option value="' + esc(u) + '"' + (u === chosen ? ' selected' : '') + '>' +
+        esc(u) + ' (' + counts[u] + ')</option>';
+    }).join('');
+  pick.value = chosen;
+  return chosen;
+}
+
+/** 2026-09-18 -> "Friday, 18 Sep 2026". */
+function longDate(iso) {
+  var p = String(iso).split('-');
+  var dt = new Date(+p[0], +p[1] - 1, +p[2]);
+  if (isNaN(dt.getTime())) return String(iso);
+  var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return days[dt.getDay()] + ', ' + (+p[2]) + ' ' + mon[+p[1] - 1] + ' ' + p[0];
+}
+
+/* One day, everybody: the muster roll the supervisor actually wants - who came,
+   when they came, who is missing, and what nobody has marked yet. */
+function reportDaily(iso) {
+  var ym = iso.slice(0, 7), d = parseInt(iso.slice(8), 10);
+  var emps = activeEmployees().filter(function (e) {
+    return !e.doj || String(e.doj) <= iso;          /* not yet joined is not absent */
+  });
+
+  var counts = {};
+  emps.forEach(function (e) { var u = unitOf(e); counts[u] = (counts[u] || 0) + 1; });
+  var only = fillUnitPicker(counts);
+  if (only) emps = emps.filter(function (e) { return unitOf(e) === only; });
+
+  emps.sort(function (a, b) {
+    return String(a.department || '').localeCompare(String(b.department || '')) ||
+           String(a.name).localeCompare(String(b.name));
+  });
+
+  var k = { on: 0, A: 0, L: 0, late: 0, blank: 0, mins: 0 };
+  var rows = emps.map(function (e) {
+    var rec = recordFor(ym, e.emp_code, d);
+    var st = statusOf(ym, e.emp_code, d);
+    /* A day marked absent or on leave was not worked, whatever hours an older
+       row or an import left behind on it. */
+    var onDuty = st === 'P' || st === 'HD' || st === 'OD' || st === 'CO';
+    var open = rec && rec.in_time && !rec.out_time;
+    /* An unclosed day has no hours to report either - the total on the row
+       would be whatever the last import happened to leave there. */
+    var mins = (onDuty && !open) ? workedMinutes(rec) : null;
+    var working = st === 'P' || st === 'HD';
+    var late = working ? lateMinutes(rec, e.emp_code) : 0;
+    var ot = working ? otMinutes(rec, e.emp_code) : 0;
+
+    if (!st) k.blank++;
+    else if (st === 'A') k.A++;
+    else if (st === 'L') k.L++;
+    else if (st !== 'WO' && st !== 'H') k.on++;
+    if (late) k.late++;
+    if (mins) k.mins += mins;
+
+    /* Punched in and never out is the one thing worth seeing today, while the
+       person is still on the premises to ask. */
+    var note = String((rec && rec.remarks) || '');
+    if (open && st !== 'WO' && st !== 'H') {
+      note = (note ? note + ' - ' : '') + 'no punch out';
+    }
+
+    return [e.emp_code, e.name, e.department || unitOf(e), DAY_WORDS[st] || 'Not marked',
+            hhmm(rec && rec.in_time) || '-', hhmm(rec && rec.out_time) || '-',
+            mins ? hoursText(mins) : '-', late || '', ot || '', note];
+  });
+
+  var hol = holidayOn(iso);
+  var due = k.on + k.A + k.L + k.blank;
+  return {
+    title: 'Daily attendance - ' + longDate(iso) + (only ? ' - ' + only : ''),
+    note: (hol ? 'Holiday: ' + (hol.name || hol) + '. ' : '') +
+      'Everyone on the rolls that day, with in time, out time and hours worked. ' +
+      '"Not marked" means nobody has entered the day and no punch has come in from the ' +
+      'device - it is paid as LOP until someone marks it.',
+    cols: ['Code', 'Name', 'Department', 'Status', 'In', 'Out', 'Hours',
+           'Late (min)', 'OT (min)', 'Remarks'],
+    numFrom: 4, textCols: [9], rows: rows, emptyLabel: longDate(iso),
+    kpis:
+      kpi('On duty', k.on, due ? Math.round(k.on * 100 / due) + '% of those due in' : '',
+          '', 'k-good', '&#10003;') +
+      kpi('Absent', k.A, k.A ? 'unpaid unless marked otherwise' : 'nobody absent',
+          '', k.A ? 'k-critical' : 'k-good', '&#10005;') +
+      kpi('On leave', k.L, k.L ? 'approved leave' : 'nobody on leave', '', 'k-blue', '&#127796;') +
+      kpi('Late', k.late, 'in after the shift grace', '', k.late ? 'k-warn' : 'k-good', '&#9200;') +
+      kpi('Not marked', k.blank, k.blank ? 'will be paid as LOP' : 'day is complete',
+          '', k.blank ? 'k-warn' : 'k-good', '&#9633;') +
+      kpi('Hours worked', hoursText(k.mins), 'everyone, this day', '', 'k-violet', '&#8721;')
+  };
 }
 
 function reportRegister(ym) {
@@ -9115,8 +9238,11 @@ function reportLeave(ym) {
 /** Every report prints the same way: letterhead, the report as shown, a footer. */
 function printReport() {
   var spec = LAST_SPEC;
-  var ym = el('rep-month').value || thisMonth();
   var kindSel = el('rep-kind');
+  /* The muster is filed by the day it covers, not by month. */
+  var ym = kindSel.value === 'daily'
+    ? (el('rep-date').value || today())
+    : (el('rep-month').value || thisMonth());
   var kindName = kindSel.options[kindSel.selectedIndex].text;
   var bodyHtml = spec && spec.html
     ? spec.html
