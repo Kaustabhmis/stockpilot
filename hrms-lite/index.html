@@ -1599,12 +1599,21 @@ var SHEET_TO_LIST = {
    same rules are applied here. Kept deliberately small and next to the demo
    data it serves. */
 function demoChain(db, kind) {
-  var rows = (db.approvalLevels || []).filter(function (r) {
-    if (String(r.active || 'yes') === 'no') return false;
-    var to = String(r.applies_to || 'all').toLowerCase();
-    return to === 'all' || to === String(kind || '').toLowerCase();
-  }).sort(function (a, b) { return num(a.level) - num(b.level); });
-  if (!rows.length) return [{ approver: 'manager_or_hr', label: 'Manager or HR' }];
+  var want = String(kind || '').toLowerCase();
+  var live = (db.approvalLevels || []).filter(function (r) {
+    return String(r.active || 'yes') !== 'no';
+  });
+  var pick = function (to) {
+    return live.filter(function (r) { return String(r.applies_to || 'all').toLowerCase() === to; });
+  };
+  /* Same rule as the workspace: a chain written for this kind wins outright. */
+  var rows = (pick(want).length ? pick(want) : pick('all'))
+    .sort(function (a, b) { return num(a.level) - num(b.level); });
+  /* Same default as the workspace: the manager says yes first, HR grants it. */
+  if (!rows.length) {
+    return [{ approver: 'manager', label: 'Reporting manager' },
+            { approver: 'hr', label: 'HR' }];
+  }
   return rows;
 }
 function demoStamp(db, sheetName) {
@@ -3954,8 +3963,10 @@ function signedNote(row) {
 }
 
 function decideLeave(id, decision) {
+  /* Look in what this person can actually see: a manager's screen shows their
+     team's applications, which are not in S.leave - that is their own. */
   var l = null;
-  S.leave.forEach(function (x) { if (String(x.id) === String(id)) l = x; });
+  visibleLeave().forEach(function (x) { if (String(x.id) === String(id)) l = x; });
   if (!l) return;
   if (decision === 'Approved' && monthLocked(String(l.from_date).slice(0, 7))) {
     return toast('Payroll for ' + monthLabel(String(l.from_date).slice(0, 7)) +
@@ -5816,8 +5827,9 @@ function approvalsPane() {
     '</div>' +
     '<div id="appr-list"></div>' +
     '<div style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.9">' +
-    'With <b>no steps at all</b>, an application needs one approval from either the reporting ' +
-    'manager or HR &mdash; which is how this worked before.<br>' +
+    'Clear the list and the built-in chain applies instead: <b>the reporting manager, then ' +
+    'HR</b>. Anybody with no manager on record waits for HR alone, so nothing can sit ' +
+    'unapproved for an approver who does not exist.<br>' +
     'A step set to <b>Everything</b> applies to leave and to every kind of request. Add steps ' +
     'against a specific kind to give that kind its own chain: leave might need manager, then HR, ' +
     'then the unit head, while a missed punch needs only the manager.<br>' +
@@ -9188,7 +9200,7 @@ function submitRequest() {
 /* --------------------------- decide ------------------------------ */
 function decideRequest(id, decision) {
   var r = null;
-  (S.requests || []).forEach(function (x) { if (String(x.id) === String(id)) r = x; });
+  visibleRequests().forEach(function (x) { if (String(x.id) === String(id)) r = x; });
   if (!r) return;
   if (monthLocked(String(r.date).slice(0, 7))) {
     return toast('Payroll for ' + monthLabel(String(r.date).slice(0, 7)) + ' is finalised - reopen it first', 'bad');

@@ -505,6 +505,18 @@ function setup() {
     });
   }
 
+  // Seed the approval chain, so it is visible and editable in Settings rather
+  // than an invisible default: the reporting manager first, then HR.
+  if (readSheet('ApprovalLevels').length === 0) {
+    [['all', 1, 'manager', 'Reporting manager'],
+     ['all', 2, 'hr', 'HR']
+    ].forEach(function (a) {
+      appendRow('ApprovalLevels', {
+        id: newId(), applies_to: a[0], level: a[1], approver: a[2], label: a[3], active: 'yes'
+      });
+    });
+  }
+
   // Seed the salary structure. These are the rules read off the company's own
   // CTC sheet, so a fresh setup already matches what payroll is expected to do.
   if (readSheet('CtcVariables').length === 0) {
@@ -1985,13 +1997,28 @@ var DECIDABLE = { Leave: 'decision_note', Requests: 'note' };
  */
 function approvalChain(kind) {
   var want = String(kind || '').toLowerCase();
-  var rows = readSheet('ApprovalLevels').filter(function (r) {
-    if (String(r.active || 'yes').toLowerCase() === 'no') return false;
-    var to = String(r.applies_to || 'all').toLowerCase();
-    return to === 'all' || to === want;
+  var live = readSheet('ApprovalLevels').filter(function (r) {
+    return String(r.active || 'yes').toLowerCase() !== 'no';
+  });
+  /* A chain written for this kind is the chain. The "Everything" steps are the
+     fallback for the kinds nobody wrote one for - not extra steps bolted on to
+     the front of a company's own. */
+  var rows = live.filter(function (r) {
+    return String(r.applies_to || 'all').toLowerCase() === want;
   });
   if (!rows.length) {
-    return [{ level: 1, approver: 'manager_or_hr', label: 'Manager or HR' }];
+    rows = live.filter(function (r) {
+      return String(r.applies_to || 'all').toLowerCase() === 'all';
+    });
+  }
+  if (!rows.length) {
+    /* The default any company actually wants: the reporting manager says yes
+       first, then HR grants it. A manager's yes moves the application on; it
+       does not decide it. Change or extend this in Settings - Approvals. */
+    return [
+      { level: 1, approver: 'manager', label: 'Reporting manager' },
+      { level: 2, approver: 'hr', label: 'HR' }
+    ];
   }
   rows.sort(function (a, b) { return num(a.level) - num(b.level); });
   return rows.map(function (r, i) {
@@ -2012,7 +2039,12 @@ function canClear(stage, caller, ownerCode) {
   var who = String(stage.approver || '');
   if (who === 'hr') return isHrOrAbove(caller.role);
   if (who === 'owner') return isOwner(caller.role);
-  if (who === 'manager') return isManagerOf(caller.emp_code, ownerCode);
+  if (who === 'manager') {
+    if (isManagerOf(caller.emp_code, ownerCode)) return true;
+    /* Somebody with no reporting manager on record would otherwise wait for an
+       approver who does not exist. HR stands in for that stage only. */
+    return !hasManager(ownerCode) && isHrOrAbove(caller.role);
+  }
   if (who === 'manager_or_hr') {
     return isHrOrAbove(caller.role) || isManagerOf(caller.emp_code, ownerCode);
   }
@@ -2021,6 +2053,23 @@ function canClear(stage, caller, ownerCode) {
            who.slice(4).trim().toLowerCase();
   }
   return false;
+}
+
+/** Is anybody named as this person's reporting manager? */
+function hasManager(empCode) {
+  var code = String(empCode || '').trim().toLowerCase();
+  if (!code) return false;
+  var named = '';
+  readSheet('Employees').forEach(function (e) {
+    if (String(e.emp_code).trim().toLowerCase() === code) named = String(e.manager || '').trim();
+  });
+  if (!named) return false;
+  /* Named, but the name has to match somebody still on the rolls. */
+  var want = named.toLowerCase();
+  return readSheet('Employees').some(function (e) {
+    return String(e.emp_code).trim().toLowerCase() === want ||
+           String(e.name || '').trim().toLowerCase() === want;
+  });
 }
 
 /** A readable name for a stage, for the screens. */
