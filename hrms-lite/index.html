@@ -852,6 +852,8 @@ var S = {
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
   requestTypes: [], requests: [], punch: null, sites: [], notices: [], noticesExpanded: false,
   approvalLevels: [],
+  /* A manager's team and whatever of theirs is waiting on a decision. */
+  inbox: { isManager: false, team: [], teamLeave: [], teamRequests: [] },
   attDirty: {}, payDraft: null, attVersion: 0, attView: 'status',
   empSort: { col: 'emp_code', dir: 1 }
 };
@@ -909,6 +911,32 @@ function monthLabel(ym) {
 }
 var WEEKDAY_MAP = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
+/* "Weekly off" is typed by hand, and the cost of not understanding it is a
+   month of Sundays marked as unpaid absence. So read it generously: Sun, sun,
+   SUNDAY, Sunday, 0 and 7 all mean Sunday. Anything it cannot read comes back
+   null, which the shift editor refuses to save rather than quietly dropping. */
+var WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+function weekdayIndex(token) {
+  var t = String(token || '').trim().toLowerCase();
+  if (!t) return null;
+  if (/^[0-7]$/.test(t)) return Number(t) === 7 ? 0 : Number(t);   /* 7 = Sunday too */
+  for (var i = 0; i < 7; i++) {
+    if (t.slice(0, 3) === WEEKDAY_NAMES[i]) return i;
+  }
+  return null;
+}
+/** The weekly offs a shift declares, and whatever could not be read. */
+function weeklyOffDays(value) {
+  var parts = String(value === undefined || value === null || value === '' ? 'Sun' : value).split(',');
+  var days = [], bad = [];
+  parts.forEach(function (x) {
+    if (!String(x).trim()) return;
+    var d = weekdayIndex(x);
+    if (d === null) bad.push(String(x).trim()); else if (days.indexOf(d) < 0) days.push(d);
+  });
+  return { days: days, bad: bad };
+}
+
 /* ---------------------------------------------------------------
    Policy engine. Every rule below is read from Settings and is
    actually applied - to the register, to leave, or to pay.
@@ -961,8 +989,7 @@ function saturdayOff(d, policy) {
 function isWeeklyOff(ym, d, code) {
   var sh = shiftFor(code);
   var dow = weekdayOf(ym, d);
-  var offs = String(sh.weekly_off || 'Sun').split(',')
-    .map(function (x) { return WEEKDAY_MAP[x.trim()]; });
+  var offs = weeklyOffDays(sh.weekly_off).days;
   if (offs.indexOf(dow) >= 0) return true;
   if (dow === 6) return saturdayOff(d, sh.saturday_policy);
   return false;
@@ -984,12 +1011,17 @@ function anyHolidayOn(iso) {
 }
 
 /* ---- leave policy ---- */
+/* A retired leave type keeps its name - HR switches "Casual" off and adds a
+   new "Casual" with this year's quota. An application must be judged against
+   the live one, whichever order the two sit in on the sheet. */
 function leaveTypeNamed(name) {
-  var want = String(name || '').trim().toLowerCase(), found = null;
+  var want = String(name || '').trim().toLowerCase(), live = null, any = null;
   (S.leaveTypes || []).forEach(function (t) {
-    if (String(t.name || '').trim().toLowerCase() === want) found = t;
+    if (String(t.name || '').trim().toLowerCase() !== want) return;
+    any = t;
+    if (String(t.active || 'yes').toLowerCase() !== 'no') live = t;
   });
-  return found;
+  return live || any;
 }
 function activeLeaveTypes() {
   return (S.leaveTypes || []).filter(function (t) {
@@ -1932,6 +1964,7 @@ function reload() {
      with the rest of the data rather than outliving it. */
   PUNCH_CACHE = { key: '', rows: [], error: '', loading: '' };
   return api('bootstrap').then(function (d) {
+    S.inbox = d.inbox || { isManager: false, team: [], teamLeave: [], teamRequests: [] };
     S.settings = d.settings || {};
     S.employees = d.employees || [];
     S.attendance = d.attendance || [];
@@ -2152,7 +2185,17 @@ function empByCode(code) {
   }
   return null;
 }
-function empName(code) { var e = empByCode(code); return e ? e.name : code; }
+/* A manager is not given the employee list, only their own team, so a name
+   for somebody on it has to come from the inbox or the row reads as a code. */
+function empName(code) {
+  var e = empByCode(code);
+  if (e) return e.name;
+  var team = (S.inbox && S.inbox.team) || [];
+  for (var i = 0; i < team.length; i++) {
+    if (String(team[i].emp_code) === String(code)) return team[i].name || code;
+  }
+  return code;
+}
 function visibleEmployees() {
   return isAdmin() ? S.employees : S.employees.filter(function (e) { return String(e.emp_code) === myCode(); });
 }
@@ -3064,11 +3107,17 @@ function attStats(ym, code) {
   /* In the running month, days that have not happened yet are not "missing". */
   var upTo = ym === thisMonth() ? new Date().getDate() : dim;
   var unpaid = unpaidLeaveMap();
+  var emp = empByCode(code) || {};
+  var joined = String(emp.doj || ''), left = String(emp.exit_date || '');
   var s = { P: 0, A: 0, HD: 0, L: 0, OD: 0, CO: 0, WO: 0, H: 0, blank: 0, blankDays: [],
-            future: 0, late: 0, ot: 0, unpaidLeave: 0, working: 0,
+            future: 0, late: 0, ot: 0, unpaidLeave: 0, working: 0, offRoll: 0,
             incomplete: 0, incompleteDays: [] };
   for (var d = 1; d <= dim; d++) {
     var iso = dateStr(ym, d);
+    /* Before joining and after leaving, nothing is owed - not the weekly offs
+       and not the holidays. Counting those as paid days handed a man who
+       started on the 16th three days he was never employed for. */
+    if ((joined && iso < joined) || (left && iso > left)) { s.offRoll++; continue; }
     var rec = recordFor(ym, code, d);
     var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
     if (st && s[st] !== undefined) s[st]++;
@@ -3097,7 +3146,7 @@ function attStats(ym, code) {
   /* With punch-out mandatory, an unclosed day is not a paid day until it is fixed. */
   var mandatory = String(S.settings.punch_out_mandatory || 'yes').toLowerCase() === 'yes';
   s.lop = s.A + s.HD * 0.5 + s.blank + s.unpaidLeave + s.lateDeduction +
-          (mandatory ? s.incomplete : 0);
+          (mandatory ? s.incomplete : 0) + s.offRoll;
   s.paid = dim - s.lop;
   return s;
 }
@@ -3631,8 +3680,26 @@ function workingDaysBetween(from, to, code) {
   }
   return n;
 }
+/* A manager is an employee whose bootstrap also carries their team's pending
+   items. Without this they could approve on the phone but not at their desk. */
+function inboxOf(kind) {
+  return (S.inbox && S.inbox.isManager && S.inbox[kind]) ? S.inbox[kind] : [];
+}
+function myTeamCodes() {
+  return inboxOf('team').map(function (e) { return String(e.emp_code); });
+}
+function isMyTeam(code) {
+  return myTeamCodes().indexOf(String(code)) >= 0;
+}
+function mergeInbox(mine, extra) {
+  var seen = {};
+  mine.forEach(function (r) { seen[r.id] = 1; });
+  return mine.concat(extra.filter(function (r) { return !seen[r.id]; }));
+}
 function visibleLeave() {
-  return isAdmin() ? S.leave : S.leave.filter(function (l) { return String(l.emp_code) === myCode(); });
+  if (isAdmin()) return S.leave;
+  var mine = S.leave.filter(function (l) { return String(l.emp_code) === myCode(); });
+  return mergeInbox(mine, inboxOf('teamLeave'));
 }
 function takenDays(code, type, year) {
   return S.leave.filter(function (l) {
@@ -3678,7 +3745,8 @@ function renderLeave() {
     var cls = l.status === 'Approved' ? 'b-green' : l.status === 'Rejected' ? 'b-red'
       : l.status === 'Cancelled' ? 'b-gray' : 'b-amber';
     var actions = '';
-    if (isAdmin() && l.status === 'Pending') {
+    var mayDecide = isAdmin() || isMyTeam(l.emp_code);
+    if (mayDecide && l.status === 'Pending') {
       actions = '<button class="ok sm" onclick="decideLeave(\'' + esc(l.id) + '\',\'Approved\')">Approve</button> ' +
         '<button class="danger sm" onclick="decideLeave(\'' + esc(l.id) + '\',\'Rejected\')">Reject</button>';
     } else if (isAdmin() && l.status === 'Approved') {
@@ -5357,6 +5425,33 @@ var PAYROLL_RULES = [
   ['pt_amount', 'Professional tax / month (used only if the CTC structure has no P.Tax slab)', 'number']
 ];
 
+/* Saying "the structure wins" is not the same as showing what it charges.
+   Print the live slab, so the number on the payslip can be checked here. */
+function ptaxNote() {
+  var comp = typeof ctcComponentByCode === 'function' ? ctcComponentByCode('ptax') : null;
+  if (!comp) {
+    return '<br><span style="color:var(--text-soft)">No ptax component right now, so the flat ' +
+      'amount above is what every payslip will deduct.</span>';
+  }
+  var expr = String(comp.expr || '');
+  var slab = expr.match(/slab\(([^)]*)\)/);
+  var read = '';
+  if (slab) {
+    var parts = slab[1].split(',').slice(1);
+    var last = 0;
+    read = parts.map(function (part) {
+      var pair = part.split(':');
+      var upto = num(pair[0]), amt = num(pair[1]);
+      var from = last; last = upto;
+      return '&bull; gross ' + (from ? cur() + money(from) + ' to ' : 'up to ') +
+        (upto >= 99999999 ? 'above' : cur() + money(upto)) + ' &rarr; ' +
+        (amt ? cur() + money(amt) : 'nil');
+    }).join('<br>');
+  }
+  return '<br><b>In use now:</b> ' + esc(comp.name || 'ptax') +
+    (read ? '<br>' + read : ' &mdash; ' + esc(expr));
+}
+
 var PAYSLIP_MAIL = [
   ['payslip_email_enabled', 'Show the Email buttons in Payroll', 'select:yes,no'],
   ['payslip_email_attach_pdf', 'Attach the payslip as a PDF', 'select:yes,no'],
@@ -5604,6 +5699,18 @@ function savePolicyTable(kind) {
   if (kind === 'ctcComponents') {
     var bad = validateStructure(rows);
     if (bad) return toast(bad, 'bad');
+  }
+  if (kind === 'shifts') {
+    for (var w = 0; w < rows.length; w++) {
+      var parsed = weeklyOffDays(rows[w].weekly_off);
+      if (parsed.bad.length) {
+        return toast('"' + parsed.bad[0] + '" is not a day of the week. Write Sun, or Sat,Sun.', 'bad');
+      }
+      if (!parsed.days.length) {
+        return toast('Shift "' + (rows[w].name || '') + '" has no weekly off. Write the day, ' +
+          'like Sun, or Sat,Sun.', 'bad');
+      }
+    }
   }
   api('saveMany', { sheet: spec.sheet, rows: rows }).then(function () {
     return api('bootstrap');
@@ -6274,6 +6381,7 @@ function payrollRulesPane() {
     'with.<br><br>' +
     '<b>Professional tax</b> comes from the <b>ptax</b> component in the CTC structure when one ' +
     'exists, so the payslip and the CTC sheet always agree. The flat amount above is only a fallback.' +
+    ptaxNote() +
     '</p>' +
     '<h3 style="margin-top:24px">Emailing payslips</h3>' +
     '<div style="font-size:.78rem;color:var(--text-muted);line-height:1.7;margin-bottom:12px">' +
@@ -8797,8 +8905,9 @@ function requestTypeByCode(code) {
   return found;
 }
 function visibleRequests() {
-  return isAdmin() ? S.requests
-    : (S.requests || []).filter(function (r) { return String(r.emp_code) === myCode(); });
+  if (isAdmin()) return S.requests;
+  var mine = (S.requests || []).filter(function (r) { return String(r.emp_code) === myCode(); });
+  return mergeInbox(mine, inboxOf('teamRequests'));
 }
 function pendingRequests() {
   return (S.requests || []).filter(function (r) { return r.status === 'Pending'; });
@@ -9099,36 +9208,17 @@ function decideRequest(id, decision) {
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
-/* Approval is what actually writes to the register. */
+/* Approval writes to the register - but the writing is done by the workspace
+   now, so a manager approving on their phone changes the register exactly as
+   HR approving here does. All that is left for the browser is the comp-off
+   adjustment: a credit set against a different day, which the server has no
+   opinion about. */
 function applyRequest(r) {
-  var effect = requestEffect(r.type);
-  var rows = [];
-  if (effect === 'present') {
-    var from = new Date(r.date), to = new Date(r.to_date || r.date);
-    for (var d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-      var iso = d.toISOString().slice(0, 10);
-      if (isWeeklyOff(iso.slice(0, 7), d.getDate(), r.emp_code) || holidayOn(iso)) continue;
-      rows.push({ id: r.emp_code + '_' + iso, date: iso, emp_code: r.emp_code, status: 'OD',
-                  in_time: '', out_time: '', hours: 0,
-                  remarks: 'OD - ' + (r.reason || 'out of office duty'), updated_at: today() });
-    }
-  } else if (effect === 'times') {
-    var hours = 0;
-    if (minutesOf(r.in_time) !== null && minutesOf(r.out_time) !== null) {
-      hours = (minutesOf(r.out_time) - minutesOf(r.in_time)) / 60;
-    }
-    var cfg = shiftCfg(r.emp_code);
-    var status = hours >= cfg.fullHours ? 'P' : (hours >= cfg.halfHours ? 'HD' : 'P');
-    rows.push({ id: r.emp_code + '_' + r.date, date: r.date, emp_code: r.emp_code, status: status,
-                in_time: r.in_time || '', out_time: r.out_time || '',
-                hours: Math.round(hours * 10) / 10,
-                remarks: 'swipe request - ' + (r.mode || 'miss punch'), updated_at: today() });
-  } else if (effect === 'comp_off' && r.mode === 'adjust' && r.adjust_date) {
-    rows.push({ id: r.emp_code + '_' + r.adjust_date, date: r.adjust_date, emp_code: r.emp_code,
+  if (requestEffect(r.type) !== 'comp_off') return Promise.resolve();
+  if (r.mode !== 'adjust' || !r.adjust_date) return Promise.resolve();
+  var rows = [{ id: r.emp_code + '_' + r.adjust_date, date: r.adjust_date, emp_code: r.emp_code,
                 status: 'CO', in_time: '', out_time: '', hours: 0,
-                remarks: 'comp-off for working ' + r.date, updated_at: today() });
-  }
-  if (!rows.length) return Promise.resolve();
+                remarks: 'comp-off for working ' + r.date, updated_at: today() }];
   return api('saveMany', { sheet: 'Attendance', rows: rows }).then(function () { mergeAttendance(rows); });
 }
 

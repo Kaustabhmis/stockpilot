@@ -976,7 +976,23 @@ function rowNumberOf(name, key, value) {
   return hit ? hit.getRow() : 0;
 }
 
+/**
+ * A finalised month is closed. The browser greys the register out, but a
+ * browser is not a lock - a stale tab, the phone app or anything holding the
+ * URL could still write, and then the register no longer says what was paid.
+ * Refused here, where it counts.
+ */
+function refuseIfClosed(name, row) {
+  if (name !== 'Attendance') return;
+  var month = String((row && row.date) || '').slice(0, 7);
+  if (month && monthIsLocked(month)) {
+    throw new Error('Payroll for ' + month + ' is finalised, so its attendance cannot be changed. ' +
+      'Reopen the run first.');
+  }
+}
+
 function upsert(name, row) {
+  refuseIfClosed(name, row);
   touched(name);
   var headers = SHEETS[name];
   var key = keyColumn(name);
@@ -1009,8 +1025,9 @@ function upsert(name, row) {
  * employees, or a month of biometric punches).
  */
 function upsertMany(name, rows) {
-  touched(name);
   rows = rows || [];
+  rows.forEach(function (r) { refuseIfClosed(name, r); });
+  touched(name);
   if (!rows.length) return { saved: 0 };
   var headers = SHEETS[name], key = keyColumn(name);
   var sh = sheet(name);
@@ -1088,7 +1105,10 @@ function removeRow(name, id) {
   var rows = indexed(name);
   var sh = sheet(name);
   for (var i = rows.length - 1; i >= 0; i--) {
-    if (String(rows[i].data[key]) === String(id)) { sh.deleteRow(rows[i].row); return { removed: id }; }
+    if (String(rows[i].data[key]) === String(id)) {
+      refuseIfClosed(name, rows[i].data);          /* deleting a day closes it too */
+      sh.deleteRow(rows[i].row); return { removed: id };
+    }
   }
   throw new Error('Record not found: ' + id);
 }
@@ -1102,7 +1122,10 @@ function removeMany(name, ids) {
   var sh = sheet(name);
   var removed = 0;
   for (var i = rows.length - 1; i >= 0; i--) {
-    if (wanted[String(rows[i].data[key])]) { sh.deleteRow(rows[i].row); removed++; }
+    if (wanted[String(rows[i].data[key])]) {
+      refuseIfClosed(name, rows[i].data);
+      sh.deleteRow(rows[i].row); removed++;
+    }
   }
   return { removed: removed };
 }
@@ -2111,7 +2134,9 @@ function decide(sheetName, id, status, note, caller) {
   if (note) set(noteCol, String(note).slice(0, 500));
 
   var marked = 0;
-  if (finalStatus === 'Approved' && sheetName === 'Leave') marked = markLeaveOnRegister(row);
+  if (finalStatus === 'Approved') {
+    marked = sheetName === 'Leave' ? markLeaveOnRegister(row) : applyRequestToRegister(row);
+  }
 
   var after = approvalChain(kindOf(sheetName, row));
   return {
@@ -2135,6 +2160,108 @@ function monthIsLocked(month) {
 }
 
 /** Weekly offs and holidays are not charged as leave unless the sandwich rule says so. */
+/**
+ * What an approved request does to the register.
+ *
+ * The browser used to do this, which meant it only happened when HR pressed
+ * Approve in the web app. A manager approving the same request on their phone
+ * cleared the application and changed nothing: the out-duty day stayed blank
+ * and the missed punch stayed open, so both were still docked at payroll.
+ * It belongs here, where every approval path passes.
+ */
+function applyRequestToRegister(req) {
+  var iso = String(req.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return 0;
+
+  var effect = '';
+  readSheet('RequestTypes').forEach(function (t) {
+    if (String(t.code || '').trim().toUpperCase() === String(req.type || '').trim().toUpperCase()) {
+      effect = String(t.effect || 'none');
+    }
+  });
+  if (effect !== 'present' && effect !== 'times') return 0;
+
+  var have = {};
+  readSheet('Attendance', attendanceWindow(readSheet('Employees').length)).forEach(function (a) {
+    if (String(a.emp_code) === String(req.emp_code)) have[String(a.date)] = a;
+  });
+
+  if (effect === 'present') {
+    /* Out duty is duty: worked away from the plant, and paid. It can run over
+       several days, and a weekly off inside it stays an off. */
+    var st = settingsMap();
+    var offName = String(st.weekly_off || 'Sun').slice(0, 3).toLowerCase();
+    var dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    var holiday = {};
+    readSheet('Holidays').forEach(function (h) {
+      if (String(h.optional || 'no').toLowerCase() !== 'yes') holiday[String(h.date)] = true;
+    });
+    var to = String(req.to_date || iso);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(to) || to < iso) to = iso;
+
+    var rows = [], cursor = new Date(iso + 'T00:00:00'), end = new Date(to + 'T00:00:00');
+    var guard = 0;
+    while (cursor <= end && guard++ < 62) {
+      var day = Utilities.formatDate(cursor, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      if (dayNames[cursor.getDay()] !== offName && !holiday[day]) {
+        var was = have[day] || {};
+        rows.push({
+          id: req.emp_code + '_' + day, date: day, emp_code: req.emp_code, status: 'OD',
+          in_time: was.in_time || '', out_time: was.out_time || '', hours: was.hours || 0,
+          remarks: 'OD approved: ' + String(req.reason || 'out of office duty').slice(0, 80),
+          updated_at: day
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (rows.length) upsertMany('Attendance', rows);
+    return rows.length;
+  }
+
+  /* A missed punch: the approved times are the times, and the day is judged
+     against the employee's own shift - a short pair is still a half day. */
+  var was2 = have[iso] || {};
+  var inT = String(req.in_time || was2.in_time || '');
+  var outT = String(req.out_time || was2.out_time || '');
+  if (!inT && !outT) return 0;
+  var mins = clockMinutes(outT) - clockMinutes(inT);
+  if (mins < 0) mins += 24 * 60;                       /* a shift across midnight */
+  var worked = (clockMinutes(inT) === null || clockMinutes(outT) === null) ? null : mins / 60;
+  var cfg = shiftOf(req.emp_code);
+  var status = was2.status || 'P';
+  if (worked !== null) status = worked >= cfg.full ? 'P' : (worked >= cfg.half ? 'HD' : 'P');
+  upsert('Attendance', {
+    id: req.emp_code + '_' + iso, date: iso, emp_code: req.emp_code, status: status,
+    in_time: inT, out_time: outT, hours: worked === null ? (was2.hours || 0) : Math.round(worked * 10) / 10,
+    remarks: 'punch corrected by approval', updated_at: iso
+  });
+  return 1;
+}
+
+/** "09:30" -> 570. Null for anything that is not a clock time. */
+function clockMinutes(value) {
+  var m = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+/** The full-day and half-day hours of whichever shift an employee works. */
+function shiftOf(empCode) {
+  var want = '';
+  readSheet('Employees').forEach(function (e) {
+    if (String(e.emp_code) === String(empCode)) want = String(e.shift || '').trim().toLowerCase();
+  });
+  var st = settingsMap();
+  if (!want) want = String(st.default_shift || 'General').trim().toLowerCase();
+  var hit = null, firstActive = null;
+  readSheet('Shifts').forEach(function (sh) {
+    if (String(sh.active || 'yes').toLowerCase() === 'no') return;
+    if (!firstActive) firstActive = sh;
+    if (String(sh.name || '').trim().toLowerCase() === want) hit = sh;
+  });
+  var use = hit || firstActive || {};
+  return { full: Number(use.full_day_hours || 8) || 8, half: Number(use.half_day_hours || 4) || 4 };
+}
+
 function markLeaveOnRegister(leave) {
   var st = settingsMap();
   var sandwich = String(st.sandwich_rule || 'no').toLowerCase() === 'yes';
