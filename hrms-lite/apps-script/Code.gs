@@ -2037,6 +2037,10 @@ function kindOf(sheetName, row) {
 /** May this caller clear this particular stage, for this applicant? */
 function canClear(stage, caller, ownerCode) {
   var who = String(stage.approver || '');
+  /* The owner can clear any stage. A manager on two weeks' leave must not be
+     able to stop the company, and every signature is recorded against the
+     application, so an override is visible rather than silent. */
+  if (isOwner(caller.role)) return true;
   if (who === 'hr') return isHrOrAbove(caller.role);
   if (who === 'owner') return isOwner(caller.role);
   if (who === 'manager') {
