@@ -1927,6 +1927,10 @@ function start() {
 }
 
 function reload() {
+  /* The punch log is fetched separately and cached per span. An import or any
+     other refresh can change the very day being looked at, so the cache goes
+     with the rest of the data rather than outliving it. */
+  PUNCH_CACHE = { key: '', rows: [], error: '', loading: '' };
   return api('bootstrap').then(function (d) {
     S.settings = d.settings || {};
     S.employees = d.employees || [];
@@ -2353,7 +2357,7 @@ function renderDashActions() {
   el('dash-actions').innerHTML = items.length ? items.map(function (it) {
     return '<div class="action" onclick="' + it.go + '">' +
       '<div class="ico" style="background:' + it.bg + '">' + it.icon + '</div>' +
-      '<div class="txt"><b>' + it.title + '</b><span>' + esc(it.sub) + '</span></div>' +
+      '<div class="txt"><b>' + esc(it.title) + '</b><span>' + esc(it.sub) + '</span></div>' +
       '<div class="go">&rsaquo;</div></div>';
   }).join('') : '<div class="all-clear">&#10003; Nothing pending. Payroll can run clean.</div>';
 }
@@ -2443,7 +2447,7 @@ function showPeople(kind, iso) {
     (extraHead ? '<th class="num-col">' + extraHead + '</th>' : '') + '<th></th></tr></thead>';
 
   var note = nonWorking && kind !== 'headcount'
-    ? '<div class="locked-note">' + esc(dateText) + ' is a ' + (hol ? 'holiday (' + hol.name + ')' : 'weekly off') +
+    ? '<div class="locked-note">' + esc(dateText) + ' is a ' + (hol ? 'holiday (' + esc(hol.name) + ')' : 'weekly off') +
       ', so there is no attendance to show.</div>'
     : '<div class="card-sub">' + esc(dateText) + ' &mdash; ' + esc(meta.note) + '</div>';
 
@@ -4716,11 +4720,19 @@ var DAY_WORDS = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'On leave', OD: 
 function isWorker(e) { return String(e.wage_type || 'Salary') === 'Wages'; }
 function personType(e) { return isWorker(e) ? 'Worker' : 'Staff'; }
 
-/* Whoever the muster is being taken for: everybody, staff only, workers only. */
-function chosenPeople(iso) {
+/* Whoever the muster is being taken for: everybody, staff only, workers only.
+   "On the rolls" means employed at some point in the period, not employed
+   today - somebody who left on the 20th still worked the first three weeks,
+   and a month that leaves them out cannot be reconciled against payroll. */
+function chosenPeople(from, to) {
+  if (to === undefined) to = from;
   var who = el('rep-who') ? el('rep-who').value : '';
-  var list = activeEmployees().filter(function (e) {
-    return (!e.doj || String(e.doj) <= iso) &&     /* not yet joined is not absent */
+  var list = visibleEmployees().filter(function (e) {
+    var left = String(e.exit_date || '');
+    var inactive = String(e.status || 'Active') !== 'Active';
+    if (inactive && !left) return false;           /* switched off, never dated */
+    return (!e.doj || String(e.doj) <= to) &&      /* not yet joined is not absent */
+           (!left || left >= from) &&              /* gone before this began */
            (!who || (who === 'worker') === isWorker(e));
   });
   list.sort(function (a, b) {
@@ -4895,7 +4907,7 @@ function reportWeekly(iso) {
   var to = days[6];
   var DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  var who = chosenPeople(to);
+  var who = chosenPeople(from, to);
   var f = applyUnitFilter(who.list);
   var emps = f.list;
 
@@ -4966,7 +4978,7 @@ function reportWeekly(iso) {
 function reportMonthly(ym) {
   var dim = daysInMonth(ym);
   var last = dateStr(ym, dim);
-  var who = chosenPeople(last);
+  var who = chosenPeople(dateStr(ym, 1), last);
   var f = applyUnitFilter(who.list);
   var emps = f.list;
 
@@ -5129,30 +5141,6 @@ function reportPunches(from, to, raw, error) {
           '', 'k-violet', '&#9203;') +
       kpi('Unknown codes', unknown, unknown ? 'enrolled on the device, not here' : 'every punch matched',
           '', unknown ? 'k-warn' : 'k-good', '&#9633;')
-  };
-}
-
-function reportRegister(ym) {
-  var rows = registerRows(ym);
-  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
-  var t = { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, ded: 0, net: 0 };
-  var out = rows.map(function (r) {
-    var e = empByCode(r.emp_code) || {};
-    t.gross += num(r.gross); t.pf += num(r.pf); t.esi += num(r.esi); t.pt += num(r.pt);
-    t.tds += num(r.tds); t.ded += num(r.total_deduction); t.net += num(r.net);
-    return [r.emp_code, e.name || '', e.department || '-', r.paid_days, money(r.gross), money(r.pf),
-            money(r.esi), money(r.pt), money(r.tds), money(r.total_deduction), money(r.net)];
-  });
-  return {
-    title: 'Salary register - ' + monthLabel(ym),
-    note: savedRunFor(ym).length ? 'From the saved payroll run.'
-      : 'Live preview from the attendance register - this month has not been finalised yet.',
-    cols: ['Code', 'Name', 'Department', 'Paid days', 'Gross', 'PF', 'ESI', 'PT', 'TDS', 'Deductions', 'Net'],
-    numFrom: 3, rows: out,
-    total: ['Total', '', '', '', money(t.gross), money(t.pf), money(t.esi), money(t.pt), money(t.tds),
-            money(t.ded), money(t.net)],
-    kpis: kpi('Employees', rows.length, '') + kpi('Gross', cur() + money(t.gross), '') +
-          kpi('Deductions', cur() + money(t.ded), '') + kpi('Net payable', cur() + money(t.net), '')
   };
 }
 
@@ -9729,8 +9717,10 @@ function printDocument(opts) {
     '.att-print .att-time .hrs{font-size:7px;font-weight:800;}' +
     '.att-print tfoot td{background:#f1f5f9;font-weight:800;}' +
     '.att-print a{color:inherit;text-decoration:none;}' +
-    '.foot{position:fixed;bottom:6mm;left:0;right:0;display:flex;justify-content:space-between;' +
-      'font-size:9.5px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:4px;}';
+    /* No running footer. The letterhead at the top already says whose sheet
+       this is and what is on it; repeating it at the foot of every page only
+       ate the bottom margin. */
+    '.foot{display:none;}';
   w.document.write(
     '<html><head><title>' + esc(opts.fileTitle || opts.title) + '</title><style>' + css + '</style></head><body>' +
     '<div class="head"><div>' +
@@ -9742,8 +9732,6 @@ function printDocument(opts) {
     '</div></div>' +
     (opts.subtitle ? '<div class="note">' + esc(opts.subtitle) + '</div>' : '') +
     opts.body +
-    '<div class="foot"><span>' + esc(S.settings.company_name || '') + '</span>' +
-    '<span>' + esc(opts.title) + '</span></div>' +
     '</body></html>');
   w.document.close();
   w.focus();
