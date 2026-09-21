@@ -3705,6 +3705,24 @@ function mergeInbox(mine, extra) {
   mine.forEach(function (r) { seen[r.id] = 1; });
   return mine.concat(extra.filter(function (r) { return !seen[r.id]; }));
 }
+/* Is this application sitting on the viewer's own desk? The server says which
+   stage it is at; who may clear that stage is the same rule the server applies
+   when the button is pressed. "Waiting on HR" on a manager's screen, when it is
+   waiting on him, is the kind of wrong that makes people stop looking. */
+function awaitingMe(row) {
+  if (String(row.status || 'Pending') !== 'Pending') return false;
+  var who = String(row._waiting_on || '');
+  if (/manager/i.test(who)) return isMyTeam(row.emp_code) || isOwner();
+  if (/hr|management/i.test(who)) return isAdmin();
+  return isAdmin();
+}
+function waitingHint(rows) {
+  if (!rows.length) return 'nothing waiting';
+  var mine = rows.filter(awaitingMe).length;
+  if (!mine) return 'with someone else to sign';
+  return mine === rows.length ? 'waiting on you' : mine + ' of them waiting on you';
+}
+
 function visibleLeave() {
   if (isAdmin()) return S.leave;
   var mine = S.leave.filter(function (l) { return String(l.emp_code) === myCode(); });
@@ -3739,7 +3757,7 @@ function renderLeave() {
   });
 
   el('leave-kpis').innerHTML =
-    kpi('Pending approvals', pending.length, pending.length ? 'waiting on HR' : 'nothing waiting') +
+    kpi('Pending approvals', pending.length, waitingHint(pending)) +
     kpi('Approved days', approved.reduce(function (s, l) { return s + num(l.days); }, 0), 'in ' + year) +
     kpi('On leave today', onLeaveToday.length,
         onLeaveToday.map(function (l) { return empName(l.emp_code); }).join(', ') || 'everyone at work') +
@@ -9704,7 +9722,7 @@ function reportLeave(ym) {
     kpis: kpi('Employees with leave', anyTaken, 'in ' + year) +
           kpi('Days taken', Object.keys(totals).reduce(function (t, k) { return t + totals[k]; }, 0), 'approved, ' + year) +
           kpi('Days in ' + monthLabel(ym), monthDays, 'approved') +
-          kpi('Pending', pending, pending ? 'waiting on HR' : 'nothing waiting')
+          kpi('Pending', pending, pending ? 'waiting on a decision' : 'nothing waiting')
   };
 }
 
