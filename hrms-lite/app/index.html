@@ -372,6 +372,9 @@ function api(action, payload) {
       if (j.authFailed) signedOut(j.error || 'Please sign in again.');
       throw new Error(j.error || 'Something went wrong');
     }
+    /* A write sends back the revision it produced. Taking it here is what
+       stops this screen refreshing itself over its own punch. */
+    if (j.rev !== undefined) S._rev = j.rev;
     return j.data;
   }).catch(function (e) {
     if (e instanceof TypeError) throw new Error('No connection. Check your internet and try again.');
@@ -417,7 +420,49 @@ function start() {
   el('login').style.display = 'none';
   el('app').style.display = 'block';
   startClock();
-  return reload();
+  return reload().then(startWatch);
+}
+
+/* ------------------------- auto refresh -------------------------- */
+/* A leave application is approved at the office while the phone is in a
+   pocket. Without this the screen still said "Pending" until the app was
+   closed and opened again, and a manager's team list never grew.
+
+   Asking costs a script property and the small session lookup - one tab read
+   against the twenty-one a real refresh costs - so the phone can ask often
+   without eating the daily quota or the battery. A backgrounded app stops
+   asking altogether. */
+var WATCH_MS = 25000;
+
+function startWatch() {
+  if (S._watch) return;
+  api('rev').then(function (r) { S._rev = r && r.rev; }).catch(function () {});
+  S._watch = setInterval(checkRevision, WATCH_MS);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) checkRevision();      /* back in hand: ask at once */
+  });
+}
+
+function checkRevision() {
+  if (document.hidden || S._revBusy || !S.user) return;
+  S._revBusy = true;
+  api('rev').then(function (r) {
+    S._revBusy = false;
+    if (!r || S._rev === null || S._rev === undefined) { S._rev = r && r.rev; return; }
+    if (r.rev === S._rev) return;
+    S._rev = r.rev;
+    /* Nothing on this screen is a half-finished form except the request
+       sheet, and that one is left alone until it is sent or closed. */
+    if (el('sheet') && el('sheet').classList.contains('on')) { S._revLate = true; return; }
+    reload();
+  }).catch(function () { S._revBusy = false; });
+}
+
+/* Whatever was being filled in is finished with, so take the update. */
+function refreshWhenFree() {
+  if (!S._revLate) return;
+  S._revLate = false;
+  reload();
 }
 
 function reload() {
@@ -756,6 +801,7 @@ function openSheet(html) {
 function closeSheet() {
   el('sheet').classList.remove('on');
   document.body.style.overflow = '';
+  refreshWhenFree();          /* an update may have been waiting on this form */
 }
 el('sheet').onclick = function (e) { if (e.target === this) closeSheet(); };
 

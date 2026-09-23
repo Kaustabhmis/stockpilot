@@ -156,7 +156,13 @@ function handle(action, payload, callback, token) {
     var lock = LockService.getScriptLock();
     lock.waitLock(25000);
     try {
+      REV_DIRTY = {};
       out = { ok: true, data: route(action, payload || {}, caller) };
+      /* The new revision rides back with the write that caused it, so the
+         screen that did the saving knows it is already up to date and does
+         not reload itself over its own change. */
+      var moved = bumpRevision();
+      if (moved !== null) out.rev = moved;
     } finally {
       lock.releaseLock();
     }
@@ -314,6 +320,8 @@ function hasUsers() {
    person's record, whatever the browser sends. */
 var EMPLOYEE_ACTIONS = {
   bootstrap: 1, changePassword: 1, punchState: 1, webPunch: 1, ping: 1,
+  /* Just a number and a list of tab names - no one's data is in it. */
+  rev: 1,
   save: 1, remove: 1,
   /* Allowed through to decide(), which then refuses anyone who is not the
      manager of the person the application belongs to. */
@@ -370,7 +378,7 @@ function authorize(action, p, caller) {
 
   var code = String(caller.emp_code || '');
 
-  if (action === 'bootstrap' || action === 'ping') return;   // read-only, already scoped
+  if (action === 'bootstrap' || action === 'ping' || action === 'rev') return;   // read-only, already scoped
   if (action === 'decide') return;        // decide() checks the reporting line itself
   if (action === 'changePassword') {
     p.email = caller.email;                        // only ever their own
@@ -423,6 +431,7 @@ function findById(sheetName, id) {
 function route(action, p, caller) {
   switch (action) {
     case 'ping':        return { service: 'HRMS Lite', version: VERSION };
+    case 'rev':         return currentRevision();
     case 'setup':       return setup();
     case 'login':       return login(p.email, p.password);
     case 'bootstrap':   return bootstrap(caller);
@@ -878,11 +887,63 @@ function readSheet(name, tailRows) {
   return indexed(name, tailRows).map(function (x) { return x.data; });
 }
 
-/* A write invalidates what this request has cached for that tab. */
+/* A write invalidates what this request has cached for that tab, and marks
+   the tab as changed so the revision below moves once this request ends. */
 function touched(name) {
   Object.keys(READ_CACHE).forEach(function (k) {
     if (k.indexOf(name + '|') === 0) delete READ_CACHE[k];
   });
+  REV_DIRTY[name] = 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* The revision stamp - how a screen knows the sheet has moved         */
+/* ------------------------------------------------------------------ */
+
+/* Every browser showing this workspace asks "has anything changed?" every few
+   seconds. Answering that by sending the whole workspace back would be a few
+   hundred sheet rows per screen per poll - it would be slower than the manual
+   Refresh it replaces, and it would burn the daily Apps Script quota. So a
+   write bumps one number in script properties, and the question costs one
+   property read plus the Users lookup that checks the caller's session - a
+   handful of rows, and the same however big the company gets. Measured on a
+   120-person workspace with a month of attendance: asking costs 1 tab read,
+   a full refresh costs 21.
+
+   The names of the tabs that moved travel with the number, so a screen can
+   tell the user what changed - and stay quiet about the punches the eSSL
+   agent pushes all day. */
+var REV_KEY = 'data_revision';
+var REV_TABS_KEY = 'data_revision_tabs';
+var REV_DIRTY = {};
+
+function currentRevision() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    rev: Number(props.getProperty(REV_KEY) || 0),
+    tabs: String(props.getProperty(REV_TABS_KEY) || '')
+  };
+}
+
+/* Called once at the end of a request, not once per row: a 500-row import is
+   one bump, not five hundred. */
+function bumpRevision() {
+  var tabs = Object.keys(REV_DIRTY);
+  REV_DIRTY = {};
+  if (!tabs.length) return null;
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var next = Number(props.getProperty(REV_KEY) || 0) + 1;
+    var write = {};
+    write[REV_KEY] = String(next);
+    write[REV_TABS_KEY] = tabs.join(',');
+    props.setProperties(write);
+    return next;
+  } catch (e) {
+    /* A failed bump must never fail the write that already succeeded. The
+       screen falls back to its own timer and picks the change up late. */
+    return null;
+  }
 }
 
 /**

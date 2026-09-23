@@ -57,6 +57,11 @@ body{background:var(--bg-main);color:var(--text-dark);display:flex;height:100vh;
 .topbar h2{font-size:1.1rem;font-weight:700;}
 .topbar .sub{font-size:.75rem;color:var(--text-muted);font-weight:500;margin-top:2px;}
 .userbox{display:flex;align-items:center;gap:12px;}
+/* Shown only when an update is held back by unsaved work. Amber, not red:
+   nothing is wrong, something is simply waiting. */
+.stale-note{align-items:center;gap:6px;border-color:var(--warning) !important;
+  color:var(--warning) !important;font-weight:600;}
+.stale-note:hover{background:rgba(250,178,25,.12) !important;}
 .avatar{width:32px;height:32px;background:var(--primary);border-radius:50%;display:flex;align-items:center;
   justify-content:center;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0;}
 .content{flex:1;overflow-y:auto;padding:22px 26px 60px;}
@@ -561,7 +566,10 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
     </div>
     <div class="userbox">
       <span class="demo-flag" id="demo-flag" style="display:none;">DEMO DATA</span>
-      <button class="ghost sm" onclick="reload()">&#8635; Refresh</button>
+      <button class="ghost sm stale-note" id="stale-note" style="display:none;"
+              onclick="forceRefresh()" title="Someone else changed the sheet. Finish or save what you are doing, then take the update.">
+        &#9679; New data &mdash; refresh</button>
+      <button class="ghost sm" onclick="manualRefresh()">&#8635; Refresh</button>
       <div class="avatar" id="avatar">A</div>
       <div style="font-size:.8rem;">
         <div style="font-weight:700;" id="who">admin</div>
@@ -1208,6 +1216,9 @@ function api(action, payload) {
       if (j.authFailed) { sessionEnded(j.error || 'Please sign in again.'); }
       throw new Error(j.error || 'Request failed');
     }
+    /* A write sends back the revision it produced. Taking it here is what
+       stops this screen refreshing itself over its own save. */
+    if (j.rev !== undefined) S._rev = j.rev;
     return j.data;
   });
 }
@@ -2046,7 +2057,7 @@ function demoRole() {
   go('dashboard');
   reload();
 }
-function logout() { S.user = null; forgetSession(); location.reload(); }
+function logout() { stopWatch(); S.user = null; forgetSession(); location.reload(); }
 
 function start() {
   el('login').style.display = 'none';
@@ -2064,7 +2075,30 @@ function start() {
     b.classList.toggle('on', b.dataset.attview === S.attView);
   });
   startClock();
-  return reload();
+  return reload().then(function () {
+    /* Demo mode lives in this browser's own storage - nobody else can change
+       it, so there is nothing to watch for. */
+    if (!S.demo) startWatch();
+  });
+}
+
+/* Pressing Refresh is also the answer to the "new data" note, so it clears
+   the note and re-stamps what this screen has seen. */
+function manualRefresh() {
+  S._revPending = null;
+  showStaleNote(false);
+  return reload().then(stampRevision);
+}
+
+/* The note is only shown when something was in the way, so this is the user
+   saying "drop it and take the update". */
+function forceRefresh() {
+  var n = Object.keys(S.attDirty || {}).length;
+  var what = n ? n + ' unsaved attendance mark' + (n === 1 ? '' : 's')
+            : S.payDraft ? 'the unsaved payroll draft' : '';
+  if (what && !confirm('Refreshing will discard ' + what + '. Continue?')) return;
+  S.attDirty = {}; S.payDraft = null;
+  return manualRefresh();
 }
 
 function reload() {
@@ -2284,7 +2318,10 @@ function showModal(title, bodyHtml, buttons, wide) {
   });
   el('modal').classList.add('open');
 }
-function closeModal() { el('modal').classList.remove('open'); }
+function closeModal() {
+  el('modal').classList.remove('open');
+  refreshWhenFree();          /* an update may have been waiting on this modal */
+}
 el('modal').onclick = function (e) { if (e.target === this) closeModal(); };
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
@@ -3675,6 +3712,7 @@ function saveAttendance() {
     S.attDirty = {};
     toast(rows.length + (rows.length === 1 ? ' attendance day saved' : ' attendance days saved'), 'good');
     renderAttendance(); renderReports(); renderDashboard(); renderPayroll();
+    refreshWhenFree();          /* the work is saved; an update may be waiting */
   }).catch(function (e) {
     markAttDirty(true); toast(e.message, 'bad');
   });
@@ -4511,6 +4549,7 @@ function writePayroll(rows) {
     S.payDraft = null;
     toast('Payroll finalised and written to the sheet', 'good');
     renderPayroll(); renderReports(); renderDashboard(); renderAttendance();
+    refreshWhenFree();
   }).catch(function (e) {
     el('pay-save').disabled = false; el('pay-save').textContent = 'Finalise run'; toast(e.message, 'bad');
   });
@@ -7073,6 +7112,122 @@ function startClock() {
   };
   tick();
   S._clock = setInterval(tick, 1000);
+}
+
+/* ------------------------- auto refresh -------------------------- */
+/* Two people work the same sheet: HR marks attendance while a manager clears
+   leave, and the eSSL agent pushes punches all day. Without this, each screen
+   showed whatever it had loaded at sign-in until somebody pressed Refresh, so
+   HR could finalise payroll against attendance that had already moved.
+
+   The screen asks the server for one number every few seconds. Nothing is
+   fetched unless that number has changed, so watching costs a script property
+   and the small Users lookup that checks the session - one tab read against
+   the twenty-one a real refresh costs, and it does not grow with the company. */
+var WATCH_MS = 20000;         /* how often to ask while the tab is in front */
+var WATCH_IDLE_MS = 120000;   /* a background tab drops to this, rather than stopping:
+                                 a second screen left open on a spare monitor should
+                                 still be roughly right when it is looked at */
+
+function startWatch() {
+  if (S._watch) return;
+  stampRevision();                       /* whatever it is now is "seen" */
+  S._watch = setInterval(checkRevision, WATCH_MS);
+  document.addEventListener('visibilitychange', onWatchVisibility);
+}
+
+function stopWatch() {
+  if (S._watch) { clearInterval(S._watch); S._watch = null; }
+  document.removeEventListener('visibilitychange', onWatchVisibility);
+  S._rev = null; S._revPending = null;
+  showStaleNote(false);
+}
+
+/* Coming back to the tab is the moment the answer is most likely to be stale,
+   so ask straight away rather than waiting out the rest of the interval. */
+function onWatchVisibility() {
+  if (document.hidden) return;
+  checkRevision();
+}
+
+function stampRevision() {
+  if (S.demo) return Promise.resolve();      /* nothing to watch in demo mode */
+  return api('rev').then(function (r) {
+    S._rev = r && r.rev;
+  }).catch(function () { /* offline: the next tick tries again */ });
+}
+
+function checkRevision() {
+  if (S.demo || S._revBusy) return;      /* one question at a time */
+  if (document.hidden && Date.now() - (S._revSeenAt || 0) < WATCH_IDLE_MS) return;
+  S._revBusy = true;
+  S._revSeenAt = Date.now();
+  api('rev').then(function (r) {
+    S._revBusy = false;
+    if (!r || S._rev === null || S._rev === undefined) { S._rev = r && r.rev; return; }
+    if (r.rev === S._rev) return;
+    S._revPending = r;
+    applyRevision();
+  }).catch(function () { S._revBusy = false; });
+}
+
+/* Somebody else changed the sheet. Whether that can be shown right now is a
+   different question - see below. */
+function applyRevision() {
+  var r = S._revPending;
+  if (!r) return;
+  if (!safeToRefresh()) { showStaleNote(true); return; }
+  S._rev = r.rev; S._revPending = null;
+  showStaleNote(false);
+  return reload().then(function () {
+    /* The eSSL agent pushes punches all day. Saying so every few minutes
+       would be noise, so the screen updates quietly for that one and speaks
+       up only when a person changed something. */
+    if (String(r.tabs || '') === 'Punches') return;
+    toast('Updated - ' + tabWords(r.tabs) + ' changed', 'ok');
+  });
+}
+
+/* Reloading throws away unsaved work: reload() clears S.attDirty and the
+   payroll draft outright. Half-marked attendance or an unsaved payroll run is
+   an hour of somebody's day, so the refresh waits and the screen says so
+   instead. A modal, a menu or a field being typed into waits too - having the
+   page redraw under a half-finished form is its own kind of data loss. */
+function safeToRefresh() {
+  if (Object.keys(S.attDirty || {}).length) return false;
+  if (S.payDraft) return false;
+  if (el('modal') && el('modal').classList.contains('open')) return false;
+  var f = document.activeElement;
+  if (f && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName) && f.type !== 'button') return false;
+  if (el('chiku') && el('chiku').classList.contains('on')) return false;
+  return true;
+}
+
+/* Once the thing that was in the way is finished with, take the update. */
+function refreshWhenFree() {
+  if (S._revPending) applyRevision();
+}
+
+function tabWords(tabs) {
+  var names = String(tabs || '').split(',').filter(Boolean).map(function (t) {
+    return ({ Attendance: 'attendance', Leave: 'leave', Requests: 'requests',
+      Employees: 'employees', Payroll: 'payroll', Punches: 'punches',
+      Holidays: 'holidays', Settings: 'settings', Notices: 'notices',
+      Shifts: 'shifts', LeaveTypes: 'leave types', RequestTypes: 'request types',
+      Users: 'accounts' }[t] || t.toLowerCase());
+  });
+  if (!names.length) return 'data';
+  if (names.length > 2) return names.slice(0, 2).join(', ') + ' and more';
+  return names.join(' and ');
+}
+
+/* A quiet line by the Refresh button, for when the update cannot be taken
+   yet. It is deliberately not a dialog: it must not interrupt the work that
+   is holding the refresh up. */
+function showStaleNote(on) {
+  var n = el('stale-note');
+  if (!n) return;
+  n.style.display = on ? 'inline-flex' : 'none';
 }
 
 /* ------------------------------ init ---------------------------- */
@@ -10643,6 +10798,7 @@ function chikuOpen() {
 function chikuClose() {
   el('chiku').classList.remove('on');
   el('chiku-open').style.display = isAdmin() ? 'flex' : 'none';
+  refreshWhenFree();
 }
 function chikuChips() {
   el('ck-chips').innerHTML = CHIKU_CHIPS.map(function (c) {
