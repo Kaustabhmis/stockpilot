@@ -450,11 +450,10 @@ function checkRevision() {
     S._revBusy = false;
     if (!r || S._rev === null || S._rev === undefined) { S._rev = r && r.rev; return; }
     if (r.rev === S._rev) return;
-    S._rev = r.rev;
     /* Nothing on this screen is a half-finished form except the request
        sheet, and that one is left alone until it is sent or closed. */
     if (el('sheet') && el('sheet').classList.contains('on')) { S._revLate = true; return; }
-    reload();
+    reload().then(function (ok) { if (ok) S._rev = r.rev; });
   }).catch(function () { S._revBusy = false; });
 }
 
@@ -480,8 +479,12 @@ function reload() {
     paintHeader();
     el('nav-team').style.display = S.inbox.isManager ? '' : 'none';
     return api('punchState', {}).then(function (p) { S.punch = p; }).catch(function () {});
-  }).then(function () { render(); })
-    .catch(function (e) { toast(e.message, 'bad'); render(); });
+  }).then(function () { render(); return true; })
+    .catch(function (e) {
+      /* Whether this worked decides whether the auto-refresh marks the
+         update as taken, so a refresh lost to a dead signal is retried. */
+      toast(e.message, 'bad'); render(); return false;
+    });
 }
 
 function paintHeader() {

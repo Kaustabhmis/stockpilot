@@ -2087,7 +2087,9 @@ function start() {
 function manualRefresh() {
   S._revPending = null;
   showStaleNote(false);
-  return reload().then(stampRevision);
+  return reload().then(function (ok) {
+    if (ok) return stampRevision();   /* a failed refresh is not "up to date" */
+  });
 }
 
 /* The note is only shown when something was in the way, so this is the user
@@ -2131,7 +2133,14 @@ function reload() {
     el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
     applyRole();
     renderAll();
-  }).catch(function (e) { toast(e.message, 'bad'); });
+    return true;
+  }).catch(function (e) {
+    /* Saying whether this worked matters: the auto-refresh marks the update
+       as taken only on a true, so a refresh lost to a dropped connection is
+       retried rather than recorded as done. */
+    toast(e.message, 'bad');
+    return false;
+  });
 }
 
 /* The chrome an employee gets: their own screens, nothing of HR's. The real
@@ -7177,9 +7186,14 @@ function applyRevision() {
   var r = S._revPending;
   if (!r) return;
   if (!safeToRefresh()) { showStaleNote(true); return; }
-  S._rev = r.rev; S._revPending = null;
   showStaleNote(false);
-  return reload().then(function () {
+  return reload().then(function (ok) {
+    /* The fetch can fail - an office wifi drops, the laptop sleeps. Leaving
+       the revision alone then means the very next tick tries again, instead
+       of the screen sitting stale behind a number that says it is current. */
+    if (!ok) return;
+    S._rev = r.rev;
+    if (S._revPending === r) S._revPending = null;
     /* The eSSL agent pushes punches all day. Saying so every few minutes
        would be noise, so the screen updates quietly for that one and speaks
        up only when a person changed something. */

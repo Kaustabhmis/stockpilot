@@ -431,7 +431,7 @@ function findById(sheetName, id) {
 function route(action, p, caller) {
   switch (action) {
     case 'ping':        return { service: 'HRMS Lite', version: VERSION };
-    case 'rev':         return currentRevision();
+    case 'rev':         return currentRevision(caller);
     case 'setup':       return setup();
     case 'login':       return login(p.email, p.password);
     case 'bootstrap':   return bootstrap(caller);
@@ -917,12 +917,16 @@ var REV_KEY = 'data_revision';
 var REV_TABS_KEY = 'data_revision_tabs';
 var REV_DIRTY = {};
 
-function currentRevision() {
+/* The names of the tabs that moved are for the HR screen's "payroll changed"
+   line. An employee's app never uses them, and knowing that Payroll or Users
+   moved tells them when HR was working - so they are simply not sent. */
+function currentRevision(caller) {
   var props = PropertiesService.getScriptProperties();
-  return {
-    rev: Number(props.getProperty(REV_KEY) || 0),
-    tabs: String(props.getProperty(REV_TABS_KEY) || '')
-  };
+  var out = { rev: Number(props.getProperty(REV_KEY) || 0), tabs: '' };
+  if (caller && isHrOrAbove(caller.role)) {
+    out.tabs = String(props.getProperty(REV_TABS_KEY) || '');
+  }
+  return out;
 }
 
 /* Called once at the end of a request, not once per row: a 500-row import is
@@ -940,8 +944,10 @@ function bumpRevision() {
     props.setProperties(write);
     return next;
   } catch (e) {
-    /* A failed bump must never fail the write that already succeeded. The
-       screen falls back to its own timer and picks the change up late. */
+    /* A failed bump must never fail the write that already succeeded - the
+       rows are in the sheet either way. The cost is that other screens do
+       not learn of this one change until the next write bumps the number,
+       or somebody presses Refresh. */
     return null;
   }
 }
