@@ -1332,28 +1332,64 @@ function stackedColumnChart(id, rows, series) {
 }
 
 /* Horizontal bars, single hue (sequential) with direct value labels */
+/* A department name is often longer than the label gutter. SVG text does not
+   wrap on its own, and the bars are painted after the labels, so an overrun
+   used to disappear under the bar and read as cut off mid-word. Long names are
+   split over two lines here, and only a name too long for even that is cut -
+   with the whole of it kept in the tooltip. */
+var LABEL_CH = 6.6;                    /* a generous width for one 11px character */
+function wrapLabel(text, width) {
+  var words = String(text).split(/\s+/).filter(Boolean);
+  var max = Math.floor(width / LABEL_CH);
+  var lines = [], line = '';
+  words.forEach(function (w) {
+    var next = line ? line + ' ' + w : w;
+    if (next.length <= max || !line) { line = next; return; }
+    lines.push(line); line = w;
+  });
+  if (line) lines.push(line);
+  if (lines.length > 2) lines = [lines[0], lines.slice(1).join(' ')];
+  return lines.map(function (l) {
+    return l.length > max ? l.slice(0, Math.max(1, max - 1)) + '\u2026' : l;
+  });
+}
+
 function barChart(id, rows, onPick) {
   if (!rows.length) { el(id).innerHTML = '<div class="chart-empty">No data yet.</div>'; return; }
-  var rowH = 24, W = 400, H = rows.length * rowH + 8, labelW = 96, valW = 54;
+  var W = 400, labelW = 104, valW = 54;
   var plotW = W - labelW - valW;
+  var lines = rows.map(function (r) { return wrapLabel(r.label, labelW - 8); });
+  var wrapped = lines.some(function (l) { return l.length > 1; });
+  var rowH = wrapped ? 32 : 24, bh = 14, lineH = 12;
+  var H = rows.length * rowH + 8;
   var max = Math.max.apply(null, rows.map(function (r) { return r.value; })) || 1;
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Headcount by department">';
   rows.forEach(function (r, i) {
-    var y = i * rowH + 4, bh = 14;
+    var y = i * rowH + (rowH - bh) / 2;
     var w = Math.max(2, plotW * r.value / max);
     var tip = esc('<b>' + r.label + '</b><br>' + r.tip + (onPick ? '<br>Click to open the list' : ''));
     var pick = onPick ? ' class="pickable" data-pick="' + esc(r.label) + '"' : '';
+    var mid = y + bh / 2;
+    var parts = lines[i];
+    var first = mid - (parts.length - 1) * lineH / 2 + 4;
+    /* The tooltip rides on the label too, so a name cut short can still be
+       read in full by hovering it. A <title> would do that natively, but its
+       text lands in textContent and doubles the label for anything reading it. */
+    var label = '<text class="axis-text" x="0" y="' + first + '" data-tip="' + tip + '"' + pick + '>' +
+      parts.map(function (l, n) {
+        return '<tspan x="0" dy="' + (n ? lineH : 0) + '">' + esc(l) + '</tspan>';
+      }).join('') + '</text>';
     /* A hit strip across the whole row, so the target is the row and not a
        14px bar - and it carries the tooltip for the empty space too. */
-    svg += '<rect x="0" y="' + (y - 3) + '" width="' + W + '" height="' + (bh + 6) +
+    svg += '<rect x="0" y="' + (i * rowH) + '" width="' + W + '" height="' + rowH +
         '" fill="transparent"' + (onPick ? ' class="pickable hit" data-pick="' + esc(r.label) + '"' : '') +
         ' data-tip="' + tip + '"/>' +
-      '<text class="axis-text" x="0" y="' + (y + bh - 3) + '"' + pick + '>' + esc(r.label) + '</text>' +
+      label +
       '<rect x="' + labelW + '" y="' + y + '" width="' + (w - 4) + '" height="' + bh +
       '" fill="var(--seq-450)" data-tip="' + tip + '"' + pick + '/>' +
       '<rect x="' + (labelW + w - 4) + '" y="' + y + '" width="4" height="' + bh +
       '" rx="2" fill="var(--seq-450)" data-tip="' + tip + '"' + pick + '/>' +
-      '<text class="val-text" x="' + (labelW + w + 7) + '" y="' + (y + bh - 3) + '"' + pick + '>' +
+      '<text class="val-text" x="' + (labelW + w + 7) + '" y="' + (mid + 4) + '"' + pick + '>' +
       esc(r.valueLabel) + '</text>';
   });
   svg += '</svg>';
