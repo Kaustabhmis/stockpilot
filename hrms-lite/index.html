@@ -2677,7 +2677,7 @@ var EMP_FIELDS = [
   ['esic_no', 'ESIC number', 'text'],
   ['bank_account', 'Bank account', 'text'],
   ['ifsc', 'IFSC', 'text'],
-  ['manager', 'Reporting manager', 'text'],
+  ['manager', 'Reporting manager', 'manager'],
   ['device_id', 'Biometric device ID', 'text'],
   ['shift', 'Shift', 'shift'],
   ['wage_type', 'Paid as', 'select:Salary,Wages'],
@@ -2777,10 +2777,51 @@ function renderEmployees() {
     '<tr><td colspan="9" class="empty">No employees match this filter.</td></tr>') + '</tbody>';
 }
 
+/* Whose form is open, so the manager list can leave them out of it. */
+var EDITING_CODE = '';
+
 function fieldInput(f, value) {
   var name = f[0], label = f[1], type = f[2], readonly = f[3];
   var html;
-  if (type === 'shift') {
+  if (type === 'manager') {
+    /* A typed name was one keystroke away from breaking somebody's approvals:
+       the chain looks the manager up by code or by name, and "Sunil Deshpade"
+       matches nobody, so their leave would sit waiting for a person who does
+       not exist. Picking from the list makes that impossible.
+
+       The code is stored, not the name, so the chain survives a person being
+       renamed. */
+    var current = String(value || '').trim();
+    var mine = String(EDITING_CODE || '');
+    var people = activeEmployees().filter(function (x) {
+      return String(x.emp_code) !== mine;
+    }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+    /* An older record may hold a name, or somebody who has since left. Keep
+       whatever is there as an option rather than silently clearing it. */
+    var matched = people.some(function (x) {
+      return String(x.emp_code) === current ||
+             String(x.name).trim().toLowerCase() === current.toLowerCase();
+    });
+    var byName = null;
+    people.forEach(function (x) {
+      if (String(x.name).trim().toLowerCase() === current.toLowerCase()) byName = x;
+    });
+    var selected = byName ? String(byName.emp_code) : current;
+
+    html = '<select data-f="' + name + '">' +
+      '<option value=""' + (current ? '' : ' selected') + '>\u2014 nobody \u2014</option>' +
+      (current && !matched
+        ? '<option value="' + esc(current) + '" selected>' + esc(current) +
+          ' (not on the list)</option>'
+        : '') +
+      people.map(function (x) {
+        return '<option value="' + esc(x.emp_code) + '"' +
+          (String(x.emp_code) === selected ? ' selected' : '') + '>' +
+          esc(x.name) + ' \u00b7 ' + esc(x.emp_code) +
+          (x.designation ? ' \u00b7 ' + esc(x.designation) : '') + '</option>';
+      }).join('') + '</select>';
+  } else if (type === 'shift') {
     var names = (S.shifts || []).filter(function (x) {
       return String(x.active || 'yes').toLowerCase() !== 'no';
     }).map(function (x) { return String(x.name); });
@@ -2815,6 +2856,7 @@ function collectFields() {
 function openEmployee(code) {
   var e = code ? empByCode(code) : { status: 'Active', pf_applicable: 'yes', esi_applicable: 'yes', doj: today() };
   if (!e) return;
+  EDITING_CODE = code || '';
   var body = '<div id="emp-errors"></div><div class="grid2">' + EMP_FIELDS.map(function (f) {
     /* the code is yours to choose when adding, and fixed afterwards so history stays attached */
     return fieldInput(f[0] === 'emp_code' && code ? [f[0], f[1], f[2], true] : f, e[f[0]]);
@@ -2860,7 +2902,40 @@ function validateEmployee(row, code) {
     errs.push('ESI is marked applicable but gross ' + cur() + money(gross) + ' is above the ' +
       cur() + money(S.settings.esi_wage_ceiling || 21000) + ' ceiling.');
   }
+  /* The list cannot offer somebody themselves, but it can still be used to
+     build a ring - A reports to B, B reports to A - and then neither of them
+     has anybody above them to sign. Walk up from the chosen manager and see
+     whether we come back round. */
+  var loop = managerLoop(newCode, String(row.manager || '').trim());
+  if (loop) {
+    errs.push('That makes a circle: ' + loop + '. Somebody at the top has to report to nobody.');
+  }
   return errs;
+}
+
+/** The path back to this employee, if choosing that manager closes a ring. */
+function managerLoop(empCode, managerRef) {
+  var me = String(empCode || '').trim().toLowerCase();
+  if (!me || !managerRef) return '';
+  var byRef = function (ref) {
+    var want = String(ref || '').trim().toLowerCase();
+    if (!want) return null;
+    var hit = null;
+    S.employees.forEach(function (x) {
+      if (String(x.emp_code).trim().toLowerCase() === want ||
+          String(x.name || '').trim().toLowerCase() === want) hit = x;
+    });
+    return hit;
+  };
+  var path = [], at = byRef(managerRef), guard = 0;
+  while (at && guard++ < 60) {
+    path.push(at.name || at.emp_code);
+    if (String(at.emp_code).trim().toLowerCase() === me) {
+      return path.join(' \u2192 ') + ' \u2192 back to the same person';
+    }
+    at = byRef(at.manager);
+  }
+  return '';
 }
 
 function saveEmployee(code) {
