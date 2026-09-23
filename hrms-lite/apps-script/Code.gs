@@ -439,7 +439,7 @@ function route(action, p, caller) {
     case 'esslPush':      return esslPush(p.month, p.rows);
     case 'ingestPunches': return ingestPunches(p.punches, p.token, p.source, caller);
     case 'testIntegration': return testIntegration();
-    case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note, p.geo);
+    case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note, p.geo, caller);
     case 'punchState':    return punchState(p.emp_code);
     case 'punchLog':      return punchLog(p.from, p.to);
     case 'sendPayslips':  return sendPayslips(p, caller);
@@ -1737,7 +1737,7 @@ function geoCheck(emp, geo) {
   };
 }
 
-function webPunch(empCode, kind, note, geo) {
+function webPunch(empCode, kind, note, geo, caller) {
   var st = settingsMap();
   if (String(st.web_punch_enabled || 'yes').toLowerCase() !== 'yes') {
     throw new Error('Punching from the app is switched off.');
@@ -1762,15 +1762,23 @@ function webPunch(empCode, kind, note, geo) {
      back taps twice more. The day is bounded by the first tap and the last,
      exactly as it is for the machine on the gate - so there is no second
      punch to refuse and no way to end up in the wrong order. */
+  /* HR may punch for somebody who has no phone, and that is a fair thing to
+     allow - but the log must not then read as if the person tapped it
+     themselves. Whoever actually pressed it is written beside the punch. */
+  var byOther = caller && caller.email && String(caller.emp_code || '') !== String(empCode);
+  var how = byOther ? 'app (by ' + caller.email + ')' : 'app';
+
   appendMany('Punches', [{
     id: newId(), punch_time: n.date + ' ' + n.time, emp_code: empCode, device_id: emp.device_id || '',
-    device: 'app', direction: String(kind || ''), source: 'app', imported_at: n.stamp,
+    device: how, direction: String(kind || ''), source: byOther ? 'app-on-behalf' : 'app',
+    imported_at: n.stamp,
     lat: geo && geo.lat !== undefined ? geo.lat : '', lng: geo && geo.lng !== undefined ? geo.lng : '',
     accuracy: geo && geo.accuracy ? Math.round(parseFloat(geo.accuracy)) : '',
     site: fence.site || '', distance_m: fence.distance === undefined ? '' : fence.distance
   }]);
 
-  var row = rebuildDayFromPunches(empCode, n.date, 'app', [n.time]);
+  var row = rebuildDayFromPunches(empCode, n.date, byOther ? 'app, by ' + caller.email : 'app',
+                                  [n.time]);
   if (!row) {
     throw new Error('Today cannot be changed - it is on approved leave, or this month is finalised.');
   }
