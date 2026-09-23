@@ -143,6 +143,53 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .hint-line{font-size:.62rem;font-weight:600;color:var(--text-soft);text-transform:none;letter-spacing:0;}
 .hint-line:empty{display:none;}
 
+/* ---------------- Chiku, the question box ----------------
+   A chat window that answers from the data already on this screen. There is
+   no model behind it and nothing leaves the workspace: a question is matched
+   to a query, and the query runs against the same functions the reports use,
+   so an answer here and a printed report can never disagree. */
+#chiku-open{position:fixed;right:22px;bottom:22px;z-index:60;display:none;align-items:center;
+  gap:9px;padding:13px 19px;border:0;border-radius:99px;cursor:pointer;
+  background:var(--primary);color:#fff;font:inherit;font-weight:700;font-size:.9rem;
+  box-shadow:0 10px 26px rgba(37,99,235,.36);}
+#chiku-open:hover{transform:translateY(-1px);}
+#chiku-open .ic{font-size:1.15rem;}
+#chiku{position:fixed;right:22px;bottom:22px;z-index:61;width:390px;max-width:calc(100vw - 32px);
+  height:600px;max-height:calc(100vh - 44px);display:none;flex-direction:column;
+  background:var(--bg-card);border:1px solid var(--border);border-radius:18px;overflow:hidden;
+  box-shadow:0 24px 60px rgba(15,23,42,.24);}
+#chiku.on{display:flex;}
+.ck-head{display:flex;align-items:center;gap:11px;padding:14px 16px;background:var(--sidebar-bg);color:#fff;}
+.ck-head .av{width:34px;height:34px;border-radius:50%;background:var(--primary);display:flex;
+  align-items:center;justify-content:center;font-weight:800;font-size:.95rem;}
+.ck-head b{font-size:.95rem;display:block;line-height:1.2;}
+.ck-head span{font-size:.7rem;opacity:.7;}
+.ck-head .x{margin-left:auto;background:none;border:0;color:#fff;font-size:1.5rem;cursor:pointer;
+  opacity:.75;line-height:1;}
+.ck-body{flex:1;overflow-y:auto;padding:16px;background:var(--bg-main);}
+.ck-msg{max-width:88%;margin-bottom:12px;padding:10px 13px;border-radius:14px;font-size:.84rem;
+  line-height:1.6;white-space:pre-wrap;}
+.ck-msg.me{margin-left:auto;background:var(--primary);color:#fff;border-bottom-right-radius:4px;}
+.ck-msg.ck{background:var(--bg-card);border:1px solid var(--border);border-bottom-left-radius:4px;}
+.ck-msg b{font-weight:700;}
+.ck-msg table{width:100%;border-collapse:collapse;margin-top:9px;font-size:.78rem;}
+.ck-msg th{text-align:left;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border);
+  padding:4px 6px 4px 0;}
+.ck-msg td{padding:4px 6px 4px 0;border-bottom:1px solid var(--border);}
+.ck-msg td.n,.ck-msg th.n{text-align:right;}
+.ck-msg .more{display:block;margin-top:7px;font-size:.74rem;color:var(--text-soft);}
+.ck-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 10px;background:var(--bg-main);}
+.ck-chip{border:1px solid var(--border);background:var(--bg-card);border-radius:99px;padding:6px 11px;
+  font-size:.74rem;cursor:pointer;color:var(--text-muted);font-family:inherit;}
+.ck-chip:hover{border-color:var(--primary);color:var(--primary);}
+.ck-ask{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);background:var(--bg-card);}
+.ck-ask input{flex:1;font-size:.86rem;}
+.ck-ask button{padding:9px 15px;}
+@media (max-width:520px){
+  #chiku{right:10px;left:10px;bottom:10px;width:auto;height:calc(100vh - 20px);}
+  #chiku-open{right:14px;bottom:14px;}
+}
+
 .badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:.7rem;font-weight:700;white-space:nowrap;}
 .b-green{background:#d1fae5;color:#065f46;} .b-red{background:#fee2e2;color:#991b1b;}
 .b-amber{background:#fef3c7;color:#92400e;} .b-blue{background:#dbeafe;color:#1e40af;}
@@ -824,6 +871,23 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
     <div class="modal-foot" id="modal-foot"></div>
   </div>
 </div>
+<!-- Chiku: ask the workspace a question in words -->
+<button id="chiku-open" onclick="chikuOpen()" title="Ask Chiku">
+  <span class="ic">&#128172;</span>Ask Chiku</button>
+<div id="chiku" role="dialog" aria-label="Ask Chiku">
+  <div class="ck-head">
+    <div class="av">C</div>
+    <div><b>Chiku</b><span>Answers from your own sheet</span></div>
+    <button class="x" onclick="chikuClose()" aria-label="Close">&times;</button>
+  </div>
+  <div class="ck-body" id="ck-body"></div>
+  <div class="ck-chips" id="ck-chips"></div>
+  <form class="ck-ask" onsubmit="chikuSend();return false;">
+    <input id="ck-in" type="text" autocomplete="off" placeholder="How many came in today?">
+    <button type="submit">Ask</button>
+  </form>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -2150,6 +2214,7 @@ function renderNoticeBoard() {
 function renderAll() {
   renderEmployees(); renderAttendance(); renderLeave(); renderRequests();
   renderPayroll(); renderReports(); renderDashboard();
+  if (typeof chikuVisible === 'function') chikuVisible();
 }
 
 /* --------------------------- navigation ------------------------- */
@@ -9935,6 +10000,586 @@ function printDocument(opts) {
   w.document.close();
   w.focus();
   setTimeout(function () { w.print(); }, 250);
+}
+</script>
+
+<script>
+/* =================================================================
+   CHIKU - ask the workspace a question in words
+   =================================================================
+   There is no model behind this and nothing leaves the workspace. A
+   question is matched against a list of things Chiku knows how to look
+   up, and the lookup runs through the very same functions the reports
+   use - attStats, computePay, the register - so an answer here and a
+   printed report can never disagree.
+
+   The cost of that honesty is that Chiku's range is finite. When a
+   question falls outside it, it says so and shows what it can answer
+   instead. It never guesses at a number.
+   ================================================================= */
+
+var CHIKU_MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
+                    'august', 'september', 'october', 'november', 'december'];
+
+function chikuNorm(q) {
+  return ' ' + String(q || '').toLowerCase()
+    .replace(/[^a-z0-9À-ɏ\/\-: ]+/g, ' ')
+    .replace(/\s+/g, ' ').trim() + ' ';
+}
+function chikuHas(q, words) {
+  for (var i = 0; i < words.length; i++) {
+    if (q.indexOf(' ' + words[i]) >= 0) return true;
+  }
+  return false;
+}
+
+/** The month a question is about: "april", "april 2026", "last month", 2026-04. */
+function chikuMonth(q) {
+  var m = q.match(/ (\d{4})-(\d{2}) /);
+  if (m) return m[1] + '-' + m[2];
+  for (var i = 0; i < 12; i++) {
+    var name = CHIKU_MONTHS[i];
+    if (q.indexOf(' ' + name.slice(0, 3)) < 0) continue;
+    var year = (q.match(new RegExp(name.slice(0, 3) + '[a-z]* (\\d{4})')) || [])[1] ||
+               (q.match(new RegExp(name.slice(0, 3) + '[a-z]* (\\d{2}) ')) || [])[1];
+    if (year && year.length === 2) year = '20' + year;
+    if (!year) {
+      /* No year given: the most recent one that has already happened. */
+      var now = thisMonth(), guess = now.slice(0, 4) + '-' + ('0' + (i + 1)).slice(-2);
+      year = guess > now ? String(+now.slice(0, 4) - 1) : now.slice(0, 4);
+    }
+    return year + '-' + ('0' + (i + 1)).slice(-2);
+  }
+  if (chikuHas(q, ['last month', 'previous month', 'past month'])) return addMonths(thisMonth(), -1);
+  if (chikuHas(q, ['this month', 'current month', 'month'])) return thisMonth();
+  return null;
+}
+
+/** The day a question is about. Defaults to today when it names no other. */
+function chikuDay(q) {
+  var m = q.match(/ (\d{4})-(\d{2})-(\d{2}) /);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = q.match(/ (\d{1,2})[\/-](\d{1,2})[\/-](\d{4}) /);
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  m = q.match(/ (\d{1,2})(?:st|nd|rd|th)? ([a-z]{3,})/);
+  if (m) {
+    for (var i = 0; i < 12; i++) {
+      if (CHIKU_MONTHS[i].indexOf(m[2].slice(0, 3)) === 0) {
+        var ym = chikuMonth(' ' + m[2] + ' ') || thisMonth();
+        return ym.slice(0, 4) + '-' + ('0' + (i + 1)).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+      }
+    }
+  }
+  if (chikuHas(q, ['yesterday'])) return addDays(today(), -1);
+  return today();
+}
+function chikuSaidDay(q) {
+  return / \d{4}-\d{2}-\d{2} | \d{1,2}[\/-]\d{1,2}[\/-]\d{4} | \d{1,2}(st|nd|rd|th)? [a-z]{3,}/.test(q) ||
+         chikuHas(q, ['yesterday', 'today']);
+}
+
+/** The employee a question names, by code or by any part of the name. */
+function chikuWho(q) {
+  var pool = visibleEmployees(), best = null, bestLen = 0;
+  pool.forEach(function (e) {
+    var code = String(e.emp_code || '').toLowerCase();
+    if (code && q.indexOf(' ' + code) >= 0 && code.length > bestLen) { best = e; bestLen = code.length; }
+    String(e.name || '').toLowerCase().split(/\s+/).forEach(function (part) {
+      if (part.length < 3) return;
+      if (q.indexOf(' ' + part) >= 0 && part.length > bestLen) { best = e; bestLen = part.length; }
+    });
+  });
+  return best;
+}
+
+/* ---------------- the things Chiku can look up ---------------- */
+
+function chikuDayList(iso, pick) {
+  var ym = iso.slice(0, 7), d = parseInt(iso.slice(8), 10), out = [];
+  activeEmployees().forEach(function (e) {
+    if (e.doj && String(e.doj) > iso) return;
+    var rec = recordFor(ym, e.emp_code, d);
+    var st = statusOf(ym, e.emp_code, d);
+    var hit = pick(st, rec, e);
+    if (hit) out.push({ e: e, rec: rec, st: st, extra: hit === true ? '' : hit });
+  });
+  return out;
+}
+function chikuNames(list, extraHead) {
+  if (!list.length) return '';
+  var rows = list.slice(0, 12).map(function (x) {
+    return '<tr><td>' + esc(x.e.name) + '<br><span class="more">' + esc(x.e.emp_code) + '</span></td>' +
+      '<td>' + esc(x.e.department || unitOf(x.e)) + '</td>' +
+      (extraHead ? '<td class="n">' + esc(x.extra) + '</td>' : '') + '</tr>';
+  }).join('');
+  return '<table><tr><th>Name</th><th>Department</th>' +
+    (extraHead ? '<th class="n">' + esc(extraHead) + '</th>' : '') + '</tr>' + rows + '</table>' +
+    (list.length > 12 ? '<span class="more">and ' + (list.length - 12) + ' more</span>' : '');
+}
+function chikuDayWord(iso) {
+  return iso === today() ? 'today' : 'on ' + longDate(iso);
+}
+
+var CHIKU_SKILLS = [
+  { id: 'present',
+    words: ['came in', 'come in', 'came', 'come', 'present', 'reported', 'attended',
+            'who is in', 'in today', 'turned up', 'attendance today', 'attendance on'],
+    veto: ['late', 'absent', 'perfect', 'joined', 'left', 'resigned', 'how many employee',
+           'headcount', 'strength', 'payroll', 'overtime', 'lop', 'balance', 'holiday'],
+    run: function (q) {
+      var iso = chikuDay(q);
+      var list = chikuDayList(iso, function (st) {
+        return st === 'P' || st === 'HD' || st === 'OD' || st === 'CO';
+      });
+      var due = chikuDayList(iso, function (st) { return st !== 'WO' && st !== 'H'; }).length;
+      if (!due) return { text: longDate(iso) + ' is a weekly off or a holiday - nobody was due in.' };
+      var hd = list.filter(function (x) { return x.st === 'HD'; }).length;
+      return {
+        text: '<b>' + list.length + ' of ' + due + '</b> came in ' + chikuDayWord(iso) + '.' +
+          (hd ? ' ' + hd + ' of them on a half day.' : ''),
+        html: chikuNames(list.map(function (x) {
+          x.extra = hhmm(x.rec && x.rec.in_time) || '-'; return x;
+        }), 'In')
+      };
+    } },
+
+  { id: 'absent',
+    words: ['absent', 'absentee', 'absentees', 'not come', 'did not come', 'who is missing'],
+    run: function (q) {
+      var iso = chikuDay(q);
+      var absent = chikuDayList(iso, function (st) { return st === 'A'; });
+      var blank = chikuDayList(iso, function (st) { return !st; });
+      var leave = chikuDayList(iso, function (st) { return st === 'L'; });
+      if (!absent.length && !blank.length && !leave.length) {
+        return { text: 'Nobody was absent ' + chikuDayWord(iso) + '.' };
+      }
+      return {
+        text: '<b>' + absent.length + ' absent</b> ' + chikuDayWord(iso) +
+          (leave.length ? ', ' + leave.length + ' on approved leave' : '') +
+          (blank.length ? ', and ' + blank.length + ' not marked at all' : '') + '.',
+        html: chikuNames(absent.concat(leave).map(function (x) {
+          x.extra = x.st === 'L' ? 'On leave' : 'Absent'; return x;
+        }), 'Which')
+      };
+    } },
+
+  { id: 'late',
+    words: ['late', 'late comer', 'late comers', 'latecomer', 'latecomers', 'late coming',
+            'came late', 'late marks'],
+    run: function (q) {
+      var ym = chikuMonth(q);
+      if (ym && !chikuSaidDay(q) && chikuHas(q, ['month'])) {
+        var rows = activeEmployees().map(function (e) {
+          return { e: e, extra: attStats(ym, e.emp_code).late };
+        }).filter(function (x) { return x.extra > 0; })
+          .sort(function (a, b) { return b.extra - a.extra; });
+        if (!rows.length) return { text: 'Nobody was late in ' + monthLabel(ym) + '.' };
+        return { text: '<b>' + rows.length + ' people</b> were late at least once in ' +
+                 monthLabel(ym) + '.', html: chikuNames(rows, 'Late marks') };
+      }
+      var iso = chikuDay(q);
+      var list = chikuDayList(iso, function (st, rec, e) {
+        var mins = (st === 'P' || st === 'HD') ? lateMinutes(rec, e.emp_code) : 0;
+        return mins ? mins + ' min' : false;
+      });
+      var cfg = shiftCfg('');
+      if (!list.length) return { text: 'Nobody was late ' + chikuDayWord(iso) + '.' };
+      return {
+        text: '<b>' + list.length + (list.length === 1 ? ' person was' : ' people were') +
+          '</b> late ' + chikuDayWord(iso) + ', counting from the shift start plus ' +
+          cfg.grace + ' minutes grace.',
+        html: chikuNames(list, 'Late by')
+      };
+    } },
+
+  { id: 'onleave',
+    words: ['on leave', 'leave today', 'who is on leave', 'on chutti'],
+    veto: ['balance', 'left', 'quota', 'how many leave'],
+    run: function (q) {
+      var iso = chikuDay(q);
+      var list = chikuDayList(iso, function (st) { return st === 'L'; });
+      if (!list.length) return { text: 'Nobody is on approved leave ' + chikuDayWord(iso) + '.' };
+      return { text: '<b>' + list.length + '</b> on approved leave ' + chikuDayWord(iso) + '.',
+               html: chikuNames(list) };
+    } },
+
+  { id: 'unmarked',
+    words: ['not marked', 'unmarked', 'no punch', 'missing punch', 'blank day', 'nothing marked'],
+    run: function (q) {
+      var iso = chikuDay(q);
+      var list = chikuDayList(iso, function (st) { return !st; });
+      if (!list.length) return { text: 'Every day is marked ' + chikuDayWord(iso) + '.' };
+      return { text: '<b>' + list.length + '</b> not marked ' + chikuDayWord(iso) +
+                 '. Each one is paid as LOP until somebody marks it.',
+               html: chikuNames(list) };
+    } },
+
+  { id: 'perfect',
+    words: ['perfect', 'perfect attendance', 'full attendance', 'clean sheet',
+            'never absent', 'not missed a day', '100 percent'],
+    run: function (q) {
+      var ym = chikuMonth(q) || thisMonth();
+      var good = [];
+      activeEmployees().forEach(function (e) {
+        var s = attStats(ym, e.emp_code);
+        if (s.A === 0 && s.HD === 0 && s.blank === 0 && s.late === 0 && s.lop === 0 && s.P > 0) {
+          good.push({ e: e, extra: s.P + ' days' });
+        }
+      });
+      if (!good.length) {
+        return { text: 'Nobody has a clean sheet for ' + monthLabel(ym) +
+          ' - that means no absence, no half day, no late mark and nothing unmarked.' };
+      }
+      return { text: '<b>' + good.length + (good.length === 1 ? ' person has' : ' people have') +
+                 '</b> perfect attendance in ' + monthLabel(ym) +
+                 ': no absence, no half day, no late mark, nothing unmarked.',
+               html: chikuNames(good, 'Present') };
+    } },
+
+  { id: 'payroll',
+    words: ['payroll', 'salary', 'salary of', 'salary report', 'wage bill', 'payout',
+            'net pay', 'payslip', 'take home', 'how much was paid', 'what did we pay'],
+    run: function (q) {
+      var ym = chikuMonth(q) || thisMonth();
+      var who = chikuWho(q);
+      var run = savedRunFor(ym);
+      var live = !run.length;
+      if (live) {
+        run = activeEmployees().filter(function (e) { return !e.doj || String(e.doj) <= ym + '-31'; })
+          .map(function (e) { return computePay(e, ym, null); });
+      }
+      if (!run.length) return { text: 'There is nothing to pay for ' + monthLabel(ym) + ' yet.' };
+      if (who) {
+        var mine = run.filter(function (r) { return String(r.emp_code) === String(who.emp_code); })[0];
+        if (!mine) return { text: esc(who.name) + ' has no payroll line for ' + monthLabel(ym) + '.' };
+        return { text: '<b>' + esc(who.name) + '</b>, ' + monthLabel(ym) + (live ? ' (not finalised yet)' : '') +
+          ':\nPaid days ' + mine.paid_days + ' of ' + mine.total_days +
+          '\nGross ' + cur() + money(mine.gross) +
+          '\nPF ' + cur() + money(mine.pf) + ' · ESI ' + cur() + money(mine.esi) +
+          ' · PT ' + cur() + money(mine.pt) + ' · TDS ' + cur() + money(mine.tds) +
+          '\n<b>Net ' + cur() + money(mine.net) + '</b>' };
+      }
+      var t = function (k) { return run.reduce(function (s, r) { return s + num(r[k]); }, 0); };
+      return {
+        text: '<b>' + monthLabel(ym) + '</b>' + (live ? ' - a live preview, the run is not finalised' : '') +
+          '\n' + run.length + ' people\nGross ' + cur() + money(t('gross')) +
+          '\nDeductions ' + cur() + money(t('total_deduction')) +
+          '\n<b>Net payable ' + cur() + money(t('net')) + '</b>' +
+          '\nPF challan ' + cur() + money(t('pf') + t('pf_employer')) +
+          ' · ESI challan ' + cur() + money(t('esi') + t('esi_employer')) +
+          '\nCost to company ' + cur() + money(t('ctc')),
+        action: { label: 'Open the salary register', run: function () {
+          chikuClose(); go('reports');
+          el('rep-month').value = ym; el('rep-kind').value = 'register'; renderReports();
+        } }
+      };
+    } },
+
+  { id: 'overtime',
+    words: ['overtime', 'over time', 'ot hours', 'extra hours'],
+    run: function (q) {
+      var ym = chikuMonth(q) || thisMonth();
+      var rows = activeEmployees().map(function (e) {
+        return { e: e, mins: attStats(ym, e.emp_code).ot };
+      }).filter(function (x) { return x.mins > 0; }).sort(function (a, b) { return b.mins - a.mins; });
+      if (!rows.length) return { text: 'No overtime recorded in ' + monthLabel(ym) + '.' };
+      var total = rows.reduce(function (s, x) { return s + x.mins; }, 0);
+      return { text: '<b>' + hoursText(total) + '</b> of overtime in ' + monthLabel(ym) +
+                 ', across ' + rows.length + ' people.',
+               html: chikuNames(rows.map(function (x) {
+                 x.extra = hoursText(x.mins); return x; }), 'OT') };
+    } },
+
+  { id: 'lop',
+    words: ['lop', 'loss of pay', 'unpaid days', 'deduction days'],
+    run: function (q) {
+      var ym = chikuMonth(q) || thisMonth();
+      var rows = activeEmployees().map(function (e) {
+        return { e: e, lop: attStats(ym, e.emp_code).lop };
+      }).filter(function (x) { return x.lop > 0; }).sort(function (a, b) { return b.lop - a.lop; });
+      var total = rows.reduce(function (s, x) { return s + x.lop; }, 0);
+      if (!rows.length) return { text: 'No loss of pay in ' + monthLabel(ym) + '.' };
+      return { text: '<b>' + (Math.round(total * 100) / 100) + ' days</b> of loss of pay in ' +
+                 monthLabel(ym) + ', across ' + rows.length + ' people.',
+               html: chikuNames(rows.map(function (x) {
+                 x.extra = x.lop; return x; }), 'LOP') };
+    } },
+
+  { id: 'headcount',
+    words: ['how many employee', 'how many employees', 'headcount', 'head count', 'strength',
+            'total staff', 'how many people work', 'how many staff', 'total employee',
+            'how many workers', 'team size'],
+    run: function () {
+      var all = activeEmployees();
+      var by = {};
+      all.forEach(function (e) {
+        var k = e.department || unitOf(e);
+        by[k] = (by[k] || 0) + 1;
+      });
+      var rows = Object.keys(by).sort().map(function (k) {
+        return '<tr><td>' + esc(k) + '</td><td class="n">' + by[k] + '</td></tr>';
+      }).join('');
+      var staff = all.filter(function (e) { return !isWorker(e); }).length;
+      return { text: '<b>' + all.length + ' people</b> on the rolls - ' + staff + ' staff and ' +
+                 (all.length - staff) + ' workers.',
+               html: '<table><tr><th>Department</th><th class="n">People</th></tr>' + rows + '</table>' };
+    } },
+
+  { id: 'pending',
+    words: ['pending', 'waiting', 'to approve', 'approval', 'approvals', 'for my decision'],
+    run: function () {
+      var lv = visibleLeave().filter(function (l) { return l.status === 'Pending'; });
+      var rq = visibleRequests().filter(function (r) { return r.status === 'Pending'; });
+      if (!lv.length && !rq.length) return { text: 'Nothing is waiting for a decision.' };
+      var rows = lv.map(function (l) {
+        return '<tr><td>' + esc(empName(l.emp_code)) + '</td><td>' + esc(l.type) + ' leave</td>' +
+          '<td>' + esc(l._waiting_on || '') + '</td></tr>';
+      }).concat(rq.map(function (r) {
+        return '<tr><td>' + esc(empName(r.emp_code)) + '</td><td>' + esc(r.type) + '</td>' +
+          '<td>' + esc(r._waiting_on || '') + '</td></tr>';
+      })).join('');
+      return { text: '<b>' + (lv.length + rq.length) + '</b> waiting for a decision.',
+               html: '<table><tr><th>Who</th><th>What</th><th>With</th></tr>' + rows + '</table>',
+               action: { label: 'Open Leave', run: function () { chikuClose(); go('leave'); } } };
+    } },
+
+  { id: 'holidays',
+    words: ['holiday', 'holidays', 'next holiday', 'public holiday'],
+    veto: ['on leave', 'leave today'],
+    run: function (q) {
+      var ym = chikuMonth(q);
+      var list = S.holidays.filter(function (h) {
+        return !ym || String(h.date).slice(0, 7) === ym;
+      }).sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+      if (!ym) {
+        var next = list.filter(function (h) { return String(h.date) >= today(); })[0];
+        return next
+          ? { text: 'The next holiday is <b>' + esc(next.name) + '</b> on ' + longDate(next.date) +
+              (String(next.optional || 'no').toLowerCase() === 'yes' ? ' (optional)' : '') + '.' }
+          : { text: 'No holidays are left on the calendar.' };
+      }
+      if (!list.length) return { text: 'No holidays in ' + monthLabel(ym) + '.' };
+      return { text: monthLabel(ym) + ' has <b>' + list.length +
+                 (list.length === 1 ? ' holiday' : ' holidays') + '</b>.',
+               html: '<table><tr><th>Date</th><th>Holiday</th></tr>' + list.map(function (h) {
+                 return '<tr><td>' + esc(h.date) + '</td><td>' + esc(h.name) +
+                   (String(h.optional || 'no').toLowerCase() === 'yes' ? ' (optional)' : '') +
+                   '</td></tr>'; }).join('') + '</table>' };
+    } },
+
+  { id: 'balance',
+    words: ['balance', 'leave balance', 'leave left', 'how many leave', 'leave remaining',
+            'quota', 'leaves left'],
+    run: function (q) {
+      var who = chikuWho(q);
+      if (!who) return { text: 'Whose leave balance? Ask with a name, like "leave balance for Ramesh".' };
+      var year = String(new Date().getFullYear());
+      /* leaveTypes() hands back names; the quota lives on the row behind them. */
+      var rows = activeLeaveTypes().filter(function (t) { return num(t.quota) > 0; }).map(function (t) {
+        var used = takenDays(who.emp_code, t.name, year);
+        return '<tr><td>' + esc(t.name) + '</td><td class="n">' + used + '</td>' +
+          '<td class="n">' + Math.max(0, num(t.quota) - used) + '</td></tr>';
+      }).join('');
+      if (!rows) return { text: 'No leave types have a quota set, so there is no balance to show.' };
+      return { text: '<b>' + esc(who.name) + '</b>, leave in ' + year + ':',
+               html: '<table><tr><th>Type</th><th class="n">Taken</th><th class="n">Left</th></tr>' +
+                 rows + '</table>' };
+    } },
+
+  { id: 'person',
+    words: ['attendance of', 'record of', 'summary of', 'days of', 'how is', 'details of',
+            'report of', 'card of'],
+    run: function (q) {
+      var who = chikuWho(q);
+      if (!who) return null;
+      var ym = chikuMonth(q) || thisMonth();
+      var s = attStats(ym, who.emp_code);
+      return { text: '<b>' + esc(who.name) + '</b> · ' + monthLabel(ym) +
+        '\nPresent ' + s.P + ' · half days ' + s.HD + ' · absent ' + s.A +
+        ' · leave ' + s.L +
+        '\nLate marks ' + s.late + ' · overtime ' + hoursText(s.ot) +
+        '\nNot marked ' + s.blank + ' · LOP ' + s.lop +
+        '\n<b>Paid days ' + s.paid + ' of ' + s.total + '</b>' };
+    } },
+
+  { id: 'joiners',
+    words: ['joined', 'joiner', 'joiners', 'new employee', 'new joinee', 'leaver', 'leavers',
+            'resigned', 'exit', 'who left'],
+    run: function (q) {
+      var ym = chikuMonth(q) || thisMonth();
+      var joined = S.employees.filter(function (e) { return String(e.doj || '').slice(0, 7) === ym; });
+      var left = S.employees.filter(function (e) { return String(e.exit_date || '').slice(0, 7) === ym; });
+      if (!joined.length && !left.length) {
+        return { text: 'Nobody joined or left in ' + monthLabel(ym) + '.' };
+      }
+      var rows = joined.map(function (e) {
+        return '<tr><td>' + esc(e.name) + '</td><td>Joined</td><td>' + esc(e.doj) + '</td></tr>';
+      }).concat(left.map(function (e) {
+        return '<tr><td>' + esc(e.name) + '</td><td>Left</td><td>' + esc(e.exit_date) + '</td></tr>';
+      })).join('');
+      return { text: monthLabel(ym) + ': <b>' + joined.length + ' joined</b>, <b>' +
+                 left.length + ' left</b>.',
+               html: '<table><tr><th>Name</th><th>What</th><th>When</th></tr>' + rows + '</table>' };
+    } },
+
+  { id: 'hours',
+    words: ['hours', 'worked', 'working hours', 'total hours', 'man hours', 'hours worked'],
+    veto: ['overtime', 'over time'],
+    run: function (q) {
+      var ym = chikuMonth(q) || thisMonth();
+      var who = chikuWho(q);
+      if (who) {
+        var mine = monthWorked(ym, who.emp_code);
+        return { text: '<b>' + esc(who.name) + '</b> worked <b>' + hoursText(mine.minutes) +
+          '</b> over ' + mine.days + ' days in ' + monthLabel(ym) + '.' };
+      }
+      var rows = activeEmployees().map(function (e) {
+        var w = monthWorked(ym, e.emp_code);
+        return { e: e, mins: w.minutes };
+      }).filter(function (x) { return x.mins > 0; }).sort(function (a, b) { return b.mins - a.mins; });
+      var total = rows.reduce(function (s, x) { return s + x.mins; }, 0);
+      if (!rows.length) return { text: 'No hours recorded in ' + monthLabel(ym) + '.' };
+      return { text: '<b>' + hoursText(total) + '</b> worked in ' + monthLabel(ym) + '.',
+               html: chikuNames(rows.map(function (x) {
+                 x.extra = hoursText(x.mins); return x; }), 'Hours') };
+    } },
+
+  { id: 'help',
+    words: ['help', 'what can you', 'what do you', 'how to use', 'chiku', 'commands'],
+    run: function () { return { text: CHIKU_HELP, chips: true }; } }
+];
+
+var CHIKU_HELP =
+  'I look things up in this workspace. I have no cleverness of my own - I match ' +
+  'your question to a lookup and run it against the same figures the reports use.\n\n' +
+  'Things I can answer:\n' +
+  '• who came in, who was absent, who was late - today or on any date\n' +
+  '• who is on leave, whose day is not marked\n' +
+  '• perfect attendance for a month\n' +
+  '• the payroll for a month, or one person’s payslip\n' +
+  '• overtime, LOP and hours worked\n' +
+  '• headcount, joiners and leavers, holidays\n' +
+  '• a person’s leave balance or month\n\n' +
+  'If I do not understand, I will say so rather than guess at a number.';
+
+var CHIKU_CHIPS = ['How many came in today?', 'Late comers today', 'Who is absent today?',
+                   'Perfect attendance this month', 'Payroll for last month',
+                   'Overtime this month', 'Pending approvals', 'What can you answer?'];
+
+/* ---------------- matching ---------------- */
+
+/**
+ * Which lookup a question is asking for.
+ *
+ * The rule is longest match wins, not most matches. "How many" and "who"
+ * appear in nearly every question, so counting them made one skill answer
+ * everything; but "perfect attendance" is longer than "attendance", and
+ * "late comer" is longer than "came", so the specific phrase beats the
+ * general one without any weighting to tune.
+ */
+function chikuAnswer(raw) {
+  if (!chikuAllowed()) return null;
+  var q = chikuNorm(raw);
+  if (!q.trim()) return null;
+  var best = null, bestLen = 0, bestCount = 0;
+  CHIKU_SKILLS.forEach(function (skill) {
+    if (skill.veto && chikuHas(q, skill.veto)) return;
+    var longest = 0, count = 0;
+    skill.words.forEach(function (w) {
+      if (q.indexOf(' ' + w) < 0) return;
+      count++;
+      if (w.length > longest) longest = w.length;
+    });
+    if (!count) return;
+    if (longest > bestLen || (longest === bestLen && count > bestCount)) {
+      bestLen = longest; bestCount = count; best = skill;
+    }
+  });
+  if (!best && chikuWho(q)) {
+    best = CHIKU_SKILLS.filter(function (s) { return s.id === 'person'; })[0];
+  }
+  if (!best) return null;
+  try {
+    return best.run(q);
+  } catch (err) {
+    return { text: 'Something went wrong working that out: ' + esc(err.message) };
+  }
+}
+
+/* ---------------- the window ---------------- */
+
+var CHIKU_ACTIONS = {};
+var CHIKU_SEQ = 0;
+
+/* HR and the owner only. Chiku answers about the whole company - who was
+   absent, what the payroll came to - and that is not an employee's to ask.
+   The button is hidden for them; these two guards mean hiding it is not the
+   only thing standing in the way. (Their browser could not answer anyway: the
+   workspace only ever sends an employee their own rows.) */
+function chikuAllowed() { return !!(S.user && isAdmin()); }
+
+function chikuOpen() {
+  if (!chikuAllowed()) return;
+  el('chiku').classList.add('on');
+  el('chiku-open').style.display = 'none';
+  if (!el('ck-body').children.length) {
+    chikuSay('ck', 'I am Chiku. Ask me about attendance, leave or payroll and I will look it ' +
+      'up in your sheet. Tap a question below, or type your own.');
+    chikuChips();
+  }
+  setTimeout(function () { el('ck-in').focus(); }, 60);
+}
+function chikuClose() {
+  el('chiku').classList.remove('on');
+  el('chiku-open').style.display = isAdmin() ? 'flex' : 'none';
+}
+function chikuChips() {
+  el('ck-chips').innerHTML = CHIKU_CHIPS.map(function (c) {
+    return '<button class="ck-chip" onclick="chikuAsk(this.textContent)">' + esc(c) + '</button>';
+  }).join('');
+}
+function chikuSay(who, html, extra) {
+  var div = document.createElement('div');
+  div.className = 'ck-msg ' + who;
+  div.innerHTML = html + (extra || '');
+  el('ck-body').appendChild(div);
+  el('ck-body').scrollTop = el('ck-body').scrollHeight;
+}
+function chikuAsk(text) {
+  el('ck-in').value = text;
+  chikuSend();
+}
+function chikuSend() {
+  if (!chikuAllowed()) { chikuClose(); return; }
+  var q = el('ck-in').value.trim();
+  if (!q) return;
+  chikuSay('me', esc(q));
+  el('ck-in').value = '';
+
+  var a = chikuAnswer(q);
+  if (!a) {
+    chikuSay('ck', 'I did not understand that one, so I would rather not guess.\n\n' + CHIKU_HELP);
+    chikuChips();
+    return;
+  }
+  var extra = (a.html || '');
+  if (a.action) {
+    var key = 'a' + (++CHIKU_SEQ);
+    CHIKU_ACTIONS[key] = a.action.run;
+    extra += '<span class="more"><a href="#" onclick="CHIKU_ACTIONS[\'' + key +
+      '\']();return false;">' + esc(a.action.label) + ' ›</a></span>';
+  }
+  chikuSay('ck', a.text, extra);
+  if (a.chips) chikuChips();
+}
+
+/** Chiku is HR's, because the answers are company-wide. */
+function chikuVisible() {
+  var btn = el('chiku-open');
+  if (!btn) return;
+  var on = chikuAllowed();
+  btn.style.display = on && !el('chiku').classList.contains('on') ? 'flex' : 'none';
+  if (!on) el('chiku').classList.remove('on');
 }
 </script>
 
