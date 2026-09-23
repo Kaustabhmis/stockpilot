@@ -7415,6 +7415,7 @@ function buildImport(sheets, kind, ym) {
       }
       punches.push({ code: code, date: when.date, time: when.time });
     });
+    out.punches = punches;
     out.rows = punchesToAttendance(punches, out.problems);
     return out;
   }
@@ -7475,13 +7476,50 @@ function buildImport(sheets, kind, ym) {
 var MONTHS = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
                jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
-function esslStamp(v) {
-  var m = String(v || '').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})\s+(\d{1,2}):(\d{2})/);
+/**
+ * A punch stamp out of a device export, in whichever shape the machine wrote
+ * it: 01-Sep-2026 09:53, 2026-09-01 09:53:00, 01/09/2026 9:53 AM.
+ *
+ * A stamp with no time of day returns null rather than midnight. A day with no
+ * clock on it is a mapping mistake, and scoring it as 00:00 hid a month of
+ * real punches behind "the same time every day".
+ */
+function esslStamp(v, clock) {
+  var s = String(v || '').trim().replace('T', ' ');
+  var date = '', rest = '';
+  var m = s.match(/^(\d{1,2})-([A-Za-z]{3,})-(\d{2,4})/);      /* 01-Sep-2026 */
+  if (m) {
+    var mon = MONTHS[m[2].slice(0, 3).toLowerCase()];
+    if (mon) {
+      date = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + mon + '-' + padL(m[1]);
+    }
+  }
+  if (!date) {
+    m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);      /* 2026-09-01 */
+    if (m) date = m[1] + '-' + padL(m[2]) + '-' + padL(m[3]);
+  }
+  if (!date) {
+    m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);    /* 01/09/2026, dd/mm */
+    if (m) date = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + padL(m[2]) + '-' + padL(m[1]);
+  }
+  if (!date) return null;
+  rest = s.slice(m[0].length);
+  var time = clockPart(rest) || clockPart(clock);
+  return time ? { date: date, time: time } : null;
+}
+
+function padL(v) { return ('0' + String(v)).slice(-2); }
+
+/** "09:53:00", "9:53 AM", "17:34" -> "09:53"; null when there is no clock. */
+function clockPart(v) {
+  var m = String(v || '').trim().match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])?/);
   if (!m) return null;
-  var mon = MONTHS[m[2].toLowerCase()];
-  if (!mon) return null;
-  return { date: m[3] + '-' + mon + '-' + ('0' + m[1]).slice(-2),
-           time: ('0' + m[4]).slice(-2) + ':' + m[5] };
+  var h = Number(m[1]), min = Number(m[2]);
+  if (min > 59) return null;
+  var ap = m[3] ? m[3].toLowerCase() : '';
+  if (ap === 'p' && h < 12) h += 12;
+  if (ap === 'a' && h === 12) h = 0;
+  return h > 23 ? null : padL(h) + ':' + padL(min);
 }
 
 function buildEsslReport(sheets, out) {
@@ -7575,6 +7613,7 @@ function buildEsslReport(sheets, out) {
       'either Employee Wise or Device Wise.');
   }
   var devNames = Object.keys(devices);
+  out.punches = punches;
   out.rows = punchesToAttendance(punches, out.problems);
   out.meta = punches.length + ' punches kept for ' + employees + ' of your employees' +
     (range.min ? ', ' + range.min + ' to ' + range.max : '') +
@@ -7877,6 +7916,28 @@ function saveInBatches(sheet, rows, onProgress) {
   }, Promise.resolve()).then(function () { return done; });
 }
 
+/** Punches, in batches the workspace can chew, tallying what comes back. */
+function sendPunchesInBatches(punches, onProgress) {
+  var chunks = [], done = 0, tally = { punches: 0, days: 0, skipped: 0, notes: [] };
+  for (var i = 0; i < punches.length; i += IMPORT_BATCH) {
+    chunks.push(punches.slice(i, i + IMPORT_BATCH));
+  }
+  return chunks.reduce(function (chain, chunk) {
+    return chain.then(function () {
+      var rows = chunk.map(function (p) {
+        return { emp_code: p.code, punch_time: p.date + ' ' + p.time };
+      });
+      return api('ingestPunches', { punches: rows, source: 'file import' }).then(function (r) {
+        tally.punches += num(r.punches); tally.days += num(r.days);
+        tally.skipped += num(r.skippedCount);
+        (r.skipped || []).forEach(function (m) { if (tally.notes.length < 5) tally.notes.push(m); });
+        done += chunk.length;
+        if (onProgress) onProgress(done, punches.length);
+      });
+    });
+  }, Promise.resolve()).then(function () { return tally; });
+}
+
 function runImport() {
   var built = S.importRows;
   if (!built || !built.rows.length) return;
@@ -7886,8 +7947,26 @@ function runImport() {
   var show = function (done, total) {
     btn.innerHTML = '<span class="spin"></span>' + done + ' / ' + total;
   };
-  show(0, built.rows.length);
 
+  /* A punch file goes up as punches, not as finished days. The workspace keeps
+     every punch in the log and works the day out the same way it does for the
+     LAN agent and for the app - first punch in, last punch out - so a file
+     uploaded here and a punch pulled off the device land identically, and the
+     punch log report can show what the machine actually recorded. */
+  if (built.punches && built.punches.length) {
+    show(0, built.punches.length);
+    return sendPunchesInBatches(built.punches, show).then(function (res) {
+      toast(res.days + ' day(s) written from ' + res.punches + ' punch(es)' +
+        (res.skipped ? ' \u00b7 ' + res.skipped + ' row(s) skipped' : ''), 'good');
+      closeModal();
+      return reload();
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = 'Import';
+      toast(e.message, 'bad');
+    });
+  }
+
+  show(0, built.rows.length);
   saveInBatches(sheet, built.rows, show).then(function () {
     if (built.companies && built.companies.length) {
       return api('saveSettings', { settings: { import_companies: built.companies.join(',') } })

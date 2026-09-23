@@ -98,6 +98,14 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .punch .times b{display:block;font-size:1.3rem;font-variant-numeric:tabular-nums;}
 .punch .times span{font-size:.72rem;color:var(--muted);text-transform:uppercase;
   letter-spacing:.4px;}
+/* Every tap of the day, the first and the last picked out - so somebody who
+   tapped twice can see that both arrived and that it cost them nothing. */
+.punch .taps{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
+.punch .tap{display:inline-block;margin:3px;padding:4px 9px;border-radius:99px;
+  background:var(--chip,#eef2f7);color:var(--muted);font-size:.78rem;
+  font-variant-numeric:tabular-nums;}
+.punch .tap.edge{background:var(--primary);color:#fff;font-weight:700;}
+.punch .taps .cs{margin-top:8px;}
 .geo{margin-top:14px;font-size:.78rem;color:var(--muted);display:flex;gap:7px;
   align-items:center;justify-content:center;}
 .geo.bad{color:var(--red);font-weight:600;}
@@ -519,10 +527,17 @@ function renderPunch() {
   var mins = workedMinutes({ in_time: inT, out_time: outT });
   var canPunch = String(S.settings.web_punch_enabled || 'yes') !== 'no';
 
-  var stage = !inT ? 'in' : (!outT ? 'out' : 'done');
-  var label = { in: 'Punch in', out: 'Punch out', done: 'Day closed' }[stage];
-  var sub = { in: 'Tap when you arrive', out: 'Tap when you leave',
-              done: hoursText(mins) + ' worked' }[stage];
+  /* The button never locks. Somebody who taps by mistake taps again, and
+     somebody who steps out at noon taps on the way out and on the way back.
+     The day is the first tap to the last, so an extra tap costs nothing - and
+     an app that refuses the second tap is an app people stop trusting.
+     An odd number of taps means they are currently in. */
+  var taps = (st.taps || []).slice();
+  var stage = taps.length % 2 === 1 ? 'out' : 'in';
+  var label = stage === 'in' ? 'Punch in' : 'Punch out';
+  var sub = !taps.length ? 'Tap when you arrive'
+          : stage === 'out' ? 'Tap when you leave'
+          : 'Tap again if you are back';
 
   var live = S.notices.slice(0, 2).map(function (n) {
     return '<div class="nb ' + (n.level === 'urgent' ? 'urgent' : '') + '">' +
@@ -536,15 +551,22 @@ function renderPunch() {
       '<div class="state">' + esc(dayName(iso)) + ' &middot; ' +
         (holidayOn(iso) ? 'Holiday' : isWeeklyOff(iso) ? 'Weekly off' : 'Working day') + '</div>' +
       (canPunch
-        ? '<button class="big ' + (stage === 'out' ? 'out' : stage === 'done' ? 'done' : '') + '" ' +
-          (stage === 'done' ? 'disabled' : 'onclick="doPunch(\'' + stage + '\')"') + ' id="punch-btn">' +
+        ? '<button class="big ' + (stage === 'out' ? 'out' : '') + '" ' +
+          'onclick="doPunch(\'' + stage + '\')" id="punch-btn">' +
           esc(label) + '<small>' + esc(sub) + '</small></button>'
         : '<div class="empty">Punching from the app is switched off.</div>') +
       '<div class="times">' +
-        '<div><b>' + (inT || '--:--') + '</b><span>In</span></div>' +
-        '<div><b>' + (outT || '--:--') + '</b><span>Out</span></div>' +
+        '<div><b>' + (inT || '--:--') + '</b><span>First in</span></div>' +
+        '<div><b>' + (outT || '--:--') + '</b><span>Last out</span></div>' +
         '<div><b>' + hoursText(mins) + '</b><span>Worked</span></div>' +
       '</div>' +
+      (taps.length > 1
+        ? '<div class="taps">' + taps.map(function (t, i) {
+            var edge = i === 0 || i === taps.length - 1;
+            return '<span class="tap' + (edge ? ' edge' : '') + '">' + esc(t) + '</span>';
+          }).join('') + '<div class="cs">Every tap today. The day counts from the ' +
+          'first to the last.</div></div>'
+        : '') +
       '<div class="geo" id="geo">&#128205; <span>Checking your location&hellip;</span></div>' +
     '</div>' +
     '<div class="kpis">' +
@@ -561,7 +583,7 @@ function renderPunch() {
         'onclick="openRequest(\'swipe\')">Raise a missed punch</span></button></div>'
       : '');
 
-  if (canPunch && stage !== 'done') locate(true);
+  if (canPunch) locate(true);
   else el('geo').innerHTML = '';
 }
 
@@ -634,8 +656,11 @@ function doPunch(kind) {
       S.att = keep;
     }
     var f = res.fence || {};
-    toast(kind === 'in' ? 'Punched in at ' + hhmm(res.record && res.record.in_time)
-                        : 'Punched out at ' + hhmm(res.record && res.record.out_time), 'good');
+    /* Say the time of the tap that was just made, not the boundary of the day:
+       a midday tap is real even though it moved neither the first nor the last. */
+    var at = hhmm(res.at) || hhmm(res.record && (kind === 'in' ? res.record.in_time : res.record.out_time));
+    var taps = (res.state && res.state.taps) || [];
+    toast('Punched at ' + at + (taps.length > 2 ? ' \u00b7 ' + taps.length + ' taps today' : ''), 'good');
     if (f.soft && f.reason) setTimeout(function () { toast(f.reason); }, 2800);
     S.busy = false;
     render();

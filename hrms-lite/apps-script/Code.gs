@@ -235,6 +235,14 @@ function authenticate(action, token) {
     /* setup is public only while the sheet is empty, so the very first run
        needs no login. After that it is an admin action like any other. */
     if (action === 'setup' && hasUsers()) return requireSession(token);
+    /* Punches arrive two ways: from HR, signed in and uploading the machine's
+       report, or from the LAN agent, which has no login and carries the ingest
+       token instead. Read the session when there is one, so ingestPunches can
+       tell the two apart; a token that does not check out simply leaves the
+       caller anonymous, and the ingest token then has to stand for them. */
+    if (action === 'ingestPunches' && String(token || '')) {
+      try { return requireSession(token); } catch (err) { /* fall through */ }
+    }
     return { email: '', role: 'public', emp_code: '' };
   }
   return requireSession(token);
@@ -429,7 +437,7 @@ function route(action, p, caller) {
     case 'secretStatus':  return secretStatus();
     case 'esslPull':      return esslPull(p.from, p.to);
     case 'esslPush':      return esslPush(p.month, p.rows);
-    case 'ingestPunches': return ingestPunches(p.punches, p.token, p.source);
+    case 'ingestPunches': return ingestPunches(p.punches, p.token, p.source, caller);
     case 'testIntegration': return testIntegration();
     case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note, p.geo);
     case 'punchState':    return punchState(p.emp_code);
@@ -1320,9 +1328,25 @@ function esslPush(month, rows) {
 }
 
 /** Called by the LAN agent. Requires the ingest token once one is set. */
-function ingestPunches(punches, token, source) {
-  if (secret('ingest_token') && String(token || '') !== secret('ingest_token')) {
-    throw new Error('Invalid or missing ingest token.');
+/**
+ * Punches arriving from outside: the LAN agent, or HR uploading the machine's
+ * own report from the Import screen.
+ *
+ * The agent has no session, so it carries the ingest token. HR is already
+ * signed in, and a signed-in HR or owner needs no token - the router has
+ * established who they are before this runs.
+ */
+function ingestPunches(punches, token, source, caller) {
+  if (!(caller && isHrOrAbove(caller.role))) {
+    var want = secret('ingest_token');
+    /* Without this, a workspace that never set a token accepted punches from
+       anybody who had the URL - including one of its own employees, punching
+       for somebody else. */
+    if (!want) {
+      throw new Error('Set an ingest token in Settings > Integrations before sending ' +
+        'punches from outside, or upload the file while signed in as HR.');
+    }
+    if (String(token || '') !== want) throw new Error('Invalid or missing ingest token.');
   }
   return applyPunches((punches || []).map(normalizePunch), source || 'agent');
 }
@@ -1337,61 +1361,177 @@ function normalizePunch(p) {
     }
     return '';
   };
+  /* Half the machines in the field export one "2026-09-01 09:53:00" column and
+     the other half export a Date column with a Time column beside it. Reading
+     only the first kind is what made every imported day read 00:00. */
+  var stamp = String(pick(['punchtime', 'logdate', 'attdatetime', 'datetime', 'timestamp',
+                           'punchdatetime', 'recordtime', 'logdatetime', 'attendancedate',
+                           'punchdate', 'attdate', 'date']) || '').trim();
+  var clock = String(pick(['logtime', 'punchtimeonly', 'time', 'attime', 'recordedtime',
+                           'intime', 'punchhour']) || '').trim();
+  if (!hasDate(stamp)) {
+    var onlyDate = String(pick(['attdate', 'punchdate', 'logdate', 'attendancedate',
+                                'date']) || '').trim();
+    if (hasDate(onlyDate)) { clock = clock || stamp; stamp = onlyDate; }
+  }
   return {
     emp_code:  String(pick(['empcode', 'employeecode', 'employeeid', 'empid']) || '').trim(),
     device_id: String(pick(['deviceid', 'userid', 'enrollno', 'enrollnumber', 'indexid', 'usrid']) || '').trim(),
-    punch_time: String(pick(['punchtime', 'logdate', 'attdatetime', 'datetime', 'timestamp',
-                             'punchdate', 'recordtime']) || '').trim(),
+    /* A file can name its columns so that the clock is picked first - AttDate
+       beside PunchTime, say. If what was picked has no date in it but does
+       have a clock, the two have arrived the wrong way round. */
+    punch_time: (!hasDate(stamp) && clockOf(stamp) && hasDate(clock)) ? clock : stamp,
+    punch_clock: (!hasDate(stamp) && clockOf(stamp))
+      ? (hasDate(clock) ? stamp : stamp)
+      : clock,
     device:    String(pick(['device', 'devicename', 'serialnumber', 'deviceserial']) || '').trim(),
     direction: String(pick(['direction', 'inout', 'punchtype', 'c1']) || '').trim()
   };
 }
 
-function parsePunchTime(v) {
-  var s = String(v || '').trim().replace('T', ' ');
-  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ ]?(\d{2})?:?(\d{2})?/);
-  if (m) return { date: m[1] + '-' + m[2] + '-' + m[3], time: (m[4] || '00') + ':' + (m[5] || '00') };
-  m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})[ ]+(\d{1,2}):(\d{2})/);   /* dd/mm/yyyy hh:mm */
+function parsePunchTime(v, clock) {
+  var s = String(v || '').trim().replace(/^"|"$/g, '').replace('T', ' ');
+  var date = '', m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if (m) {
-    return { date: m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2),
-             time: ('0' + m[4]).slice(-2) + ':' + m[5] };
+    date = m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]);
+  } else {
+    m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+    if (m) {
+      var year = m[3].length === 2 ? '20' + m[3] : m[3];
+      date = year + '-' + pad2(m[2]) + '-' + pad2(m[1]);      /* dd/mm/yyyy, the Indian way */
+    }
   }
-  return null;
+  if (!date) {
+    /* "Tue Sep 01 2026 09:53:00", or "01-Sep-2026 09:53" - what a machine's own
+       date object becomes once it has been through a spreadsheet or JSON. */
+    m = s.match(/([A-Za-z]{3,})\s+(\d{1,2})\s+(\d{4})/) ||
+        s.match(/(\d{1,2})[ -]([A-Za-z]{3,})[ -](\d{2,4})/);
+    if (m) {
+      var namePos = /^[A-Za-z]/.test(m[1]) ? 1 : 2, dayPos = namePos === 1 ? 2 : 1;
+      var mon = MONTH_NAMES.indexOf(String(m[namePos]).slice(0, 3).toLowerCase());
+      var yr = m[3].length === 2 ? '20' + m[3] : m[3];
+      if (mon >= 0) date = yr + '-' + pad2(mon + 1) + '-' + pad2(m[dayPos]);
+    }
+    if (!date) return null;
+    var t2 = clockOf(s.slice(m.index + m[0].length)) || clockOf(clock);
+    return t2 ? { date: date, time: t2 } : null;
+  }
+
+  /* A stamp with no time of day is NOT midnight. Inventing 00:00 turned a
+     month of real punches into "the same time every day", every day scored as
+     nought hours. Such a row is refused and named, so the mapping gets fixed. */
+  var time = clockOf(s.slice(m[0].length)) || clockOf(clock);
+  return time ? { date: date, time: time } : null;
+}
+
+function pad2(v) { return ('0' + String(v)).slice(-2); }
+
+var MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                   'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+/** Does this text carry a date at all? */
+function hasDate(v) {
+  var s = String(v || '');
+  return /\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/.test(s) ||
+         /\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(s) ||
+         /[A-Za-z]{3,}\s+\d{1,2}\s+\d{4}|\d{1,2}[ -][A-Za-z]{3,}[ -]\d{2,4}/.test(s);
+}
+
+/** "09:53:00", "9:53 AM", "17:34" -> "09:53". Null when there is no clock time. */
+function clockOf(v) {
+  var m = String(v || '').trim().match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])?/);
+  if (!m) return null;
+  var h = Number(m[1]), min = Number(m[2]);
+  if (min > 59) return null;
+  var ap = m[3] ? m[3].toLowerCase() : '';
+  if (ap === 'p' && h < 12) h += 12;
+  if (ap === 'a' && h === 12) h = 0;
+  return h > 23 ? null : pad2(h) + ':' + pad2(min);
+}
+
+function minutesOfClock(t) {
+  var c = clockOf(t);
+  return c ? Number(c.slice(0, 2)) * 60 + Number(c.slice(3, 5)) : 0;
 }
 
 /**
- * Turn raw punches into attendance rows: first punch in, last punch out,
- * status from the hours worked. Approved leave and finalised months are
- * never overwritten.
+ * The one rule, for every source: a day's IN is the first punch on it and its
+ * OUT is the last, however many punches came in between and whatever the
+ * machine called them.
+ *
+ * The device's own in/out flag is deliberately ignored. A worker who touches
+ * the reader twice on the way in, or somebody who taps the app by mistake and
+ * taps again, must not end up with the day inverted, and eSSL's flag is only
+ * as right as the mode the device happened to be left in. Every tap stays in
+ * the punch log; the day is bounded by the first and the last.
  */
-function applyPunches(punches, source) {
+function rebuildDayFromPunches(empCode, iso, source, extraTimes) {
   var st = settingsMap();
-  var fullHours = parseFloat(st.full_day_hours || 8);
-  var halfHours = parseFloat(st.half_day_hours || 4);
+  if (monthIsLocked(iso.slice(0, 7))) return null;
 
+  var existing = null;
+  readSheet('Attendance', punchWindow()).forEach(function (a) {
+    if (String(a.emp_code) === String(empCode) && String(a.date) === iso) existing = a;
+  });
+  /* Approved leave is a decision somebody signed. A punch does not overrule it. */
+  if (existing && String(existing.status) === 'L') return null;
+
+  var times = [];
+  var add = function (t) { var c = clockOf(t); if (c && times.indexOf(c) < 0) times.push(c); };
+  readSheet('Punches', punchWindow()).forEach(function (r) {
+    if (String(r.emp_code) !== String(empCode)) return;
+    var stamp = String(r.punch_time || '');
+    if (stamp.slice(0, 10) === iso) add(stamp.slice(10));
+  });
+  (extraTimes || []).forEach(add);
+  /* With the punch log switched off there is nothing to rebuild from, so widen
+     what the day already holds rather than narrowing it. */
+  if (existing) { add(existing.in_time); add(existing.out_time); }
+  if (!times.length) return null;
+
+  times.sort();
+  var inT = times[0], outT = times[times.length - 1], taps = times.length;
+  var hours = 0;
+  if (inT !== outT) {
+    var mins = minutesOfClock(outT) - minutesOfClock(inT);
+    if (mins < 0) mins += 24 * 60;                     /* a shift across midnight */
+    hours = mins / 60;
+  }
+  var full = parseFloat(st.full_day_hours || 8), half = parseFloat(st.half_day_hours || 4);
+  var status, remark;
+  if (inT === outT) { status = 'P'; remark = source + ' - single punch, verify'; }
+  else if (hours >= full) { status = 'P'; remark = source + (taps > 2 ? ' - ' + taps + ' punches' : ''); }
+  else if (hours >= half) { status = 'HD'; remark = source + ' - ' + hours.toFixed(1) + ' h'; }
+  else { status = 'A'; remark = source + ' - only ' + hours.toFixed(1) + ' h, verify'; }
+
+  var row = {
+    id: empCode + '_' + iso, date: iso, emp_code: empCode, status: status,
+    in_time: inT, out_time: inT === outT ? '' : outT,
+    hours: inT === outT ? 0 : Math.round(hours * 10) / 10,
+    remarks: remark, updated_at: nowParts().date
+  };
+  upsert('Attendance', row);
+  return row;
+}
+
+function applyPunches(punches, source) {
   var byDevice = {}, known = {};
   readSheet('Employees').forEach(function (e) {
     known[String(e.emp_code).toUpperCase()] = e.emp_code;
     if (e.device_id) byDevice[String(e.device_id).trim()] = e.emp_code;
   });
 
-  var lockedMonths = {};
-  readSheet('Payroll').forEach(function (r) {
-    if (r.status === 'Finalised') lockedMonths[String(r.month)] = true;
-  });
-
-  var leaveDays = {};
-  readSheet('Attendance').forEach(function (a) {
-    if (a.status === 'L') leaveDays[a.emp_code + '_' + a.date] = true;
-  });
-
-  var groups = {}, skipped = [], rawRows = [], stamp = new Date().toISOString();
+  var days = {}, skipped = [], rawRows = [], stamp = new Date().toISOString();
   punches.forEach(function (p, i) {
     var code = p.emp_code && known[p.emp_code.toUpperCase()]
       ? known[p.emp_code.toUpperCase()]
       : (p.device_id ? byDevice[p.device_id] : '');
-    var when = parsePunchTime(p.punch_time);
-    if (!when) { skipped.push('Row ' + (i + 1) + ': unreadable time "' + p.punch_time + '"'); return; }
+    var when = parsePunchTime(p.punch_time, p.punch_clock);
+    if (!when) {
+      skipped.push('Row ' + (i + 1) + ': no punch time could be read from "' +
+        String(p.punch_time || '') + (p.punch_clock ? ' / ' + p.punch_clock : '') +
+        '" - check which columns hold the date and the time');
+      return;
+    }
     if (!code) {
       skipped.push('Row ' + (i + 1) + ': no employee matches code "' + p.emp_code +
         '" / device id "' + p.device_id + '"');
@@ -1400,51 +1540,30 @@ function applyPunches(punches, source) {
     rawRows.push({ id: newId(), punch_time: when.date + ' ' + when.time, emp_code: code,
                    device_id: p.device_id, device: p.device, direction: p.direction,
                    source: source, imported_at: stamp });
-    var key = code + '_' + when.date;
-    groups[key] = groups[key] || { code: code, date: when.date, times: [] };
-    groups[key].times.push(when.time);
+    var key = code + '|' + when.date;
+    days[key] = days[key] || { code: code, date: when.date, times: [] };
+    days[key].times.push(when.time);
   });
 
-  var rows = [], conflicts = 0;
-  Object.keys(groups).forEach(function (key) {
-    var g = groups[key];
-    if (lockedMonths[g.date.slice(0, 7)]) { conflicts++; return; }
-    if (leaveDays[key]) { conflicts++; return; }
-    g.times.sort();
-    var inT = g.times[0], outT = g.times[g.times.length - 1];
-    var mins = function (t) { return (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)); };
-    var hours = g.times.length > 1 ? (mins(outT) - mins(inT)) / 60 : 0;
-    var status, remark = source;
-    if (g.times.length < 2) { status = 'P'; remark = source + ' - single punch, verify'; }
-    else if (hours >= fullHours) status = 'P';
-    else if (hours >= halfHours) { status = 'HD'; remark = source + ' - ' + hours.toFixed(1) + ' h'; }
-    else { status = 'A'; remark = source + ' - only ' + hours.toFixed(1) + ' h, verify'; }
-    rows.push({
-      id: key, date: g.date, emp_code: g.code, status: status,
-      in_time: inT, out_time: g.times.length > 1 ? outT : '',
-      hours: g.times.length > 1 ? Math.round(hours * 10) / 10 : 0,
-      remarks: remark, updated_at: stamp.slice(0, 10)
-    });
-  });
-
-  if (rawRows.length && String(st.keep_punch_log || 'yes').toLowerCase() === 'yes') {
+  /* The log is written first, so the rebuild below sees this batch too and a
+     re-import of the same period can only widen a day, never shrink it. */
+  var logged = String(settingsMap().keep_punch_log || 'yes').toLowerCase() === 'yes';
+  if (rawRows.length && logged) {
     appendMany('Punches', rawRows);
     trimPunches();
   }
-  if (rows.length) upsertMany('Attendance', rows);
+
+  var written = 0, conflicts = 0;
+  Object.keys(days).forEach(function (key) {
+    var d = days[key];
+    if (rebuildDayFromPunches(d.code, d.date, source, d.times)) written++; else conflicts++;
+  });
 
   return {
-    punches: punches.length, days: rows.length, skipped: skipped.slice(0, 20),
+    punches: punches.length, days: written, skipped: skipped.slice(0, 20),
     skippedCount: skipped.length, protectedDays: conflicts, source: source
   };
 }
-
-
-/* ==================================================================
-   WEB PUNCH
-   The time comes from this script, not from the browser, so a device
-   clock cannot be moved to fake an in-time.
-   ================================================================== */
 
 function nowParts() {
   var tz = Session.getScriptTimeZone(), now = new Date();
@@ -1511,6 +1630,20 @@ function punchState(empCode) {
     }
   });
   open.sort(function (x, y) { return String(y.date).localeCompare(String(x.date)); });
+
+  /* Every tap made today, so the app can show them rather than only the two
+     that bound the day. Somebody who taps twice should be able to see that
+     both taps arrived, and that the extra one changed nothing. */
+  var taps = [];
+  readSheet('Punches', punchWindow()).forEach(function (r) {
+    if (String(r.emp_code) !== String(empCode)) return;
+    var stamp = String(r.punch_time || '');
+    if (stamp.slice(0, 10) !== n.date) return;
+    var t = clockOf(stamp.slice(10));
+    if (t) taps.push(t);
+  });
+  taps.sort();
+
   var gs = settingsMap();
   return {
     geofence: {
@@ -1524,6 +1657,7 @@ function punchState(empCode) {
     status: todayRow ? todayRow.status : '',
     hours: todayRow ? todayRow.hours : 0,
     openDays: open.slice(0, 5),
+    taps: taps,
     mandatory: String(settingsMap().punch_out_mandatory || 'yes').toLowerCase() === 'yes'
   };
 }
@@ -1619,55 +1753,33 @@ function webPunch(empCode, kind, note, geo) {
   if (!fence.ok) throw new Error(fence.reason);
 
   var n = nowParts();
-  if (readSheet('Payroll').some(function (r) {
-    return String(r.month) === n.date.slice(0, 7) && r.status === 'Finalised';
-  })) {
+  if (monthIsLocked(n.date.slice(0, 7))) {
     throw new Error('Payroll for this month is finalised, so today cannot be changed.');
   }
 
-  var id = empCode + '_' + n.date;
-  var row = null;
-  readSheet('Attendance', punchWindow()).forEach(function (a) { if (String(a.id) === id) row = a; });
-  row = row || { id: id, date: n.date, emp_code: empCode, status: '', in_time: '', out_time: '',
-                 hours: 0, remarks: '' };
-
-  if (kind === 'in') {
-    if (row.in_time) throw new Error('Already punched in at ' + row.in_time + '.');
-    row.in_time = n.time;
-    row.out_time = '';
-    row.status = 'P';
-    row.hours = 0;
-    row.remarks = 'web punch in' + (fence.site ? ' @ ' + fence.site : '') + (note ? ' - ' + note : '');
-  } else if (kind === 'out') {
-    if (!row.in_time) throw new Error('Punch in first.');
-    if (row.out_time) throw new Error('Already punched out at ' + row.out_time + '.');
-    row.out_time = n.time;
-    var mins = function (t) { return (+String(t).slice(0, 2)) * 60 + (+String(t).slice(3, 5)); };
-    var hours = (mins(row.out_time) - mins(row.in_time)) / 60;
-    if (hours < 0) hours = 0;
-    row.hours = Math.round(hours * 10) / 10;
-    var full = parseFloat(st.full_day_hours || 8), half = parseFloat(st.half_day_hours || 4);
-    row.status = hours >= full ? 'P' : (hours >= half ? 'HD' : 'HD');
-    row.remarks = 'web punch ' + row.in_time + '-' + row.out_time +
-      (hours < half ? ' (short day, verify)' : '');
-  } else {
-    throw new Error('Unknown punch type.');
-  }
-  row.updated_at = n.date;
-  upsert('Attendance', row);
+  /* Every tap is a punch and every punch is kept. Somebody who touches the
+     button by mistake taps again; somebody who steps out at noon and comes
+     back taps twice more. The day is bounded by the first tap and the last,
+     exactly as it is for the machine on the gate - so there is no second
+     punch to refuse and no way to end up in the wrong order. */
   appendMany('Punches', [{
     id: newId(), punch_time: n.date + ' ' + n.time, emp_code: empCode, device_id: emp.device_id || '',
-    device: 'web', direction: kind, source: 'web', imported_at: n.stamp,
+    device: 'app', direction: String(kind || ''), source: 'app', imported_at: n.stamp,
     lat: geo && geo.lat !== undefined ? geo.lat : '', lng: geo && geo.lng !== undefined ? geo.lng : '',
     accuracy: geo && geo.accuracy ? Math.round(parseFloat(geo.accuracy)) : '',
     site: fence.site || '', distance_m: fence.distance === undefined ? '' : fence.distance
   }]);
-  return { record: row, state: punchState(empCode), fence: fence };
-}
 
-/* ------------------------------------------------------------------ */
-/* Payslips by email                                                   */
-/* ------------------------------------------------------------------ */
+  var row = rebuildDayFromPunches(empCode, n.date, 'app', [n.time]);
+  if (!row) {
+    throw new Error('Today cannot be changed - it is on approved leave, or this month is finalised.');
+  }
+  if (note) {
+    row.remarks = String(row.remarks + ' - ' + note).slice(0, 120);
+    upsert('Attendance', row);
+  }
+  return { record: row, state: punchState(empCode), fence: fence, at: n.time };
+}
 
 function senderAddress() {
   try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; }
