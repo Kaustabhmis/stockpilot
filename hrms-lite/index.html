@@ -496,7 +496,10 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
         <div class="login-field">
           <label class="lab" for="in-email">Staff code or email</label>
-          <input id="in-email" type="text" placeholder="DE-S-001 &mdash; or your email" autocomplete="username"
+          <!-- No invented example here: staff codes are the company's own
+               scheme (ST0004, DE-S-001, 101...) and a placeholder in the
+               wrong shape is worse than none. -->
+          <input id="in-email" type="text" placeholder="Your staff code, or your email" autocomplete="username"
                  autocorrect="off" spellcheck="false">
         </div>
         <div class="login-field">
