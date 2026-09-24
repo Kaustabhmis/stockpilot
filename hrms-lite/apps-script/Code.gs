@@ -414,6 +414,20 @@ function authorize(action, p, caller) {
       Object.keys(sent).forEach(function (f) {
         if (EMPLOYEE_OWN_FIELDS[f]) mine[f] = sent[f];
       });
+      /* An address is also a way in, so two people must not share one: the
+         colleague whose address it really is would find their email sign-in
+         landing on somebody else's account. Their staff code would still
+         work, but they would have no idea why. */
+      var wants = String(mine.email || '').trim().toLowerCase();
+      if (wants) {
+        var all = readSheet('Employees');
+        for (var n = 0; n < all.length; n++) {
+          if (String(all[n].emp_code || '') === code) continue;
+          if (String(all[n].email || '').trim().toLowerCase() === wants) {
+            throw new Error('Somebody else on the staff list already uses that email address.');
+          }
+        }
+      }
       p.row = mine;
       return;
     }
@@ -748,7 +762,23 @@ function login(email, password) {
       if (String(users[j].emp_code || '').trim().toLowerCase() === typed) { user = users[j]; break; }
     }
   }
-  if (!user) throw new Error('No account found for that email or staff code');
+  /* Their company email, which is on the employee record rather than on the
+     account. The account is keyed by staff code, so an office worker who
+     types the address they use all day would otherwise be turned away.
+     Looked up only when the first two found nothing, so the usual sign-in
+     still reads one tab. */
+  if (!user && typed.indexOf('@') > 0) {
+    var staff = readSheet('Employees');
+    for (var k = 0; k < staff.length; k++) {
+      if (String(staff[k].email || '').trim().toLowerCase() !== typed) continue;
+      var theirs = String(staff[k].emp_code || '').trim().toLowerCase();
+      for (var m = 0; m < users.length; m++) {
+        if (String(users[m].emp_code || '').trim().toLowerCase() === theirs) { user = users[m]; break; }
+      }
+      break;
+    }
+  }
+  if (!user) throw new Error('No account found for that staff code or email');
   if (String(user.active || 'yes').toLowerCase() === 'no') throw new Error('This account is disabled');
   if (String(user.password) !== hash(password)) throw new Error('Incorrect password');
   var who = {
@@ -1133,12 +1163,13 @@ function refuseIfClosed(name, row) {
 function accountFor(emp) {
   var code = String((emp && emp.emp_code) || '').trim();
   if (!code) return null;
-  var mail = String((emp && emp.email) || '').trim().toLowerCase();
-  /* The account is found by either, so the worker can type whichever they
-     know. With no company email, the code is the username outright. */
-  if (!/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(mail)) mail = code.toLowerCase();
+  /* The staff code is the username, always - including for the office staff
+     who do have a company address. It is the one identifier every worker
+     already knows, it is what is printed on the ID card and held in the eSSL
+     device, and it does not change when somebody switches their email. Their
+     email still gets them in; see login(). */
   return {
-    email: mail, password: hash(code), role: 'employee',
+    email: code.toLowerCase(), password: hash(code), role: 'employee',
     emp_code: code, active: 'yes'
   };
 }

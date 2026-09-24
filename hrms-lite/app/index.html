@@ -255,7 +255,7 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
        validation would reject "DE-S-021" before it ever reached us. -->
   <input id="em" type="text" inputmode="text" autocapitalize="characters"
          autocorrect="off" spellcheck="false" autocomplete="username"
-         placeholder="DE-S-021">
+         placeholder="DE-S-021 &mdash; or your email">
   <label for="pw">Password</label>
   <input id="pw" type="password" autocomplete="current-password" placeholder="Your password">
   <div class="row"><input type="checkbox" id="stay" checked><label for="stay"
@@ -1241,10 +1241,12 @@ function editMyDetails() {
   openSheet('<h3>My details</h3>' +
     '<label>Phone</label><input type="tel" inputmode="tel" id="md-phone" value="' + esc(e.phone || '') + '">' +
     '<label>Email</label><input type="email" inputmode="email" id="md-email" value="' + esc(e.email || '') + '">' +
-    /* Changing this does not move the login. Saying so here stops somebody
-       changing their address and then believing they are locked out. */
-    '<div class="cs" style="margin:-6px 0 12px">Where your payslip is sent. You always ' +
-      'sign in with your staff code' + ((S.me || {}).emp_code ? ', ' + esc(S.me.emp_code) : '') + '.</div>' +
+    /* Either gets them in, and a changed address works straight away because
+       sign-in reads it off this record. Worth saying, so nobody changes their
+       email and then believes they are locked out. */
+    '<div class="cs" style="margin:-6px 0 12px">Where your payslip is sent. You can sign ' +
+      'in with this or with your staff code' +
+      ((S.me || {}).emp_code ? ', ' + esc(S.me.emp_code) : '') + '.</div>' +
     '<label>Date of birth</label><input type="date" id="md-dob" value="' + esc(e.dob || '') + '">' +
     '<label>Gender</label><select id="md-gender">' +
       ['', 'Male', 'Female', 'Other'].map(function (o) {
