@@ -250,8 +250,12 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
   <div class="mark"><i></i>BISCS <span style="color:#60a5fa">OS</span></div>
   <p class="sub">Attendance, leave and payslips.</p>
   <div class="err" id="lerr"></div>
-  <label for="em">Email</label>
-  <input id="em" type="email" inputmode="email" autocomplete="username" placeholder="name@company.com">
+  <label for="em">Staff code or email</label>
+  <!-- Not type="email": a staff code is not an address, and Android's own
+       validation would reject "DE-S-021" before it ever reached us. -->
+  <input id="em" type="text" inputmode="text" autocapitalize="characters"
+         autocorrect="off" spellcheck="false" autocomplete="username"
+         placeholder="DE-S-021">
   <label for="pw">Password</label>
   <input id="pw" type="password" autocomplete="current-password" placeholder="Your password">
   <div class="row"><input type="checkbox" id="stay" checked><label for="stay"
@@ -377,7 +381,19 @@ function api(action, payload) {
     if (j.rev !== undefined) S._rev = j.rev;
     return j.data;
   }).catch(function (e) {
-    if (e instanceof TypeError) throw new Error('No connection. Check your internet and try again.');
+    if (e instanceof TypeError) {
+      /* A dead workspace address fails exactly like a dead signal does, and
+         "check your internet" then sends everybody hunting for the wrong
+         thing - a worker blames the phone while the real cause is that the
+         Apps Script deployment was replaced and its /exec address changed.
+         The phone knows whether it has a network, so it says which it is. */
+      if (navigator.onLine === false) {
+        throw new Error('No connection. Check your internet and try again.');
+      }
+      throw new Error('Cannot reach the workspace. Your phone is online, so ' +
+        'the address this app was built with may no longer be the live one - ' +
+        'ask HR to check the Apps Script deployment.');
+    }
     throw e;
   });
 }
@@ -1184,7 +1200,12 @@ function renderMe() {
         row('Reporting to', e.manager) + row('Email', e.email) + row('Phone', e.phone) +
         row('Date of birth', e.dob) + row('Gender', e.gender) +
         row('Blood group', e.blood_group) + row('Address', e.address) +
-      '</div></div>' +
+      '</div>' +
+      '<button class="cancel" style="color:var(--primary);font-weight:700;margin-top:12px" ' +
+        'onclick="editMyDetails()">Edit my details</button>' +
+      '<div class="cs" style="margin:6px 0 0">You can change your phone, email, ' +
+        'address and date of birth. The rest is HR\'s to set.</div>' +
+    '</div>' +
 
     '<div class="card"><h3>Statutory</h3>' +
       '<div class="rows">' +
@@ -1208,6 +1229,57 @@ function renderMe() {
         'onclick="changePassword()">Change my password</button>' +
       '<button class="cancel" style="color:var(--red);font-weight:700" onclick="signOut()">Sign out</button>' +
     '</div>';
+}
+
+/* The details a worker is the best source for. A new phone number reaching
+   HR the day it changes is worth more than a form nobody fills in - and the
+   server keeps the list short, so nothing here can touch pay or department
+   however this screen is meddled with. */
+function editMyDetails() {
+  var e = S.me || {};
+  var g = String(e.gender || '');
+  openSheet('<h3>My details</h3>' +
+    '<label>Phone</label><input type="tel" inputmode="tel" id="md-phone" value="' + esc(e.phone || '') + '">' +
+    '<label>Email</label><input type="email" inputmode="email" id="md-email" value="' + esc(e.email || '') + '">' +
+    /* Changing this does not move the login. Saying so here stops somebody
+       changing their address and then believing they are locked out. */
+    '<div class="cs" style="margin:-6px 0 12px">Where your payslip is sent. You always ' +
+      'sign in with your staff code' + ((S.me || {}).emp_code ? ', ' + esc(S.me.emp_code) : '') + '.</div>' +
+    '<label>Date of birth</label><input type="date" id="md-dob" value="' + esc(e.dob || '') + '">' +
+    '<label>Gender</label><select id="md-gender">' +
+      ['', 'Male', 'Female', 'Other'].map(function (o) {
+        return '<option value="' + esc(o) + '"' + (g === o ? ' selected' : '') + '>' +
+          esc(o || '\u2014') + '</option>';
+      }).join('') +
+    '</select>' +
+    '<label>Address</label><textarea id="md-address" rows="3">' + esc(e.address || '') + '</textarea>' +
+    '<div class="err" id="md-err"></div>' +
+    '<button class="go" id="md-go" onclick="saveMyDetails()">Save</button>' +
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+}
+
+function saveMyDetails() {
+  var err = el('md-err'), btn = el('md-go');
+  var mail = el('md-email').value.trim();
+  if (mail && !/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(mail)) {
+    err.textContent = 'That does not look like an email address.'; err.className = 'err on'; return;
+  }
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  api('save', { sheet: 'Employees', row: {
+    emp_code: (S.me || {}).emp_code,
+    phone: el('md-phone').value.trim(),
+    email: mail,
+    dob: el('md-dob').value,
+    gender: el('md-gender').value,
+    address: el('md-address').value.trim()
+  }}).then(function () {
+    return reload();
+  }).then(function () {
+    closeSheet(); toast('Your details are saved', 'good');
+  }).catch(function (e) {
+    btn.disabled = false; btn.textContent = 'Save';
+    err.textContent = e.message; err.className = 'err on';
+  });
 }
 
 function changePassword() {

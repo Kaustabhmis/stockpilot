@@ -329,7 +329,17 @@ var EMPLOYEE_ACTIONS = {
 };
 
 /* The only tabs an employee may write to, and only their own rows. */
-var EMPLOYEE_WRITE_SHEETS = { Leave: 1, Requests: 1 };
+var EMPLOYEE_WRITE_SHEETS = { Leave: 1, Requests: 1, Employees: 1 };
+
+/* What a worker may change on their own record: the details they are the
+   best source for, and which cost nothing if wrong. Everything else - pay,
+   bank, PF and ESI numbers, department, shift, date of joining, status,
+   their manager, their device id - is the company's to set, so it is not
+   listed and is dropped from whatever the browser sends. Their own name is
+   not here either: it is what payroll and the bank pay against. */
+var EMPLOYEE_OWN_FIELDS = {
+  phone: 1, email: 1, address: 1, dob: 1, gender: 1
+};
 
 function denied() {
   throw new Error('Not allowed. Your account does not have permission for this.');
@@ -392,6 +402,22 @@ function authorize(action, p, caller) {
   if (action === 'save') {
     if (!EMPLOYEE_WRITE_SHEETS[p.sheet]) denied();
     if (!code) throw new Error('Your login is not linked to an employee code. Ask HR to set it.');
+
+    /* Their own record: their own row, and only the fields above. The row is
+       rebuilt from scratch here rather than filtered, so a field the browser
+       was never meant to send cannot survive by any spelling. upsert() keeps
+       whatever is left out, so the rest of the record is untouched. */
+    if (p.sheet === 'Employees') {
+      var sent = p.row || {};
+      if (String(sent.emp_code || code) !== code) denied();
+      var mine = { emp_code: code };
+      Object.keys(sent).forEach(function (f) {
+        if (EMPLOYEE_OWN_FIELDS[f]) mine[f] = sent[f];
+      });
+      p.row = mine;
+      return;
+    }
+
     var row = p.row || {};
     var existing = row.id ? findById(p.sheet, row.id) : null;
     if (existing && String(existing.emp_code) !== code) denied();
@@ -409,6 +435,7 @@ function authorize(action, p, caller) {
   }
   if (action === 'remove') {
     if (!EMPLOYEE_WRITE_SHEETS[p.sheet]) denied();
+    if (p.sheet === 'Employees') denied();   /* they may edit theirs, never delete it */
     var mine = findById(p.sheet, p.id);
     if (!mine || String(mine.emp_code) !== code) denied();
     if (String(mine.status || '') !== 'Pending') {
@@ -432,6 +459,7 @@ function route(action, p, caller) {
   switch (action) {
     case 'ping':        return { service: 'HRMS Lite', version: VERSION };
     case 'rev':         return currentRevision(caller);
+    case 'makeLogins':  return backfillAccounts();
     case 'setup':       return setup();
     case 'login':       return login(p.email, p.password);
     case 'bootstrap':   return bootstrap(caller);
@@ -705,12 +733,22 @@ function resetAdminPassword() {
 
 function login(email, password) {
   var users = readSheet('Users');
-  var mail = String(email || '').trim().toLowerCase();
+  var typed = String(email || '').trim().toLowerCase();
   var user = null;
+  /* Either identifies them: the email HR holds, or the staff code on their ID
+     card. A worker with no company email knows only the code, and asking a
+     fitter to remember an address nobody ever gave him is how a system ends
+     up unused. The email is tried first, so a code that happens to look like
+     somebody's address can never take precedence over a real one. */
   for (var i = 0; i < users.length; i++) {
-    if (String(users[i].email || '').trim().toLowerCase() === mail) { user = users[i]; break; }
+    if (String(users[i].email || '').trim().toLowerCase() === typed) { user = users[i]; break; }
   }
-  if (!user) throw new Error('No account found for this email');
+  if (!user) {
+    for (var j = 0; j < users.length; j++) {
+      if (String(users[j].emp_code || '').trim().toLowerCase() === typed) { user = users[j]; break; }
+    }
+  }
+  if (!user) throw new Error('No account found for that email or staff code');
   if (String(user.active || 'yes').toLowerCase() === 'no') throw new Error('This account is disabled');
   if (String(user.password) !== hash(password)) throw new Error('Incorrect password');
   var who = {
@@ -1078,6 +1116,67 @@ function refuseIfClosed(name, row) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Logins that come with the employee                                  */
+/* ------------------------------------------------------------------ */
+
+/* Adding somebody to the staff list used to leave them unable to sign in:
+   HR had to remember to make a login too, and when they did not, the worker
+   opened the phone app and was told "No account found for this email".
+
+   So a new employee gets an account with the staff code as both the username
+   and the first password - the code they already know from their ID card and
+   the eSSL device. It is deliberately guessable by design: it is a first
+   password, and the employee can change it from the app. Nobody is ever
+   given a second account, and an existing one is never touched - in
+   particular a password already chosen by the worker is never reset. */
+function accountFor(emp) {
+  var code = String((emp && emp.emp_code) || '').trim();
+  if (!code) return null;
+  var mail = String((emp && emp.email) || '').trim().toLowerCase();
+  /* The account is found by either, so the worker can type whichever they
+     know. With no company email, the code is the username outright. */
+  if (!/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(mail)) mail = code.toLowerCase();
+  return {
+    email: mail, password: hash(code), role: 'employee',
+    emp_code: code, active: 'yes'
+  };
+}
+
+/* Makes the logins for staff who have none. Used when an employee is added
+   and by the "create missing logins" button, which is what an existing
+   company needs: everybody already on the list is in exactly the position a
+   new joiner used to be in. */
+function makeAccountsFor(emps) {
+  var users = readSheet('Users');
+  var haveCode = {}, haveMail = {};
+  users.forEach(function (u) {
+    var c = String(u.emp_code || '').trim();
+    if (c) haveCode[c.toLowerCase()] = 1;
+    haveMail[String(u.email || '').trim().toLowerCase()] = 1;
+  });
+  var made = [], skipped = 0;
+  (emps || []).forEach(function (e) {
+    var a = accountFor(e);
+    if (!a) return;
+    if (haveCode[a.emp_code.toLowerCase()] || haveMail[a.email]) { skipped++; return; }
+    haveCode[a.emp_code.toLowerCase()] = 1; haveMail[a.email] = 1;
+    made.push(a);
+  });
+  if (made.length) appendMany('Users', made);
+  return { created: made.length, alreadyHad: skipped,
+           logins: made.map(function (m) { return m.email; }) };
+}
+
+/* Only the active staff: somebody who has left should not be given a way in. */
+function backfillAccounts() {
+  var emps = readSheet('Employees').filter(function (e) {
+    return String(e.status || 'Active').toLowerCase() !== 'inactive' &&
+           String(e.status || 'Active').toLowerCase() !== 'left';
+  });
+  return makeAccountsFor(emps);
+}
+
 function upsert(name, row) {
   refuseIfClosed(name, row);
   touched(name);
@@ -1103,6 +1202,8 @@ function upsert(name, row) {
     return row;
   }
   sh.appendRow(headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
+  /* A new member of staff, so give them the login at the same moment. */
+  if (name === 'Employees') { touched('Users'); makeAccountsFor([row]); }
   return row;
 }
 
@@ -1124,6 +1225,7 @@ function upsertMany(name, rows) {
   });
   var byKey = {};
   existing.forEach(function (x, i) { byKey[String(x.data[key])] = i; });
+  var fresh = [];
 
   rows.forEach(function (row) {
     if (name === 'Employees' && !String(row.emp_code || '').trim()) {
@@ -1134,6 +1236,7 @@ function upsertMany(name, rows) {
     var at = byKey[k];
     if (at === undefined) {
       byKey[k] = values.length;
+      fresh.push(row);
       values.push(headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
     } else {
       var prev = values[at];
@@ -1146,7 +1249,10 @@ function upsertMany(name, rows) {
   if (lastRow > values.length + 1) {
     sh.getRange(values.length + 2, 1, lastRow - values.length - 1, headers.length).clearContent();
   }
-  return { saved: rows.length, total: values.length };
+  /* Everybody the import brought in gets a login, in one write. */
+  var accounts = null;
+  if (name === 'Employees' && fresh.length) { touched('Users'); accounts = makeAccountsFor(fresh); }
+  return { saved: rows.length, total: values.length, accounts: accounts };
 }
 
 /** Append-only, for the raw punch log - never keyed, never rewritten. */

@@ -495,8 +495,9 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
         <div class="err" id="login-err"></div>
 
         <div class="login-field">
-          <label class="lab" for="in-email">Email</label>
-          <input id="in-email" type="email" placeholder="name@company.com" autocomplete="username">
+          <label class="lab" for="in-email">Email or staff code</label>
+          <input id="in-email" type="text" placeholder="name@company.com or staff code" autocomplete="username"
+                 autocorrect="off" spellcheck="false">
         </div>
         <div class="login-field">
           <label class="lab" for="in-pass">Password</label>
@@ -690,6 +691,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <button class="ghost sm" onclick="exportEmployees()">&#8681; Export CSV</button>
           <button class="ghost sm adm" onclick="openImport()">&#8679; Import CSV</button>
           <button class="ghost sm adm" onclick="openBulk()">Bulk action</button>
+          <button class="ghost sm adm" onclick="makeLogins()" title="Every employee added from now on gets a login automatically. This is for the staff who were added before that.">&#128273; Create missing logins</button>
           <button class="adm" onclick="openEmployee()">+ Add employee</button>
         </div>
         <div class="table-wrap"><table id="emp-table"></table></div>
@@ -2933,6 +2935,28 @@ function collectFields() {
   var out = {};
   el('modal-body').querySelectorAll('[data-f]').forEach(function (n) { out[n.dataset.f] = n.value; });
   return out;
+}
+
+/* Staff added before logins were automatic have none, so the phone app tells
+   them "no account found". This gives every active employee the same account
+   a new joiner now gets. It never touches an account that already exists, so
+   a password somebody has already changed is safe, and running it twice does
+   nothing the second time. */
+function makeLogins() {
+  /* The count of who is missing one is not asked for here: the accounts list
+     is the owner's to read, so HR's browser does not hold it. The server
+     knows, and says what it did. */
+  if (!confirm('Give every active employee who has no login one now?\n\n' +
+      'Each gets their staff code as both the username and the first password, ' +
+      'and can change the password in the app.\n\n' +
+      'Anyone who already has a login is left alone, so a password somebody ' +
+      'has already changed is safe.')) return;
+  api('makeLogins').then(function (r) {
+    reload();
+    if (!r.created) { toast('Nothing to do - everyone already had a login', 'ok'); return; }
+    toast(r.created + (r.created === 1 ? ' login created' : ' logins created') +
+      ' - staff code is the username and the first password', 'good');
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 function openEmployee(code) {
