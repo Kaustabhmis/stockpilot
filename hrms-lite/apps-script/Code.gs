@@ -1910,6 +1910,16 @@ function metresBetween(lat1, lng1, lat2, lng2) {
  * Is this punch inside a site the employee may punch from?
  * Runs here, not in the browser, so the check cannot be skipped by the client.
  */
+/* The sites one person may punch at. Typed by HR as a list, so it is read as
+   one however they separate it - comma, semicolon or new line - and blanks
+   and stray spacing are dropped. Empty means every site. */
+function siteList(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .split(/[,;\n]/)
+    .map(function (x) { return x.trim(); })
+    .filter(function (x) { return x.length > 0; });
+}
+
 function geoCheck(emp, geo) {
   var st = settingsMap();
   var on = String(st.geofence_enabled || 'no').toLowerCase() === 'yes';
@@ -1932,14 +1942,41 @@ function geoCheck(emp, geo) {
   var allowed = readSheet('Sites').filter(function (x) {
     return String(x.active || 'yes').toLowerCase() !== 'no' && x.lat !== '' && x.lng !== '';
   });
-  var only = String((emp && emp.site) || '').trim();
-  if (only) {
-    var mine = allowed.filter(function (x) { return String(x.name).trim() === only; });
-    if (mine.length) allowed = mine;
-  }
   if (!allowed.length) {
     return { ok: soft, enabled: true, soft: soft,
              reason: 'Geofencing is on but no site has been set up yet.' };
+  }
+
+  /* A supervisor is sent wherever the work is, so a person is tied to a list
+     of sites, not one. Blank still means any site. */
+  var staleNames = '';
+  var wanted = siteList(emp && emp.site);
+  if (wanted.length) {
+    var byName = {};
+    allowed.forEach(function (x) { byName[String(x.name).trim().toLowerCase()] = x; });
+    var mine = [], unknown = [];
+    wanted.forEach(function (w) {
+      var hit = byName[w.toLowerCase()];
+      if (hit) mine.push(hit); else unknown.push(w);
+    });
+    /* A name that matches nothing used to be ignored, and ignoring it let the
+       punch through at ANY site - a fence that opens on a typo or a renamed
+       site, quietly, which is worse than no fence because it is trusted.
+
+       The ones that do match are still honoured: renaming one site should not
+       stop a supervisor punching at the other three, and keeping them is
+       never wider than what HR configured. Only when nothing at all matches
+       is the punch refused, because that is the case that would otherwise
+       mean "anywhere". */
+    if (!mine.length) {
+      return { ok: false, enabled: true, badSite: true, unknown: unknown.join(', '),
+               reason: 'Your record lists ' +
+                 (unknown.length > 1 ? 'sites that no longer exist: ' : 'a site that no longer exists: ') +
+                 unknown.join(', ') +
+                 '. Ask HR to correct it - punching is blocked until then.' };
+    }
+    allowed = mine;
+    if (unknown.length) staleNames = unknown.join(', ');
   }
 
   var best = null;
@@ -1948,7 +1985,10 @@ function geoCheck(emp, geo) {
     if (!best || d < best.distance) best = { site: x.name, distance: d, radius: parseFloat(x.radius_m || 150) };
   });
   if (best.distance <= best.radius) {
-    return { ok: true, enabled: true, site: best.site, distance: best.distance };
+    var good = { ok: true, enabled: true, site: best.site, distance: best.distance };
+    /* They are let through, but somebody should still fix the record. */
+    if (staleNames) good.stale = staleNames;
+    return good;
   }
 
   /* field staff with an approved out-duty for today are allowed to be away */
@@ -1966,7 +2006,12 @@ function geoCheck(emp, geo) {
   return {
     ok: soft, enabled: true, soft: soft, site: best.site, distance: best.distance,
     reason: 'You are about ' + best.distance + ' m from ' + best.site +
-            ', which allows ' + best.radius + ' m.'
+            ', which allows ' + best.radius + ' m.' +
+            /* Somebody sent between sites needs to know which ones count, or
+               the refusal tells them only that they are in the wrong place. */
+            (allowed.length > 1
+              ? ' You can punch at: ' + allowed.map(function (x) { return x.name; }).join(', ') + '.'
+              : '')
   };
 }
 

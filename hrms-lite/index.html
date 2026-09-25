@@ -144,6 +144,16 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;}
 .grid-half{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;}
 .field-err{font-size:.7rem;color:var(--danger);font-weight:600;text-transform:none;letter-spacing:0;}
+/* The punch-site picker on the employee form */
+.site-picker{display:block;}
+.site-pick{display:flex;align-items:center;gap:8px;padding:5px 2px;font-weight:500;
+  text-transform:none;letter-spacing:0;font-size:.85rem;color:var(--text-dark);cursor:pointer;}
+.site-pick input{width:16px;height:16px;flex-shrink:0;margin:0;cursor:pointer;}
+.site-pick.bad{color:var(--danger);}
+.site-pick.bad span{font-size:.75rem;}
+.site-sum{margin-top:6px;font-size:.75rem;color:var(--text-muted);text-transform:none;
+  letter-spacing:0;font-weight:500;}
+.site-none{font-size:.8rem;color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:500;}
 /* A date box that means "the week around this date" has to say so. */
 .hint-line{font-size:.62rem;font-weight:600;color:var(--text-soft);text-transform:none;letter-spacing:0;}
 .hint-line:empty{display:none;}
@@ -2746,7 +2756,7 @@ var EMP_FIELDS = [
   ['phone', 'Phone', 'text'],
   ['company', 'Company / unit', 'text'],
   ['unit', 'Unit / division (register)', 'text'],
-  ['site', 'Punch site (blank = any site)', 'text'],
+  ['site', 'Punch sites (none ticked = any site)', 'sites'],
   ['department', 'Department', 'text'],
   ['designation', 'Designation', 'text'],
   ['doj', 'Date of joining', 'date'],
@@ -2867,6 +2877,26 @@ function renderEmployees() {
 /* Whose form is open, so the manager list can leave them out of it. */
 var EDITING_CODE = '';
 
+/* The same reading of the field as the server's siteList(). */
+function siteListOf(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .split(/[,;\n]/)
+    .map(function (x) { return x.trim(); })
+    .filter(function (x) { return x.length > 0; });
+}
+
+/* Keeps the hidden field and the summary line in step with the ticks. */
+function syncSites(box) {
+  var wrap = box.closest('.site-picker');
+  if (!wrap) return;
+  var picked = [];
+  wrap.querySelectorAll('input[type=checkbox]').forEach(function (c) {
+    if (c.checked) picked.push(c.value);
+  });
+  wrap.querySelector('input[type=hidden]').value = picked.join(', ');
+  wrap.querySelector('.site-sum').textContent = picked.length ? picked.join(', ') : 'Any site';
+}
+
 function fieldInput(f, value) {
   var name = f[0], label = f[1], type = f[2], readonly = f[3];
   var html;
@@ -2908,6 +2938,36 @@ function fieldInput(f, value) {
           esc(x.name) + ' \u00b7 ' + esc(x.emp_code) +
           (x.designation ? ' \u00b7 ' + esc(x.designation) : '') + '</option>';
       }).join('') + '</select>';
+  } else if (type === 'sites') {
+    /* A supervisor goes wherever the work is, so this is a list, not one
+       place. Ticked from the real sites rather than typed: a name that
+       matches no site now blocks the person's punches outright (a fence that
+       opens on a typo is not a fence), so the typo must be impossible to
+       make. The hidden field carries the value, because the form collects
+       every field by .value and a multi-select reports only its first. */
+    var chosen = siteListOf(value);
+    var live = (S.sites || []).filter(function (x) {
+      return String(x.active || 'yes').toLowerCase() !== 'no';
+    }).map(function (x) { return String(x.name).trim(); });
+    var known = {};
+    live.forEach(function (n) { known[n.toLowerCase()] = 1; });
+    /* A site that has been renamed or switched off is still shown, ticked and
+       marked, because it is the thing blocking that person right now. */
+    var stale = chosen.filter(function (c) { return !known[c.toLowerCase()]; });
+    var boxes = live.map(function (n) {
+      var on = chosen.some(function (c) { return c.toLowerCase() === n.toLowerCase(); });
+      return '<label class="site-pick"><input type="checkbox" value="' + esc(n) + '"' +
+        (on ? ' checked' : '') + ' onchange="syncSites(this)"> ' + esc(n) + '</label>';
+    }).concat(stale.map(function (n) {
+      return '<label class="site-pick bad"><input type="checkbox" value="' + esc(n) +
+        '" checked onchange="syncSites(this)"> ' + esc(n) +
+        ' <span>\u2014 no such site, punching is blocked</span></label>';
+    })).join('');
+    html = '<div class="site-picker">' +
+      (boxes || '<div class="site-none">No sites set up yet. Settings &rarr; Sites.</div>') +
+      '<input type="hidden" data-f="' + name + '" value="' + esc(chosen.join(', ')) + '">' +
+      '<div class="site-sum">' + (chosen.length ? esc(chosen.join(', ')) : 'Any site') + '</div>' +
+      '</div>';
   } else if (type === 'shift') {
     var names = (S.shifts || []).filter(function (x) {
       return String(x.active || 'yes').toLowerCase() !== 'no';
