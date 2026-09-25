@@ -420,11 +420,27 @@ function authorize(action, p, caller) {
          work, but they would have no idea why. */
       var wants = String(mine.email || '').trim().toLowerCase();
       if (wants) {
+        /* The browser checks the shape too, but the browser is not the fence:
+           a malformed address silently breaks their payslip delivery. */
+        if (!/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(wants)) {
+          throw new Error('That does not look like an email address.');
+        }
+        /* An address is a way in, so it must belong to one person. Checked
+           against the staff list and against the accounts, so nobody can
+           point their record at the HR or owner address and be sent the
+           payslips and notices meant for it. */
         var all = readSheet('Employees');
         for (var n = 0; n < all.length; n++) {
           if (String(all[n].emp_code || '') === code) continue;
           if (String(all[n].email || '').trim().toLowerCase() === wants) {
             throw new Error('Somebody else on the staff list already uses that email address.');
+          }
+        }
+        var accts = readSheet('Users');
+        for (var q = 0; q < accts.length; q++) {
+          if (String(accts[q].emp_code || '') === code) continue;
+          if (String(accts[q].email || '').trim().toLowerCase() === wants) {
+            throw new Error('That email address is already in use.');
           }
         }
       }
@@ -1178,6 +1194,16 @@ function accountFor(emp) {
    and by the "create missing logins" button, which is what an existing
    company needs: everybody already on the list is in exactly the position a
    new joiner used to be in. */
+/* Only somebody actually on the strength gets a way in. A whitelist, not a
+   list of words to exclude: "Left" and "Inactive" were excluded by name
+   before, so "Resigned", "Suspended" or "Terminated" - all of which a company
+   does write in that column - were handed a working login. Blank counts as
+   active, because that is how the rest of the system reads it. */
+function mayHaveLogin(emp) {
+  var st = String((emp && emp.status) || 'Active').trim().toLowerCase();
+  return st === '' || st === 'active';
+}
+
 function makeAccountsFor(emps) {
   var users = readSheet('Users');
   var haveCode = {}, haveMail = {};
@@ -1188,6 +1214,7 @@ function makeAccountsFor(emps) {
   });
   var made = [], skipped = 0;
   (emps || []).forEach(function (e) {
+    if (!mayHaveLogin(e)) return;
     var a = accountFor(e);
     if (!a) return;
     if (haveCode[a.emp_code.toLowerCase()] || haveMail[a.email]) { skipped++; return; }
@@ -1199,13 +1226,9 @@ function makeAccountsFor(emps) {
            logins: made.map(function (m) { return m.email; }) };
 }
 
-/* Only the active staff: somebody who has left should not be given a way in. */
+/* Every employee; makeAccountsFor() decides who may have one. */
 function backfillAccounts() {
-  var emps = readSheet('Employees').filter(function (e) {
-    return String(e.status || 'Active').toLowerCase() !== 'inactive' &&
-           String(e.status || 'Active').toLowerCase() !== 'left';
-  });
-  return makeAccountsFor(emps);
+  return makeAccountsFor(readSheet('Employees'));
 }
 
 function upsert(name, row) {
