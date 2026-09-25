@@ -5965,6 +5965,12 @@ function removePolicyRow(kind, index) {
   }
 }
 
+/* Minutes past midnight for an "HH:MM" already normalised by hhmm(). */
+function minsOfHHMM(t) {
+  var p = String(t || '').split(':');
+  return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+}
+
 function savePolicyTable(kind) {
   var spec = POLICY_TABLES[kind];
   var keyCol = spec.key || 'name';
@@ -5989,6 +5995,17 @@ function savePolicyTable(kind) {
       if (!parsed.days.length) {
         return toast('Shift "' + (rows[w].name || '') + '" has no weekly off. Write the day, ' +
           'like Sun, or Sat,Sun.', 'bad');
+      }
+      /* A shift whose end is before its start runs through midnight, and
+         attendance cannot yet score one: the two punches land on two dates.
+         Saying so here is the difference between a policy somebody set on
+         purpose and a month of wrong hours nobody explains. */
+      var st0 = hhmm(rows[w].start_time), en0 = hhmm(rows[w].end_time);
+      if (st0 && en0 && minsOfHHMM(en0) <= minsOfHHMM(st0)) {
+        if (!confirm('Shift "' + (rows[w].name || '') + '" runs ' + st0 + ' to ' + en0 +
+            ', through midnight.\n\nAttendance cannot score a night shift yet: the two ' +
+            'punches fall on two dates, so each night is marked as two present days with ' +
+            'no hours, and overtime is not counted.\n\nSave it anyway?')) return;
       }
     }
   }

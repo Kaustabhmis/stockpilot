@@ -1719,9 +1719,15 @@ function rebuildDayFromPunches(empCode, iso, source, extraTimes) {
   var inT = times[0], outT = times[times.length - 1], taps = times.length;
   var hours = 0;
   if (inT !== outT) {
-    var mins = minutesOfClock(outT) - minutesOfClock(inT);
-    if (mins < 0) mins += 24 * 60;                     /* a shift across midnight */
-    hours = mins / 60;
+    /* Sorted, so the last clock is never earlier than the first and this
+       subtraction is never negative. A shift that really does cross midnight
+       is NOT handled here: its two punches fall on two calendar dates, so
+       each date is rebuilt on its own and scores one punch. The day is still
+       marked present and flagged to verify, but the hours are nought and the
+       night counts as two days rather than one. Night shifts need the day's
+       last punch paired with the next morning's first, which is a change to
+       how a day is assembled, not a sum. */
+    hours = (minutesOfClock(outT) - minutesOfClock(inT)) / 60;
   }
   var full = parseFloat(st.full_day_hours || 8), half = parseFloat(st.half_day_hours || 4);
   var status, remark;
