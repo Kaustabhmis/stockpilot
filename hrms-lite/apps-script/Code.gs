@@ -160,9 +160,13 @@ function handle(action, payload, callback, token) {
       out = { ok: true, data: route(action, payload || {}, caller) };
       /* The new revision rides back with the write that caused it, so the
          screen that did the saving knows it is already up to date and does
-         not reload itself over its own change. */
+         not reload itself over its own change. Each side is told the counter
+         it actually watches, or it would compare against the wrong one and
+         refresh on every single tick. */
       var moved = bumpRevision();
-      if (moved !== null) out.rev = moved;
+      if (moved !== null) {
+        out.rev = isHrOrAbove(caller.role) ? moved.rev : moved.staff;
+      }
     } finally {
       lock.releaseLock();
     }
@@ -322,6 +326,8 @@ var EMPLOYEE_ACTIONS = {
   bootstrap: 1, changePassword: 1, punchState: 1, webPunch: 1, ping: 1,
   /* Just a number and a list of tab names - no one's data is in it. */
   rev: 1,
+  /* Their own attendance for one month; the code comes from the session. */
+  myMonth: 1,
   save: 1, remove: 1,
   /* Allowed through to decide(), which then refuses anyone who is not the
      manager of the person the application belongs to. */
@@ -389,6 +395,7 @@ function authorize(action, p, caller) {
   var code = String(caller.emp_code || '');
 
   if (action === 'bootstrap' || action === 'ping' || action === 'rev') return;   // read-only, already scoped
+  if (action === 'myMonth') return;       // myMonth() reads the code off the session
   if (action === 'decide') return;        // decide() checks the reporting line itself
   if (action === 'changePassword') {
     p.email = caller.email;                        // only ever their own
@@ -489,6 +496,7 @@ function route(action, p, caller) {
   switch (action) {
     case 'ping':        return { service: 'HRMS Lite', version: VERSION };
     case 'rev':         return currentRevision(caller);
+    case 'myMonth':     return myMonth(caller && caller.emp_code, p.month);
     case 'makeLogins':  return backfillAccounts();
     case 'setup':       return setup();
     case 'login':       return login(p.email, p.password);
@@ -886,6 +894,67 @@ function onlyMine(sheetName, code, tailRows) {
  * down. One row per person per working day, so the window is sized from
  * headcount.
  */
+/* What one person's phone needs on opening: the month it shows and the one
+   before it, which also covers the open-shift look-back on the punch screen.
+   Sized off the headcount because the rows of every employee are interleaved
+   by date, so reaching back N days means reading N days of everybody. */
+function employeeWindow() {
+  var st = settingsMap();
+  var days = parseInt(st.app_attendance_days || '62', 10);
+  if (!(days > 0)) return 0;
+  var people = readSheet('Employees').length || 1;
+  return Math.max(400, Math.ceil(people * days * 1.15));
+}
+
+/* How far back a named month needs the tail to reach, so paging back to
+   January does not read the whole tab and paging back one month barely
+   reads anything. */
+function monthWindow(ym) {
+  var n = nowParts();
+  var a = String(ym || '').split('-'), b = String(n.date).slice(0, 7).split('-');
+  var months = (parseInt(b[0], 10) - parseInt(a[0], 10)) * 12 +
+               (parseInt(b[1], 10) - parseInt(a[1], 10));
+  if (!(months >= 0)) months = 0;
+  var people = readSheet('Employees').length || 1;
+  return Math.max(400, Math.ceil(people * (months + 2) * 31 * 1.15));
+}
+
+/* One month of the caller's own attendance, fetched when they page back to a
+   month the opening load did not carry. Without it those months simply showed
+   empty, which reads as the system having lost the days.
+
+   The guessed window is checked rather than trusted. Guessing how far back to
+   read from today's date is wrong the moment the tab holds a row dated later
+   than today - one future-dated correction and every month before it comes
+   back short, which is the same silent half-month the opening load used to
+   give. So: if the rows read do not reach back past the start of the month
+   asked for, the guess was too small and the tab is read in full. */
+function myMonth(empCode, ym) {
+  if (!empCode) throw new Error('No employee is linked to this login.');
+  var want = String(ym || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(want)) throw new Error('Which month? Use YYYY-MM.');
+
+  var take = function (tail) {
+    var all = readSheet('Attendance', tail);
+    var earliest = '';
+    all.forEach(function (a) {
+      var d = String(a.date || '');
+      if (d && (!earliest || d < earliest)) earliest = d;
+    });
+    return {
+      reached: !tail || !earliest || earliest <= want + '-01',
+      rows: all.filter(function (a) {
+        return String(a.emp_code) === String(empCode) &&
+               String(a.date).slice(0, 7) === want;
+      })
+    };
+  };
+
+  var got = take(monthWindow(want));
+  if (!got.reached) got = take(0);            /* the whole tab, and be right */
+  return { month: want, rows: got.rows };
+}
+
 function attendanceWindow(people) {
   var days = parseInt(settingsMap().bootstrap_attendance_days || '150', 10);
   if (!(days > 0)) return 0;                       // 0 = no limit, read it all
@@ -928,11 +997,20 @@ function bootstrap(caller) {
         if (String(e.emp_code) === code) me = e;
       });
     }
+    var myAttendance = code ? onlyMine('Attendance', code, employeeWindow()) : [];
     return {
       role: 'employee',
       settings:    employeeSettings(),
       employees:   me ? [me] : [],
-      attendance:  code ? onlyMine('Attendance', code, attendanceWindow(readSheet('Employees').length)) : [],
+      /* Two months, not the five the office screen asks for. The phone shows
+         one month at a time and fetches an older one when it is asked for, so
+         reading half a year of the whole company's attendance to hand back
+         one person's was most of what made the app slow to open. */
+      attendance:  myAttendance,
+      /* Folded in rather than fetched after, and worked out from the rows
+         just read. Opening the app used to be two round trips to Apps Script
+         and two passes over the same tab. */
+      punch:       code ? punchState(code, myAttendance) : null,
       leave:       code ? onlyMine('Leave', code).map(stamped('Leave')) : [],
       payroll:     code ? onlyMine('Payroll', code) : [],
       requests:    code ? onlyMine('Requests', code).map(stamped('Requests')) : [],
@@ -999,22 +1077,45 @@ function touched(name) {
    agent pushes all day. */
 var REV_KEY = 'data_revision';
 var REV_TABS_KEY = 'data_revision_tabs';
+var REV_STAFF_KEY = 'data_revision_staff';
 var REV_DIRTY = {};
+
+/* The tabs a worker's phone has any reason to redraw for: a decision on their
+   leave or their request, a notice, a payslip, a change to their record or to
+   the rules.
+
+   Attendance and Punches are deliberately absent. They move every time
+   anybody anywhere touches the clock, and counting them meant that at shift
+   change one punch made every open phone in the company fetch its whole
+   world again - sixty-odd reloads for a punch that concerned one person. A
+   worker's own punch already updates their screen from the reply, and
+   anything else on those tabs is picked up when they next open the app. */
+var REV_STAFF_TABS = {
+  Leave: 1, Requests: 1, Notices: 1, Holidays: 1, Settings: 1, Employees: 1,
+  Payroll: 1, Shifts: 1, LeaveTypes: 1, RequestTypes: 1, ApprovalLevels: 1,
+  Sites: 1, Users: 1
+};
 
 /* The names of the tabs that moved are for the HR screen's "payroll changed"
    line. An employee's app never uses them, and knowing that Payroll or Users
    moved tells them when HR was working - so they are simply not sent. */
 function currentRevision(caller) {
   var props = PropertiesService.getScriptProperties();
-  var out = { rev: Number(props.getProperty(REV_KEY) || 0), tabs: '' };
   if (caller && isHrOrAbove(caller.role)) {
-    out.tabs = String(props.getProperty(REV_TABS_KEY) || '');
+    return {
+      rev: Number(props.getProperty(REV_KEY) || 0),
+      tabs: String(props.getProperty(REV_TABS_KEY) || '')
+    };
   }
-  return out;
+  /* A worker watches their own counter, which other people's punches do not
+     move. The tab names stay with HR either way. */
+  return { rev: Number(props.getProperty(REV_STAFF_KEY) || 0), tabs: '' };
 }
 
 /* Called once at the end of a request, not once per row: a 500-row import is
    one bump, not five hundred. */
+/* Returns { rev, staff } - the two counters as they now stand - or null when
+   this request wrote nothing. */
 function bumpRevision() {
   var tabs = Object.keys(REV_DIRTY);
   REV_DIRTY = {};
@@ -1025,8 +1126,14 @@ function bumpRevision() {
     var write = {};
     write[REV_KEY] = String(next);
     write[REV_TABS_KEY] = tabs.join(',');
+    /* The staff counter only moves for the tabs a phone would redraw for. */
+    var staff = Number(props.getProperty(REV_STAFF_KEY) || 0);
+    if (tabs.some(function (t) { return REV_STAFF_TABS[t]; })) {
+      staff = staff + 1;
+      write[REV_STAFF_KEY] = String(staff);
+    }
     props.setProperties(write);
-    return next;
+    return { rev: next, staff: staff };
   } catch (e) {
     /* A failed bump must never fail the write that already succeeded - the
        rows are in the sheet either way. The cost is that other screens do
@@ -1849,10 +1956,14 @@ function punchLog(from, to) {
 }
 
 /** Today's punch record plus any earlier day left open. */
-function punchState(empCode) {
+/* mine, when given, is this employee's attendance already read by the caller
+   over at least as long a span as punchWindow(). bootstrap() has just read
+   it, and reading the tab a second time for the same rows was the larger
+   half of what opening the app cost. */
+function punchState(empCode, mine) {
   if (!empCode) throw new Error('No employee is linked to this login.');
   var n = nowParts();
-  var rows = readSheet('Attendance', punchWindow()).filter(function (a) {
+  var rows = mine || readSheet('Attendance', punchWindow()).filter(function (a) {
     return String(a.emp_code) === String(empCode);
   });
   var todayRow = null, open = [];

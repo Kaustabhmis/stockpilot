@@ -219,6 +219,7 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .sheet input,.sheet select,.sheet textarea{width:100%;padding:13px;border-radius:10px;
   border:1px solid var(--line);background:#f8fafc;font-size:.95rem;}
 .sheet textarea{resize:vertical;min-height:80px;}
+.cal-load{font-weight:500;font-size:.72rem;color:var(--muted);}
 .sheet .go{width:100%;padding:15px;border-radius:12px;background:var(--primary);color:#fff;
   font-weight:700;margin-top:18px;font-size:1rem;}
 .sheet .cancel{width:100%;padding:13px;color:var(--muted);font-weight:600;margin-top:6px;}
@@ -485,6 +486,7 @@ function reload() {
     S.settings = d.settings || {};
     S.me = (d.employees || [])[0] || null;
     S.att = d.attendance || [];
+    S.haveMonth = {};                 /* the rows were just replaced */
     S.leave = d.leave || [];
     S.reqs = d.requests || [];
     S.types = d.leaveTypes || [];
@@ -494,6 +496,9 @@ function reload() {
     S.inbox = d.inbox || { isManager: false, team: [], teamLeave: [], teamRequests: [] };
     paintHeader();
     el('nav-team').style.display = S.inbox.isManager ? '' : 'none';
+    /* It arrives with everything else now. Older workspaces, where the script
+       has not been updated yet, still answer the separate call. */
+    if (d.punch) { S.punch = d.punch; return; }
     return api('punchState', {}).then(function (p) { S.punch = p; }).catch(function () {});
   }).then(function () { render(); return true; })
     .catch(function (e) {
@@ -756,7 +761,8 @@ function renderCalendar() {
   el('v-cal').innerHTML =
     '<div class="cal-top">' +
       '<button onclick="shiftMonth(-1)">&lsaquo;</button>' +
-      '<b>' + esc(monthLabel(ym)) + '</b>' +
+      '<b>' + esc(monthLabel(ym)) +
+        (S.monthBusy === ym ? ' <span class="cal-load">loading\u2026</span>' : '') + '</b>' +
       '<button onclick="shiftMonth(1)">&rsaquo;</button>' +
     '</div>' +
     '<div class="kpis">' +
@@ -780,6 +786,31 @@ function shiftMonth(by) {
   var d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + by, 1);
   S.cal = d.getFullYear() + '-' + pad(d.getMonth() + 1);
   renderCalendar();
+  loadMonth(S.cal);
+}
+
+/* The phone is given the last two months on opening, so paging further back
+   used to land on an empty grid - which reads as the days having been lost,
+   not as "not fetched yet". The month is fetched once and kept. */
+S.haveMonth = {};
+function loadMonth(ym) {
+  if (!ym || S.haveMonth[ym] || S.monthBusy === ym) return;
+  /* Anything the opening load already covered is there in full. */
+  var days = 0;
+  S.att.forEach(function (a) { if (String(a.date).slice(0, 7) === ym) days++; });
+  if (days && ym !== thisMonth()) { S.haveMonth[ym] = 1; return; }
+  S.monthBusy = ym;
+  if (S.cal === ym) renderCalendar();          /* shows "loading..." */
+  api('myMonth', { month: ym }).then(function (r) {
+    S.monthBusy = null;
+    S.haveMonth[ym] = 1;
+    var keep = S.att.filter(function (a) { return String(a.date).slice(0, 7) !== r.month; });
+    S.att = keep.concat(r.rows || []);
+    if (S.cal === ym) renderCalendar();
+  }).catch(function () {
+    S.monthBusy = null;                 /* let it be tried again */
+    if (S.cal === ym) renderCalendar();
+  });
 }
 
 function dayDetail(iso) {
