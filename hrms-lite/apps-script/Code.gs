@@ -812,6 +812,13 @@ function login(email, password) {
   };
   who.token = signToken(who);
   who.expires_in_hours = SESSION_HOURS;
+  /* The workspace comes back with the session. Signing in was two calls -
+     one to prove who you are, then a second, identical for everybody, to
+     fetch what you are allowed to see. On Apps Script the second call costs
+     a script start and a round trip before it reads anything, which on a
+     phone was most of the wait. A client that ignores this field and asks
+     separately still works exactly as before. */
+  try { who.workspace = bootstrap(who); } catch (e) { /* sign in anyway */ }
   return who;
 }
 
@@ -1811,7 +1818,7 @@ function rebuildDayFromPunches(empCode, iso, source, extraTimes) {
 
   var times = [];
   var add = function (t) { var c = clockOf(t); if (c && times.indexOf(c) < 0) times.push(c); };
-  readSheet('Punches', punchWindow()).forEach(function (r) {
+  readSheet('Punches', tapWindow()).forEach(function (r) {
     if (String(r.emp_code) !== String(empCode)) return;
     var stamp = String(r.punch_time || '');
     if (stamp.slice(0, 10) === iso) add(stamp.slice(10));
@@ -1920,6 +1927,14 @@ function punchWindow() {
   return Math.max(1000, readSheet('Employees').length * 45);
 }
 
+/* Today's taps only, so the tail needs to span a couple of days rather than
+   six weeks. The punch log is append-only, so the newest rows are the last
+   ones - reading three thousand of them to find the two somebody made this
+   morning was most of what a punch cost. */
+function tapWindow() {
+  return Math.max(200, readSheet('Employees').length * 6);
+}
+
 /**
  * The machine's own record for a day, or a span of days: every punch as it
  * came off the device, before attendance settled it into an in and an out.
@@ -1979,7 +1994,7 @@ function punchState(empCode, mine) {
      that bound the day. Somebody who taps twice should be able to see that
      both taps arrived, and that the extra one changed nothing. */
   var taps = [];
-  readSheet('Punches', punchWindow()).forEach(function (r) {
+  readSheet('Punches', tapWindow()).forEach(function (r) {
     if (String(r.emp_code) !== String(empCode)) return;
     var stamp = String(r.punch_time || '');
     if (stamp.slice(0, 10) !== n.date) return;
@@ -2166,16 +2181,25 @@ function webPunch(empCode, kind, note, geo, caller) {
     site: fence.site || '', distance_m: fence.distance === undefined ? '' : fence.distance
   }]);
 
+  /* Read before the rebuild, because the rebuild writes and a write clears
+     the cache: asking for these rows afterwards meant reading every recent
+     attendance row a second time for one tap. The rebuild then reuses what
+     is already cached, and the new row is patched in here rather than
+     fetched back. */
+  var mine = onlyMine('Attendance', empCode, punchWindow());
+
   var row = rebuildDayFromPunches(empCode, n.date, byOther ? 'app, by ' + caller.email : 'app',
                                   [n.time]);
   if (!row) {
     throw new Error('Today cannot be changed - it is on approved leave, or this month is finalised.');
   }
+  mine = mine.filter(function (a) { return String(a.date) !== String(row.date); });
+  mine.push(row);
   if (note) {
     row.remarks = String(row.remarks + ' - ' + note).slice(0, 120);
     upsert('Attendance', row);
   }
-  return { record: row, state: punchState(empCode), fence: fence, at: n.time };
+  return { record: row, state: punchState(empCode, mine), fence: fence, at: n.time };
 }
 
 function senderAddress() {

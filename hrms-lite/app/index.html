@@ -435,7 +435,8 @@ el('signin').onclick = function () {
     }
     S.user = u;
     if (el('stay').checked) saveSession(u); else clearSession();
-    return start();
+    /* It arrived with the session; do not fetch the same thing again. */
+    return start(u.workspace || null);
   }).catch(function (e) { showLoginError(e.message); })
     .then(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
 };
@@ -443,11 +444,11 @@ el('signin').onclick = function () {
   el(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') el('signin').click(); });
 });
 
-function start() {
+function start(given) {
   el('login').style.display = 'none';
   el('app').style.display = 'block';
   startClock();
-  return reload().then(startWatch);
+  return reload(given).then(startWatch);
 }
 
 /* ------------------------- auto refresh -------------------------- */
@@ -491,8 +492,11 @@ function refreshWhenFree() {
   reload();
 }
 
-function reload() {
-  return api('bootstrap').then(function (d) {
+function reload(given) {
+  /* given is the workspace that came back with the sign-in. Opening the app
+     was two round trips to Apps Script, and on a phone the second one cost
+     more than everything it carried. */
+  return (given ? Promise.resolve(given) : api('bootstrap')).then(function (d) {
     S.settings = d.settings || {};
     S.me = (d.employees || [])[0] || null;
     S.att = d.attendance || [];

@@ -2036,7 +2036,10 @@ el('btn-login').onclick = function () {
       S.user = user;
       localStorage.setItem('hrms_lite_api', url);
       if (stay) rememberSession(user); else forgetSession();
-      return start();
+      /* The workspace came back with the session, so start() is told not to
+         fetch it again. An older script that does not send it makes start()
+         fetch as before. */
+      return start(user.workspace || null);
     })
     .catch(function (e) { showLoginError(e.message); })
     .then(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
@@ -2078,7 +2081,7 @@ function demoRole() {
 }
 function logout() { stopWatch(); S.user = null; forgetSession(); location.reload(); }
 
-function start() {
+function start(given) {
   el('login').style.display = 'none';
   el('demo-flag').style.display = S.demo ? 'inline-block' : 'none';
   el('demo-role').style.display = S.demo ? '' : 'none';
@@ -2094,7 +2097,7 @@ function start() {
     b.classList.toggle('on', b.dataset.attview === S.attView);
   });
   startClock();
-  return reload().then(function () {
+  return reload(given).then(function () {
     /* Demo mode lives in this browser's own storage - nobody else can change
        it, so there is nothing to watch for. */
     if (!S.demo) startWatch();
@@ -2122,12 +2125,14 @@ function forceRefresh() {
   return manualRefresh();
 }
 
-function reload() {
+function reload(given) {
   /* The punch log is fetched separately and cached per span. An import or any
      other refresh can change the very day being looked at, so the cache goes
      with the rest of the data rather than outliving it. */
   PUNCH_CACHE = { key: '', rows: [], error: '', loading: '' };
-  return api('bootstrap').then(function (d) {
+  /* given is the workspace that arrived with the sign-in, so the screen does
+     not ask for it a second time. Every other refresh fetches. */
+  return (given ? Promise.resolve(given) : api('bootstrap')).then(function (d) {
     S.inbox = d.inbox || { isManager: false, team: [], teamLeave: [], teamRequests: [] };
     S.settings = d.settings || {};
     S.employees = d.employees || [];
@@ -5749,7 +5754,13 @@ var ATTENDANCE_RULES = [
   ['late_marks_per_halfday', 'Late marks that cost half a day (0 = off)', 'number'],
   ['ot_pay_enabled', 'Pay overtime', 'select:no,yes'],
   ['ot_rate_multiplier', 'Overtime rate multiplier', 'number'],
-  ['ot_max_hours_month', 'Overtime hours paid per month at most', 'number']
+  ['ot_max_hours_month', 'Overtime hours paid per month at most', 'number'],
+  /* The single biggest thing the office screen waits for on opening. It is
+     one number of days across the whole company, so what it costs grows with
+     the headcount: 150 days of 62 people is ten thousand rows to read before
+     anything is drawn. Lower it and the screens open faster but reach less
+     far back without a refresh. */
+  ['bootstrap_attendance_days', 'Days of attendance loaded at sign-in (lower = faster)', 'number']
 ];
 var LEAVE_RULES = [
   ['sandwich_rule', 'Sandwich rule (offs inside a leave are charged)', 'select:no,yes'],
