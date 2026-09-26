@@ -610,6 +610,7 @@ function setup() {
      ['esi_employee_pct', '0.0075', 'ESI employee share, on gross'],
      ['esi_employer_pct', '0.0325', 'ESI employer share, on gross'],
      ['esi_ceiling', '21000', 'No ESI above this monthly gross'],
+     ['pf_ceiling', '15000', 'PF is charged on at most this much basic'],
      ['leave_pct', '0.32', 'Paid-leave component, share of gross'],
      ['bonus_months_basic', '1', 'Annual bonus as months of basic']
     ].forEach(function (v) {
@@ -623,7 +624,12 @@ function setup() {
      [40, 'conveyance', 'Conveyance allowance', 'earning', 'formula', 'gross - basic - hra', 'yes', 'no', 'no', 'no', 'yes'],
      [50, 'esi_employee', 'ESIC @0.75% of gross', 'deduction', 'formula',
       'if(gross <= esi_ceiling, gross * esi_employee_pct, 0)', 'no', 'no', 'no', 'no', 'yes'],
-     [60, 'pf_employee', 'PF @12% of basic', 'deduction', 'formula', 'basic * pf_employee_pct', 'no', 'no', 'no', 'no', 'yes'],
+     /* The ceiling, exactly as payroll applies it: PF is charged on at most
+        pf_ceiling of basic, so above it the deduction stops at 1,800. Without
+        the cap a CTC sheet showed a candidate on 60,000 a PF deduction of
+        4,320 that payroll would never take. */
+     [60, 'pf_employee', 'PF @12% of basic (capped)', 'deduction', 'formula',
+      'min(basic, pf_ceiling) * pf_employee_pct', 'no', 'no', 'no', 'no', 'yes'],
      [70, 'ptax', 'P.Tax', 'deduction', 'formula',
       'slab(gross, 10000:0, 15000:110, 25000:130, 40000:150, 99999999:200)', 'no', 'no', 'no', 'no', 'yes'],
      [80, 'deductions', 'Total deductions', 'summary', 'formula', 'esi_employee + pf_employee + ptax', 'no', 'no', 'no', 'no', 'yes'],
