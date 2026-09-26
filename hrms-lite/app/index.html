@@ -43,9 +43,19 @@ button{border:0;background:none;cursor:pointer;}
 #login p.sub{color:#94a3b8;font-size:.9rem;margin-bottom:30px;}
 #login label{display:block;font-size:.78rem;font-weight:700;color:#cbd5e1;
   text-transform:uppercase;letter-spacing:.4px;margin:0 0 6px;}
-#login input[type=email],#login input[type=password]{width:100%;padding:15px 14px;
+/* Every field on this screen, not a list of the types it happens to use.
+   The staff-code box became type="text" when sign-in stopped being an email
+   address, matched neither name in the old selector, and so lost its
+   background and width and inherited the panel's white text - white on
+   white, invisible, and half the width of the password box under it. */
+#login input:not([type=checkbox]){width:100%;padding:15px 14px;
   border-radius:12px;border:1px solid #334155;background:#1e293b;color:#fff;
-  font-size:1rem;margin-bottom:16px;}
+  font-size:1rem;margin-bottom:16px;-webkit-text-fill-color:#fff;
+  box-sizing:border-box;}
+#login input:not([type=checkbox]):focus{outline:none;border-color:var(--primary);}
+/* Chrome paints its own colours over a remembered login. */
+#login input:-webkit-autofill{-webkit-text-fill-color:#fff;
+  -webkit-box-shadow:0 0 0 60px #1e293b inset;caret-color:#fff;}
 #login input::placeholder{color:#64748b;}
 #login .row{display:flex;align-items:center;gap:9px;margin-bottom:22px;font-size:.88rem;
   color:#cbd5e1;}
