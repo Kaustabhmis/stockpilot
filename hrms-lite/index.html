@@ -42,7 +42,10 @@ body{background:var(--bg-main);color:var(--text-dark);display:flex;height:100vh;
   border-left:3px solid transparent;font-size:.9rem;font-weight:500;transition:.15s;}
 .nav-item:hover{background:rgba(255,255,255,.05);color:#fff;}
 .nav-item.active{background:var(--sidebar-active);color:#fff;border-left-color:var(--primary);}
-.nav-item .num{margin-left:auto;font-size:.65rem;color:#475569;font-weight:700;}
+/* The module number, 1 to 5. At #475569 on this sidebar it sat at about
+   1.9:1 against the background - present but not actually readable. Lifted
+   to a shade that can be read while staying quieter than the module name. */
+.nav-item .num{margin-left:auto;font-size:.65rem;color:#8ea0b8;font-weight:700;}
 .nav-item.home{border-bottom:1px solid rgba(255,255,255,.06);}
 .nav-item .dot{margin-left:auto;background:var(--danger);color:#fff;border-radius:99px;padding:1px 7px;
   font-size:.65rem;font-weight:800;display:none;}
