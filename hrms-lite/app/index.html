@@ -409,7 +409,14 @@ function api(action, payload) {
   });
 }
 
-function saveSession(u) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(u)); } catch (e) {} }
+/* The session only, never the workspace that now rides back with it: that
+   would put the worker's attendance and payslips into the phone's storage
+   and, on a real company, exceed what the browser will keep at all. */
+function saveSession(u) {
+  var keep = {};
+  Object.keys(u || {}).forEach(function (k) { if (k !== 'workspace') keep[k] = u[k]; });
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(keep)); } catch (e) {}
+}
 function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} }
 function readSession() {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return null; }

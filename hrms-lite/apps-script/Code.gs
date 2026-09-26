@@ -1818,10 +1818,9 @@ function rebuildDayFromPunches(empCode, iso, source, extraTimes) {
 
   var times = [];
   var add = function (t) { var c = clockOf(t); if (c && times.indexOf(c) < 0) times.push(c); };
-  readSheet('Punches', tapWindow()).forEach(function (r) {
+  punchesOn(iso).forEach(function (r) {
     if (String(r.emp_code) !== String(empCode)) return;
-    var stamp = String(r.punch_time || '');
-    if (stamp.slice(0, 10) === iso) add(stamp.slice(10));
+    add(String(r.punch_time || '').slice(10));
   });
   (extraTimes || []).forEach(add);
   /* With the punch log switched off there is nothing to rebuild from, so widen
@@ -1932,7 +1931,32 @@ function punchWindow() {
    ones - reading three thousand of them to find the two somebody made this
    morning was most of what a punch cost. */
 function tapWindow() {
-  return Math.max(200, readSheet('Employees').length * 6);
+  return Math.max(400, readSheet('Employees').length * 8);
+}
+
+/* Every punch made on one date, with the tail checked rather than trusted.
+   A guess at how many rows a day takes is wrong the moment a shift punches
+   more than the guess allows: at eight taps each, sixty-two people fill the
+   tail before lunch, the morning punches fall outside it, and the day is
+   rebuilt with a midday time as its first punch - an attendance error, not
+   a slow screen. So if the rows read do not reach back past the start of
+   the day, the guess was too small and the log is read in full. */
+function punchesOn(iso) {
+  var day = String(iso || '');
+  var take = function (tail) {
+    var rows = readSheet('Punches', tail);
+    var oldest = '';
+    rows.forEach(function (r) {
+      var t = String(r.punch_time || '');
+      if (t && (!oldest || t < oldest)) oldest = t;
+    });
+    return { reached: !tail || !oldest || oldest < day, rows: rows };
+  };
+  var got = take(tapWindow());
+  if (!got.reached) got = take(0);
+  return got.rows.filter(function (r) {
+    return String(r.punch_time || '').slice(0, 10) === day;
+  });
 }
 
 /**
@@ -1994,11 +2018,9 @@ function punchState(empCode, mine) {
      that bound the day. Somebody who taps twice should be able to see that
      both taps arrived, and that the extra one changed nothing. */
   var taps = [];
-  readSheet('Punches', tapWindow()).forEach(function (r) {
+  punchesOn(n.date).forEach(function (r) {
     if (String(r.emp_code) !== String(empCode)) return;
-    var stamp = String(r.punch_time || '');
-    if (stamp.slice(0, 10) !== n.date) return;
-    var t = clockOf(stamp.slice(10));
+    var t = clockOf(String(r.punch_time || '').slice(10));
     if (t) taps.push(t);
   });
   taps.sort();

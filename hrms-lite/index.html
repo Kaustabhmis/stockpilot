@@ -2011,8 +2011,18 @@ function brandTap() {
    inside the window the server already allows. */
 var SESSION_KEY = 'hrms_lite_session';
 
+/* Only what is needed to prove who this is on the next visit. The sign-in
+   reply now carries the whole workspace with it, and storing that put every
+   employee record, salary and payslip into this browser's storage - tens of
+   kilobytes for a small company, megabytes for a real one, which silently
+   exceeds the quota and leaves "keep me signed in" quietly not working. The
+   workspace is fetched fresh when the session resumes anyway. */
 function rememberSession(user) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch (e) { /* private mode */ }
+  var keep = {};
+  Object.keys(user || {}).forEach(function (k) {
+    if (k !== 'workspace') keep[k] = user[k];
+  });
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(keep)); } catch (e) { /* private mode */ }
 }
 function forgetSession() {
   try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* private mode */ }
