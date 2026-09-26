@@ -2317,8 +2317,19 @@ function saveUser(user, caller) {
   var role = String(user.role || 'employee').toLowerCase();
   if (role === 'admin') role = 'owner';
 
+  /* A username is an email address or a staff code, because that is what
+     sign-in accepts and what every auto-created login holds. Insisting on an
+     address here left HR unable to touch those logins at all: they could not
+     add a second (rightly refused as a duplicate) and could not edit the
+     first, so an employee could never be promoted to HR. */
   if (!/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(email)) {
-    throw new Error('That does not look like an email address.');
+    var isCode = false;
+    readSheet('Employees').forEach(function (e) {
+      if (String(e.emp_code || '').trim().toLowerCase() === email) isCode = true;
+    });
+    if (!isCode) {
+      throw new Error('That is neither an email address nor a staff code on the list.');
+    }
   }
   if (ROLES.indexOf(role) < 0) {
     throw new Error('Role must be one of: ' + ROLES.join(', '));
@@ -2342,6 +2353,21 @@ function saveUser(user, caller) {
   var existing = null;
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].data.email || '').trim().toLowerCase() === email) { existing = rows[i]; break; }
+  }
+
+  /* One person, one login. Every employee is given one as they are added, so
+     making a second under a different address left them with two that
+     disagreed: the HR manager's own staff code signed her in as an ordinary
+     employee, because sign-in finds whichever row it meets first - and the
+     password on that second door was the staff code printed on her ID card.
+     The existing login is named so it can be edited instead. */
+  if (!existing && empCode) {
+    for (var d = 0; d < rows.length; d++) {
+      if (String(rows[d].data.emp_code || '').trim().toLowerCase() !== empCode.toLowerCase()) continue;
+      throw new Error(empCode + ' already has a login: ' + rows[d].data.email +
+        '. Change the role or the password on that one rather than adding a second, ' +
+        'or remove it first if the address is wrong.');
+    }
   }
 
   var me = String((caller && caller.email) || '').toLowerCase();
