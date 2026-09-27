@@ -957,7 +957,7 @@ var S = {
   /* Which months of attendance this screen is holding. null means it
      holds the lot - the demo, and any Apps Script old enough not to
      send the list - in which case nothing is ever fetched. */
-  attMonths: null, attFetching: {},
+  attMonths: null, attFetching: {}, viewStale: {},
   empSort: { col: 'emp_code', dir: 1 }
 };
 
@@ -2344,10 +2344,33 @@ function renderNoticeBoard() {
     '</div>';
 }
 
+/* Which function draws each screen. */
+var VIEW_RENDER = {
+  dashboard:  function () { renderDashboard(); },
+  employees:  function () { renderEmployees(); },
+  attendance: function () { renderAttendance(); },
+  /* the leave screen carries the requests tabs inside it */
+  leave:      function () { renderLeave(); renderRequests(); },
+  payroll:    function () { renderPayroll(); },
+  reports:    function () { renderReports(); }
+};
+
+/* Signing in used to draw all six screens before showing the one being
+   looked at - the whole register grid, the payroll table and a report, for
+   sixty-odd people, none of it on screen. Now the screen in front of you is
+   drawn and the rest are marked as needing it; go() draws one when it is
+   opened. Opening a screen for the first time costs what it always did. */
 function renderAll() {
-  renderEmployees(); renderAttendance(); renderLeave(); renderRequests();
-  renderPayroll(); renderReports(); renderDashboard();
+  Object.keys(VIEW_RENDER).forEach(function (v) { S.viewStale[v] = 1; });
+  renderView(S.view || 'dashboard');
   if (typeof chikuVisible === 'function') chikuVisible();
+}
+
+function renderView(view) {
+  var draw = VIEW_RENDER[view];
+  if (!draw) return;
+  delete S.viewStale[view];
+  draw();
 }
 
 /* --------------------------- navigation ------------------------- */
@@ -2356,6 +2379,7 @@ var ADMIN_VIEWS = { employees: 1, reports: 1 };
 function go(view) {
   if (ADMIN_VIEWS[view] && !isAdmin()) view = 'dashboard';
   S.view = view;
+  if (S.viewStale[view]) renderView(view);
   document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
   el('view-' + view).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(function (n) {
@@ -4638,7 +4662,10 @@ function renderPayroll() {
   var ym = el('pay-month').value || thisMonth();
   /* the run is worked out from that month's attendance, so it has to be here */
   if (needMonths([ym], renderPayroll)) return;
-  if (isAdmin() && S.mailLogMonth !== ym) {
+  /* Who has already been sent their payslip. Only worth asking for when the
+     payroll screen is the one being looked at - it used to be fetched at
+     sign-in, a round trip for a screen nobody had opened. */
+  if (isAdmin() && S.view === 'payroll' && S.mailLogMonth !== ym) {
     S.mailLogMonth = ym;
     S.mailLog = [];
     refreshMailLog(ym).then(function () {
