@@ -500,8 +500,8 @@ function route(action, p, caller) {
     case 'monthAtt':    return monthAtt(p.month);
     case 'makeLogins':  return backfillAccounts();
     case 'setup':       return setup();
-    case 'login':       return login(p.email, p.password);
-    case 'bootstrap':   return bootstrap(caller);
+    case 'login':       return login(p.email, p.password, p.months);
+    case 'bootstrap':   return bootstrap(caller, p && p.months);
     case 'list':        return readSheet(p.sheet);
     case 'save':        return upsert(p.sheet, p.row);
     case 'saveMany':    return upsertMany(p.sheet, p.rows);
@@ -776,7 +776,7 @@ function resetAdminPassword() {
 /* Auth                                                                */
 /* ------------------------------------------------------------------ */
 
-function login(email, password) {
+function login(email, password, byMonth) {
   var users = readSheet('Users');
   var typed = String(email || '').trim().toLowerCase();
   var user = null;
@@ -825,7 +825,7 @@ function login(email, password) {
      a script start and a round trip before it reads anything, which on a
      phone was most of the wait. A client that ignores this field and asks
      separately still works exactly as before. */
-  try { who.workspace = bootstrap(who); } catch (e) { /* sign in anyway */ }
+  try { who.workspace = bootstrap(who, byMonth); } catch (e) { /* sign in anyway */ }
   return who;
 }
 
@@ -980,8 +980,8 @@ function myMonth(empCode, ym) {
    actually read. Every other month is fetched when it is opened, by
    monthAtt(). Reading five months of the whole company's register to show
    one was most of what made signing in slow. */
-function bootstrapMonths() {
-  var back = parseInt(settingsMap().bootstrap_attendance_months || '2', 10);
+function bootstrapMonths(back) {
+  if (back === undefined) back = parseInt(settingsMap().bootstrap_attendance_months || '2', 10);
   if (!(back > 0)) back = 1;
   if (back > 24) back = 24;
   var ym = String(nowParts().date).slice(0, 7);
@@ -1093,17 +1093,23 @@ function monthAtt(ym) {
   return { month: want, rows: attendanceFor([want]) };
 }
 
-function bootstrap(caller) {
+/* byMonth says the screen that asked understands being given a couple of
+   months and fetching the rest itself. A screen served from an older cached
+   copy does not, and would show every month it was not sent as a month
+   nobody marked - so that one is handed the reach it used to have. It costs
+   an old screen what it always cost, for as long as it takes one reload to
+   pick up the new one. */
+function bootstrap(caller, byMonth) {
   if (caller && isHrOrAbove(caller.role)) {
     var owner = isOwner(caller.role);
     return {
       role: owner ? 'owner' : 'hr',
       settings:   owner ? settingsMap() : hrSettings(),
       employees:  readSheet('Employees'),
-      attendance: attendanceFor(bootstrapMonths()),
+      attendance: attendanceFor(bootstrapMonths(byMonth ? undefined : 6)),
       /* which months that covers, so the screen knows what it still has to
          fetch before it can show one */
-      attMonths:  bootstrapMonths(),
+      attMonths:  bootstrapMonths(byMonth ? undefined : 6),
       leave:      readSheet('Leave').map(stamped('Leave')),
       payroll:    readSheet('Payroll'),
       holidays:   readSheet('Holidays'),

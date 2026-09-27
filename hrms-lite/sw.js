@@ -6,7 +6,7 @@
  * never be answered out of a cache, and a stale payslip would be worse than
  * no payslip.
  */
-var CACHE = 'biscs-os-v1';
+var CACHE = 'biscs-os-v2';
 var SHELL = ['./index.html', './manifest.webmanifest',
              './app/icons/icon-192.png', './app/icons/icon-512.png'];
 
@@ -28,16 +28,30 @@ self.addEventListener('fetch', function (e) {
   if (req.method !== 'GET') return;                       // punches are POSTs
   if (req.url.indexOf('script.google.com') >= 0) return;  // never cache the workspace
 
-  /* The page itself: try the network so a redeploy is picked up straight
-     away, fall back to the cached copy when there is no signal. */
+  /* The page itself: hand over the copy we already have straight away and
+     fetch a fresh one behind it, which the next open uses. The page is half
+     a megabyte, so waiting for it over a phone connection was a second or
+     two of blank screen every single time it was opened.
+
+     Nothing goes stale by this. None of the data is in the page: attendance,
+     punches and payslips are always fetched from the workspace and are never
+     served from here. What it costs is that a redeploy shows up one open
+     later - open it twice after putting a new copy on the site. */
   if (req.mode === 'navigate' || req.destination === 'document') {
     e.respondWith(
-      fetch(req).then(function (res) {
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
-        return res;
-      }).catch(function () {
-        return caches.match('./index.html');
+      caches.match('./index.html').then(function (hit) {
+        var fresh = fetch(req).then(function (res) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
+          return res;
+        });
+        if (hit) {
+          /* it is fetched anyway, for next time; a dead signal is not an
+             error worth reporting when we already have the page */
+          fresh.catch(function () { /* offline - the cached copy is serving */ });
+          return hit;
+        }
+        return fresh.catch(function () { return caches.match('./index.html'); });
       })
     );
     return;

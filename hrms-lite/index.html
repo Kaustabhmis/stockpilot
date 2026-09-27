@@ -1234,12 +1234,17 @@ function api(action, payload) {
     catch (err) { return Promise.reject(err); }
   }
   var token = S.user ? (S.user.token || '') : '';
-  var body = JSON.stringify({ action: action, payload: payload || {}, token: token });
+  var p = payload || {};
+  /* Tells the workspace this screen knows how to fetch a month for itself,
+     so it may be handed two rather than half a year. A screen served from an
+     older cached copy says nothing and is given the reach it expects. */
+  if (action === 'bootstrap' || action === 'login') { p = Object.assign({}, p, { months: true }); }
+  var body = JSON.stringify({ action: action, payload: p, token: token });
   return fetch(S.api, {
     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body
   }).then(function (r) { return r.json(); }).catch(function (netErr) {
     if (body.length > 6000) throw netErr;
-    return jsonpCall(action, payload || {}, token);
+    return jsonpCall(action, p, token);
   }).then(function (j) {
     if (!j.ok) {
       /* The server refused the session, not the request. Nothing this browser
