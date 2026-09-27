@@ -98,7 +98,7 @@ var DEFAULT_SETTINGS = {
   sync_last_push: '',
   import_companies: '',
   register_group_by: 'unit',
-  bootstrap_attendance_days: '150',
+  bootstrap_attendance_months: '2',
   payslip_email_enabled: 'yes',
   payslip_email_attach_pdf: 'yes',
   payslip_email_subject: 'Payslip for {month} - {company}',
@@ -497,6 +497,7 @@ function route(action, p, caller) {
     case 'ping':        return { service: 'HRMS Lite', version: VERSION };
     case 'rev':         return currentRevision(caller);
     case 'myMonth':     return myMonth(caller && caller.emp_code, p.month);
+    case 'monthAtt':    return monthAtt(p.month);
     case 'makeLogins':  return backfillAccounts();
     case 'setup':       return setup();
     case 'login':       return login(p.email, p.password);
@@ -929,7 +930,13 @@ function monthWindow(ym) {
                (parseInt(b[1], 10) - parseInt(a[1], 10));
   if (!(months >= 0)) months = 0;
   var people = readSheet('Employees').length || 1;
-  return Math.max(400, Math.ceil(people * (months + 2) * 31 * 1.15));
+  /* months + 1 is what it takes to reach the start of that month; the 1.15 is
+     the slack for days somebody marked twice or a headcount that has grown.
+     It used to be months + 2, a whole spare month - which on a two-month read
+     was half the rows again for nothing. If the guess does still come up
+     short the caller checks and reads the tab whole, so this is only ever a
+     question of speed, never of correctness. */
+  return Math.max(400, Math.ceil(people * (months + 1) * 31 * 1.15));
 }
 
 /* One month of the caller's own attendance, fetched when they page back to a
@@ -968,10 +975,122 @@ function myMonth(empCode, ym) {
   return { month: want, rows: got.rows };
 }
 
-function attendanceWindow(people) {
-  var days = parseInt(settingsMap().bootstrap_attendance_days || '150', 10);
-  if (!(days > 0)) return 0;                       // 0 = no limit, read it all
-  return Math.max(2000, Math.ceil((people || 1) * days * 1.15));
+/* The months the office screen is given at sign-in: the running month and,
+   by default, the one before it - the two the dashboard and the payroll run
+   actually read. Every other month is fetched when it is opened, by
+   monthAtt(). Reading five months of the whole company's register to show
+   one was most of what made signing in slow. */
+function bootstrapMonths() {
+  var back = parseInt(settingsMap().bootstrap_attendance_months || '2', 10);
+  if (!(back > 0)) back = 1;
+  if (back > 24) back = 24;
+  var ym = String(nowParts().date).slice(0, 7);
+  var y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(5, 7), 10);
+  var out = [];
+  for (var i = 0; i < back; i++) {
+    out.push(y + '-' + (m < 10 ? '0' : '') + m);
+    m--; if (m < 1) { m = 12; y--; }
+  }
+  return out;
+}
+
+/* Whole-company attendance for the named months.
+
+   Two ways to get it, because the months a screen asks for sit in two very
+   different places in the tab.
+
+   The running month is at the END, so reading the last few thousand rows
+   gets it and costs little. The guess is checked rather than trusted: if the
+   rows read do not reach back past the start of the earliest month wanted,
+   the guess was too small - one row dated later than today is enough to do
+   that - and the second way is used instead.
+
+   Any older month is spread somewhere in the middle, and reading the tail
+   back to it would drag home everything since. So instead the date column
+   is read ALONE - one cell a row, the cheap thing to pull - to find which
+   rows carry those months, and only that band of rows is then read at full
+   width. The band runs from the first matching row to the last rather than
+   assuming the month is one unbroken run, because it need not be: a day
+   back-dated into February and saved today sits at the bottom of the tab.
+   A stray row like that makes the band wide and the read slower, never
+   wrong - which is the right way round. */
+function attendanceFor(months) {
+  var want = {}, earliest = '', latest = '';
+  (months || []).forEach(function (m) {
+    m = String(m).slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(m)) return;
+    want[m] = 1;
+    if (!earliest || m < earliest) earliest = m;
+    if (!latest || m > latest) latest = m;
+  });
+  if (!earliest) return [];
+
+  var mine = function (rows) {
+    return rows.filter(function (a) { return want[String(a.date).slice(0, 7)]; });
+  };
+
+  /* the tail, when what is wanted runs up to today */
+  if (latest >= String(nowParts().date).slice(0, 7)) {
+    var all = readSheet('Attendance', monthWindow(earliest));
+    var seen = '';
+    all.forEach(function (a) {
+      var d = String(a.date || '');
+      if (d && (!seen || d < seen)) seen = d;
+    });
+    if (!seen || seen <= earliest + '-01') return mine(all);
+  }
+
+  return attendanceBand(want);
+}
+
+/* The date column alone, then the band of rows it points at. */
+function attendanceBand(want) {
+  var sh = sheet('Attendance');
+  var headers = SHEETS.Attendance;
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+
+  var tz = Session.getScriptTimeZone();
+  var dates = sh.getRange(2, headers.indexOf('date') + 1, lastRow - 1, 1).getValues();
+  var first = 0, last = 0;
+  for (var i = 0; i < dates.length; i++) {
+    if (!want[String(normalize(dates[i][0], 'date', tz)).slice(0, 7)]) continue;
+    if (!first) first = i + 2;
+    last = i + 2;
+  }
+  if (!first) return [];
+
+  var values = sh.getRange(first, 1, last - first + 1, headers.length).getValues();
+  var out = [];
+  values.forEach(function (r) {
+    if (r.join('') === '') return;
+    var obj = {};
+    headers.forEach(function (h, c) { obj[h] = normalize(r[c], h, tz); });
+    if (want[String(obj.date).slice(0, 7)]) out.push(obj);
+  });
+  return out;
+}
+
+/* Every YYYY-MM from one date to another, both ends included. */
+function monthsSpanned(fromIso, toIso) {
+  var a = String(fromIso).slice(0, 7), b = String(toIso || fromIso).slice(0, 7);
+  if (b < a) { var t = a; a = b; b = t; }
+  var out = [], y = parseInt(a.slice(0, 4), 10), m = parseInt(a.slice(5, 7), 10);
+  for (var i = 0; i < 400; i++) {          /* a guard, not a limit */
+    var ym = y + '-' + (m < 10 ? '0' : '') + m;
+    out.push(ym);
+    if (ym >= b) break;
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/* One month of the whole company's attendance, for HR paging the register,
+   payroll or a report back to a month the opening load did not carry. */
+function monthAtt(ym) {
+  var want = String(ym || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(want)) throw new Error('Which month? Use YYYY-MM.');
+  return { month: want, rows: attendanceFor([want]) };
 }
 
 function bootstrap(caller) {
@@ -981,7 +1100,10 @@ function bootstrap(caller) {
       role: owner ? 'owner' : 'hr',
       settings:   owner ? settingsMap() : hrSettings(),
       employees:  readSheet('Employees'),
-      attendance: readSheet('Attendance', attendanceWindow(readSheet('Employees').length)),
+      attendance: attendanceFor(bootstrapMonths()),
+      /* which months that covers, so the screen knows what it still has to
+         fetch before it can show one */
+      attMonths:  bootstrapMonths(),
       leave:      readSheet('Leave').map(stamped('Leave')),
       payroll:    readSheet('Payroll'),
       holidays:   readSheet('Holidays'),
@@ -2821,8 +2943,13 @@ function applyRequestToRegister(req) {
   });
   if (effect !== 'present' && effect !== 'times') return 0;
 
+  /* Only the months the request itself covers, checked to reach: this used to
+     read the whole company's register five months back to find one person's
+     few days. */
+  var spanTo = String(req.to_date || iso);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(spanTo) || spanTo < iso) spanTo = iso;
   var have = {};
-  readSheet('Attendance', attendanceWindow(readSheet('Employees').length)).forEach(function (a) {
+  attendanceFor(monthsSpanned(iso, spanTo)).forEach(function (a) {
     if (String(a.emp_code) === String(req.emp_code)) have[String(a.date)] = a;
   });
 

@@ -65,6 +65,12 @@ body{background:var(--bg-main);color:var(--text-dark);display:flex;height:100vh;
 .stale-note{align-items:center;gap:6px;border-color:var(--warning) !important;
   color:var(--warning) !important;font-weight:600;}
 .stale-note:hover{background:rgba(250,178,25,.12) !important;}
+.month-note{align-items:center;gap:7px;font-size:.78rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:5px 12px;white-space:nowrap;}
+.month-note .spin{width:11px;height:11px;border-radius:50%;flex:0 0 auto;
+  border:2px solid var(--line);border-top-color:var(--brand);
+  animation:month-spin .7s linear infinite;}
+@keyframes month-spin{to{transform:rotate(360deg);}}
 .avatar{width:32px;height:32px;background:var(--primary);border-radius:50%;display:flex;align-items:center;
   justify-content:center;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0;}
 .content{flex:1;overflow-y:auto;padding:22px 26px 60px;}
@@ -584,6 +590,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
     </div>
     <div class="userbox">
       <span class="demo-flag" id="demo-flag" style="display:none;">DEMO DATA</span>
+      <span class="month-note" id="month-note" style="display:none;">
+        <span class="spin"></span><span id="month-note-text">Loading</span></span>
       <button class="ghost sm stale-note" id="stale-note" style="display:none;"
               onclick="forceRefresh()" title="Someone else changed the sheet. Finish or save what you are doing, then take the update.">
         &#9679; New data &mdash; refresh</button>
@@ -946,6 +954,10 @@ var S = {
   /* A manager's team and whatever of theirs is waiting on a decision. */
   inbox: { isManager: false, team: [], teamLeave: [], teamRequests: [] },
   attDirty: {}, payDraft: null, attVersion: 0, attView: 'status',
+  /* Which months of attendance this screen is holding. null means it
+     holds the lot - the demo, and any Apps Script old enough not to
+     send the list - in which case nothing is ever fetched. */
+  attMonths: null, attFetching: {},
   empSort: { col: 'emp_code', dir: 1 }
 };
 
@@ -2149,6 +2161,12 @@ function reload(given) {
     S.settings = d.settings || {};
     S.employees = d.employees || [];
     S.attendance = d.attendance || [];
+    /* Sign-in carries the running month and the one before it. Any other
+       month is fetched when a screen asks for it - see ensureMonths(). An
+       older Apps Script sends no list, which means it sent everything. */
+    S.attMonths = d.attMonths ? d.attMonths.reduce(
+      function (m, k) { m[String(k).slice(0, 7)] = 1; return m; }, {}) : null;
+    S.attFetching = {};
     S.leave = d.leave || [];
     S.payroll = d.payroll || [];
     S.holidays = d.holidays || [];
@@ -3386,6 +3404,104 @@ function openImport() {
    MODULE 2 - ATTENDANCE
    ================================================================= */
 
+/* ---------------- attendance, a month at a time ----------------
+   Signing in used to carry five months of the whole company's register -
+   over ten thousand rows for sixty-odd people - so that a screen showing one
+   month had it to hand. Now it carries the running month and the one before,
+   and anything older is fetched the moment a screen actually asks for it.
+
+   Nothing is lost: every month is still reachable. It arrives when it is
+   opened rather than at sign-in, which is why signing in is quick. */
+
+function monthsBetween(fromIso, toIso) {
+  var a = String(fromIso).slice(0, 7), b = String(toIso || fromIso).slice(0, 7);
+  if (b < a) { var t = a; a = b; b = t; }
+  var out = [], y = parseInt(a.slice(0, 4), 10), m = parseInt(a.slice(5, 7), 10);
+  /* a guard, not a limit: a date typed as 1900 must not spin forever */
+  for (var i = 0; i < 400; i++) {
+    var ym = y + '-' + (m < 10 ? '0' : '') + m;
+    out.push(ym);
+    if (ym >= b) break;
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+function haveMonth(ym) {
+  return !S.attMonths || S.attMonths[String(ym).slice(0, 7)] === 1;
+}
+
+/* Fetch whichever of these months is not here yet and fold the rows in.
+   Resolves once the screen may safely draw. A month that will not load is
+   reported rather than left silently empty, because an empty register reads
+   as "the days were never marked" and that is not what happened. */
+function ensureMonths(months) {
+  var want = [];
+  (months || []).forEach(function (m) {
+    m = String(m).slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(m) && !haveMonth(m) && want.indexOf(m) < 0) want.push(m);
+  });
+  if (!want.length) return Promise.resolve(false);
+
+  return Promise.all(want.map(function (ym) {
+    /* two screens asking for the same month share the one request */
+    if (S.attFetching[ym]) return S.attFetching[ym];
+    var job = api('monthAtt', { month: ym }).then(function (d) {
+      var rows = (d && d.rows) || [];
+      /* drop anything already held for that month before folding the fresh
+         rows in, so a month fetched twice cannot double its days */
+      S.attendance = S.attendance.filter(function (a) {
+        return String(a.date).slice(0, 7) !== ym;
+      }).concat(rows);
+      if (S.attMonths) S.attMonths[ym] = 1;
+      delete S.attFetching[ym];
+      return true;
+    }).catch(function (e) {
+      delete S.attFetching[ym];
+      toast('Could not load ' + monthLabel(ym) + ': ' + e.message, 'bad');
+      throw e;
+    });
+    S.attFetching[ym] = job;
+    return job;
+  })).then(function () { S.attVersion++; return true; });
+}
+
+function monthNote(label) {
+  var n = el('month-note');
+  if (!n) return;
+  if (label) { el('month-note-text').textContent = 'Loading ' + label; n.style.display = 'inline-flex'; }
+  else n.style.display = 'none';
+}
+
+/* Draw once the months the screen needs are here.
+
+   It does NOT draw first with what it happens to hold: a register with the
+   month's rows missing looks exactly like a month nobody marked, and that
+   is a worse answer than a second's wait. So say what is being fetched,
+   wait, then draw the real thing. Months already held draw at once, which
+   is every month the user opens more than once. */
+function withMonths(months, draw) {
+  var missing = (months || []).filter(function (m) { return !haveMonth(m); });
+  if (!missing.length) { monthNote(''); draw(); return; }
+  monthNote(monthLabel(missing[0]) + (missing.length > 1 ? ' +' + (missing.length - 1) : ''));
+  var done = function () { monthNote(''); draw(); };
+  ensureMonths(missing).then(done, done);
+}
+
+/* The guard a render puts at its top: "I need these months; if they are not
+   here, fetch them and call me again." Returns true when the caller should
+   stop and wait. The second pass draws whether the fetch worked or not - a
+   failure has already been said out loud - so this can never loop. */
+function needMonths(months, again) {
+  if (!(months || []).some(function (m) { return !haveMonth(m); })) return false;
+  if (S._monthWait) return false;
+  withMonths(months, function () {
+    S._monthWait = true;
+    try { again(); } finally { S._monthWait = false; }
+  });
+  return true;
+}
+
 function attMap(ym) {
   if (S._amYm === ym && S._amV === S.attVersion) return S._am;
   var map = {};
@@ -3566,6 +3682,7 @@ function printAttendance() {
 
 function renderAttendance() {
   var ym = el('att-month').value || thisMonth();
+  if (needMonths([ym], renderAttendance)) return;
   var dim = daysInMonth(ym);
   var emps = activeEmployees();
   var locked = monthLocked(ym);
@@ -4361,8 +4478,18 @@ function cancelLeave(id) {
   ]);
 }
 
-/* Approved leave writes "L" onto the register; cancelling clears those days. */
+/* Approved leave writes "L" onto the register; cancelling clears those days.
+
+   The months the leave falls in have to be in hand first. Deciding whether a
+   day may be cleared turns on what is already marked on it, and a month this
+   screen never loaded looks unmarked - which would clear a day somebody had
+   marked Present, times and all. So fetch, then decide. */
 function writeLeaveToAttendance(l, status) {
+  return ensureMonths(monthsBetween(l.from_date, l.to_date))
+    .then(function () { return writeLeaveDays(l, status); });
+}
+
+function writeLeaveDays(l, status) {
   var rows = [];
   var a = new Date(l.from_date), b = new Date(l.to_date);
   for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
@@ -4509,6 +4636,8 @@ function currentRun(ym) {
 
 function renderPayroll() {
   var ym = el('pay-month').value || thisMonth();
+  /* the run is worked out from that month's attendance, so it has to be here */
+  if (needMonths([ym], renderPayroll)) return;
   if (isAdmin() && S.mailLogMonth !== ym) {
     S.mailLogMonth = ym;
     S.mailLog = [];
@@ -5081,6 +5210,17 @@ function renderReports() {
      was meant, so the heading and the file name do not come out reversed. */
   if (punches && upto < iso) { var flip = iso; iso = upto; upto = flip; }
   var ym = byDate ? iso.slice(0, 7) : (el('rep-month').value || thisMonth());
+
+  /* Which months this report reads. A week can straddle two, a punch span any
+     number, and everything else is the one month picked. Fetch them before
+     drawing, or the report comes out short without saying so. */
+  var need;
+  if (weekly) { var ws = weekStart(iso); need = monthsBetween(ws, addDays(ws, 6)); }
+  else if (punches) need = monthsBetween(iso, upto);
+  else if (daily) need = [iso.slice(0, 7)];
+  else need = [ym];
+  if (needMonths(need, renderReports)) return;
+
   el('rep-date-wrap').style.display = byDate ? '' : 'none';
   el('rep-month-wrap').style.display = byDate ? 'none' : '';
   el('rep-date2-wrap').style.display = punches ? '' : 'none';
@@ -5767,12 +5907,13 @@ var ATTENDANCE_RULES = [
   ['ot_pay_enabled', 'Pay overtime', 'select:no,yes'],
   ['ot_rate_multiplier', 'Overtime rate multiplier', 'number'],
   ['ot_max_hours_month', 'Overtime hours paid per month at most', 'number'],
-  /* The single biggest thing the office screen waits for on opening. It is
-     one number of days across the whole company, so what it costs grows with
-     the headcount: 150 days of 62 people is ten thousand rows to read before
-     anything is drawn. Lower it and the screens open faster but reach less
-     far back without a refresh. */
-  ['bootstrap_attendance_days', 'Days of attendance loaded at sign-in (lower = faster)', 'number']
+  /* What signing in carries. The office screen used to read five months of
+     the whole company's register - ten thousand rows for sixty-odd people -
+     before it drew anything. Now it takes these months and fetches any other
+     month when a screen is actually opened on it, so nothing is out of reach
+     and opening is quick. 2 is the running month and the one before, which
+     is what the dashboard and the payroll run read. */
+  ['bootstrap_attendance_months', 'Months of attendance loaded at sign-in (lower = faster)', 'number']
 ];
 var LEAVE_RULES = [
   ['sandwich_rule', 'Sandwich rule (offs inside a leave are charged)', 'select:no,yes'],
@@ -7137,9 +7278,13 @@ function openPush() {
     'bearer token if one is stored. The endpoint must be reachable from the public internet.</p>' +
     '<div id="push-out" style="margin-top:12px;font-size:.8rem"></div>',
     [{ label: 'Close', cls: 'ghost', onClick: closeModal },
-     { label: 'Send', onClick: function () {
+     { label: 'Send', onClick: function doPush() {
         var ym2 = el('push-month').value;
         var what = el('push-what').value;
+        /* Any month may be typed here, including one this screen never
+           loaded. Fetch it first - otherwise it reads as an empty month and
+           the dialog says there is nothing to send, which is not true. */
+        if (what !== 'payroll' && needMonths([ym2], doPush)) return;
         var rows = what === 'payroll' ? savedRunFor(ym2) : attendanceRowsFor(ym2);
         if (!rows.length) return toast('Nothing to send for ' + monthLabel(ym2), 'bad');
         var out = el('push-out');
@@ -7183,6 +7328,7 @@ function downloadAgentConfig() {
 /* Generate INSERT statements so attendance can be pushed into any SQL database. */
 function exportSql() {
   var ym = el('att-month') && el('att-month').value ? el('att-month').value : thisMonth();
+  if (needMonths([ym], exportSql)) return;
   var rows = attendanceRowsFor(ym);
   if (!rows.length) return toast('No attendance saved for ' + monthLabel(ym), 'bad');
   var table = S.settings.sql_table || 'DeviceLogs';
