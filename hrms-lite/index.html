@@ -4604,9 +4604,23 @@ function computePay(e, ym, prev) {
   incentive += coAmount;
   var gross = basic + hra + special + other + arrears + bonus + otAmount + incentive;
 
+  /* PF on the basic actually earned this month, capped at the ceiling.
+
+     The ceiling is a flat monthly figure and is NOT scaled down by the days
+     lost. It used to be, and that quietly under-deducted everybody above it
+     who missed a day: on 2 days LOP the cap fell to 14,032 and the deduction
+     came out 1,684 instead of 1,800. The basic is already prorated by then,
+     so proration was being applied twice - once to the wage and again to the
+     cap it is tested against.
+
+     Note what this does not do: it does not hand a flat 1,800 to anyone whose
+     FULL basic is over the ceiling. Someone on 20,000 basic who worked five
+     days earned about 3,200, and 12% of that is what is due - charging 1,800
+     would be taking PF on wages never paid. The cap applies to what was
+     earned, which is also what the salary structure's own formula does. */
   var pfWage = 0, pf = 0, pfEmployer = 0;
   if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
-    pfWage = Math.min(basic, num(S.settings.pf_wage_ceiling || 15000) * factor);
+    pfWage = Math.min(basic, num(S.settings.pf_wage_ceiling || 15000));
     pf = pfWage * num(S.settings.pf_employee_pct || 12) / 100;
     pfEmployer = pfWage * num(S.settings.pf_employer_pct || 13) / 100;
   }
