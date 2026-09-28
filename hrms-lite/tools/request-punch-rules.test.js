@@ -63,6 +63,19 @@ const check = (label, got, want, why) => {
       full_day_hours: 8, half_day_hours: 4, weekly_off: 'Sun',
       saturday_policy: 'working', ot_after_minutes: 30 }) }, token);
 
+
+  /* A finalised payroll run locks its month's register - correctly. This
+     file lays that month out itself, so reopen the run first, or it fails
+     for a reason that has nothing to do with the rule under test. */
+  {
+    const runRows = (await call('list', { sheet: 'Payroll' }, token))
+      .filter(p => String(p.month) === YM);
+    for (let i = 0; i < runRows.length; i += 200) {
+      await call('removeMany', { sheet: 'Payroll',
+        ids: runRows.slice(i, i + 200).map(p => p.id) }, token);
+    }
+  }
+
   const PEOPLE = ['RQ-01', 'RQ-02', 'RQ-03'];
   const mine = new Set(PEOPLE);
   for (const sheet of ['Requests', 'Attendance', 'Leave']) {

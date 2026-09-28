@@ -71,6 +71,19 @@ const check = (label, got, want, why) => {
   /* PL-01  two late days, PL-02 three, PL-03 six. Nothing else wrong.
      PL-04  one day punched in and never out.
      PL-05  a clean month, used for the divisor and overtime checks. */
+
+  /* A finalised payroll run locks its month's register - correctly. This
+     file lays that month out itself, so reopen the run first, or it fails
+     for a reason that has nothing to do with the rule under test. */
+  {
+    const runRows = (await call('list', { sheet: 'Payroll' }, token))
+      .filter(p => String(p.month) === YM);
+    for (let i = 0; i < runRows.length; i += 200) {
+      await call('removeMany', { sheet: 'Payroll',
+        ids: runRows.slice(i, i + 200).map(p => p.id) }, token);
+    }
+  }
+
   const PEOPLE = ['PL-01', 'PL-02', 'PL-03', 'PL-04', 'PL-05'];
   for (const code of PEOPLE) {
     await call('save', { sheet: 'Employees', row: { emp_code: code, name: 'Policy ' + code,

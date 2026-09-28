@@ -76,6 +76,19 @@ const STATUS = { P: 'P', A: 'A', h: 'HD', W: 'WO', H: 'H', O: 'OD', C: 'CO', L: 
   const { chromium } = await import('/opt/node22/lib/node_modules/playwright/index.mjs');
   const token = (await call('login', { email: 'admin@company.com', password: 'admin123' })).token;
 
+
+  /* A finalised payroll run locks its month's register - correctly. This
+     file lays that month out itself, so reopen the run first, or it fails
+     for a reason that has nothing to do with the rule under test. */
+  {
+    const runRows = (await call('list', { sheet: 'Payroll' }, token))
+      .filter(p => String(p.month) === YM);
+    for (let i = 0; i < runRows.length; i += 200) {
+      await call('removeMany', { sheet: 'Payroll',
+        ids: runRows.slice(i, i + 200).map(p => p.id) }, token);
+    }
+  }
+
   for (const c of CASES) {
     await call('save', { sheet: 'Employees', row: { emp_code: c.code, name: 'Case ' + c.code,
       status: 'Active', basic: 31000, hra: 0, special_allowance: 0, other_allowance: 0,

@@ -83,6 +83,19 @@ const check = (label, got, want, why) => {
     excess_leave_unpaid: 'no', payroll_basis: 'calendar', payroll_rounding: '1',
     late_marks_per_halfday: '0', punch_out_mandatory: 'no', ot_pay_enabled: 'no' } }, token);
 
+
+  /* A finalised payroll run locks its month's register - correctly. This
+     file lays that month out itself, so reopen the run first, or it fails
+     for a reason that has nothing to do with the rule under test. */
+  {
+    const runRows = (await call('list', { sheet: 'Payroll' }, token))
+      .filter(p => String(p.month) === YM);
+    for (let i = 0; i < runRows.length; i += 200) {
+      await call('removeMany', { sheet: 'Payroll',
+        ids: runRows.slice(i, i + 200).map(p => p.id) }, token);
+    }
+  }
+
   const PEOPLE = ['LV-01', 'LV-02', 'LV-03', 'LV-04', 'LV-05'];
 
   /* Clear anything a previous run of this file left behind. Leave applications

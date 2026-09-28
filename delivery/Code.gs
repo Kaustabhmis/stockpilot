@@ -2962,9 +2962,6 @@ function applyRequestToRegister(req) {
   if (effect === 'present') {
     /* Out duty is duty: worked away from the plant, and paid. It can run over
        several days, and a weekly off inside it stays an off. */
-    var st = settingsMap();
-    var offName = String(st.weekly_off || 'Sun').slice(0, 3).toLowerCase();
-    var dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     var holiday = {};
     readSheet('Holidays').forEach(function (h) {
       if (String(h.optional || 'no').toLowerCase() !== 'yes') holiday[String(h.date)] = true;
@@ -2976,7 +2973,8 @@ function applyRequestToRegister(req) {
     var guard = 0;
     while (cursor <= end && guard++ < 62) {
       var day = Utilities.formatDate(cursor, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      if (dayNames[cursor.getDay()] !== offName && !holiday[day]) {
+      /* the employee's OWN rest day, the same one the register draws */
+      if (!isRestDay(req.emp_code, day) && !holiday[day]) {
         var was = have[day] || {};
         rows.push({
           id: req.emp_code + '_' + day, date: day, emp_code: req.emp_code, status: 'OD',
@@ -3032,14 +3030,58 @@ function shiftOf(empCode) {
     if (String(sh.name || '').trim().toLowerCase() === want) hit = sh;
   });
   var use = hit || firstActive || {};
-  return { full: Number(use.full_day_hours || 8) || 8, half: Number(use.half_day_hours || 4) || 4 };
+  return { full: Number(use.full_day_hours || 8) || 8, half: Number(use.half_day_hours || 4) || 4,
+           weekly_off: use.weekly_off, saturday_policy: use.saturday_policy };
+}
+
+/* Which weekday numbers a shift rests on. "Sun", "sun,wed", "0", "7" all
+   read; anything unrecognised is simply not a rest day. Empty means Sunday,
+   which is what a workspace that has never been configured expects. */
+function weeklyOffSet(value) {
+  var names = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  var raw = (value === undefined || value === null || String(value) === '') ? 'Sun' : String(value);
+  var out = {};
+  raw.split(',').forEach(function (part) {
+    var t = String(part || '').trim().toLowerCase();
+    if (!t) return;
+    if (/^[0-7]$/.test(t)) { out[Number(t) === 7 ? 0 : Number(t)] = 1; return; }
+    for (var i = 0; i < 7; i++) if (t.slice(0, 3) === names[i]) out[i] = 1;
+  });
+  return out;
+}
+
+function saturdayIsOff(dayOfMonth, policy) {
+  var nth = Math.floor((dayOfMonth - 1) / 7) + 1;
+  switch (String(policy || 'working')) {
+    case 'all_off': return true;
+    case '2_4': return nth === 2 || nth === 4;
+    case '1_3': return nth === 1 || nth === 3;
+    case 'alt':  return nth % 2 === 0;
+    default: return false;
+  }
+}
+
+/* Is this date a rest day for THIS employee?
+
+   It has to be the employee's own shift, not one weekly-off setting for the
+   whole company. Marking an approved leave used to read the global setting
+   while the register, the paid days and everything the employee sees read
+   their shift - so a man resting on Friday had his Friday charged as leave
+   and his Sunday left alone, and the two screens disagreed about the same
+   month. Same rule, one place. */
+function isRestDay(empCode, iso) {
+  var sh = shiftOf(empCode);
+  var d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return false;
+  var dow = d.getDay();
+  if (weeklyOffSet(sh.weekly_off)[dow]) return true;
+  if (dow === 6) return saturdayIsOff(Number(iso.slice(8, 10)), sh.saturday_policy);
+  return false;
 }
 
 function markLeaveOnRegister(leave) {
   var st = settingsMap();
   var sandwich = String(st.sandwich_rule || 'no').toLowerCase() === 'yes';
-  var weeklyOff = String(st.weekly_off || 'Sun').slice(0, 3).toLowerCase();
-  var days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
   var holidays = {};
   readSheet('Holidays').forEach(function (h) {
@@ -3053,7 +3095,8 @@ function markLeaveOnRegister(leave) {
   var guard = 0;
   while (cursor <= end && guard++ < 400) {
     var iso = Utilities.formatDate(cursor, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    var off = days[cursor.getDay()] === weeklyOff || holidays[iso];
+    /* the employee's OWN rest day, the same one the register draws */
+    var off = isRestDay(leave.emp_code, iso) || holidays[iso];
     if (!off || sandwich) {
       rows.push({
         id: leave.emp_code + '_' + iso, date: iso, emp_code: leave.emp_code,
