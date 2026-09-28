@@ -98,8 +98,20 @@ const call = async (action, payload, token) => {
   for (let i = 0; i < rows.length; i += 400) {
     await call('saveMany', { sheet: 'Attendance', rows: rows.slice(i, i + 400) }, token);
   }
-  /* every calendar day is a working day here, so no weekly off steals one */
-  await call('saveSettings', { settings: { weekly_off: 'None', payroll_basis: 'calendar' } }, token);
+  /* Pin every setting this file depends on rather than inheriting whatever
+     the workspace was left in. A test that reads a rule it did not set is
+     measuring somebody else's run. */
+  const shifts = await call('list', { sheet: 'Shifts' }, token);
+  const general = shifts.find(s => String(s.name).trim().toLowerCase() === 'general') || shifts[0];
+  if (general) {
+    await call('save', { sheet: 'Shifts', row: Object.assign({}, general,
+      { weekly_off: 'None', saturday_policy: 'working' }) }, token);
+  }
+  await call('saveSettings', { settings: { payroll_basis: 'calendar', payroll_rounding: '1',
+    late_marks_per_halfday: '0', punch_out_mandatory: 'no', ot_pay_enabled: 'no',
+    excess_leave_unpaid: 'no', pf_wage_ceiling: '15000', pf_employee_pct: '12',
+    pf_employer_pct: '13', esi_wage_ceiling: '21000', esi_employee_pct: '0.75',
+    esi_employer_pct: '3.25' } }, token);
 
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 1500, height: 950 } });

@@ -4646,23 +4646,37 @@ function computePay(e, ym, prev) {
   var tds = gross > 0 ? num(e.tds_monthly) : 0;
   var otherDed = prev && prev.other_deduction !== undefined ? num(prev.other_deduction) : 0;
   var advance = prev && prev.advance_deduction !== undefined ? num(prev.advance_deduction) : 0;
-  var totalDed = pf + esi + pt + tds + otherDed + advance;
   var r = Math.round;
+
+  /* A payslip has to add up as it is printed, not as it was before it was
+     rounded. Rounding gross, each deduction and the net separately let them
+     drift apart: at "round to the nearest 100", a gross of 28,000 less
+     deductions of 1,950 was printed with a net of 26,100, and the man
+     holding it can see that 28,000 - 1,950 is not 26,100.
+     So the figures on the payslip are derived from each other: the
+     deductions total is the sum of the deductions as printed, and the net is
+     the gross as printed less that total. At the default "nearest 1" this
+     changes nothing. */
+  var pfR = r(pf), esiR = r(esi), ptR = r(pt), tdsR = r(tds);
+  var otherDedR = r(otherDed), advanceR = r(advance);
+  var totalDedR = pfR + esiR + ptR + tdsR + otherDedR + advanceR;
+  var grossR = roundTo(gross);
+  var pfErR = r(pfEmployer), esiErR = r(esiEmployer);
 
   return {
     id: ym + '_' + e.emp_code, month: ym, emp_code: e.emp_code,
     total_days: divisor, lop_days: s.lop, paid_days: Math.round(paidDays * 100) / 100,
     basic: roundTo(basic), hra: roundTo(hra), special_allowance: roundTo(special),
     other_allowance: roundTo(other),
-    arrears: r(arrears), bonus: r(bonus), incentive: r(incentive), advance_deduction: r(advance),
+    arrears: r(arrears), bonus: r(bonus), incentive: r(incentive), advance_deduction: advanceR,
     ot_hours: Math.round(otHours * 10) / 10, ot_amount: roundTo(otAmount),
     late_deduction_days: s.lateDeduction, unpaid_leave_days: s.unpaidLeave,
     co_payout_days: coDays,
-    gross: roundTo(gross),
-    pf: r(pf), esi: r(esi), pt: r(pt), tds: r(tds), other_deduction: r(otherDed),
-    total_deduction: r(totalDed), net: roundTo(gross - totalDed),
-    pf_employer: r(pfEmployer), esi_employer: r(esiEmployer),
-    ctc: roundTo(gross + pfEmployer + esiEmployer),
+    gross: grossR,
+    pf: pfR, esi: esiR, pt: ptR, tds: tdsR, other_deduction: otherDedR,
+    total_deduction: totalDedR, net: grossR - totalDedR,
+    pf_employer: pfErR, esi_employer: esiErR,
+    ctc: grossR + pfErR + esiErR,
     status: 'Draft', generated_at: today(), generated_by: S.user ? S.user.email : ''
   };
 }
@@ -5969,7 +5983,7 @@ var LEAVE_RULES = [
 var PAYROLL_RULES = [
   ['register_group_by', 'Salary register grouped by', 'select:unit,department,company'],
   ['payroll_basis', 'Salary divisor', 'select:calendar,fixed26,working'],
-  ['payroll_rounding', 'Round amounts to the nearest', 'select:1,5,10,100'],
+  ['payroll_rounding', 'Round earnings to the nearest (PF, ESI and P.Tax stay exact)', 'select:1,5,10,100'],
   ['pf_employee_pct', 'PF employee %', 'number'],
   ['pf_employer_pct', 'PF employer %', 'number'],
   ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
