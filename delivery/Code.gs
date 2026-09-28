@@ -75,6 +75,8 @@ var DEFAULT_SETTINGS = {
   saturday_policy: 'working',
   default_shift: 'General',
   late_marks_per_halfday: '3',
+  /* "at this many lates, this many half days" - a slab, not a rate */
+  late_mark_slab: '6:1, 12:2, 24:3',
   ot_pay_enabled: 'no',
   ot_rate_multiplier: '1',
   ot_max_hours_month: '60',
@@ -2026,9 +2028,15 @@ function applyPunches(punches, source) {
   });
 
   /* The log is written first, so the rebuild below sees this batch too and a
-     re-import of the same period can only widen a day, never shrink it. */
-  var logged = String(settingsMap().keep_punch_log || 'yes').toLowerCase() === 'yes';
-  if (rawRows.length && logged) {
+     re-import of the same period can only widen a day, never shrink it.
+
+     Every punch is logged, whatever brought it in - the device export, a
+     push from another system, or a tap in the app. This used to be gated on
+     a setting that the app's own punch ignored, so with it switched off the
+     punch report showed the taps and silently dropped everything the
+     biometric readers recorded. A punch log missing the biometric punches is
+     not a punch log. trimPunches() keeps the tab from growing without end. */
+  if (rawRows.length) {
     appendMany('Punches', rawRows);
     trimPunches();
   }
