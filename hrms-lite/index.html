@@ -1504,6 +1504,7 @@ function demoDb() {
       pt_amount: '200', weekly_off: 'Sun', shift_start: '09:30', shift_end: '18:30',
       grace_minutes: '15', ot_after_minutes: '30', full_day_hours: '8', half_day_hours: '4',
       saturday_policy: 'working', default_shift: 'General', late_marks_per_halfday: '3',
+      late_mark_slab: '6:1, 12:2, 24:3',
       web_punch_enabled: 'yes', punch_out_mandatory: 'yes',
       geofence_enabled: 'no', geofence_mode: 'block', geofence_accuracy_m: '120',
       geofence_allow_od: 'yes',
@@ -3586,6 +3587,46 @@ function otMinutes(rec, code) {
   return over > cfg.otAfter ? over : 0;
 }
 
+/* What a month's late marks cost, in days.
+
+   The rule is a slab, not a rate, because that is how the policy is actually
+   written: "6 late marks is one half day, 12 is two, 24 is three". Note that
+   those steps are not evenly spaced - 24 gives three half days, not four -
+   so it cannot be expressed as "every N lates". Read it as: find the highest
+   step the count has reached, and charge that many half days.
+
+   The setting is a list of "lates:half-days" pairs. Left empty, the older
+   "every N late marks" setting still applies, so a workspace that was never
+   changed keeps behaving as it did.
+
+   5 lates cost nothing. 6 to 11 cost half a day. 12 to 23 cost one day.
+   24 and above cost a day and a half. */
+function lateSlab() {
+  var raw = String(S.settings.late_mark_slab || '').trim();
+  if (!raw) return null;
+  var steps = [];
+  raw.split(',').forEach(function (part) {
+    var m = String(part).split(':');
+    var at = num(m[0]), halves = num(m[1]);
+    if (at > 0 && halves > 0) steps.push({ at: at, halves: halves });
+  });
+  if (!steps.length) return null;
+  steps.sort(function (a, b) { return a.at - b.at; });
+  return steps;
+}
+
+function lateCost(lateCount) {
+  var steps = lateSlab();
+  if (steps) {
+    var halves = 0;
+    steps.forEach(function (s) { if (lateCount >= s.at) halves = s.halves; });
+    return halves * 0.5;
+  }
+  /* the older rule: every N late marks costs half a day */
+  var per = num(S.settings.late_marks_per_halfday || 0);
+  return per > 0 ? Math.floor(lateCount / per) * 0.5 : 0;
+}
+
 function attStats(ym, code) {
   var dim = daysInMonth(ym);
   /* In the running month, days that have not happened yet are not "missing". */
@@ -3622,9 +3663,7 @@ function attStats(ym, code) {
        neither is LOP. */
   }
   s.total = dim;
-  /* Late-mark rule: every N late marks costs half a day. */
-  var per = num(S.settings.late_marks_per_halfday || 0);
-  s.lateDeduction = per > 0 ? Math.floor(s.late / per) * 0.5 : 0;
+  s.lateDeduction = lateCost(s.late);
   /* An unmarked day that has already passed is unpaid until someone marks it.
      Leave of an unpaid type - or beyond quota - is unpaid too. */
   /* With punch-out mandatory, an unclosed day is not a paid day until it is fixed. */
@@ -3831,9 +3870,15 @@ function setCell(ym, code, d, patch) {
     hours: 0, remarks: ''
   };
   var next = Object.assign({}, base, patch, { id: key, date: dateStr(ym, d), emp_code: code, updated_at: today() });
-  next.hours = next.status === 'P' ? 9 : (next.status === 'HD' ? 4.5 : 0);
   if (minutesOf(next.in_time) !== null && minutesOf(next.out_time) !== null) {
+    /* both clocks known: the hours are the difference, not an assumption */
     next.hours = Math.round((minutesOf(next.out_time) - minutesOf(next.in_time)) / 6) / 10;
+  } else if (patch && patch.hours !== undefined) {
+    /* the caller said what the hours are - a day marked present with no
+       punch has none, and must not be handed a notional nine */
+    next.hours = num(patch.hours);
+  } else {
+    next.hours = next.status === 'P' ? 9 : (next.status === 'HD' ? 4.5 : 0);
   }
   S.attDirty[key] = next;
   return next;
@@ -3953,8 +3998,26 @@ function markAllPresent() {
   activeEmployees().forEach(function (e) {
     for (var d = 1; d <= lastDay; d++) {
       if (statusOf(ym, e.emp_code, d)) continue;       /* already marked, weekly off or holiday */
+      /* Present, with NO times.
+
+         This used to write the shift's own start and end onto every blank
+         day. That invented a punch nobody made, and the invented punch was
+         by construction exactly on time and exactly to the minute - so the
+         day could never be late and could never earn overtime, and a
+         register full of 09:30-18:30 told you nothing about who actually
+         turned up when.
+
+         Worse, it poisoned the real data: when the device export or an app
+         punch arrived later, the day is rebuilt from the earliest and latest
+         clock it holds, and a made-up 09:30 sitting there dragged a genuine
+         09:47 arrival back to 09:30. The lateness was erased before anybody
+         could see it.
+
+         A day filled by hand is a day with no clock times, and the register
+         shows it as such. */
       setCell(ym, e.emp_code, d, {
-        status: 'P', in_time: S.settings.shift_start || '09:30', out_time: S.settings.shift_end || '18:30'
+        status: 'P', in_time: '', out_time: '', hours: 0,
+        remarks: 'marked present by HR - no punch'
       });
       count++;
     }
@@ -5963,7 +6026,8 @@ var ATTENDANCE_RULES = [
   ['geofence_accuracy_m', 'Reject a location less accurate than (m)', 'number'],
   ['geofence_allow_od', 'Allow punching away on an approved OD', 'select:yes,no'],
   ['default_shift', 'Default shift for new staff', 'text'],
-  ['late_marks_per_halfday', 'Late marks that cost half a day (0 = off)', 'number'],
+  ['late_mark_slab', 'Late-mark slab \u2014 "lates:half-days", e.g. 6:1, 12:2, 24:3', 'text'],
+  ['late_marks_per_halfday', 'Or, every N late marks cost half a day (used only if the slab above is empty)', 'number'],
   ['ot_pay_enabled', 'Pay overtime', 'select:no,yes'],
   ['ot_rate_multiplier', 'Overtime rate multiplier', 'number'],
   ['ot_max_hours_month', 'Overtime hours paid per month at most', 'number'],
