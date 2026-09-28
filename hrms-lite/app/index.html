@@ -322,7 +322,7 @@ var API = '';   /* set below - the workspace this copy talks to */
 API = 'https://script.google.com/macros/s/AKfycbxFUPMyQvLJFONHbK8Tgk54Sq6Gfje_5uzoNyrHa7anQeqXH0KV67ZGRfd3qpKzDpTDIA/exec';
 
 var SESSION_KEY = 'biscs_app_session';
-var S = { user: null, me: null, att: [], leave: [], reqs: [], types: [], reqTypes: [],
+var S = { user: null, me: null, att: [], slips: [], leave: [], reqs: [], types: [], reqTypes: [],
           holidays: [], notices: [], inbox: { isManager: false, team: [], teamLeave: [], teamRequests: [] },
           settings: {}, punch: null, cal: null, view: 'punch', busy: false };
 
@@ -342,6 +342,17 @@ function monthLabel(ym) {
   var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return M[+ym.slice(5, 7) - 1] + ' ' + ym.slice(0, 4);
 }
+/* Indian grouping: 1,23,456 rather than 123,456. A payslip that groups the
+   way nothing else in the country does reads as somebody else's payslip. */
+function money(v) {
+  var n = Math.round(Number(v) || 0);
+  var sign = n < 0 ? '-' : '';
+  var str = String(Math.abs(n));
+  if (str.length <= 3) return sign + str;
+  var last3 = str.slice(-3), rest = str.slice(0, -3);
+  return sign + rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
+}
+
 function dayName(iso) {
   return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][
     new Date(iso + 'T00:00:00').getDay()];
@@ -508,6 +519,10 @@ function reload(given) {
     S.me = (d.employees || [])[0] || null;
     S.att = d.attendance || [];
     S.haveMonth = {};                 /* the rows were just replaced */
+    /* The server has always sent the worker their own finalised payslips.
+       This app used to drop them on the floor while its own sign-in screen
+       promised "attendance, leave and payslips". */
+    S.slips = d.payroll || [];
     S.leave = d.leave || [];
     S.reqs = d.requests || [];
     S.types = d.leaveTypes || [];
@@ -1259,6 +1274,26 @@ function renderMe() {
         'address and date of birth. The rest is HR\'s to set.</div>' +
     '</div>' +
 
+    /* The payslips the server sends. Finalised runs only - a draft is not
+       a payslip and must never be shown as one. */
+    (function () {
+      var slips = mySlips();
+      if (!slips.length) {
+        return '<div class="card"><h3>Payslips</h3><div class="rows">' +
+          '<div><span>&mdash;</span><b>Nothing finalised yet</b></div></div>' +
+          '<div class="cs" style="margin:10px 0 0">A payslip appears here once HR ' +
+          'finalises that month\'s run.</div></div>';
+      }
+      return '<div class="card"><h3>Payslips</h3>' +
+        '<div class="cs">Tap a month to see how it was worked out</div>' +
+        '<div class="rows">' + slips.map(function (p, i) {
+          return '<div style="cursor:pointer" onclick="showSlip(' + i + ')">' +
+            '<span>' + esc(monthLabel(String(p.month))) + '</span>' +
+            '<b>' + cur() + money(p.net) + ' <span style="color:var(--muted);width:auto">&rsaquo;</span></b>' +
+          '</div>';
+        }).join('') + '</div></div>';
+    })() +
+
     '<div class="card"><h3>Statutory</h3>' +
       '<div class="rows">' +
         row('PAN', e.pan) + row('UAN', e.uan) + row('ESIC number', e.esic_no) +
@@ -1281,6 +1316,66 @@ function renderMe() {
         'onclick="changePassword()">Change my password</button>' +
       '<button class="cancel" style="color:var(--red);font-weight:700" onclick="signOut()">Sign out</button>' +
     '</div>';
+}
+
+/* The currency symbol HR configured, so the app and the office screen agree. */
+function cur() {
+  var c = String((S.settings && S.settings.currency) || 'INR').toUpperCase();
+  return { INR: '\u20b9', USD: '$', AED: 'AED ', GBP: '\u00a3', EUR: '\u20ac' }[c] || '';
+}
+
+/* The finalised payslips, newest first - the one list both the card and the
+   breakdown read, so tapping the third row cannot open somebody else's month. */
+function mySlips() {
+  return (S.slips || []).filter(function (p) {
+    return String(p.status || '') === 'Finalised';
+  }).sort(function (a, b) { return String(b.month).localeCompare(String(a.month)); });
+}
+
+/* One payslip, broken out the way a payslip has to read: what was earned,
+   what was taken off, and what is left - with the arithmetic shown, because
+   a net figure nobody can check is a net figure nobody trusts. */
+function showSlip(i) {
+  var p = mySlips()[i];
+  if (!p) return;
+  var line = function (k, v, strong) {
+    if (!Number(v)) return '';
+    return '<div><span>' + esc(k) + '</span><b' + (strong ? ' style="font-weight:800"' : '') +
+      '>' + cur() + money(v) + '</b></div>';
+  };
+  var earned = Number(p.gross) || 0;
+  var taken = Number(p.total_deduction) || 0;
+  openSheet('<h3>' + esc(monthLabel(String(p.month))) + '</h3>' +
+    '<div class="cs" style="margin:-6px 0 14px">' +
+      esc(p.paid_days) + ' of ' + esc(p.total_days) + ' days paid' +
+      (Number(p.lop_days) ? ' \u00b7 ' + esc(p.lop_days) + ' day(s) lost' : '') + '</div>' +
+
+    '<div class="card" style="margin:0 0 12px"><h3>Earnings</h3><div class="rows">' +
+      line('Basic', p.basic) + line('HRA', p.hra) +
+      line('Special allowance', p.special_allowance) +
+      line('Other allowance', p.other_allowance) +
+      line('Overtime', p.ot_amount) + line('Arrears', p.arrears) +
+      line('Bonus', p.bonus) + line('Incentive', p.incentive) +
+      '<div><span>Gross</span><b style="font-weight:800">' + cur() + money(earned) + '</b></div>' +
+    '</div></div>' +
+
+    '<div class="card" style="margin:0 0 12px"><h3>Deductions</h3><div class="rows">' +
+      (taken ? line('PF', p.pf) + line('ESI', p.esi) + line('Professional tax', p.pt) +
+               line('TDS', p.tds) + line('Advance', p.advance_deduction) +
+               line('Other', p.other_deduction) +
+               '<div><span>Total</span><b style="font-weight:800">' + cur() + money(taken) + '</b></div>'
+            : '<div><span>&mdash;</span><b>Nothing deducted</b></div>') +
+    '</div></div>' +
+
+    '<div class="card" style="margin:0"><div class="rows">' +
+      '<div><span style="font-weight:700">Net paid</span>' +
+      '<b style="font-weight:800;font-size:1.15rem">' + cur() + money(p.net) + '</b></div>' +
+      '<div><span style="color:var(--muted)">' + cur() + money(earned) + ' less ' +
+        cur() + money(taken) + '</span><b style="color:var(--muted)">' +
+        cur() + money(earned - taken) + '</b></div>' +
+    '</div>' +
+    '<div class="cs" style="margin:10px 0 0">Something wrong? Ask HR &mdash; a ' +
+      'finalised payslip keeps the figures it was saved with.</div></div>');
 }
 
 /* The details a worker is the best source for. A new phone number reaching
