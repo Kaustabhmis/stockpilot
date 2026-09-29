@@ -1,59 +1,65 @@
 # What to deploy
 
-Both files are built from the sources in `hrms-lite/`. They are copies for
-downloading, not somewhere to edit - change `hrms-lite/` and rebuild.
+Built from `hrms-lite/`. These are copies for downloading, not somewhere to
+edit.
 
-- **`Code.gs`** - the Apps Script. Paste it over the script bound to the
-  Google Sheet, then deploy the EXISTING deployment. Do not create a new one,
-  or the address the apps talk to changes.
-- **`biscs-os-netlify.zip`** - the site. Drag it onto Netlify. It holds the
-  office screen at `/` and the staff app at `/app/`.
+## Staying on Google Sheets (what you run today)
 
-Do the sheet first, then the site. Either order works - a screen running from
-an older cached copy tells the workspace nothing and is handed the wider
-reach it expects - but this way nobody sees the in-between.
+1. **`Code.gs`** -> paste over the Apps Script bound to the sheet, then deploy
+   the EXISTING deployment. Not a new one, or the address both apps talk to
+   changes.
+2. **`biscs-os-netlify.zip`** -> drag onto your existing Netlify site, in its
+   Deploys tab. Not "Add new site", or the domain stops working.
+3. **Open the site twice.** The installed app serves its cached copy first.
 
-**Open the site twice after uploading.** The installed office app serves its
-cached copy first and fetches the new one behind it, so the first open still
-shows the previous version.
+Then: check the late-mark slab reads `6:1, 12:2, 24:3` in Settings ->
+Attendance rules, and regenerate any payroll run you had already saved.
 
-## Then, in this order
+## Moving to Postgres (Supabase)
 
-1. **Settings -> Attendance rules.** Check the late-mark slab reads
-   `6:1, 12:2, 24:3` - that is "6 late marks cost one half day, 12 cost two,
-   24 cost three". Change the numbers here if the policy changes; no code
-   needs touching.
+**`supabase-backend.zip`** holds the schema, the seed and the API.
 
-2. **Settings -> Payroll.** Check the PF wage ceiling, the PF and ESI
-   percentages and the salary divisor are what you file on.
+1. Make a NEW Supabase project. Do not use the one your other system runs on.
+2. SQL editor: run `schema.sql`, then `seed-settings.sql`, then `seed.sql`.
+3. Deploy `functions/api` as an Edge Function.
+4. Open `migrate.html` (it is in the site zip, at `/migrate.html`), give it
+   both addresses and the owner sign-in, press **Check both sides**, then
+   **Copy everything across**. It counts both sides and tells you whether
+   they agree. **If any table does not agree, do not switch over.**
+5. Point the apps at the new address and redeploy the site.
 
-3. **Regenerate every payroll run you have already saved.** A finalised run
-   keeps the figures it was saved with, on purpose, so a corrected rule does
-   not reach it by itself. Payroll -> pick the month -> Generate from
-   attendance. Reopen the run first if it is finalised.
+**The sheet is never written to.** It stays exactly as it is, so until you
+change the address the office carries on as normal, and if anything looks
+wrong you simply keep using it.
 
-4. **Stop using "Fill blank days" as a way to record attendance.** It marks
-   the day present with no times, which is honest - HR saying somebody was
-   here is not a record of when they arrived. Days filled this way carry no
-   late mark and no overtime, because nothing was measured.
+### Passwords after a migration
 
-## Months already filled with shift times
+Everyone signs in with the password they already have. The sheet's hashes
+come across as they are, and each one is quietly replaced with a proper
+salted hash the first time its owner signs in. Nobody is locked out and
+nobody has to do anything.
 
-Older months may hold days written as 09:30-18:30 by the previous behaviour.
-Those are not real arrival times and they carry no late marks. Re-importing
-the device export for those months now corrects them - the made-up times are
-no longer written, so they can no longer drag a genuine 09:47 back to 09:30.
+## Browsing the data (instead of opening the sheet)
+
+Settings -> **Browse the data**, owner only. Every table, a search across
+every column, edit a cell, delete a row, export CSV.
+
+It is the raw data: a change there is written exactly as typed, nothing is
+recalculated and no approval is asked for. Use the ordinary screens unless
+you are fixing something they cannot reach.
 
 ## Checking it yourself
 
     cd hrms-lite/tools
-    ./run-audit.sh https://your-test-workspace
+    ./run-audit.sh https://your-test-workspace     # nine checks
+    node migration.test.js <sheet-url>/exec <postgres-url>/exec
 
-Seven files. Each states its rules in words at the top and derives every
-expected figure from those words, so it checks the system against the rules
-rather than against itself. Every case is awkward on purpose - lost days,
-somebody exactly on a ceiling, a rupee either side of a limit, mid-month
-joiners and leavers - because clean data hides the faults that cost money.
+Every audit file states its rules in words at the top and derives the
+expected figures from those words, so it checks the system against the rules
+rather than against itself. The migration test compares row counts AND
+recomputes the whole payroll from the migrated data - counts prove nothing
+arrived short, recomputing the money proves it arrived meaning the same
+thing.
 
-Point it at a TEST workspace, never the live sheet: it writes employees,
+Point them at a TEST workspace, never the live sheet: they write employees,
 attendance, leave and payroll rows.
