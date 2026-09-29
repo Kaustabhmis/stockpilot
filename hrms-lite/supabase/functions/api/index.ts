@@ -15,8 +15,10 @@
  *
  * Secrets it expects:
  *   SUPABASE_DB_URL   set for you by Supabase
- *   TOKEN_SECRET      yours - a long random string, used to sign sessions
- *                     (supabase secrets set TOKEN_SECRET="...")
+ *   TOKEN_SECRET      optional. The signing key lives in hrms.app_secrets,
+ *                     minted by a migration; setting or changing this mixes
+ *                     into it and so rotates every session. Any value will
+ *                     do - it cannot weaken the key.
  *   COMPANY_TZ        optional, defaults to Asia/Kolkata
  */
 
@@ -26,13 +28,6 @@ import { createRouter } from './router.js';
 const DB_URL = Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('DB_URL');
 if (!DB_URL) throw new Error('SUPABASE_DB_URL is not set');
 
-const TOKEN_SECRET = Deno.env.get('TOKEN_SECRET');
-if (!TOKEN_SECRET || TOKEN_SECRET.length < 24) {
-  /* A guessable signing key means anybody can mint a session as the owner.
-     Better to refuse to start than to run open. */
-  throw new Error('TOKEN_SECRET is missing or too short - set a long random one');
-}
-
 /* hrms is where the tables are; extensions is where Supabase keeps
    pgcrypto, and without it on the path crypt() and gen_salt() are not
    found and every password check fails. */
@@ -40,6 +35,45 @@ const sql = postgres(DB_URL, {
   max: 5, prepare: false,
   connection: { search_path: 'hrms, public, extensions' }
 });
+
+/* The key that signs session tokens.
+ *
+ * A guessable key means anybody can mint a session as the owner, so this
+ * function will not start without a strong one, and it never invents a
+ * default.
+ *
+ * The floor is hrms.app_secrets, where a migration had Postgres mint 256
+ * random bits with gen_random_bytes. Reading that table needs the database
+ * credentials, which already open every salary record in the workspace, so
+ * keeping the key there gives an attacker nothing they did not have. If it
+ * is missing the function stops dead.
+ *
+ * TOKEN_SECRET, if somebody sets one, does not replace that key - it is
+ * mixed into it. Two reasons. It rotates every session on demand: change
+ * the secret and yesterday's tokens stop verifying. And it cannot weaken
+ * anything, because the result is a 256-bit HMAC however short or guessable
+ * the typed value was. A person picking their company name as the secret is
+ * the likeliest way this would have gone wrong, and mixing removes it.
+ *
+ * Read once, at boot, not per request. */
+async function signingKey(): Promise<string> {
+  const rows = await sql.unsafe(
+    `select value from hrms.app_secrets where key = 'token_secret'`);
+  const base = String((rows[0] as { value?: string } | undefined)?.value ?? '');
+  if (base.length < 24) {
+    throw new Error("No session signing key. Seed hrms.app_secrets with a long " +
+                    "random 'token_secret' - the schema migration does this.");
+  }
+  const extra = Deno.env.get('TOKEN_SECRET') ?? '';
+  if (!extra) return base;
+
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(base),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', k,
+    new TextEncoder().encode('biscs-os/session-token/v1|' + extra));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const TOKEN_SECRET = await signingKey();
 
 /* The one method the API asks of a database. postgres.js returns the rows
    directly; the API expects { rows }, as node-postgres gives. */
