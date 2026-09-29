@@ -23,7 +23,9 @@ const pgPath = process.env.PG_MODULE ||
   '/tmp/claude-0/-home-user-stockpilot/8aedcd83-0e16-508a-a671-eb29f4bcbbbe/scratchpad/pgapi/node_modules/pg/lib/index.js';
 const { default: pg } = await import(pgPath);
 const pool = new pg.Pool({ connectionString: CONN, max: 10 });
-await pool.query('set search_path to hrms, public');
+/* every pooled connection, not just the first: a query that lands on a
+   fresh one would otherwise not find the tables at all */
+pool.on('connect', c => c.query('set search_path to hrms, public, extensions'));
 
 const handle = createRouter(
   { query: (sql, params) => pool.query(sql, params) },

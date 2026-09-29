@@ -10,7 +10,9 @@
 --   supabase db push          (or paste into the SQL editor)
 
 create schema if not exists hrms;
-set search_path to hrms, public;
+-- extensions is on the path because Supabase installs pgcrypto there, not
+-- in public. Leaving it off is how crypt() and gen_salt() vanish.
+set search_path to hrms, public, extensions;
 
 -- ---------------------------------------------------------------- settings
 create table if not exists settings (

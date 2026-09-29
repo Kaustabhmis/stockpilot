@@ -20,7 +20,7 @@
  *   COMPANY_TZ        optional, defaults to Asia/Kolkata
  */
 
-import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
+import postgres from 'npm:postgres@3.4.5';
 import { createRouter } from './router.js';
 
 const DB_URL = Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('DB_URL');
@@ -33,7 +33,13 @@ if (!TOKEN_SECRET || TOKEN_SECRET.length < 24) {
   throw new Error('TOKEN_SECRET is missing or too short - set a long random one');
 }
 
-const sql = postgres(DB_URL, { max: 5, prepare: false });
+/* hrms is where the tables are; extensions is where Supabase keeps
+   pgcrypto, and without it on the path crypt() and gen_salt() are not
+   found and every password check fails. */
+const sql = postgres(DB_URL, {
+  max: 5, prepare: false,
+  connection: { search_path: 'hrms, public, extensions' }
+});
 
 /* The one method the API asks of a database. postgres.js returns the rows
    directly; the API expects { rows }, as node-postgres gives. */

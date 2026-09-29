@@ -1,5 +1,5 @@
 -- Seeded defaults: the same values a fresh Apps Script workspace got.
-set search_path to hrms, public;
+set search_path to hrms, public, extensions;
 
 insert into settings (key, value) values
   ('company_name', 'My Company Pvt Ltd'),

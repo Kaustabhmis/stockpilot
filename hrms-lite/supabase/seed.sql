@@ -3,7 +3,7 @@
 --
 -- Run after schema.sql and seed-settings.sql.
 
-set search_path to hrms, public;
+set search_path to hrms, public, extensions;
 create extension if not exists pgcrypto;
 
 -- ------------------------------------------------------------------ shift
