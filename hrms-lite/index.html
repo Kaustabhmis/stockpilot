@@ -391,10 +391,17 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .cal .day .hname{color:#5b21b6;font-size:.65rem;font-weight:700;margin-top:3px;}
 
 /* ---------------- Tabs ---------------- */
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;
+  overflow-x:auto;scrollbar-width:thin;}
 .tab{padding:9px 14px;font-size:.82rem;font-weight:600;color:var(--text-muted);cursor:pointer;
-  border-bottom:2px solid transparent;}
+  border-bottom:2px solid transparent;white-space:nowrap;flex:0 0 auto;}
 .tab:hover{color:var(--text-dark);}
+/* The data browser's rows are as wide as the table they came from, so the
+   Save and Delete buttons would scroll off the right and never be reached.
+   Pin that one column to the edge. */
+#br-table th:last-child,#br-table td:last-child{position:sticky;right:0;
+  background:var(--card);box-shadow:-6px 0 6px -6px rgba(0,0,0,.18);}
+#br-table td input:focus{outline:2px solid var(--brand);border-radius:4px;}
 .tab.active{color:var(--primary);border-bottom-color:var(--primary);}
 
 /* ---------------- Modal ---------------- */
@@ -6146,7 +6153,8 @@ function openSettings() {
     .concat([['shifts', 'Shifts &amp; attendance'], ['holidays', 'Holidays'],
              ['leaverules', 'Leave policy'], ['requests', 'Requests'], ['ctc', 'CTC structure'], ['payrollrules', 'Payroll rules'],
              ['notices', 'Notice board'], ['approvals', 'Approvals']])
-    .concat(owner ? [['accounts', 'Accounts'], ['integrations', 'Integrations']] : [])
+    .concat(owner ? [['accounts', 'Accounts'], ['integrations', 'Integrations'],
+                     ['browse', 'Browse the data']] : [])
     .concat([['import', 'Import data'], ['account', 'Account']]);
 
   var body = '<div class="tabs">' + tabs.map(function (t, i) {
@@ -6168,7 +6176,8 @@ function openSettings() {
   '<div id="stab-notices" style="display:none">' + noticesPane() + '</div>' +
   '<div id="stab-approvals" style="display:none">' + approvalsPane() + '</div>' +
   (owner ? '<div id="stab-accounts" style="display:none">' + accountsPane() + '</div>' +
-           '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' : '') +
+           '<div id="stab-integrations" style="display:none">' + integrationsPane() + '</div>' +
+           '<div id="stab-browse" style="display:none">' + browsePane() + '</div>' : '') +
   '<div id="stab-import" style="display:none">' + importPane() + '</div>' +
   '<div id="stab-account" style="display:none">' + accountPane() + '</div>';
 
@@ -6211,6 +6220,10 @@ function settingsTab(tab) {
     n.classList.toggle('active', n.dataset.stab === tab);
   });
   el('modal-body').scrollTop = 0;
+  /* the data browser reads its table when it is opened, not before: pulling
+     every row of every table to build a pane nobody looked at is exactly the
+     kind of cost this app spent a week removing */
+  if (tab === 'browse' && !S.browseRows) browseGo();
 }
 
 function saveSettingsForm() {
@@ -6860,6 +6873,168 @@ function deleteNotice(id) {
 /* ----------------------------- accounts -------------------------- */
 /* Owner only. Creating a login here hashes the password on the server; the
    hash is never sent back to any browser. */
+/* ---------------- Browse the data ----------------
+   What the Google Sheet was actually for.
+
+   Giving up the sheet means giving up being able to open it, look at any
+   tab, and fix a wrong cell by hand. That is worth more than it sounds: it
+   is the thing HR falls back on when something looks odd and nobody is
+   around to ask. So it comes back here - every table, as it really is, with
+   a search box and an editable grid.
+
+   It is the owner's, not HR's. Editing a row here goes around every rule
+   the screens apply: no proration, no recompute, no approval chain, no
+   audit of who changed what beyond the row's own updated_at. That is
+   exactly what the sheet allowed and exactly why it is behind one more
+   door, with the warning on it. */
+
+var BROWSE = { sheet: 'Employees', q: '', limit: 100 };
+
+var BROWSE_TABLES = ['Employees', 'Attendance', 'Leave', 'Requests', 'Payroll',
+  'Punches', 'Users', 'Settings', 'Holidays', 'Events', 'Sites', 'Shifts',
+  'LeaveTypes', 'RequestTypes', 'ApprovalLevels', 'CtcVariables',
+  'CtcComponents', 'CtcValues', 'Notices'];
+
+function browsePane() {
+  return '<div class="locked-note" style="background:#fef3c7;color:#92400e">' +
+      '&#9888; This is the raw data. A change here is written exactly as you type ' +
+      'it - nothing is recalculated, no approval is asked for, and payroll will ' +
+      'read whatever you leave behind. Use the proper screens unless you are ' +
+      'fixing something they cannot reach.</div>' +
+    '<div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:14px 0">' +
+      '<label class="field">Table<select id="br-sheet" onchange="browseGo()">' +
+        BROWSE_TABLES.map(function (t) {
+          return '<option value="' + t + '"' + (t === BROWSE.sheet ? ' selected' : '') +
+                 '>' + t + '</option>'; }).join('') +
+      '</select></label>' +
+      '<label class="field" style="flex:1;min-width:180px">Search' +
+        '<input id="br-q" placeholder="any word in any column" oninput="browseFilter()"></label>' +
+      '<button class="ghost sm" onclick="browseGo()">&#8635; Reload</button>' +
+      '<button class="ghost sm" onclick="browseCsv()">&#8681; Export CSV</button>' +
+    '</div>' +
+    '<div id="br-count" class="card-sub" style="margin-bottom:8px"></div>' +
+    '<div class="table-wrap" style="max-height:52vh;overflow:auto">' +
+      '<table id="br-table"></table></div>';
+}
+
+function browseRows() {
+  var list = (S.browseRows || []);
+  var q = String(BROWSE.q || '').trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(function (r) {
+    for (var k in r) {
+      if (String(r[k] === undefined || r[k] === null ? '' : r[k]).toLowerCase()
+          .indexOf(q) >= 0) return true;
+    }
+    return false;
+  });
+}
+
+function browseGo() {
+  var sel = el('br-sheet');
+  if (sel) BROWSE.sheet = sel.value;
+  el('br-count').textContent = 'Reading ' + BROWSE.sheet + '...';
+  el('br-table').innerHTML = '';
+  api('list', { sheet: BROWSE.sheet }).then(function (rows) {
+    S.browseRows = rows || [];
+    browseDraw();
+  }).catch(function (e) {
+    el('br-count').innerHTML = '<span style="color:var(--danger)">' + esc(e.message) + '</span>';
+  });
+}
+
+function browseFilter() {
+  var q = el('br-q');
+  BROWSE.q = q ? q.value : '';
+  browseDraw();
+}
+
+function browseDraw() {
+  /* keep the picker showing the table that is actually drawn */
+  var sel = el('br-sheet');
+  if (sel && sel.value !== BROWSE.sheet) sel.value = BROWSE.sheet;
+  var rows = browseRows();
+  var all = (S.browseRows || []).length;
+  var shown = Math.min(rows.length, BROWSE.limit);
+  el('br-count').textContent = all
+    ? shown + ' of ' + rows.length + ' row(s)' +
+      (rows.length !== all ? ' (filtered from ' + all + ')' : '') +
+      (rows.length > BROWSE.limit ? ' — search to narrow it' : '')
+    : 'This table is empty.';
+  if (!all) { el('br-table').innerHTML = ''; return; }
+
+  var cols = Object.keys(S.browseRows[0]);
+  var key = BROWSE.sheet === 'Settings' ? 'key'
+          : (BROWSE.sheet === 'Users' ? 'email'
+          : (BROWSE.sheet === 'Employees' ? 'emp_code' : 'id'));
+
+  var html = '<tr>' + cols.map(function (c) {
+    return '<th>' + esc(c) + (c === key ? ' &#128273;' : '') + '</th>'; }).join('') +
+    '<th></th></tr>';
+  rows.slice(0, BROWSE.limit).forEach(function (r, i) {
+    html += '<tr>' + cols.map(function (c) {
+      return '<td><input class="br-cell" data-row="' + i + '" data-col="' + esc(c) + '" ' +
+        'value="' + esc(r[c] === undefined || r[c] === null ? '' : r[c]) + '"' +
+        (c === key ? ' readonly title="the key - change it by deleting and adding"' : '') +
+        ' style="width:100%;min-width:90px;border:0;background:transparent;' +
+        'font:inherit;color:inherit;padding:3px 4px"></td>'; }).join('') +
+      '<td style="white-space:nowrap">' +
+        '<button class="ghost sm" onclick="browseSave(' + i + ')">Save</button> ' +
+        '<button class="ghost sm" style="color:var(--danger)" ' +
+          'onclick="browseDelete(' + i + ')">Delete</button></td></tr>';
+  });
+  el('br-table').innerHTML = html;
+}
+
+function browseCell(i) {
+  var row = {};
+  document.querySelectorAll('.br-cell[data-row="' + i + '"]').forEach(function (n) {
+    row[n.dataset.col] = n.value;
+  });
+  return row;
+}
+
+function browseSave(i) {
+  var row = browseCell(i);
+  api('save', { sheet: BROWSE.sheet, row: row }).then(function () {
+    toast('Saved', 'good');
+    /* the screens read their own copy of the workspace, so pull it again or
+       the register keeps showing what was there before this edit */
+    return reload();
+  }).then(function () { browseGo(); })
+    .catch(function (e) { toast(e.message, 'bad'); });
+}
+
+function browseDelete(i) {
+  var row = browseCell(i);
+  var key = BROWSE.sheet === 'Settings' ? 'key'
+          : (BROWSE.sheet === 'Users' ? 'email'
+          : (BROWSE.sheet === 'Employees' ? 'emp_code' : 'id'));
+  showModal('Delete this row?',
+    '<p>From <b>' + esc(BROWSE.sheet) + '</b>, the row keyed <b>' +
+    esc(row[key]) + '</b>.</p>' +
+    '<p style="margin-top:10px">Nothing here is recalculated and there is no undo. ' +
+    'Deleting an employee takes their attendance, leave and payslips with them.</p>',
+    [{ label: 'Keep it', cls: 'ghost', onClick: closeModal },
+     { label: 'Delete', cls: 'danger', onClick: function () {
+        api('remove', { sheet: BROWSE.sheet, id: row[key] }).then(function () {
+          closeModal(); toast('Deleted', 'good');
+          return reload();
+        }).then(function () { openSettings(); settingsTab('browse'); browseGo(); })
+          .catch(function (e) { toast(e.message, 'bad'); });
+     } }]);
+}
+
+function browseCsv() {
+  var rows = browseRows();
+  if (!rows.length) return toast('Nothing to export');
+  var cols = Object.keys(S.browseRows[0]);
+  download(BROWSE.sheet.toLowerCase() + '.csv',
+    toCSV(cols, rows.map(function (r) {
+      return cols.map(function (c) { return r[c] === undefined ? '' : r[c]; });
+    })));
+}
+
 function accountsPane() {
   return '<div class="toolbar">' +
     '<span class="sub-line" style="max-width:640px">Every person who signs in needs an account ' +
