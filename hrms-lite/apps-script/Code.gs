@@ -202,6 +202,48 @@ function handle(action, payload, callback, token) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Moving out                                                          */
+/* ------------------------------------------------------------------ */
+
+/* How many rows each tab holds, so the tool that copies them out knows how
+   far it has to go and can say so while it works. */
+function exportPlan() {
+  var out = [];
+  Object.keys(SHEETS).forEach(function (name) {
+    var sh = sheet(name);
+    var last = sh.getLastRow();
+    out.push({ sheet: name, rows: last > 1 ? last - 1 : 0, columns: SHEETS[name] });
+  });
+  return { tabs: out, at: nowParts().date + ' ' + nowParts().time };
+}
+
+/* One page of one tab, exactly as the sheet holds it.
+   Paged on purpose: a workspace with a year of attendance and a punch log
+   behind it is tens of thousands of rows, and one response carrying all of
+   them is how an export dies half way through with nothing to show. */
+function exportTab(name, offset, limit) {
+  if (!SHEETS[name]) throw new Error('There is no ' + name + ' tab.');
+  var from = Math.max(0, parseInt(offset || 0, 10));
+  var take = Math.min(2000, Math.max(1, parseInt(limit || 1000, 10)));
+  var sh = sheet(name);
+  var headers = SHEETS[name];
+  var last = sh.getLastRow();
+  var total = last > 1 ? last - 1 : 0;
+  if (from >= total) return { sheet: name, offset: from, total: total, rows: [], done: true };
+
+  var count = Math.min(take, total - from);
+  var values = sh.getRange(2 + from, 1, count, headers.length).getValues();
+  var tz = Session.getScriptTimeZone();
+  var rows = values.map(function (r) {
+    var o = {};
+    headers.forEach(function (h, c) { o[h] = normalize(r[c], h, tz); });
+    return o;
+  });
+  return { sheet: name, offset: from, total: total, rows: rows,
+           done: from + count >= total };
+}
+
+/* ------------------------------------------------------------------ */
 /* Authentication - signed sessions                                    */
 /* ------------------------------------------------------------------ */
 
@@ -390,7 +432,9 @@ function denied() {
 var OWNER_ACTIONS = {
   saveUser: 1, removeUser: 1, listUsers: 1,
   setSecret: 1, secretStatus: 1, testIntegration: 1,
-  esslPull: 1, esslPush: 1
+  esslPull: 1, esslPush: 1,
+  /* the whole workspace, password hashes included - the owner's alone */
+  exportTab: 1, exportPlan: 1
 };
 
 function authorize(action, p, caller) {
@@ -548,6 +592,8 @@ function route(action, p, caller) {
     case 'esslPull':      return esslPull(p.from, p.to);
     case 'esslPush':      return esslPush(p.month, p.rows);
     case 'ingestPunches': return ingestPunches(p.punches, p.token, p.source, caller);
+    case 'exportTab':     return exportTab(p.sheet, p.offset, p.limit);
+    case 'exportPlan':    return exportPlan();
     case 'testIntegration': return testIntegration();
     case 'webPunch':      return webPunch(p.emp_code, p.kind, p.note, p.geo, caller);
     case 'punchState':    return punchState(p.emp_code);

@@ -113,12 +113,42 @@ export function createActions(api, db, deps) {
         where lower(email) = lower($1)`, [email, String(plain)]);
   }
 
+  /* Checking a password, and quietly moving it forward.
+   *
+   * A migrated workspace arrives with every password as the sheet kept it:
+   * one SHA-256 of 'hrms-lite:' + the password, sixty-four hex characters,
+   * no per-user salt. bcrypt cannot read that, so on the morning after a
+   * migration nobody could sign in - not one of the sixty-odd people, and
+   * not the owner either.
+   *
+   * So: try bcrypt, and if the stored value is one of the old hashes, check
+   * that instead - and on success replace it with a bcrypt hash there and
+   * then. Nobody is locked out, nobody is asked to do anything, and every
+   * account upgrades itself the first time its owner signs in. The old
+   * hashes drain away on their own. */
+  const LOOKS_LEGACY = v => /^[0-9a-f]{64}$/i.test(String(v || ''));
+
   async function checkPassword(email, plain) {
+    const pw = String(plain || '');
+    const u = await one(
+      'select email, password from hrms.users where lower(email) = lower($1)', [email]);
+    if (!u) return false;
+
+    if (!LOOKS_LEGACY(u.password)) {
+      const r = await one(
+        `select 1 as ok from hrms.users
+          where lower(email) = lower($1) and password = crypt($2, password)`, [email, pw]);
+      return !!r;
+    }
+
     const r = await one(
-      `select email from hrms.users
-        where lower(email) = lower($1) and password = crypt($2, password)`,
-      [email, String(plain || '')]);
-    return !!r;
+      `select 1 as ok from hrms.users
+        where lower(email) = lower($1)
+          and password = encode(digest('hrms-lite:' || $2, 'sha256'), 'hex')`,
+      [email, pw]);
+    if (!r) return false;
+    await setPassword(u.email, pw);        /* upgraded, once, on the way in */
+    return true;
   }
 
   /* One login per person, username = their staff code, first password the
@@ -723,6 +753,15 @@ export function createActions(api, db, deps) {
     };
   }
 
+  /* How many rows every table holds, so a migration can be checked against
+     the sheet it came from rather than believed. */
+  async function tally() {
+    const names = Object.keys(api.TABLE);
+    const out = {};
+    for (const n of names) out[n] = await api.countRows(n);
+    return out;
+  }
+
   async function payslipMailLog(month) {
     return (await all('select * from hrms.payslip_mail where month = $1', [month])).map(rowOut);
   }
@@ -730,7 +769,7 @@ export function createActions(api, db, deps) {
   return {
     nowParts, today, login, changePassword, listUsers, saveUser, removeUser,
     backfillAccounts, makeAccountsFor, bootstrap, monthAtt, myMonth,
-    punchState, webPunch, punchLog, ingestPunches, decide, payslipMailLog,
+    punchState, webPunch, punchLog, ingestPunches, decide, payslipMailLog, tally,
     attendanceBetween, isRestDay, rebuildDay, setPassword, checkPassword
   };
 }

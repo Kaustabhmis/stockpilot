@@ -188,7 +188,9 @@ export function createApi(db, opts = {}) {
   const EMPLOYEE_ACTIONS = new Set(['bootstrap', 'changePassword', 'punchState',
     'webPunch', 'ping', 'rev', 'myMonth', 'save', 'remove', 'decide']);
   const OWNER_ACTIONS = new Set(['saveUser', 'removeUser', 'listUsers',
-    'setSecret', 'secretStatus', 'testIntegration', 'esslPull', 'esslPush']);
+    'setSecret', 'secretStatus', 'testIntegration', 'esslPull', 'esslPush',
+    /* writes every table, password hashes included - the owner's alone */
+    'importTab', 'tally']);
 
   async function authenticate(action, token) {
     if (!token && PUBLIC_ACTIONS.has(action)) return { role: 'public', email: '' };
@@ -343,6 +345,136 @@ export function createApi(db, opts = {}) {
     return { saved: entries.length };
   }
 
+  /* ------------------------------------------------------------- */
+  /* Taking a tab in from the sheet                                   */
+  /* ------------------------------------------------------------- */
+  /* The sheet kept everything as text and guessed on the way out, so what
+     arrives here is loose: '' for a missing date, 'yes' for true, '1,800'
+     for a number, a full ISO stamp where only a date is wanted. Coerce once,
+     here, rather than letting a blank land in a date column and stop the
+     whole import on row nine thousand. Anything that cannot be read is
+     reported with its row rather than silently dropped. */
+  function coerce(col, v) {
+    if (v === undefined || v === null) return null;
+    const raw = typeof v === 'string' ? v.trim() : v;
+    /* An empty cell means different things per column: false for a flag,
+       "not set" for a date or a time, and an EMPTY STRING for plain text.
+       Turning an empty setting into null stopped the whole Settings import
+       on a not-null column - the company address nobody had filled in. */
+    if (raw === '') {
+      if (BOOL_COLS.has(col)) return false;
+      if (DATE_COLS.has(col) || TIME_COLS.has(col)) return null;
+      return '';
+    }
+    if (BOOL_COLS.has(col)) return yes(raw);
+    if (DATE_COLS.has(col)) {
+      const m = String(raw).match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return m[0];
+      const dmy = String(raw).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+      if (dmy) return dmy[3] + '-' + dmy[2].padStart(2, '0') + '-' + dmy[1].padStart(2, '0');
+      return null;
+    }
+    if (TIME_COLS.has(col)) {
+      const m = String(raw).match(/(\d{1,2}):(\d{2})/);
+      return m ? String(Number(m[1])).padStart(2, '0') + ':' + m[2] : null;
+    }
+    return raw;
+  }
+
+  /* Some tables carry a unique code of their own as well as an id. A fresh
+     workspace is seeded with its own ids for these, so matching on the id
+     while importing means two rows claiming the same code and the whole tab
+     refusing. Match on what is actually unique to the thing. */
+  const NATURAL_KEY = { ctc_variables: 'code', ctc_components: 'code' };
+
+  /* The small configuration tables - the shifts, the leave and request types,
+     the approval chain - are seeded when a workspace is created AND carried
+     over by a migration. Matching on the id leaves both: the seeded General
+     shift and the sheet's General shift, two of every leave type, an approval
+     chain twice as long. For these the sheet is the truth, so the migration
+     clears them first. */
+  async function importTab(sheet, rows, opts2 = {}) {
+    const t = tableFor(sheet);
+    if (opts2.replace) await db.query(`delete from hrms.${t}`);
+    const known = await cols(t);
+    const numeric = await numericCols(t);
+    const key = NATURAL_KEY[t] || (sheet === 'Settings' ? 'key'
+              : (sheet === 'Users' ? 'email'
+              : (sheet === 'Employees' ? 'emp_code' : 'id')));
+    let written = 0;
+    const problems = [];
+    for (let i = 0; i < (rows || []).length; i++) {
+      const src = rows[i] || {};
+      const data = {};
+      for (const k of Object.keys(src)) {
+        if (!known.includes(k)) continue;
+        let v = coerce(k, src[k]);
+        if (numeric.has(k)) {
+          const n = Number(String(v == null ? '' : v).replace(/[^0-9.\-]/g, ''));
+          v = Number.isFinite(n) ? n : 0;
+        }
+        data[k] = v;
+      }
+      if (!data[key]) {
+        if (key === 'id') data.id = newId();
+        else { problems.push({ row: i, why: 'no ' + key }); continue; }
+      }
+      if (!data.id && known.includes('id')) data.id = newId();
+      if (sheet === 'Users') {
+        data.email = String(data.email).trim().toLowerCase();
+        /* An owner's login is linked to nobody, and the sheet writes that as
+           an empty cell. An empty string is not a staff code, so it cannot
+           point at the employees table: it has to be nothing at all. */
+        if (data.emp_code === '' || data.emp_code === undefined) data.emp_code = null;
+        /* A login can outlive the employee record it points at - somebody
+           deleted from the sheet, the login left behind. Keep the login and
+           unlink it rather than refusing it: losing an account silently is
+           how somebody cannot sign in on Monday. */
+        if (data.emp_code) {
+          const there = await one(
+            'select emp_code from hrms.employees where emp_code = $1', [data.emp_code]);
+          if (!there) {
+            problems.push({ row: i, key: data.email,
+              why: 'kept, but unlinked: no employee ' + data.emp_code });
+            data.emp_code = null;
+          }
+        }
+      }
+      const names = Object.keys(data);
+      const ph = names.map((_, j) => '$' + (j + 1));
+      /* never rewrite the id of a row that is already there: the seeded row
+         keeps its own, and anything pointing at it stays pointing at it */
+      const updates = names.filter(n => n !== key && n !== 'id')
+        .map(n => `${n} = excluded.${n}`).join(', ');
+      try {
+        await db.query(
+          `insert into hrms.${t} (${names.join(',')}) values (${ph.join(',')})
+           on conflict (${key}) do update set ${updates || key + ' = excluded.' + key}`,
+          names.map(n => data[n]));
+        written++;
+      } catch (e) {
+        problems.push({ row: i, key: data[key], why: String(e.message || e).slice(0, 160) });
+      }
+    }
+    return { sheet, written, problems };
+  }
+
+  const numCache = {};
+  async function numericCols(table) {
+    if (numCache[table]) return numCache[table];
+    const rows = await all(
+      `select column_name from information_schema.columns
+        where table_schema = 'hrms' and table_name = $1
+          and data_type in ('numeric','integer','bigint','double precision','real')`,
+      [table]);
+    return (numCache[table] = new Set(rows.map(r => r.column_name)));
+  }
+
+  async function countRows(sheet) {
+    const r = await one(`select count(*)::int as n from hrms.${tableFor(sheet)}`);
+    return r ? r.n : 0;
+  }
+
   let idSeq = 0;
   function newId() {
     idSeq = (idSeq + 1) % 100000;
@@ -354,6 +486,7 @@ export function createApi(db, opts = {}) {
     TABLE, isOwner, isHrOrAbove, settingsMap, bumpRevision, currentRevision,
     signToken, readToken, authenticate, authorize,
     listSheet, upsertRow, upsertMany, removeRow, removeMany, saveSettings,
+    importTab, countRows, coerce,
     newId, one, all, cols, tableFor, rowOut, yes,
     AUTH_PREFIX
   };

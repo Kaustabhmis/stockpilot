@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Move the workspace</title>
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;
+      --brand:#2563eb;--good:#059669;--bad:#dc2626;--warn:#b45309;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+     font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px 16px}
+.wrap{max-width:860px;margin:0 auto}
+h1{font-size:1.5rem;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+      padding:20px;margin-bottom:16px}
+h2{font-size:1rem;margin:0 0 12px}
+label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.04em;margin:12px 0 5px}
+input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;
+      font:inherit;background:#fff;color:var(--text)}
+button{padding:11px 18px;border:0;border-radius:9px;background:var(--brand);color:#fff;
+       font:inherit;font-weight:650;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.ghost{background:#fff;color:var(--text);border:1px solid var(--line)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+table{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:6px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.ok{color:var(--good);font-weight:650}
+.no{color:var(--bad);font-weight:650}
+.warnv{color:var(--warn);font-weight:650}
+#log{font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#0f172a;
+     color:#e2e8f0;padding:14px;border-radius:10px;max-height:320px;overflow:auto;
+     white-space:pre-wrap;margin-top:12px}
+.note{font-size:.85rem;color:var(--muted);margin-top:10px}
+.bar{height:7px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:12px}
+.bar>i{display:block;height:100%;background:var(--brand);width:0;transition:width .2s}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#0b1220;--card:#131c2e;--line:#243146;--text:#e8edf6;--muted:#93a4bd}
+  input{background:#0f1829;color:var(--text)} button.ghost{background:#0f1829;color:var(--text)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Move the workspace</h1>
+  <p class="sub">Copies everything out of the Google Sheet and into Postgres,
+     then counts both sides and tells you whether they agree.</p>
+
+  <div class="card">
+    <h2>Where from, and where to</h2>
+    <label for="oldUrl">The Apps Script address (the sheet you use now)</label>
+    <input id="oldUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    <label for="newUrl">The new address (Postgres)</label>
+    <input id="newUrl" placeholder="https://your-project.supabase.co/functions/v1/api">
+    <label for="email">Owner sign-in</label>
+    <input id="email" placeholder="admin@company.com">
+    <label for="pass">Password</label>
+    <input id="pass" type="password" placeholder="the owner password">
+    <div class="row">
+      <button id="check">Check both sides</button>
+      <button id="go" class="ghost" disabled>Copy everything across</button>
+    </div>
+    <div class="bar"><i id="bar"></i></div>
+    <p class="note">Nothing is deleted from the sheet. It stays exactly as it is,
+       so if anything looks wrong you simply carry on using it.</p>
+  </div>
+
+  <div class="card" id="tallyCard" style="display:none">
+    <h2>Row by row</h2>
+    <table id="tally"><thead><tr>
+      <th>Table</th><th class="n">In the sheet</th><th class="n">In Postgres</th><th>Agree?</th>
+    </tr></thead><tbody></tbody></table>
+    <p class="note" id="verdict"></p>
+  </div>
+
+  <div class="card">
+    <h2>What it did</h2>
+    <div id="log">ready.</div>
+  </div>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+const log = m => { const l = el('log');
+  l.textContent += (l.textContent === 'ready.' ? '' : '\n') + m; l.scrollTop = l.scrollHeight; };
+
+let oldTok = '', newTok = '', plan = null;
+
+async function call(url, action, payload, token) {
+  const r = await fetch(url, { method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, payload: payload || {}, token: token || '' }) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(action + ': ' + (j.error || 'failed'));
+  return j.data;
+}
+
+el('check').onclick = async () => {
+  const b = el('check'); b.disabled = true;
+  el('log').textContent = 'ready.';
+  try {
+    const oldUrl = el('oldUrl').value.trim(), newUrl = el('newUrl').value.trim();
+    const email = el('email').value.trim(), pass = el('pass').value;
+    if (!oldUrl || !newUrl) throw new Error('Both addresses are needed.');
+
+    log('signing in to the sheet...');
+    oldTok = (await call(oldUrl, 'login', { email, password: pass })).token;
+    log('  signed in');
+
+    log('signing in to Postgres...');
+    newTok = (await call(newUrl, 'login', { email, password: pass })).token;
+    log('  signed in');
+
+    log('asking the sheet what it holds...');
+    plan = await call(oldUrl, 'exportPlan', {}, oldTok);
+    const total = plan.tabs.reduce((s, t) => s + t.rows, 0);
+    plan.tabs.forEach(t => log('  ' + String(t.rows).padStart(7) + '  ' + t.sheet));
+    log('  ' + total.toLocaleString() + ' rows in all');
+
+    log('\nboth sides answered. Ready to copy.');
+    el('go').disabled = false;
+  } catch (e) {
+    log('\nSTOPPED: ' + e.message);
+    log('Nothing has been changed.');
+  }
+  b.disabled = false;
+};
+
+el('go').onclick = async () => {
+  const g = el('go'), c = el('check');
+  g.disabled = c.disabled = true;
+  const oldUrl = el('oldUrl').value.trim(), newUrl = el('newUrl').value.trim();
+  const PAGE = 500;
+  const totalRows = plan.tabs.reduce((s, t) => s + t.rows, 0) || 1;
+  let done = 0;
+  const problems = [];
+
+  try {
+    /* Employees first: attendance, leave and payroll all point at a staff
+       code, and a row whose person is not there yet has nowhere to attach. */
+    /* the sheet is the truth for these, so its rows replace the seeded ones */
+    const REPLACE = new Set(['Shifts', 'LeaveTypes', 'RequestTypes', 'ApprovalLevels']);
+    const order = ['Settings', 'Employees', 'Users', 'Shifts', 'LeaveTypes',
+      'RequestTypes', 'ApprovalLevels', 'Sites', 'Holidays', 'Events',
+      'CtcVariables', 'CtcComponents', 'CtcValues', 'Notices',
+      'Attendance', 'Leave', 'Requests', 'Payroll', 'Punches', 'PayslipMail'];
+    const tabs = order.filter(n => plan.tabs.some(t => t.sheet === n))
+      .concat(plan.tabs.map(t => t.sheet).filter(n => !order.includes(n)));
+
+    for (const name of tabs) {
+      const meta = plan.tabs.find(t => t.sheet === name) || { rows: 0 };
+      if (!meta.rows) { log(name + ': nothing to copy'); continue; }
+      log(name + ': ' + meta.rows.toLocaleString() + ' rows');
+      let offset = 0;
+      while (true) {
+        const page = await call(oldUrl, 'exportTab',
+          { sheet: name, offset, limit: PAGE }, oldTok);
+        if (page.rows.length) {
+          const res = await call(newUrl, 'importTab',
+            { sheet: name, rows: page.rows, replace: REPLACE.has(name) && offset === 0 }, newTok);
+          if (res.problems && res.problems.length) {
+            res.problems.forEach(p => problems.push(name + ' row ' + (offset + p.row) +
+              ': ' + p.why));
+            log('   ' + res.problems.length + ' row(s) would not go in - listed at the end');
+          }
+          done += page.rows.length;
+          el('bar').style.width = Math.min(100, done / totalRows * 100) + '%';
+        }
+        offset += page.rows.length;
+        if (page.done || !page.rows.length) break;
+        log('   ' + offset.toLocaleString() + ' of ' + page.total.toLocaleString());
+      }
+      log('   done');
+    }
+
+    /* Count both sides. This is the part that matters: not "it finished"
+       but "there are as many rows there as there were here". */
+    log('\ncounting both sides...');
+    const after = await call(newUrl, 'tally', {}, newTok);
+    const body = el('tally').querySelector('tbody');
+    body.innerHTML = '';
+    let bad = 0;
+    plan.tabs.forEach(t => {
+      const got = after[t.sheet] === undefined ? 0 : after[t.sheet];
+      /* Settings and Users can legitimately be larger: the new workspace was
+         seeded with its own defaults and its own first owner before anything
+         arrived. Everything else must match exactly. */
+      const soft = t.sheet === 'Settings' || t.sheet === 'Users';
+      const ok = soft ? got >= t.rows : got === t.rows;
+      if (!ok) bad++;
+      body.insertAdjacentHTML('beforeend',
+        '<tr><td>' + t.sheet + '</td><td class="n">' + t.rows.toLocaleString() +
+        '</td><td class="n">' + got.toLocaleString() + '</td><td class="' +
+        (ok ? 'ok' : 'no') + '">' + (ok ? (soft && got > t.rows ? 'yes, plus seeded rows' : 'yes')
+                                        : 'NO - ' + (got - t.rows) + ' out') + '</td></tr>');
+    });
+    el('tallyCard').style.display = '';
+    el('verdict').innerHTML = bad
+      ? '<b class="no">' + bad + ' table(s) do not agree.</b> Do not switch over. ' +
+        'Send this page to whoever set it up.'
+      : '<b class="ok">Every table agrees.</b> The sheet is untouched, so you can ' +
+        'keep using it until you are satisfied with the new one.';
+
+    if (problems.length) {
+      log('\nrows that would not go in (' + problems.length + '):');
+      problems.slice(0, 50).forEach(p => log('  ' + p));
+      if (problems.length > 50) log('  ...and ' + (problems.length - 50) + ' more');
+    } else {
+      log('\nevery row went in.');
+    }
+    log(bad ? '\n** ' + bad + ' table(s) do not agree - see the table above.'
+            : '\nfinished. Every table agrees.');
+  } catch (e) {
+    log('\nSTOPPED: ' + e.message);
+    log('The sheet is untouched. Fix the cause and run it again - copying the ' +
+        'same rows twice is safe, they replace themselves.');
+  }
+  g.disabled = c.disabled = false;
+};
+</script>
+</body>
+</html>

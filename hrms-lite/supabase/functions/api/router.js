@@ -42,6 +42,11 @@ export function createRouter(db, opts = {}) {
       case 'ingestPunches': return act.ingestPunches(p.punches, p.source, dirty);
 
       case 'decide':        return act.decide(p.sheet, p.id, p.status, p.note, caller, dirty);
+
+      /* moving in from the sheet */
+      case 'importTab':     dirty[p.sheet] = 1;
+                            return api.importTab(p.sheet, p.rows, { replace: !!p.replace });
+      case 'tally':         return act.tally();
       case 'payslipMailLog':return act.payslipMailLog(p.month);
 
       default: throw new Error('Unknown action: ' + action);
@@ -53,7 +58,8 @@ export function createRouter(db, opts = {}) {
      the single global queue that made the sheet version take minutes has no
      equivalent here. */
   const READ_ACTIONS = new Set(['ping', 'rev', 'bootstrap', 'login', 'list',
-    'myMonth', 'monthAtt', 'punchState', 'punchLog', 'listUsers', 'payslipMailLog']);
+    'myMonth', 'monthAtt', 'punchState', 'punchLog', 'listUsers', 'payslipMailLog',
+    'tally']);
 
   return async function handle(body) {
     const action = String((body && body.action) || '');
