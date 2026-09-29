@@ -155,8 +155,29 @@ function handle(action, payload, callback, token) {
     var caller = authenticate(action, token);
     authorize(action, payload || {}, caller);
 
-    var lock = LockService.getScriptLock();
-    lock.waitLock(25000);
+    /* Only a WRITE takes the lock.
+     *
+     * The script lock is one holder at a time for the whole workspace, so
+     * taking it on every request - reads included - put every screen in the
+     * company into a single queue. Sixty-odd phones and the office screens
+     * each ask "has anything changed?" every twenty seconds: about three
+     * requests a second, all of them reads, all of them queueing behind one
+     * another for a second or two each. Arrivals outran the queue and it
+     * never drained, so a punch that should take two seconds took minutes,
+     * and past twenty-five seconds waitLock gave up and the browser retried,
+     * which made it worse.
+     *
+     * Reads need no lock. They do not change anything, and a read that
+     * catches the sheet mid-write sees the row either before or after, never
+     * torn - each write is a single setValues on one row. So the reads now
+     * run side by side and only writes serialise, which is what the lock was
+     * ever for. */
+    var write = !READ_ACTIONS[action];
+    var lock = null;
+    if (write) {
+      lock = LockService.getScriptLock();
+      lock.waitLock(25000);
+    }
     try {
       REV_DIRTY = {};
       out = { ok: true, data: route(action, payload || {}, caller) };
@@ -170,7 +191,7 @@ function handle(action, payload, callback, token) {
         out.rev = isHrOrAbove(caller.role) ? moved.rev : moved.staff;
       }
     } finally {
-      lock.releaseLock();
+      if (lock) lock.releaseLock();
     }
   } catch (err) {
     var msg = String(err && err.message ? err.message : err);
@@ -183,6 +204,17 @@ function handle(action, payload, callback, token) {
 /* ------------------------------------------------------------------ */
 /* Authentication - signed sessions                                    */
 /* ------------------------------------------------------------------ */
+
+/* Actions that only ever READ. Everything not named here takes the write
+   lock, so an action added later is safe by default rather than silently
+   unserialised. Each of these was checked: none of them upserts, appends,
+   deletes, or sets a script property. */
+var READ_ACTIONS = {
+  ping: 1, rev: 1, bootstrap: 1, login: 1, list: 1,
+  myMonth: 1, monthAtt: 1,
+  punchState: 1, punchLog: 1,
+  listUsers: 1, secretStatus: 1, payslipMailLog: 1, mailQuota: 1
+};
 
 var AUTH_PREFIX = 'AUTH:';
 var SESSION_HOURS = 12;

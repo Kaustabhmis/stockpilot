@@ -7534,7 +7534,12 @@ function startClock() {
    fetched unless that number has changed, so watching costs a script property
    and the small Users lookup that checks the session - one tab read against
    the twenty-one a real refresh costs, and it does not grow with the company. */
-var WATCH_MS = 20000;         /* how often to ask while the tab is in front */
+/* Every open screen asking every twenty seconds was about three requests a
+   second across the company, and Apps Script bills the daily quota by how
+   long the script runs, not by what it does. A minute is still well inside
+   how fast anybody notices somebody else's change, and it is a third of the
+   traffic. */
+var WATCH_MS = 60000;         /* how often to ask while the tab is in front */
 var WATCH_IDLE_MS = 120000;   /* a background tab drops to this, rather than stopping:
                                  a second screen left open on a spare monitor should
                                  still be roughly right when it is looked at */

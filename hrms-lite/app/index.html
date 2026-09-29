@@ -478,7 +478,11 @@ function start(given) {
    against the twenty-one a real refresh costs - so the phone can ask often
    without eating the daily quota or the battery. A backgrounded app stops
    asking altogether. */
-var WATCH_MS = 25000;
+/* A worker opens this to punch and closes it again; there is very little on
+   their own screen that somebody else changes while they watch. Two minutes
+   keeps an open app roughly right without sixty-odd phones between them
+   making a request every few seconds all morning. */
+var WATCH_MS = 120000;
 
 function startWatch() {
   if (S._watch) return;
