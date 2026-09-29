@@ -24,6 +24,28 @@ window.APP_CONFIG = {
     EMAIL: 'info@ashirbadenterprise.com',
     ADDRESS: 'Rajarhat Expressway, Kolkata, West Bengal 700156',
 
+    /** Official social profiles (leave '' to hide). Also used as "sameAs" in structured data. */
+    SOCIAL: {
+        facebook: '',   // e.g. 'https://www.facebook.com/ashirbadenterprise'
+        instagram: '',
+        youtube: '',
+        linkedin: ''
+    },
+
+    /** Google Analytics 4 measurement ID, e.g. 'G-XXXXXXXXXX' (optional). */
+    GA_MEASUREMENT_ID: '',
+
+    /** Search Console / Bing verification codes (content="..." value only). Added by the build. */
+    GOOGLE_SITE_VERIFICATION: '',
+    BING_SITE_VERIFICATION: '',
+
+    /**
+     * Customer testimonials for the landing page. Use REAL reviews only, with the
+     * customer's permission. The section stays hidden while this list is empty.
+     * Example: { name: 'Rahul S.', project: 'Ashirbad Enclave', quote: '...', rating: 5 }
+     */
+    TESTIMONIALS: [],
+
     /** Hero carousel: time each live project stays on screen (ms). */
     CAROUSEL_DELAY_MS: 10000,
 

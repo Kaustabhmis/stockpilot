@@ -21,7 +21,7 @@
  */
 
 var SCHEMA = {
-  projects: ['id', 'title', 'slug', 'location', 'stage', 'status_label', 'plot_size', 'carpet_area', 'config', 'price',
+  projects: ['id', 'title', 'slug', 'location', 'stage', 'status_label', 'rera_no', 'plot_size', 'carpet_area', 'config', 'price',
     'description', 'img', 'images', 'lat', 'lng', 'completed_year', 'sort_order', 'sold_at', 'created_at'],
   commercial: ['id', 'title', 'type', 'area', 'size', 'img', 'sort_order', 'created_at'],
   posts: ['id', 'slug', 'title', 'category', 'author', 'excerpt', 'content', 'cover', 'read_time', 'published',
@@ -67,9 +67,9 @@ function route_(req) {
     case 'check': requireAdmin_(req.token); return true;
     case 'logout': if (req.token) CacheService.getScriptCache().remove(tokenKey_(req.token)); return true;
     case 'all': requireAdmin_(req.token); return readAll_();
-    case 'save': requireAdmin_(req.token); return withLock_(function () { return saveRows_(collection_(req.collection), [req.row || {}])[0]; });
-    case 'bulkSave': requireAdmin_(req.token); return withLock_(function () { return saveRows_(collection_(req.collection), req.rows || []).length; });
-    case 'remove': requireAdmin_(req.token); return withLock_(function () { return removeRow_(collection_(req.collection), req.id); });
+    case 'save': requireAdmin_(req.token); return afterContentChange_(req.collection, withLock_(function () { return saveRows_(collection_(req.collection), [req.row || {}])[0]; }));
+    case 'bulkSave': requireAdmin_(req.token); return afterContentChange_(req.collection, withLock_(function () { return saveRows_(collection_(req.collection), req.rows || []).length; }));
+    case 'remove': requireAdmin_(req.token); return afterContentChange_(req.collection, withLock_(function () { return removeRow_(collection_(req.collection), req.id); }));
     case 'upload': requireAdmin_(req.token); return upload_(req.data, req.mime, req.name);
     default: throw new Error('Unknown action');
   }
@@ -368,6 +368,62 @@ function upload_(base64, mime, name) {
 }
 
 /* ===================================================================
+ * Automatic website rebuild (pre-rendered SEO pages)
+ * When content changes, ping the hosting provider's "build hook" URL
+ * about a minute later, so several quick edits cause a single rebuild.
+ * ================================================================= */
+function afterContentChange_(collection, result) {
+  if (collection !== 'leads') scheduleRebuild_();
+  return result;
+}
+
+function scheduleRebuild_() {
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('BUILD_HOOK_URL')) return;
+  var cache = CacheService.getScriptCache();
+  if (cache.get('rebuild_pending')) return;
+  cache.put('rebuild_pending', '1', 300);
+  try {
+    ScriptApp.newTrigger('runScheduledRebuild').timeBased().after(60 * 1000).create();
+  } catch (e) {
+    // Trigger quota or permission problem: rebuild immediately instead
+    cache.remove('rebuild_pending');
+    pingBuildHook_();
+  }
+}
+
+function runScheduledRebuild() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'runScheduledRebuild') ScriptApp.deleteTrigger(t);
+  });
+  CacheService.getScriptCache().remove('rebuild_pending');
+  pingBuildHook_();
+}
+
+function pingBuildHook_() {
+  var url = PropertiesService.getScriptProperties().getProperty('BUILD_HOOK_URL');
+  if (!url) return false;
+  var res = UrlFetchApp.fetch(url, { method: 'post', muteHttpExceptions: true, contentType: 'application/json', payload: '{}' });
+  return res.getResponseCode() < 300;
+}
+
+function setBuildHookPrompt() {
+  var ui = SpreadsheetApp.getUi();
+  var res = ui.prompt('Website rebuild hook', 'Paste the build hook URL from your hosting provider (Netlify / Cloudflare Pages / Vercel). Leave empty to turn off.', ui.ButtonSet.OK_CANCEL);
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+  var url = res.getResponseText().trim();
+  var props = PropertiesService.getScriptProperties();
+  if (url && !/^https:\/\//.test(url)) { ui.alert('The URL must start with https://'); return; }
+  if (url) props.setProperty('BUILD_HOOK_URL', url); else props.deleteProperty('BUILD_HOOK_URL');
+  ui.alert(url ? 'Saved. The website will rebuild about a minute after each change in the admin panel.' : 'Automatic rebuilds turned off.');
+}
+
+function rebuildNow() {
+  var ok = pingBuildHook_();
+  SpreadsheetApp.getUi().alert(ok ? 'Rebuild started. The website will update in a few minutes.' : 'No build hook set, or the hook returned an error.');
+}
+
+/* ===================================================================
  * Sheet menu (only visible to people who can open the private sheet)
  * ================================================================= */
 function onOpen() {
@@ -375,7 +431,9 @@ function onOpen() {
     .addItem('1. Create / repair tabs', 'setupSheets')
     .addItem('2. Set admin password', 'setAdminPasswordPrompt')
     .addItem('3. Set lead notification email', 'setNotifyEmailPrompt')
+    .addItem('4. Set website rebuild hook', 'setBuildHookPrompt')
     .addSeparator()
+    .addItem('Rebuild website now', 'rebuildNow')
     .addItem('Sign out all admin sessions', 'signOutEveryone')
     .addToUi();
 }

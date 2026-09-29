@@ -8,16 +8,17 @@
     <meta name="robots" content="index, follow">
     <meta name="theme-color" content="#12304d">
     <link rel="canonical" href="https://www.ashirbadenterprise.com/privacy.html">
-    <link rel="icon" type="image/jpeg" href="1000365300.jpg">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="assets/js/config.js"></script>
-    <script src="assets/js/common.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="assets/css/site.css">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" referrerpolicy="no-referrer">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer"></noscript>
+    <link rel="stylesheet" href="assets/css/tailwind.css">
+    <!--@head-->
 </head>
-<body class="bg-amber-50/30 text-gray-800 font-sans antialiased overflow-x-hidden pt-20">
-    <div id="site-header-root"></div>
+<body data-page="privacy" class="bg-amber-50/30 text-gray-800 font-sans antialiased overflow-x-hidden pt-20">
+    <!--@header--><div id="site-header-root"></div><!--/@header-->
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-12 md:py-16">
         <nav aria-label="Breadcrumb" class="text-sm text-gray-500"><a href="index.html" class="hover:text-brand-orange" aria-label="Home">Home</a> / <span aria-current="page">Privacy Policy</span></nav>
         <h1 class="text-3xl md:text-4xl font-extrabold text-brand-navy mt-3">Privacy Policy</h1>
@@ -30,7 +31,10 @@
             <section><h2 class="text-xl font-bold text-brand-navy mb-2">Retention &amp; your rights</h2><p>We keep enquiry data only as long as needed to serve you. You may ask us to access, correct or delete your data at any time by writing to <a id="privacy-email" href="#" class="text-brand-orange underline" aria-label="Email our privacy contact"></a>.</p></section>
         </div>
     </main>
-    <div id="site-footer-root"></div>
+    <!--@footer--><div id="site-footer-root"></div><!--/@footer-->
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/templates.js"></script>
+    <script src="assets/js/common.js"></script>
     <script>
         AE.layout('privacy');
         const e = document.getElementById('privacy-email');

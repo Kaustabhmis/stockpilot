@@ -6,15 +6,16 @@
     <title>Admin Panel | Ashirbad Enterprise</title>
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#12304d">
-    <link rel="icon" type="image/jpeg" href="1000365300.jpg">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="assets/js/config.js"></script>
-    <script src="assets/js/common.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="assets/css/site.css">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" referrerpolicy="no-referrer">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer"></noscript>
+    <link rel="stylesheet" href="assets/css/tailwind.css">
+    <!--@head-->
     <style>
         .inp { width: 100%; padding: .65rem .85rem; background: #f9fafb; border: 1px solid #d1d5db; border-radius: .375rem; font-size: 1rem; outline: none; }
         .inp:focus { box-shadow: 0 0 0 2px #e66825; border-color: transparent; }
@@ -25,10 +26,10 @@
         .tab-btn[aria-current="page"] { background: #e66825; color: #fff; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans antialiased">
+<body data-page="admin" class="bg-gray-100 text-gray-800 font-sans antialiased">
 
     <!-- ================= Login ================= -->
-    <main id="login-screen" class="min-h-screen flex items-center justify-center p-4 bg-brand-navy">
+    <div id="login-screen" class="min-h-screen flex items-center justify-center p-4 bg-brand-navy">
         <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
             <div class="text-center">
                 <img src="1000365300.jpg" alt="Ashirbad Enterprise logo" class="w-24 h-24 mx-auto object-contain">
@@ -50,12 +51,12 @@
             </form>
             <a href="index.html" class="block text-center text-sm text-brand-orange mt-6 hover:underline" aria-label="Back to website"><i class="fas fa-arrow-left mr-1" aria-hidden="true"></i> Back to website</a>
         </div>
-    </main>
+    </div>
 
     <!-- ================= App ================= -->
     <div id="app" class="hidden min-h-screen lg:flex">
         <!-- Sidebar -->
-        <aside class="bg-brand-navy text-white lg:w-64 lg:min-h-screen lg:fixed lg:inset-y-0 lg:left-0 z-40 flex flex-col">
+        <aside aria-label="Admin sidebar" class="bg-brand-navy text-white lg:w-64 lg:min-h-screen lg:fixed lg:inset-y-0 lg:left-0 z-40 flex flex-col">
             <div class="flex items-center justify-between gap-3 px-4 py-4 border-b border-white/10">
                 <a href="index.html" target="_blank" rel="noopener" class="flex items-center gap-3 min-w-0" aria-label="Open website in new tab">
                     <img src="1000365300.jpg" alt="Ashirbad Enterprise logo" class="w-10 h-10 rounded bg-white p-0.5 object-contain">
@@ -193,11 +194,11 @@
     </div>
 
     <!-- ================= Editor modal ================= -->
-    <div id="editorModal" class="modal fixed inset-0 z-[150] flex items-stretch sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="editor-title" aria-hidden="true">
+    <div id="editorModal" class="modal fixed inset-0 z-[150] flex items-stretch sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="editor-title" inert>
         <div class="absolute inset-0 bg-black/70" data-close-modal aria-hidden="true"></div>
         <div class="modal-panel relative bg-white w-full sm:max-w-3xl sm:max-h-[92vh] flex flex-col sm:rounded-2xl shadow-2xl">
             <div class="flex items-center justify-between px-5 py-4 border-b">
-                <h2 id="editor-title" class="text-lg font-extrabold text-brand-navy"></h2>
+                <h2 id="editor-title" class="text-lg font-extrabold text-brand-navy">Editor</h2>
                 <button type="button" class="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center" data-close-modal aria-label="Close editor"><i class="fas fa-xmark text-xl" aria-hidden="true"></i></button>
             </div>
             <form id="editor-form" class="flex-1 overflow-y-auto px-5 py-5" novalidate>
@@ -210,6 +211,9 @@
         </div>
     </div>
 
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/templates.js"></script>
+    <script src="assets/js/common.js"></script>
     <script src="assets/js/store.js"></script>
     <script>
     (function () {
@@ -233,6 +237,7 @@
                     { name: 'status_label', label: 'Status Tag', placeholder: 'e.g. Under Construction / Booking Open', list: ['Under Construction', 'Booking Open', 'Newly Launched', 'Nearing Possession', 'Ready to Move', 'Completed'] },
                     { name: 'config', label: 'Configuration', placeholder: 'e.g. 2 & 3 BHK Apartments' },
                     { name: 'price', label: 'Price', placeholder: 'e.g. ₹58 Lakh onwards' },
+                    { name: 'rera_no', label: 'WBRERA Registration No.', placeholder: 'e.g. WBRERA/P/NOR/2025/000123', help: 'Shown on the carousel, project details and landing page (required on ads for registered projects).' },
                     { name: 'plot_size', label: 'Plot Size', placeholder: 'e.g. 32 Cottah' },
                     { name: 'carpet_area', label: 'Carpet Area', placeholder: 'e.g. 850 – 1,420 sq.ft.' },
                     { name: 'description', label: 'Description', type: 'textarea', rows: 4, full: true },
@@ -396,7 +401,7 @@
             document.getElementById('dash-leads').innerHTML = state.leads.slice(0, 5).map((l) => `
                 <li class="py-3 flex items-center justify-between gap-3 text-sm">
                     <div class="min-w-0"><p class="font-bold text-brand-navy truncate">${escapeHTML(l.name)}</p><p class="text-gray-500 truncate">${escapeHTML(l.project || l.interest || 'General enquiry')}</p></div>
-                    <div class="text-right flex-shrink-0"><a href="tel:${escapeHTML(l.phone)}" class="text-brand-orange font-bold" aria-label="Call ${escapeHTML(l.name)}">${escapeHTML(l.phone)}</a><p class="text-xs text-gray-400">${formatDate(l.created_at)}</p></div>
+                    <div class="text-right flex-shrink-0"><a href="tel:${escapeHTML(l.phone)}" class="text-brand-orange font-bold" aria-label="Call ${escapeHTML(l.name)}">${escapeHTML(l.phone)}</a><p class="text-xs text-gray-500">${formatDate(l.created_at)}</p></div>
                 </li>`).join('') || '<li class="py-3 text-sm text-gray-500">No enquiries yet.</li>';
 
             document.getElementById('dash-live').innerHTML = state.projects.filter((p) => p.stage === 'live').map((p) => `
@@ -429,8 +434,8 @@
                         <div class="flex flex-wrap items-center gap-2">${stageChip(p.stage)}${p.status_label ? `<span class="text-xs text-gray-500">${escapeHTML(p.status_label)}</span>` : ''}</div>
                         <h2 class="font-bold text-brand-navy text-lg mt-1 truncate">${escapeHTML(p.title)}</h2>
                         <p class="text-sm text-gray-500 truncate"><i class="fas fa-location-dot mr-1 text-brand-orange" aria-hidden="true"></i>${escapeHTML(p.location)}</p>
-                        <p class="text-sm text-gray-700 mt-1">${[p.config, p.price].filter(Boolean).map(escapeHTML).join(' · ') || '<span class="text-gray-400">No config/price</span>'}</p>
-                        <p class="text-xs text-gray-400 mt-1"><i class="fas fa-images mr-1" aria-hidden="true"></i>${imgCount} image${imgCount === 1 ? '' : 's'}${p.sold_at ? ` · Sold ${formatDate(p.sold_at)}` : ''}${p.lat == null ? ' · <span class="text-amber-600">No map location</span>' : ''}</p>
+                        <p class="text-sm text-gray-700 mt-1">${[p.config, p.price].filter(Boolean).map(escapeHTML).join(' · ') || '<span class="text-gray-500">No config/price</span>'}</p>
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-images mr-1" aria-hidden="true"></i>${imgCount} image${imgCount === 1 ? '' : 's'}${p.sold_at ? ` · Sold ${formatDate(p.sold_at)}` : ''}${p.lat == null ? ' · <span class="text-amber-600">No map location</span>' : ''}</p>
                     </div>
                     <div class="flex flex-wrap sm:flex-col gap-2 sm:w-40">
                         ${stageAction}
@@ -450,7 +455,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             ${p.published ? '<span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-0.5 rounded-full">Published</span>' : '<span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full">Draft</span>'}
                             <span class="text-xs text-brand-orange font-bold uppercase">${escapeHTML(p.category || '')}</span>
-                            <span class="text-xs text-gray-400">${formatDate(p.published_at)}</span>
+                            <span class="text-xs text-gray-500">${formatDate(p.published_at)}</span>
                         </div>
                         <h2 class="font-bold text-brand-navy text-lg mt-1">${escapeHTML(p.title)}</h2>
                         <p class="text-sm text-gray-500 line-clamp-2">${escapeHTML(p.excerpt || '')}</p>
@@ -503,7 +508,7 @@
                         ${l.email ? `<br><a href="mailto:${escapeHTML(l.email)}" class="text-gray-500 text-xs break-all" aria-label="Email ${escapeHTML(l.name)}">${escapeHTML(l.email)}</a>` : ''}
                     </td>
                     <td class="px-4 py-3 min-w-[220px]">
-                        <p>${req || '<span class="text-gray-400">—</span>'}</p>
+                        <p>${req || '<span class="text-gray-500">—</span>'}</p>
                         ${l.message ? `<p class="text-xs text-gray-500 mt-1 whitespace-pre-line line-clamp-3" title="${escapeHTML(l.message)}">${escapeHTML(l.message)}</p>` : ''}
                     </td>
                     <td class="px-4 py-3 text-xs text-gray-500 min-w-[140px]">${escapeHTML(l.source || '')}${l.utm && l.utm.utm_source ? `<br>utm: ${escapeHTML(l.utm.utm_source)}${l.utm.utm_campaign ? '/' + escapeHTML(l.utm.utm_campaign) : ''}` : ''}</td>
@@ -514,7 +519,7 @@
                         </select>
                     </td>
                     <td class="px-4 py-3 text-right whitespace-nowrap">
-                        <a href="https://wa.me/${escapeHTML(String(l.phone).replace(/\D/g, '').replace(/^(\d{10})$/, '91$1'))}?text=${encodeURIComponent(`Hi ${l.name}, thank you for your enquiry with Ashirbad Enterprise.`)}" target="_blank" rel="noopener noreferrer" class="btn !p-2 bg-[#25D366] text-white" aria-label="WhatsApp ${escapeHTML(l.name)}"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>
+                        <a href="https://wa.me/${escapeHTML(String(l.phone).replace(/\D/g, '').replace(/^(\d{10})$/, '91$1'))}?text=${encodeURIComponent(`Hi ${l.name}, thank you for your enquiry with Ashirbad Enterprise.`)}" target="_blank" rel="noopener noreferrer" class="btn !p-2 bg-[#15803d] text-white" aria-label="WhatsApp ${escapeHTML(l.name)}"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>
                         <button type="button" data-delete="leads:${escapeHTML(l.id)}" class="btn !p-2 bg-white border border-red-200 hover:bg-red-50 text-red-600" aria-label="Delete lead ${escapeHTML(l.name)}"><i class="fas fa-trash" aria-hidden="true"></i></button>
                     </td>
                 </tr>`;
@@ -655,7 +660,7 @@
                     <img src="${escapeHTML(src)}" alt="Gallery image ${i + 1}" class="w-full aspect-square object-cover rounded-lg border bg-gray-100">
                     <button type="button" data-remove-img="${name}:${i}" class="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 hover:bg-red-600 text-white text-xs flex items-center justify-center" aria-label="Remove gallery image ${i + 1}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
                     <span class="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 rounded">${i + 1}</span>
-                </div>`).join('') || '<p class="col-span-full text-xs text-gray-400 py-3">No extra images yet.</p>';
+                </div>`).join('') || '<p class="col-span-full text-xs text-gray-500 py-3">No extra images yet.</p>';
         }
 
         function openEditor(collection, row) {

@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Ashirbad Enterprise – shared styles (Tailwind handles the rest) */
 section[id] { scroll-margin-top: 5rem; }
 

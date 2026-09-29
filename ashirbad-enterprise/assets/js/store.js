@@ -41,7 +41,7 @@
         const projects = [
             {
                 title: 'Ashirbad Heights', location: 'Action Area I, New Town, Kolkata', stage: 'live',
-                status_label: 'Under Construction', plot_size: '32 Cottah', carpet_area: '850 – 1,420 sq.ft.',
+                status_label: 'Under Construction', rera_no: 'WBRERA/P/NOR/2025/000000 (sample)', plot_size: '32 Cottah', carpet_area: '850 – 1,420 sq.ft.',
                 config: '2 & 3 BHK Apartments', price: '₹58 Lakh onwards',
                 description: 'Our flagship G+14 residential tower in the heart of New Town, minutes from Eco Park and City Centre II. Featuring a rooftop infinity pool, landscaped podium garden, fully equipped gymnasium, 24x7 CCTV security and 100% power backup. WBRERA registered with possession targeted for December 2027.',
                 img: unsplash('1545324418-cc1a3fa10c00'),
@@ -444,6 +444,8 @@
     const Store = {
         mode,
         ready,
+        /** Sample content (used by tools/build.mjs when no Google Sheet is connected). */
+        sampleData: buildSeed,
         slugify,
         uid,
 
