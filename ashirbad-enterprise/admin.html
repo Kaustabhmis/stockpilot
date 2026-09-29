@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel | Ashirbad Enterprise</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#12304d">
+    <link rel="icon" type="image/jpeg" href="1000365300.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/common.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="assets/css/site.css">
+    <style>
+        .inp { width: 100%; padding: .65rem .85rem; background: #f9fafb; border: 1px solid #d1d5db; border-radius: .375rem; font-size: 1rem; outline: none; }
+        .inp:focus { box-shadow: 0 0 0 2px #e66825; border-color: transparent; }
+        .lbl { display: block; font-size: .8rem; font-weight: 700; color: #12304d; margin-bottom: .35rem; }
+        .btn:not(.hidden) { display: inline-flex; }
+        .btn { align-items: center; justify-content: center; gap: .45rem; font-weight: 700; font-size: .875rem; padding: .6rem 1rem; border-radius: .375rem; transition: background-color .15s, color .15s; white-space: nowrap; }
+        .btn:disabled { opacity: .6; cursor: not-allowed; }
+        .tab-btn[aria-current="page"] { background: #e66825; color: #fff; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans antialiased">
+
+    <!-- ================= Login ================= -->
+    <main id="login-screen" class="min-h-screen flex items-center justify-center p-4 bg-brand-navy">
+        <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
+            <div class="text-center">
+                <img src="1000365300.jpg" alt="Ashirbad Enterprise logo" class="w-24 h-24 mx-auto object-contain">
+                <h1 class="text-2xl font-extrabold text-brand-navy mt-3">Admin Panel</h1>
+                <p class="text-sm text-gray-500">Ashirbad Enterprise</p>
+            </div>
+            <form id="login-form" class="mt-6 space-y-4" aria-label="Administrator login" novalidate>
+                <div id="login-email-wrap">
+                    <label for="login-email" class="lbl">Email</label>
+                    <input id="login-email" type="email" autocomplete="username" class="inp" placeholder="admin@ashirbadenterprise.com">
+                </div>
+                <div>
+                    <label for="login-password" class="lbl">Password</label>
+                    <input id="login-password" type="password" autocomplete="current-password" required class="inp">
+                </div>
+                <button type="submit" id="login-btn" class="btn w-full bg-brand-orange hover:bg-brand-navy text-white py-3" aria-label="Sign in to admin panel"><i class="fas fa-right-to-bracket" aria-hidden="true"></i> Sign In</button>
+                <p id="login-error" class="hidden text-sm text-red-600 text-center" role="alert"></p>
+                <p id="login-hint" class="text-xs text-gray-500 text-center"></p>
+            </form>
+            <a href="index.html" class="block text-center text-sm text-brand-orange mt-6 hover:underline" aria-label="Back to website"><i class="fas fa-arrow-left mr-1" aria-hidden="true"></i> Back to website</a>
+        </div>
+    </main>
+
+    <!-- ================= App ================= -->
+    <div id="app" class="hidden min-h-screen lg:flex">
+        <!-- Sidebar -->
+        <aside class="bg-brand-navy text-white lg:w-64 lg:min-h-screen lg:fixed lg:inset-y-0 lg:left-0 z-40 flex flex-col">
+            <div class="flex items-center justify-between gap-3 px-4 py-4 border-b border-white/10">
+                <a href="index.html" target="_blank" rel="noopener" class="flex items-center gap-3 min-w-0" aria-label="Open website in new tab">
+                    <img src="1000365300.jpg" alt="Ashirbad Enterprise logo" class="w-10 h-10 rounded bg-white p-0.5 object-contain">
+                    <span class="font-extrabold leading-tight truncate">Ashirbad<br><span class="text-brand-gold text-xs font-semibold uppercase tracking-wider">Admin Panel</span></span>
+                </a>
+                <div class="lg:hidden"><button id="signout-mobile" type="button" class="btn bg-white/10 hover:bg-white/20 text-white" aria-label="Sign out"><i class="fas fa-right-from-bracket" aria-hidden="true"></i></button></div>
+            </div>
+            <nav class="flex lg:flex-col gap-1 p-2 lg:p-3 overflow-x-auto" aria-label="Admin sections">
+                <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="dashboard" aria-label="Dashboard"><i class="fas fa-gauge w-5" aria-hidden="true"></i> Dashboard</button>
+                <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="projects" aria-label="Projects"><i class="fas fa-building w-5" aria-hidden="true"></i> Projects</button>
+                <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="posts" aria-label="Blog posts"><i class="fas fa-newspaper w-5" aria-hidden="true"></i> Blog Posts</button>
+                <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="commercial" aria-label="Commercial properties"><i class="fas fa-store w-5" aria-hidden="true"></i> Commercial</button>
+                <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="leads" aria-label="Leads and enquiries"><i class="fas fa-address-book w-5" aria-hidden="true"></i> Leads <span id="new-leads-badge" class="hidden ml-auto bg-brand-gold text-brand-navy text-[11px] rounded-full px-2 py-0.5"></span></button>
+                <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="settings" aria-label="Settings and data"><i class="fas fa-gear w-5" aria-hidden="true"></i> Settings</button>
+            </nav>
+            <div class="hidden lg:block mt-auto p-3 border-t border-white/10">
+                <a href="index.html" target="_blank" rel="noopener" class="btn w-full !justify-start text-gray-200 hover:bg-white/10" aria-label="View website"><i class="fas fa-up-right-from-square w-5" aria-hidden="true"></i> View Website</a>
+                <button id="signout" type="button" class="btn w-full !justify-start text-gray-200 hover:bg-white/10" aria-label="Sign out"><i class="fas fa-right-from-bracket w-5" aria-hidden="true"></i> Sign Out</button>
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <main class="flex-1 lg:ml-64 min-w-0">
+            <div id="mode-banner" class="px-4 sm:px-6 py-2.5 text-sm flex items-start gap-2"></div>
+
+            <div class="p-4 sm:p-6 lg:p-8 max-w-7xl">
+                <!-- Dashboard -->
+                <section data-panel="dashboard" aria-labelledby="dash-h">
+                    <h1 id="dash-h" class="text-2xl font-extrabold text-brand-navy">Dashboard</h1>
+                    <p class="text-sm text-gray-500 mt-1">Overview of your website content and enquiries.</p>
+                    <div id="stats" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mt-6"></div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-8">
+                        <div class="bg-white rounded-xl shadow-sm border p-5">
+                            <div class="flex items-center justify-between"><h2 class="font-bold text-brand-navy">Latest Enquiries</h2><button type="button" class="text-sm text-brand-orange font-bold" data-goto="leads" aria-label="View all leads">View all</button></div>
+                            <ul id="dash-leads" class="mt-4 divide-y"></ul>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border p-5">
+                            <div class="flex items-center justify-between"><h2 class="font-bold text-brand-navy">Live on Homepage Carousel</h2><button type="button" class="text-sm text-brand-orange font-bold" data-goto="projects" aria-label="Manage projects">Manage</button></div>
+                            <ul id="dash-live" class="mt-4 divide-y"></ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Projects -->
+                <section data-panel="projects" class="hidden" aria-labelledby="proj-h">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h1 id="proj-h" class="text-2xl font-extrabold text-brand-navy">Projects</h1>
+                            <p class="text-sm text-gray-500 mt-1"><strong>Live</strong> projects appear in the homepage carousel. Marking a project <strong>Sold Out</strong> removes it from the carousel and moves it to the gallery.</p>
+                        </div>
+                        <button type="button" class="btn bg-brand-orange hover:bg-brand-navy text-white" data-new="projects" aria-label="Add a new project"><i class="fas fa-plus" aria-hidden="true"></i> Add Project</button>
+                    </div>
+                    <div id="project-filters" class="flex flex-wrap gap-2 mt-5" role="group" aria-label="Filter projects"></div>
+                    <div id="projects-list" class="mt-5 space-y-3"></div>
+                </section>
+
+                <!-- Posts -->
+                <section data-panel="posts" class="hidden" aria-labelledby="posts-h">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h1 id="posts-h" class="text-2xl font-extrabold text-brand-navy">Blog Posts</h1>
+                            <p class="text-sm text-gray-500 mt-1">Published posts appear on the blog page and the latest three on the homepage.</p>
+                        </div>
+                        <button type="button" class="btn bg-brand-orange hover:bg-brand-navy text-white" data-new="posts" aria-label="Write a new post"><i class="fas fa-pen" aria-hidden="true"></i> New Post</button>
+                    </div>
+                    <div id="posts-list" class="mt-5 space-y-3"></div>
+                </section>
+
+                <!-- Commercial -->
+                <section data-panel="commercial" class="hidden" aria-labelledby="com-h">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h1 id="com-h" class="text-2xl font-extrabold text-brand-navy">Commercial Properties</h1>
+                            <p class="text-sm text-gray-500 mt-1">Office, retail and warehouse listings shown on the homepage.</p>
+                        </div>
+                        <button type="button" class="btn bg-brand-orange hover:bg-brand-navy text-white" data-new="commercial" aria-label="Add commercial property"><i class="fas fa-plus" aria-hidden="true"></i> Add Property</button>
+                    </div>
+                    <div id="commercial-list" class="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+                </section>
+
+                <!-- Leads -->
+                <section data-panel="leads" class="hidden" aria-labelledby="leads-h">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h1 id="leads-h" class="text-2xl font-extrabold text-brand-navy">Leads &amp; Enquiries</h1>
+                            <p class="text-sm text-gray-500 mt-1">Submissions from the landing page and homepage contact form.</p>
+                        </div>
+                        <button type="button" id="export-csv" class="btn bg-brand-navy hover:bg-brand-orange text-white" aria-label="Export leads as CSV"><i class="fas fa-file-csv" aria-hidden="true"></i> Export CSV</button>
+                    </div>
+                    <div class="mt-5 flex flex-col sm:flex-row gap-3">
+                        <label for="lead-search" class="sr-only">Search leads</label>
+                        <input id="lead-search" type="search" class="inp sm:max-w-xs" placeholder="Search name, phone, project...">
+                        <label for="lead-status-filter" class="sr-only">Filter by status</label>
+                        <select id="lead-status-filter" class="inp sm:max-w-[180px]"><option value="">All statuses</option><option>New</option><option>Contacted</option><option>Site Visit Scheduled</option><option>Visited</option><option>Booked</option><option>Not Interested</option></select>
+                    </div>
+                    <div class="mt-4 bg-white rounded-xl shadow-sm border overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
+                                <tr><th scope="col" class="px-4 py-3">Date</th><th scope="col" class="px-4 py-3">Customer</th><th scope="col" class="px-4 py-3">Requirement</th><th scope="col" class="px-4 py-3">Source</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="px-4 py-3 text-right">Actions</th></tr>
+                            </thead>
+                            <tbody id="leads-body" class="divide-y"></tbody>
+                        </table>
+                        <p id="leads-empty" class="hidden p-8 text-center text-gray-500">No enquiries yet.</p>
+                    </div>
+                </section>
+
+                <!-- Settings -->
+                <section data-panel="settings" class="hidden" aria-labelledby="set-h">
+                    <h1 id="set-h" class="text-2xl font-extrabold text-brand-navy">Settings &amp; Data</h1>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                        <div class="bg-white rounded-xl shadow-sm border p-5">
+                            <h2 class="font-bold text-brand-navy">Storage Mode</h2>
+                            <div id="mode-detail" class="text-sm text-gray-600 mt-2 space-y-2"></div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border p-5">
+                            <h2 class="font-bold text-brand-navy">Backup</h2>
+                            <p class="text-sm text-gray-600 mt-2">Download all projects, posts, commercial listings and leads as a JSON file, or restore from a previous backup.</p>
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <button type="button" id="export-json" class="btn bg-brand-navy hover:bg-brand-orange text-white" aria-label="Download backup"><i class="fas fa-download" aria-hidden="true"></i> Download Backup</button>
+                                <label class="btn bg-gray-200 hover:bg-gray-300 text-brand-navy cursor-pointer" aria-label="Restore from backup file"><i class="fas fa-upload" aria-hidden="true"></i> Restore Backup<input type="file" id="import-json" accept="application/json,.json" class="sr-only"></label>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border p-5">
+                            <h2 class="font-bold text-brand-navy">Sample Content</h2>
+                            <p class="text-sm text-gray-600 mt-2">Add the sample projects, blog posts and commercial listings (useful for a fresh Supabase database).</p>
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <button type="button" id="load-sample" class="btn bg-gray-200 hover:bg-gray-300 text-brand-navy" aria-label="Load sample data"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Load Sample Data</button>
+                                <button type="button" id="reset-demo" class="btn bg-red-50 hover:bg-red-100 text-red-700 hidden" aria-label="Reset demo data"><i class="fas fa-rotate-left" aria-hidden="true"></i> Reset Demo Data</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- ================= Editor modal ================= -->
+    <div id="editorModal" class="modal fixed inset-0 z-[150] flex items-stretch sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="editor-title" aria-hidden="true">
+        <div class="absolute inset-0 bg-black/70" data-close-modal aria-hidden="true"></div>
+        <div class="modal-panel relative bg-white w-full sm:max-w-3xl sm:max-h-[92vh] flex flex-col sm:rounded-2xl shadow-2xl">
+            <div class="flex items-center justify-between px-5 py-4 border-b">
+                <h2 id="editor-title" class="text-lg font-extrabold text-brand-navy"></h2>
+                <button type="button" class="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center" data-close-modal aria-label="Close editor"><i class="fas fa-xmark text-xl" aria-hidden="true"></i></button>
+            </div>
+            <form id="editor-form" class="flex-1 overflow-y-auto px-5 py-5" novalidate>
+                <div id="editor-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+            </form>
+            <div class="flex items-center justify-end gap-2 px-5 py-4 border-t bg-gray-50 sm:rounded-b-2xl">
+                <button type="button" class="btn bg-white border hover:bg-gray-100 text-gray-700" data-close-modal aria-label="Cancel">Cancel</button>
+                <button type="submit" form="editor-form" id="editor-save" class="btn bg-brand-orange hover:bg-brand-navy text-white" aria-label="Save"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="assets/js/store.js"></script>
+    <script>
+    (function () {
+        'use strict';
+        const { C, escapeHTML, formatDate, Modal, toast, waLink } = window.AE;
+        Modal.init();
+
+        const COLLECTIONS = ['projects', 'posts', 'commercial', 'leads'];
+        const state = { projects: [], posts: [], commercial: [], leads: [], projectFilter: 'live' };
+        const STAGES = { live: 'Live (Carousel)', sold: 'Sold Out (Gallery)', completed: 'Completed (Gallery)' };
+        const LEAD_STATUSES = ['New', 'Contacted', 'Site Visit Scheduled', 'Visited', 'Booked', 'Not Interested'];
+
+        /* ================= Form definitions ================= */
+        const FORMS = {
+            projects: {
+                name: 'Project',
+                fields: [
+                    { name: 'title', label: 'Project Name', required: true },
+                    { name: 'location', label: 'Location', required: true, placeholder: 'e.g. Action Area I, New Town, Kolkata' },
+                    { name: 'stage', label: 'Stage', type: 'select', options: Object.entries(STAGES), default: 'live' },
+                    { name: 'status_label', label: 'Status Tag', placeholder: 'e.g. Under Construction / Booking Open', list: ['Under Construction', 'Booking Open', 'Newly Launched', 'Nearing Possession', 'Ready to Move', 'Completed'] },
+                    { name: 'config', label: 'Configuration', placeholder: 'e.g. 2 & 3 BHK Apartments' },
+                    { name: 'price', label: 'Price', placeholder: 'e.g. ₹58 Lakh onwards' },
+                    { name: 'plot_size', label: 'Plot Size', placeholder: 'e.g. 32 Cottah' },
+                    { name: 'carpet_area', label: 'Carpet Area', placeholder: 'e.g. 850 – 1,420 sq.ft.' },
+                    { name: 'description', label: 'Description', type: 'textarea', rows: 4, full: true },
+                    { name: 'img', label: 'Main Image (carousel & thumbnail)', type: 'image', required: true, full: true, folder: 'projects' },
+                    { name: 'images', label: 'Gallery Images', type: 'images', full: true, folder: 'projects', help: 'Shown in the gallery lightbox together with the main image.' },
+                    { name: 'maplink', label: 'Google Maps link (optional helper)', type: 'maplink', full: true, help: 'Paste a Google Maps link to fill latitude & longitude automatically.' },
+                    { name: 'lat', label: 'Latitude', type: 'number', step: 'any', placeholder: '22.5807' },
+                    { name: 'lng', label: 'Longitude', type: 'number', step: 'any', placeholder: '88.4770' },
+                    { name: 'completed_year', label: 'Completion Year', placeholder: 'e.g. 2022' },
+                    { name: 'sort_order', label: 'Display Order', type: 'number', step: '1', placeholder: '0 = first', default: 0 }
+                ]
+            },
+            posts: {
+                name: 'Blog Post',
+                fields: [
+                    { name: 'title', label: 'Title', required: true, full: true },
+                    { name: 'slug', label: 'URL Slug', placeholder: 'auto-generated from title', help: 'blog.html?post=<slug>' },
+                    { name: 'category', label: 'Category', list: ['Real Estate Guide', 'Commercial', 'Project Updates', 'Market News', 'Home Loans', 'Interior & Lifestyle'] },
+                    { name: 'author', label: 'Author', default: 'Ashirbad Enterprise' },
+                    { name: 'published_at', label: 'Publish Date', type: 'date' },
+                    { name: 'read_time', label: 'Read Time', placeholder: 'e.g. 5 min read' },
+                    { name: 'published', label: 'Published (visible on website)', type: 'checkbox', default: true },
+                    { name: 'cover', label: 'Cover Image', type: 'image', required: true, full: true, folder: 'blog' },
+                    { name: 'excerpt', label: 'Short Summary', type: 'textarea', rows: 2, full: true, help: 'Shown on cards and used as the SEO meta description (≈ 150 characters).' },
+                    { name: 'content', label: 'Article Content', type: 'textarea', rows: 14, full: true, help: 'Leave a blank line between paragraphs. Start a line with "## " for a heading and "- " for a bullet point.' }
+                ]
+            },
+            commercial: {
+                name: 'Commercial Property',
+                fields: [
+                    { name: 'title', label: 'Property Name', required: true, full: true },
+                    { name: 'type', label: 'Type', list: ['Grade-A Office Space', 'Retail Shops & Showrooms', 'Co-working & Offices', 'High-Street Retail', 'Warehousing', 'Clinic & Healthcare Spaces'] },
+                    { name: 'area', label: 'Area / Location', required: true },
+                    { name: 'size', label: 'Size', placeholder: 'e.g. 1,200 – 12,000 sq.ft.' },
+                    { name: 'sort_order', label: 'Display Order', type: 'number', step: '1', default: 0 },
+                    { name: 'img', label: 'Image', type: 'image', required: true, full: true, folder: 'commercial' }
+                ]
+            }
+        };
+
+        /* ================= Auth ================= */
+        const loginForm = document.getElementById('login-form');
+        const loginErr = document.getElementById('login-error');
+        if (Store.mode === 'local') {
+            document.getElementById('login-email-wrap').classList.add('hidden');
+            document.getElementById('login-hint').textContent = 'Demo mode: use the password set as LOCAL_ADMIN_PASSWORD in assets/js/config.js.';
+        } else {
+            document.getElementById('login-email').required = true;
+            document.getElementById('login-hint').textContent = 'Sign in with your Supabase administrator account.';
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginErr.classList.add('hidden');
+            const btn = document.getElementById('login-btn');
+            btn.disabled = true;
+            try {
+                await Store.auth.signIn(document.getElementById('login-email').value.trim(), document.getElementById('login-password').value);
+                document.getElementById('login-password').value = '';
+                await enterApp();
+            } catch (ex) {
+                loginErr.textContent = ex.message || 'Sign in failed.';
+                loginErr.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        async function signOut() {
+            await Store.auth.signOut();
+            document.getElementById('app').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+        }
+        document.getElementById('signout').addEventListener('click', signOut);
+        document.getElementById('signout-mobile').addEventListener('click', signOut);
+
+        async function enterApp() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            renderModeInfo();
+            await refresh();
+            showTab((location.hash || '#dashboard').slice(1));
+        }
+
+        /* ================= Tabs ================= */
+        function showTab(name) {
+            if (!document.querySelector(`[data-panel="${name}"]`)) name = 'dashboard';
+            document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== name));
+            document.querySelectorAll('.tab-btn').forEach((b) => {
+                if (b.dataset.tab === name) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+            });
+            if (location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
+            window.scrollTo(0, 0);
+        }
+        document.addEventListener('click', (e) => {
+            const t = e.target.closest('[data-tab],[data-goto]');
+            if (t) showTab(t.dataset.tab || t.dataset.goto);
+        });
+
+        function renderModeInfo() {
+            const banner = document.getElementById('mode-banner');
+            const detail = document.getElementById('mode-detail');
+            if (Store.mode === 'local') {
+                banner.className = 'px-4 sm:px-6 py-2.5 text-sm flex items-start gap-2 bg-amber-100 text-amber-900 border-b border-amber-200';
+                banner.innerHTML = '<i class="fas fa-triangle-exclamation mt-0.5" aria-hidden="true"></i><span><strong>Demo mode:</strong> changes are saved in this browser only. Connect Supabase in <code>assets/js/config.js</code> to publish changes to all visitors.</span>';
+                detail.innerHTML = '<p><span class="inline-block bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded">Demo (this browser)</span></p><p>Data and uploaded images are stored in this browser\'s IndexedDB. Other visitors and devices will not see these changes.</p><p>To go live, follow <strong>README.md → Production setup</strong>: create a Supabase project, run <code>supabase/schema.sql</code>, and add the URL and anon key to <code>assets/js/config.js</code>.</p>';
+                document.getElementById('reset-demo').classList.remove('hidden');
+            } else {
+                banner.className = 'px-4 sm:px-6 py-2.5 text-sm flex items-start gap-2 bg-green-50 text-green-800 border-b border-green-200';
+                banner.innerHTML = '<i class="fas fa-circle-check mt-0.5" aria-hidden="true"></i><span>Connected to Supabase – changes are live for all visitors.</span>';
+                detail.innerHTML = `<p><span class="inline-block bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded">Supabase</span></p><p class="break-all">Project: ${escapeHTML(C.SUPABASE_URL)}</p><p>Images upload to the <code>${escapeHTML(C.SUPABASE_BUCKET || 'media')}</code> storage bucket.</p>`;
+            }
+        }
+
+        /* ================= Data ================= */
+        async function refresh(cols = COLLECTIONS) {
+            try {
+                const results = await Promise.all(cols.map((c) => Store.list(c)));
+                cols.forEach((c, i) => { state[c] = results[i]; });
+            } catch (ex) {
+                console.error(ex);
+                toast(`Could not load data: ${ex.message || ex}`, 'error');
+            }
+            renderAll();
+        }
+
+        function renderAll() {
+            renderDashboard();
+            renderProjects();
+            renderPosts();
+            renderCommercial();
+            renderLeads();
+        }
+
+        const stageChip = (stage) => ({
+            live: '<span class="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full"><i class="fas fa-circle text-[6px]" aria-hidden="true"></i> Live</span>',
+            sold: '<span class="inline-flex items-center gap-1 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full"><i class="fas fa-tag" aria-hidden="true"></i> Sold Out</span>',
+            completed: '<span class="inline-flex items-center gap-1 bg-orange-100 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full"><i class="fas fa-check" aria-hidden="true"></i> Completed</span>'
+        }[stage] || '');
+
+        /* ---------- Dashboard ---------- */
+        function renderDashboard() {
+            const count = (s) => state.projects.filter((p) => p.stage === s).length;
+            const newLeads = state.leads.filter((l) => (l.status || 'New') === 'New').length;
+            const stats = [
+                ['Live Projects', count('live'), 'fa-building', 'bg-blue-600', 'projects'],
+                ['Sold Out', count('sold'), 'fa-tag', 'bg-red-600', 'projects'],
+                ['Completed', count('completed'), 'fa-check', 'bg-orange-500', 'projects'],
+                ['Blog Posts', state.posts.length, 'fa-newspaper', 'bg-brand-navy', 'posts'],
+                ['Commercial', state.commercial.length, 'fa-store', 'bg-emerald-600', 'commercial'],
+                ['New Leads', newLeads, 'fa-bell', 'bg-brand-gold', 'leads']
+            ];
+            document.getElementById('stats').innerHTML = stats.map(([label, n, icon, bg, tab]) => `
+                <button type="button" data-goto="${tab}" class="bg-white rounded-xl shadow-sm border p-4 text-left hover:shadow-md transition" aria-label="${label}: ${n}">
+                    <span class="w-9 h-9 rounded-lg ${bg} text-white flex items-center justify-center"><i class="fas ${icon}" aria-hidden="true"></i></span>
+                    <span class="block text-2xl font-extrabold text-brand-navy mt-3">${n}</span>
+                    <span class="block text-xs text-gray-500 font-medium">${label}</span>
+                </button>`).join('');
+
+            const badge = document.getElementById('new-leads-badge');
+            badge.textContent = newLeads;
+            badge.classList.toggle('hidden', !newLeads);
+
+            document.getElementById('dash-leads').innerHTML = state.leads.slice(0, 5).map((l) => `
+                <li class="py-3 flex items-center justify-between gap-3 text-sm">
+                    <div class="min-w-0"><p class="font-bold text-brand-navy truncate">${escapeHTML(l.name)}</p><p class="text-gray-500 truncate">${escapeHTML(l.project || l.interest || 'General enquiry')}</p></div>
+                    <div class="text-right flex-shrink-0"><a href="tel:${escapeHTML(l.phone)}" class="text-brand-orange font-bold" aria-label="Call ${escapeHTML(l.name)}">${escapeHTML(l.phone)}</a><p class="text-xs text-gray-400">${formatDate(l.created_at)}</p></div>
+                </li>`).join('') || '<li class="py-3 text-sm text-gray-500">No enquiries yet.</li>';
+
+            document.getElementById('dash-live').innerHTML = state.projects.filter((p) => p.stage === 'live').map((p) => `
+                <li class="py-3 flex items-center gap-3 text-sm">
+                    <img src="${escapeHTML(p.img)}" alt="${escapeHTML(p.title)}" class="w-12 h-12 rounded object-cover bg-gray-100 flex-shrink-0">
+                    <div class="min-w-0 flex-1"><p class="font-bold text-brand-navy truncate">${escapeHTML(p.title)}</p><p class="text-gray-500 truncate">${escapeHTML(p.location)}</p></div>
+                    <button type="button" data-sold="${escapeHTML(p.id)}" class="btn bg-red-600 hover:bg-red-700 text-white !py-1.5 !px-3 text-xs" aria-label="Mark ${escapeHTML(p.title)} as sold out"><i class="fas fa-tag" aria-hidden="true"></i> Sold Out</button>
+                </li>`).join('') || '<li class="py-3 text-sm text-gray-500">No live projects – the homepage shows a "Launching Soon" banner.</li>';
+        }
+
+        /* ---------- Projects ---------- */
+        function renderProjects() {
+            const filters = [['live', 'Live'], ['sold', 'Sold Out'], ['completed', 'Completed'], ['all', 'All']];
+            document.getElementById('project-filters').innerHTML = filters.map(([k, label]) => {
+                const n = k === 'all' ? state.projects.length : state.projects.filter((p) => p.stage === k).length;
+                const active = state.projectFilter === k;
+                return `<button type="button" data-pfilter="${k}" aria-pressed="${active}" class="btn !py-1.5 rounded-full border ${active ? 'bg-brand-navy text-white border-brand-navy' : 'bg-white text-brand-navy hover:border-brand-orange'}" aria-label="Show ${label} projects">${label} <span class="text-xs opacity-75">(${n})</span></button>`;
+            }).join('');
+
+            const list = state.projects.filter((p) => state.projectFilter === 'all' || p.stage === state.projectFilter);
+            document.getElementById('projects-list').innerHTML = list.map((p) => {
+                const imgCount = new Set([p.img, ...(p.images || [])].filter(Boolean)).size;
+                const stageAction = p.stage === 'live'
+                    ? `<button type="button" data-sold="${escapeHTML(p.id)}" class="btn bg-red-600 hover:bg-red-700 text-white" aria-label="Mark ${escapeHTML(p.title)} as sold out"><i class="fas fa-tag" aria-hidden="true"></i> Mark Sold Out</button>`
+                    : `<button type="button" data-restore="${escapeHTML(p.id)}" class="btn bg-green-600 hover:bg-green-700 text-white" aria-label="Restore ${escapeHTML(p.title)} to live carousel"><i class="fas fa-rotate-left" aria-hidden="true"></i> Make Live</button>`;
+                return `
+                <article class="bg-white rounded-xl shadow-sm border p-3 sm:p-4 flex flex-col sm:flex-row gap-4">
+                    <img src="${escapeHTML(p.img)}" alt="${escapeHTML(p.title)}" class="w-full sm:w-40 h-40 sm:h-28 rounded-lg object-cover bg-gray-100 flex-shrink-0">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">${stageChip(p.stage)}${p.status_label ? `<span class="text-xs text-gray-500">${escapeHTML(p.status_label)}</span>` : ''}</div>
+                        <h2 class="font-bold text-brand-navy text-lg mt-1 truncate">${escapeHTML(p.title)}</h2>
+                        <p class="text-sm text-gray-500 truncate"><i class="fas fa-location-dot mr-1 text-brand-orange" aria-hidden="true"></i>${escapeHTML(p.location)}</p>
+                        <p class="text-sm text-gray-700 mt-1">${[p.config, p.price].filter(Boolean).map(escapeHTML).join(' · ') || '<span class="text-gray-400">No config/price</span>'}</p>
+                        <p class="text-xs text-gray-400 mt-1"><i class="fas fa-images mr-1" aria-hidden="true"></i>${imgCount} image${imgCount === 1 ? '' : 's'}${p.sold_at ? ` · Sold ${formatDate(p.sold_at)}` : ''}${p.lat == null ? ' · <span class="text-amber-600">No map location</span>' : ''}</p>
+                    </div>
+                    <div class="flex flex-wrap sm:flex-col gap-2 sm:w-40">
+                        ${stageAction}
+                        <button type="button" data-edit="projects:${escapeHTML(p.id)}" class="btn bg-gray-100 hover:bg-gray-200 text-brand-navy" aria-label="Edit ${escapeHTML(p.title)}"><i class="fas fa-pen" aria-hidden="true"></i> Edit</button>
+                        <button type="button" data-delete="projects:${escapeHTML(p.id)}" class="btn bg-white border border-red-200 hover:bg-red-50 text-red-600" aria-label="Delete ${escapeHTML(p.title)}"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
+                    </div>
+                </article>`;
+            }).join('') || '<p class="bg-white rounded-xl border p-8 text-center text-gray-500">No projects in this list.</p>';
+        }
+
+        /* ---------- Posts ---------- */
+        function renderPosts() {
+            document.getElementById('posts-list').innerHTML = state.posts.map((p) => `
+                <article class="bg-white rounded-xl shadow-sm border p-3 sm:p-4 flex flex-col sm:flex-row gap-4">
+                    <img src="${escapeHTML(p.cover)}" alt="${escapeHTML(p.title)}" class="w-full sm:w-40 h-40 sm:h-24 rounded-lg object-cover bg-gray-100 flex-shrink-0">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            ${p.published ? '<span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-0.5 rounded-full">Published</span>' : '<span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full">Draft</span>'}
+                            <span class="text-xs text-brand-orange font-bold uppercase">${escapeHTML(p.category || '')}</span>
+                            <span class="text-xs text-gray-400">${formatDate(p.published_at)}</span>
+                        </div>
+                        <h2 class="font-bold text-brand-navy text-lg mt-1">${escapeHTML(p.title)}</h2>
+                        <p class="text-sm text-gray-500 line-clamp-2">${escapeHTML(p.excerpt || '')}</p>
+                    </div>
+                    <div class="flex flex-wrap sm:flex-col gap-2 sm:w-36">
+                        <a href="blog.html?post=${encodeURIComponent(p.slug)}" target="_blank" rel="noopener" class="btn bg-gray-100 hover:bg-gray-200 text-brand-navy" aria-label="View ${escapeHTML(p.title)} on website"><i class="fas fa-eye" aria-hidden="true"></i> View</a>
+                        <button type="button" data-edit="posts:${escapeHTML(p.id)}" class="btn bg-gray-100 hover:bg-gray-200 text-brand-navy" aria-label="Edit ${escapeHTML(p.title)}"><i class="fas fa-pen" aria-hidden="true"></i> Edit</button>
+                        <button type="button" data-delete="posts:${escapeHTML(p.id)}" class="btn bg-white border border-red-200 hover:bg-red-50 text-red-600" aria-label="Delete ${escapeHTML(p.title)}"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
+                    </div>
+                </article>`).join('') || '<p class="bg-white rounded-xl border p-8 text-center text-gray-500">No posts yet. Click “New Post” to write your first article.</p>';
+        }
+
+        /* ---------- Commercial ---------- */
+        function renderCommercial() {
+            document.getElementById('commercial-list').innerHTML = state.commercial.map((b) => `
+                <article class="bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col">
+                    <img src="${escapeHTML(b.img)}" alt="${escapeHTML(b.title)}" class="w-full h-36 object-cover bg-gray-100">
+                    <div class="p-4 flex-1">
+                        <span class="text-xs text-brand-orange font-bold">${escapeHTML(b.type || '')}</span>
+                        <h2 class="font-bold text-brand-navy">${escapeHTML(b.title)}</h2>
+                        <p class="text-sm text-gray-500">${escapeHTML(b.area)} · ${escapeHTML(b.size || '')}</p>
+                    </div>
+                    <div class="flex gap-2 p-4 pt-0">
+                        <button type="button" data-edit="commercial:${escapeHTML(b.id)}" class="btn flex-1 bg-gray-100 hover:bg-gray-200 text-brand-navy" aria-label="Edit ${escapeHTML(b.title)}"><i class="fas fa-pen" aria-hidden="true"></i> Edit</button>
+                        <button type="button" data-delete="commercial:${escapeHTML(b.id)}" class="btn bg-white border border-red-200 hover:bg-red-50 text-red-600" aria-label="Delete ${escapeHTML(b.title)}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    </div>
+                </article>`).join('') || '<p class="col-span-full bg-white rounded-xl border p-8 text-center text-gray-500">No commercial listings yet.</p>';
+        }
+
+        /* ---------- Leads ---------- */
+        function filteredLeads() {
+            const q = document.getElementById('lead-search').value.trim().toLowerCase();
+            const st = document.getElementById('lead-status-filter').value;
+            return state.leads.filter((l) => (!st || (l.status || 'New') === st) &&
+                (!q || [l.name, l.phone, l.email, l.project, l.interest, l.location, l.message].join(' ').toLowerCase().includes(q)));
+        }
+
+        function renderLeads() {
+            const rows = filteredLeads();
+            document.getElementById('leads-empty').classList.toggle('hidden', rows.length > 0);
+            document.getElementById('leads-body').innerHTML = rows.map((l) => {
+                const req = [l.project, l.interest, l.config, l.budget, l.location].filter(Boolean).map(escapeHTML).join(' · ');
+                const status = l.status || 'New';
+                return `
+                <tr class="align-top ${status === 'New' ? 'bg-amber-50/50' : ''}">
+                    <td class="px-4 py-3 whitespace-nowrap text-gray-500">${formatDate(l.created_at)}${l.visit_date ? `<br><span class="text-xs text-brand-orange font-bold">Visit: ${formatDate(l.visit_date)}</span>` : ''}</td>
+                    <td class="px-4 py-3 min-w-[180px]">
+                        <p class="font-bold text-brand-navy">${escapeHTML(l.name)}</p>
+                        <a href="tel:${escapeHTML(l.phone)}" class="text-brand-orange" aria-label="Call ${escapeHTML(l.name)}">${escapeHTML(l.phone)}</a>
+                        ${l.email ? `<br><a href="mailto:${escapeHTML(l.email)}" class="text-gray-500 text-xs break-all" aria-label="Email ${escapeHTML(l.name)}">${escapeHTML(l.email)}</a>` : ''}
+                    </td>
+                    <td class="px-4 py-3 min-w-[220px]">
+                        <p>${req || '<span class="text-gray-400">—</span>'}</p>
+                        ${l.message ? `<p class="text-xs text-gray-500 mt-1 whitespace-pre-line line-clamp-3" title="${escapeHTML(l.message)}">${escapeHTML(l.message)}</p>` : ''}
+                    </td>
+                    <td class="px-4 py-3 text-xs text-gray-500 min-w-[140px]">${escapeHTML(l.source || '')}${l.utm && l.utm.utm_source ? `<br>utm: ${escapeHTML(l.utm.utm_source)}${l.utm.utm_campaign ? '/' + escapeHTML(l.utm.utm_campaign) : ''}` : ''}</td>
+                    <td class="px-4 py-3">
+                        <label for="st-${escapeHTML(l.id)}" class="sr-only">Status for ${escapeHTML(l.name)}</label>
+                        <select id="st-${escapeHTML(l.id)}" data-status="${escapeHTML(l.id)}" class="inp !py-1.5 !text-sm min-w-[150px]">
+                            ${LEAD_STATUSES.map((s) => `<option ${s === status ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                        <a href="https://wa.me/${escapeHTML(String(l.phone).replace(/\D/g, '').replace(/^(\d{10})$/, '91$1'))}?text=${encodeURIComponent(`Hi ${l.name}, thank you for your enquiry with Ashirbad Enterprise.`)}" target="_blank" rel="noopener noreferrer" class="btn !p-2 bg-[#25D366] text-white" aria-label="WhatsApp ${escapeHTML(l.name)}"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>
+                        <button type="button" data-delete="leads:${escapeHTML(l.id)}" class="btn !p-2 bg-white border border-red-200 hover:bg-red-50 text-red-600" aria-label="Delete lead ${escapeHTML(l.name)}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+        document.getElementById('lead-search').addEventListener('input', renderLeads);
+        document.getElementById('lead-status-filter').addEventListener('change', renderLeads);
+
+        document.addEventListener('change', async (e) => {
+            const sel = e.target.closest('[data-status]');
+            if (!sel) return;
+            const lead = state.leads.find((l) => l.id === sel.dataset.status);
+            if (!lead) return;
+            try {
+                await Store.save('leads', { ...lead, status: sel.value });
+                toast(`Status updated to “${sel.value}”`);
+                await refresh(['leads']);
+            } catch (ex) { toast(ex.message || 'Could not update status', 'error'); }
+        });
+
+        document.getElementById('export-csv').addEventListener('click', () => {
+            const cols = ['created_at', 'name', 'phone', 'email', 'interest', 'project', 'config', 'budget', 'location', 'visit_date', 'message', 'source', 'status'];
+            const cell = (v) => `"${String(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v).replace(/"/g, '""')}"`;
+            const csv = [cols.join(','), ...filteredLeads().map((l) => cols.map((c) => cell(l[c])).join(','))].join('\r\n');
+            download(`ashirbad-leads-${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + csv, 'text/csv;charset=utf-8');
+        });
+
+        function download(name, content, type) {
+            const url = URL.createObjectURL(new Blob([content], { type }));
+            const a = Object.assign(document.createElement('a'), { href: url, download: name });
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        /* ================= Actions ================= */
+        document.addEventListener('click', async (e) => {
+            const f = e.target.closest('[data-pfilter]');
+            if (f) { state.projectFilter = f.dataset.pfilter; renderProjects(); return; }
+
+            const nw = e.target.closest('[data-new]');
+            if (nw) { openEditor(nw.dataset.new, null); return; }
+
+            const ed = e.target.closest('[data-edit]');
+            if (ed) { const [c, id] = ed.dataset.edit.split(':'); openEditor(c, state[c].find((r) => r.id === id)); return; }
+
+            const sold = e.target.closest('[data-sold]');
+            if (sold) {
+                const p = state.projects.find((x) => x.id === sold.dataset.sold);
+                if (!p || !confirm(`Mark “${p.title}” as SOLD OUT?\n\nIt will be removed from the homepage carousel and shown in the Completed & Sold Out gallery.`)) return;
+                sold.disabled = true;
+                try { await Store.setSold(p.id, true); toast(`${p.title} marked as sold out and moved to the gallery`); await refresh(['projects']); }
+                catch (ex) { toast(ex.message || 'Could not update project', 'error'); sold.disabled = false; }
+                return;
+            }
+
+            const rs = e.target.closest('[data-restore]');
+            if (rs) {
+                const p = state.projects.find((x) => x.id === rs.dataset.restore);
+                if (!p || !confirm(`Move “${p.title}” back to the live homepage carousel?`)) return;
+                rs.disabled = true;
+                try { await Store.setSold(p.id, false); toast(`${p.title} is live on the carousel again`); await refresh(['projects']); }
+                catch (ex) { toast(ex.message || 'Could not update project', 'error'); rs.disabled = false; }
+                return;
+            }
+
+            const del = e.target.closest('[data-delete]');
+            if (del) {
+                const [c, id] = del.dataset.delete.split(':');
+                const row = state[c].find((r) => r.id === id);
+                if (!row || !confirm(`Delete “${row.title || row.name}” permanently? This cannot be undone.`)) return;
+                try { await Store.remove(c, id); toast('Deleted'); await refresh([c]); }
+                catch (ex) { toast(ex.message || 'Could not delete', 'error'); }
+            }
+        });
+
+        /* ================= Editor ================= */
+        let editing = null; // { collection, row, images: {fieldName: [...]} }
+
+        const fieldId = (n) => `f-${n}`;
+        function fieldHTML(f, value) {
+            const id = fieldId(f.name);
+            const req = f.required ? ' <span class="text-brand-orange" aria-hidden="true">*</span>' : '';
+            const help = f.help ? `<p class="text-xs text-gray-500 mt-1" id="${id}-help">${escapeHTML(f.help)}</p>` : '';
+            const described = f.help ? ` aria-describedby="${id}-help"` : '';
+            const wrap = (inner) => `<div class="${f.full ? 'sm:col-span-2' : ''}">${inner}${help}</div>`;
+            const v = value == null ? '' : value;
+            switch (f.type) {
+                case 'textarea':
+                    return wrap(`<label for="${id}" class="lbl">${f.label}${req}</label><textarea id="${id}" name="${f.name}" rows="${f.rows || 3}" class="inp resize-y"${f.required ? ' required' : ''}${described}>${escapeHTML(v)}</textarea>`);
+                case 'select':
+                    return wrap(`<label for="${id}" class="lbl">${f.label}${req}</label><select id="${id}" name="${f.name}" class="inp"${described}>${f.options.map(([k, l]) => `<option value="${escapeHTML(k)}" ${String(k) === String(v) ? 'selected' : ''}>${escapeHTML(l)}</option>`).join('')}</select>`);
+                case 'checkbox':
+                    return wrap(`<label class="flex items-center gap-2 mt-6 text-sm font-bold text-brand-navy cursor-pointer"><input id="${id}" name="${f.name}" type="checkbox" class="w-5 h-5 accent-brand-orange" ${v ? 'checked' : ''}${described}> ${f.label}</label>`);
+                case 'image':
+                    return wrap(`
+                        <span class="lbl" id="${id}-label">${f.label}${req}</span>
+                        <div class="flex flex-col sm:flex-row gap-3 items-start">
+                            <img id="${id}-preview" src="${escapeHTML(v || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=')}" alt="Preview of ${escapeHTML(f.label)}" class="w-full sm:w-48 h-32 object-cover rounded-lg bg-gray-100 border">
+                            <div class="flex-1 w-full space-y-2">
+                                <label class="btn bg-brand-navy hover:bg-brand-orange text-white cursor-pointer" aria-label="Upload ${escapeHTML(f.label)}">
+                                    <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i> <span data-upload-label="${f.name}">Upload Image</span>
+                                    <input type="file" accept="image/*" class="sr-only" data-upload="${f.name}" data-folder="${f.folder || 'uploads'}">
+                                </label>
+                                <input id="${id}" name="${f.name}" type="text" class="inp !text-sm" value="${escapeHTML(String(v).startsWith('data:') ? '' : v)}" data-image-url="${f.name}" placeholder="…or paste an image URL" aria-labelledby="${id}-label"${f.required ? ' aria-required="true"' : ''}>
+                                <input type="hidden" data-image-value="${f.name}" value="${escapeHTML(v)}">
+                            </div>
+                        </div>`);
+                case 'images':
+                    return wrap(`
+                        <span class="lbl">${f.label}</span>
+                        <div id="${id}-grid" class="grid grid-cols-3 sm:grid-cols-5 gap-2"></div>
+                        <div class="flex flex-col sm:flex-row gap-2 mt-2">
+                            <label class="btn bg-brand-navy hover:bg-brand-orange text-white cursor-pointer" aria-label="Upload gallery images">
+                                <i class="fas fa-images" aria-hidden="true"></i> <span data-upload-label="${f.name}">Add Images</span>
+                                <input type="file" accept="image/*" multiple class="sr-only" data-upload-multi="${f.name}" data-folder="${f.folder || 'uploads'}">
+                            </label>
+                            <label for="${id}-url" class="sr-only">Gallery image URL</label>
+                            <input id="${id}-url" type="url" class="inp !text-sm flex-1" placeholder="…or paste an image URL and press Add">
+                            <button type="button" class="btn bg-gray-200 hover:bg-gray-300 text-brand-navy" data-add-url="${f.name}" aria-label="Add image URL">Add</button>
+                        </div>`);
+                case 'maplink':
+                    return wrap(`<label for="${id}" class="lbl">${f.label}</label><input id="${id}" type="url" class="inp" data-maplink placeholder="https://www.google.com/maps/place/...@22.58,88.47,17z"${described}>`);
+                default: {
+                    const list = f.list ? ` list="${id}-list"` : '';
+                    const dl = f.list ? `<datalist id="${id}-list">${f.list.map((o) => `<option value="${escapeHTML(o)}">`).join('')}</datalist>` : '';
+                    return wrap(`<label for="${id}" class="lbl">${f.label}${req}</label><input id="${id}" name="${f.name}" type="${f.type || 'text'}" ${f.step ? `step="${f.step}"` : ''} class="inp" value="${escapeHTML(v)}" placeholder="${escapeHTML(f.placeholder || '')}"${f.required ? ' required' : ''}${list}${described}>${dl}`);
+                }
+            }
+        }
+
+        function renderImagesGrid(name) {
+            const grid = document.getElementById(`${fieldId(name)}-grid`);
+            const imgs = editing.images[name];
+            grid.innerHTML = imgs.map((src, i) => `
+                <div class="relative group">
+                    <img src="${escapeHTML(src)}" alt="Gallery image ${i + 1}" class="w-full aspect-square object-cover rounded-lg border bg-gray-100">
+                    <button type="button" data-remove-img="${name}:${i}" class="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 hover:bg-red-600 text-white text-xs flex items-center justify-center" aria-label="Remove gallery image ${i + 1}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                    <span class="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 rounded">${i + 1}</span>
+                </div>`).join('') || '<p class="col-span-full text-xs text-gray-400 py-3">No extra images yet.</p>';
+        }
+
+        function openEditor(collection, row) {
+            const def = FORMS[collection];
+            if (!def) return;
+            editing = { collection, row: row ? { ...row } : null, images: {} };
+            document.getElementById('editor-title').textContent = `${row ? 'Edit' : 'Add'} ${def.name}`;
+            document.getElementById('editor-fields').innerHTML = def.fields.map((f) => {
+                let v = row ? row[f.name] : f.default;
+                if (f.type === 'date' && !v && !row) v = new Date().toISOString().slice(0, 10);
+                if (f.type === 'date' && v) v = String(v).slice(0, 10);
+                return fieldHTML(f, v);
+            }).join('');
+            def.fields.filter((f) => f.type === 'images').forEach((f) => {
+                editing.images[f.name] = row && Array.isArray(row[f.name]) ? row[f.name].slice() : [];
+                renderImagesGrid(f.name);
+            });
+            Modal.open('editorModal');
+        }
+
+        const editorForm = document.getElementById('editor-form');
+
+        // Image URL typed/pasted → update preview + hidden value
+        editorForm.addEventListener('input', (e) => {
+            const urlInput = e.target.closest('[data-image-url]');
+            if (urlInput) {
+                const name = urlInput.dataset.imageUrl;
+                editorForm.querySelector(`[data-image-value="${name}"]`).value = urlInput.value.trim();
+                document.getElementById(`${fieldId(name)}-preview`).src = urlInput.value.trim() || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+            }
+            const ml = e.target.closest('[data-maplink]');
+            if (ml) {
+                const m = ml.value.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || ml.value.match(/[?&](?:q|query|ll|destination)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/) || ml.value.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || ml.value.match(/^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/);
+                if (m) {
+                    document.getElementById(fieldId('lat')).value = m[1];
+                    document.getElementById(fieldId('lng')).value = m[2];
+                    toast('Latitude & longitude filled from the link', 'info');
+                }
+            }
+            if (e.target.id === fieldId('title') && editing.collection === 'posts' && !(editing.row && editing.row.slug)) {
+                document.getElementById(fieldId('slug')).value = Store.slugify(e.target.value);
+            }
+        });
+
+        async function withUploadLabel(name, fn) {
+            const label = editorForm.querySelector(`[data-upload-label="${name}"]`);
+            const original = label ? label.textContent : '';
+            const save = document.getElementById('editor-save');
+            if (label) label.textContent = 'Uploading…';
+            save.disabled = true;
+            try { await fn(); }
+            catch (ex) { console.error(ex); toast(ex.message || 'Upload failed', 'error'); }
+            finally { if (label) label.textContent = original; save.disabled = false; }
+        }
+
+        editorForm.addEventListener('change', async (e) => {
+            const single = e.target.closest('[data-upload]');
+            if (single && single.files[0]) {
+                const name = single.dataset.upload;
+                await withUploadLabel(name, async () => {
+                    const url = await Store.uploadImage(single.files[0], single.dataset.folder);
+                    editorForm.querySelector(`[data-image-value="${name}"]`).value = url;
+                    editorForm.querySelector(`[data-image-url="${name}"]`).value = url.startsWith('data:') ? '' : url;
+                    document.getElementById(`${fieldId(name)}-preview`).src = url;
+                    toast('Image uploaded');
+                });
+                single.value = '';
+                return;
+            }
+            const multi = e.target.closest('[data-upload-multi]');
+            if (multi && multi.files.length) {
+                const name = multi.dataset.uploadMulti;
+                const files = Array.from(multi.files);
+                await withUploadLabel(name, async () => {
+                    for (const file of files) {
+                        editing.images[name].push(await Store.uploadImage(file, multi.dataset.folder));
+                        renderImagesGrid(name);
+                    }
+                    toast(`${files.length} image${files.length > 1 ? 's' : ''} uploaded`);
+                });
+                multi.value = '';
+            }
+        });
+
+        editorForm.addEventListener('click', (e) => {
+            const rm = e.target.closest('[data-remove-img]');
+            if (rm) {
+                const [name, i] = rm.dataset.removeImg.split(':');
+                editing.images[name].splice(Number(i), 1);
+                renderImagesGrid(name);
+                return;
+            }
+            const add = e.target.closest('[data-add-url]');
+            if (add) {
+                const name = add.dataset.addUrl;
+                const input = document.getElementById(`${fieldId(name)}-url`);
+                const url = input.value.trim();
+                if (!/^https?:\/\//.test(url)) { toast('Please paste a full image URL starting with https://', 'error'); return; }
+                editing.images[name].push(url);
+                input.value = '';
+                renderImagesGrid(name);
+            }
+        });
+
+        editorForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const def = FORMS[editing.collection];
+            const out = editing.row ? { ...editing.row } : {};
+            for (const f of def.fields) {
+                if (f.type === 'maplink') continue;
+                if (f.type === 'images') { out[f.name] = editing.images[f.name]; continue; }
+                if (f.type === 'image') { out[f.name] = editorForm.querySelector(`[data-image-value="${f.name}"]`).value.trim(); }
+                else {
+                    const el = document.getElementById(fieldId(f.name));
+                    if (f.type === 'checkbox') out[f.name] = el.checked;
+                    else if (f.type === 'number') out[f.name] = el.value === '' ? null : Number(el.value);
+                    else out[f.name] = el.value.trim();
+                }
+                if (f.required && (out[f.name] == null || out[f.name] === '')) {
+                    toast(`${f.label} is required`, 'error');
+                    const el = document.getElementById(fieldId(f.name));
+                    if (el) el.focus();
+                    return;
+                }
+            }
+            if (editing.collection === 'projects') {
+                if ((out.lat == null) !== (out.lng == null)) { toast('Please enter both latitude and longitude, or neither', 'error'); return; }
+                if (out.stage === 'sold' && !out.sold_at) out.sold_at = new Date().toISOString();
+                if (out.stage !== 'sold') out.sold_at = null;
+            }
+            if (editing.collection === 'posts') {
+                out.slug = Store.slugify(out.slug || out.title);
+                const clash = state.posts.find((p) => p.slug === out.slug && p.id !== out.id);
+                if (clash) { toast('Another post already uses this URL slug', 'error'); document.getElementById(fieldId('slug')).focus(); return; }
+            }
+            const btn = document.getElementById('editor-save');
+            btn.disabled = true;
+            try {
+                await Store.save(editing.collection, out);
+                const c = editing.collection;
+                Modal.close();
+                toast(`${def.name} saved`);
+                await refresh([c]);
+            } catch (ex) {
+                console.error(ex);
+                toast(ex.message || 'Could not save', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        /* ================= Settings ================= */
+        document.getElementById('export-json').addEventListener('click', async () => {
+            const data = await Store.exportAll();
+            download(`ashirbad-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), 'application/json');
+        });
+        document.getElementById('import-json').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+            try {
+                const data = JSON.parse(await file.text());
+                if (!confirm('Restore this backup? Records with the same ID will be overwritten.')) return;
+                await Store.importAll(data);
+                toast('Backup restored');
+                await refresh();
+            } catch (ex) { toast(`Could not restore: ${ex.message}`, 'error'); }
+        });
+        document.getElementById('load-sample').addEventListener('click', async () => {
+            if (!confirm('Add the sample projects, posts and commercial listings?')) return;
+            try { await Store.loadSampleData(); toast('Sample data added'); await refresh(); }
+            catch (ex) { toast(ex.message || 'Could not add sample data', 'error'); }
+        });
+        document.getElementById('reset-demo').addEventListener('click', async () => {
+            if (!confirm('Reset ALL demo data in this browser back to the samples? Your changes and leads will be lost.')) return;
+            try { await Store.resetDemo(); toast('Demo data reset'); await refresh(); }
+            catch (ex) { toast(ex.message, 'error'); }
+        });
+
+        // Leads submitted in another tab appear without a reload
+        Store.onChange((c, fromOtherTab) => { if (fromOtherTab && c && !document.getElementById('app').classList.contains('hidden')) refresh([c]); });
+
+        /* ================= Boot ================= */
+        (async () => {
+            try {
+                if (await Store.auth.isAdmin()) await enterApp();
+            } catch (ex) {
+                console.error(ex);
+                loginErr.textContent = `Could not connect: ${ex.message || ex}`;
+                loginErr.classList.remove('hidden');
+            }
+        })();
+    })();
+    </script>
+</body>
+</html>
