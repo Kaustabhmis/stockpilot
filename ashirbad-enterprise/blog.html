@@ -137,7 +137,6 @@
 
     <div id="site-footer-root"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="assets/js/store.js"></script>
     <script>
     (function () {
@@ -296,7 +295,11 @@
             }
             const slug = new URLSearchParams(location.search).get('post');
             if (slug) {
-                const p = posts.find((x) => x.slug === slug);
+                let p = posts.find((x) => x.slug === slug);
+                if (!p) {
+                    // Not in the cached copy (e.g. just published) – ask the server directly
+                    try { posts = await Store.list('posts', { publicView: true, fresh: true }); p = posts.find((x) => x.slug === slug); } catch (ex) { console.error(ex); }
+                }
                 if (p) renderPost(p);
                 else {
                     document.getElementById('list-view').classList.add('hidden');
@@ -310,6 +313,13 @@
             renderList();
         }
         boot();
+        // Re-render the list if fresher posts arrive from the server
+        Store.onChange(async (c, external) => {
+            if (c !== 'posts' || !external || new URLSearchParams(location.search).get('post')) return;
+            posts = await Store.list('posts', { publicView: true });
+            renderFilters();
+            renderList();
+        });
     })();
     </script>
 </body>

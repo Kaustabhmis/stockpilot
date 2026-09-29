@@ -181,7 +181,6 @@
                     <p>&copy; ${year} Ashirbad Enterprise. All rights reserved.</p>
                     <nav class="flex items-center gap-5" aria-label="Legal">
                         <a href="privacy.html" class="hover:text-brand-gold" aria-label="Read our privacy policy">Privacy Policy</a>
-                        <a href="admin.html" class="hover:text-brand-gold" aria-label="Administrator login" rel="nofollow">Admin</a>
                     </nav>
                 </div>
             </div>

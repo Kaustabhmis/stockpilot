@@ -2,7 +2,8 @@
  * Ashirbad Enterprise – data store
  * ---------------------------------------------------------------
  * One async API used by every page. Two interchangeable backends:
- *   - Supabase (when APP_CONFIG has URL + anon key): shared, production data
+ *   - Google Sheets (when APP_CONFIG.APPS_SCRIPT_URL is set): shared,
+ *     production data in a PRIVATE sheet, reached only through Apps Script
  *   - Local (IndexedDB in this browser): demo mode, seeded with sample data
  *
  * Collections: projects, commercial, posts, leads
@@ -28,7 +29,7 @@
 
     /* ------------------------------------------------------------
      * Sample data (used to seed demo mode, or "Load sample data"
-     * in the admin panel when Supabase is empty)
+     * in the admin panel when the Google Sheet is empty)
      * ---------------------------------------------------------- */
     function buildSeed() {
         const t = nowISO();
@@ -154,7 +155,7 @@
         leads: (a, b) => String(b.created_at).localeCompare(String(a.created_at))
     };
 
-    // Empty strings become null so Supabase date/number columns accept them
+    // Empty strings become null so date/number fields stay consistent
     const clean = (row) => {
         const out = {};
         Object.keys(row).forEach((k) => { out[k] = row[k] === '' ? null : row[k]; });
@@ -264,60 +265,118 @@
     };
 
     /* ------------------------------------------------------------
-     * Supabase backend
+     * Google Sheets backend (via a private Apps Script web app)
+     * The spreadsheet is never exposed: the browser only calls the
+     * script URL, which allows a fixed set of actions.
      * ---------------------------------------------------------- */
-    let sb = null;
-    const supabaseBackend = {
-        async init() {
-            if (!window.supabase || !window.supabase.createClient) {
-                throw new Error('Supabase library failed to load.');
-            }
-            sb = window.supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
-        },
-        async list(c, { publicView } = {}) {
-            let q = sb.from(c).select('*');
-            if (c === 'posts' && publicView) q = q.eq('published', true);
-            const { data, error } = await q;
-            if (error) throw error;
-            return data || [];
-        },
-        async upsert(c, row) {
-            const { data, error } = await sb.from(c).upsert(row).select().single();
-            if (error) throw error;
+    const TOKEN_KEY = 'ae-admin-token';
+    const PUBLIC_CACHE_KEY = 'ae-public-cache-v1';
+    const getToken = () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; } };
+    const setToken = (t) => { try { if (t) sessionStorage.setItem(TOKEN_KEY, t); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ } };
+
+    async function api(action, payload = {}) {
+        const body = { action, ...payload };
+        const token = getToken();
+        if (token) body.token = token;
+        let res;
+        try {
+            // text/plain keeps this a "simple" CORS request (Apps Script cannot answer preflights)
+            res = await fetch(C.APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(body),
+                redirect: 'follow'
+            });
+        } catch (e) {
+            throw new Error('Could not reach the server. Please check your internet connection.');
+        }
+        if (!res.ok) throw new Error(`Server error (${res.status}).`);
+        let data;
+        try { data = await res.json(); } catch (e) { throw new Error('Unexpected server response.'); }
+        if (!data.ok) {
+            if (data.code === 'AUTH') setToken(null);
+            const err = new Error(data.error || 'Request failed.');
+            err.code = data.code;
+            throw err;
+        }
+        return data.result;
+    }
+
+    const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result).split(',')[1]);
+        fr.onerror = () => reject(new Error('Could not read the image file.'));
+        fr.readAsDataURL(blob);
+    });
+
+    let publicMemo = null;
+    let skipLocalCache = false;
+    let adminMemo = null;
+    let adminMemoAt = 0;
+
+    /** Public data: served instantly from the last visit's cache, refreshed in the background. */
+    function fetchPublic() {
+        if (publicMemo) return publicMemo;
+        let cached = null;
+        if (!skipLocalCache) {
+            try { cached = JSON.parse(localStorage.getItem(PUBLIC_CACHE_KEY) || 'null'); } catch (e) { cached = null; }
+        }
+        skipLocalCache = false;
+        const fresh = api('public').then((data) => {
+            const json = JSON.stringify(data);
+            let prev = null;
+            try { prev = localStorage.getItem(PUBLIC_CACHE_KEY); localStorage.setItem(PUBLIC_CACHE_KEY, json); } catch (e) { /* storage full or blocked */ }
+            publicMemo = Promise.resolve(data);
+            // Page rendered from an older cache → tell it to re-render with fresh data
+            if (cached && prev !== json) setTimeout(() => ['projects', 'commercial', 'posts'].forEach((c) => emit(c, true)), 0);
             return data;
+        });
+        if (cached) {
+            fresh.catch((e) => console.warn('Background refresh failed', e));
+            publicMemo = Promise.resolve(cached);
+        } else {
+            publicMemo = fresh.catch((e) => { publicMemo = null; throw e; });
+        }
+        return publicMemo;
+    }
+
+    function fetchAll() {
+        if (adminMemo && Date.now() - adminMemoAt < 5000) return adminMemo;
+        adminMemoAt = Date.now();
+        adminMemo = api('all').catch((e) => { adminMemo = null; throw e; });
+        return adminMemo;
+    }
+
+    function invalidateRemote() {
+        publicMemo = null;
+        adminMemo = null;
+        skipLocalCache = true;
+    }
+
+    const sheetsBackend = {
+        async init() {
+            if (!/^(https:\/\/|http:\/\/localhost)/.test(C.APPS_SCRIPT_URL || '')) throw new Error('APPS_SCRIPT_URL is not set correctly in assets/js/config.js.');
         },
-        async insert(c, row) {
-            // Visitors may insert leads but cannot read them back (RLS), so no .select()
-            const { error } = await sb.from(c).insert(row);
-            if (error) throw error;
-            return row;
+        async list(c, { publicView, fresh } = {}) {
+            if (getToken() && !publicView) return (await fetchAll())[c] || [];
+            if (c === 'leads') return [];
+            if (fresh) { invalidateRemote(); }
+            return (await fetchPublic())[c] || [];
         },
-        async remove(c, id) {
-            const { error } = await sb.from(c).delete().eq('id', id);
-            if (error) throw error;
-        },
+        async upsert(c, row) { return api('save', { collection: c, row }); },
+        async bulk(c, rows) { return api('bulkSave', { collection: c, rows }); },
+        async insert(_c, row) { await api('addLead', { lead: row }); return row; },
+        async remove(c, id) { return api('remove', { collection: c, id }); },
         async upload(blob, folder) {
-            const path = `${folder || 'uploads'}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-            const bucket = sb.storage.from(C.SUPABASE_BUCKET || 'media');
-            const { error } = await bucket.upload(path, blob, { contentType: blob.type || 'image/jpeg', cacheControl: '31536000' });
-            if (error) throw error;
-            return bucket.getPublicUrl(path).data.publicUrl;
+            return api('upload', { data: await blobToBase64(blob), mime: blob.type || 'image/jpeg', name: `${folder || 'image'}.jpg` });
         },
+        invalidate: invalidateRemote,
         auth: {
-            async signIn(email, password) {
-                const { error } = await sb.auth.signInWithPassword({ email, password });
-                if (error) throw error;
-                if (!(await supabaseBackend.auth.isAdmin())) {
-                    await sb.auth.signOut();
-                    throw new Error('This account is not an administrator.');
-                }
-            },
-            async signOut() { await sb.auth.signOut(); },
+            async signIn(_email, password) { setToken(await api('login', { password })); },
+            async signOut() { try { await api('logout'); } catch (e) { /* ignore */ } setToken(null); },
             async isAdmin() {
-                const { data: { session } } = await sb.auth.getSession();
-                if (!session) return false;
-                const { data, error } = await sb.rpc('is_admin');
-                return !error && data === true;
+                if (!getToken()) return false;
+                try { await api('check'); return true; } catch (e) { if (e.code === 'AUTH') return false; throw e; }
             }
         }
     };
@@ -353,18 +412,34 @@
     /* ------------------------------------------------------------
      * Public API
      * ---------------------------------------------------------- */
-    const mode = C.SUPABASE_URL && C.SUPABASE_ANON_KEY ? 'supabase' : 'local';
-    const backend = mode === 'supabase' ? supabaseBackend : localBackend;
+    const mode = C.APPS_SCRIPT_URL ? 'sheets' : 'local';
+    const backend = mode === 'sheets' ? sheetsBackend : localBackend;
     const ready = backend.init();
 
     const channel = ('BroadcastChannel' in window) ? new BroadcastChannel('ae-store') : null;
     const listeners = new Set();
+    // Second argument is true when the change came from elsewhere (another tab or a background refresh)
+    function emit(collection, external) {
+        listeners.forEach((fn) => { try { fn(collection, external); } catch (e) { console.error(e); } });
+    }
     const notify = (collection) => {
-        listeners.forEach((fn) => { try { fn(collection, false); } catch (e) { console.error(e); } });
+        emit(collection, false);
         if (channel) channel.postMessage({ collection });
     };
-    // Second argument is true when the change came from another tab/window
-    if (channel) channel.onmessage = (e) => listeners.forEach((fn) => fn(e.data && e.data.collection, true));
+    if (channel) {
+        channel.onmessage = (e) => {
+            if (backend.invalidate) backend.invalidate();
+            emit(e.data && e.data.collection, true);
+        };
+    }
+
+    async function saveMany(c, rows) {
+        await ready;
+        if (backend.bulk) await backend.bulk(c, rows);
+        else for (const row of rows) await backend.upsert(c, row);
+        if (backend.invalidate) backend.invalidate();
+        notify(c);
+    }
 
     const Store = {
         mode,
@@ -373,9 +448,9 @@
         uid,
 
         /** List rows of a collection. publicView hides unpublished posts. */
-        async list(collection, { publicView = false } = {}) {
+        async list(collection, { publicView = false, fresh = false } = {}) {
             await ready;
-            let rows = await backend.list(collection, { publicView });
+            let rows = await backend.list(collection, { publicView, fresh });
             if (collection === 'posts' && publicView) rows = rows.filter((p) => p.published !== false);
             return rows.slice().sort(SORTERS[collection]);
         },
@@ -387,6 +462,7 @@
         async save(collection, row) {
             await ready;
             const saved = await backend.upsert(collection, normalise(collection, row));
+            if (backend.invalidate) backend.invalidate();
             notify(collection);
             return saved;
         },
@@ -394,6 +470,7 @@
         async remove(collection, id) {
             await ready;
             await backend.remove(collection, id);
+            if (backend.invalidate) backend.invalidate();
             notify(collection);
         },
 
@@ -431,10 +508,7 @@
         /** Admin utilities */
         async loadSampleData() {
             const seed = buildSeed();
-            for (const c of ['projects', 'commercial', 'posts']) {
-                for (const row of seed[c]) await backend.upsert(c, row);
-                notify(c);
-            }
+            for (const c of ['projects', 'commercial', 'posts']) await saveMany(c, seed[c]);
         },
         async exportAll() {
             const out = { exported_at: nowISO(), mode };
@@ -443,9 +517,7 @@
         },
         async importAll(data) {
             for (const c of COLLECTIONS) {
-                if (!Array.isArray(data[c])) continue;
-                for (const row of data[c]) await backend.upsert(c, normalise(c, row));
-                notify(c);
+                if (Array.isArray(data[c]) && data[c].length) await saveMany(c, data[c].map((r) => normalise(c, r)));
             }
         },
         async resetDemo() {

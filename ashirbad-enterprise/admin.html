@@ -180,7 +180,7 @@
                         </div>
                         <div class="bg-white rounded-xl shadow-sm border p-5">
                             <h2 class="font-bold text-brand-navy">Sample Content</h2>
-                            <p class="text-sm text-gray-600 mt-2">Add the sample projects, blog posts and commercial listings (useful for a fresh Supabase database).</p>
+                            <p class="text-sm text-gray-600 mt-2">Add the sample projects, blog posts and commercial listings (useful for a fresh Google Sheet).</p>
                             <div class="flex flex-wrap gap-2 mt-4">
                                 <button type="button" id="load-sample" class="btn bg-gray-200 hover:bg-gray-300 text-brand-navy" aria-label="Load sample data"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Load Sample Data</button>
                                 <button type="button" id="reset-demo" class="btn bg-red-50 hover:bg-red-100 text-red-700 hidden" aria-label="Reset demo data"><i class="fas fa-rotate-left" aria-hidden="true"></i> Reset Demo Data</button>
@@ -210,7 +210,6 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="assets/js/store.js"></script>
     <script>
     (function () {
@@ -277,13 +276,10 @@
         /* ================= Auth ================= */
         const loginForm = document.getElementById('login-form');
         const loginErr = document.getElementById('login-error');
-        if (Store.mode === 'local') {
-            document.getElementById('login-email-wrap').classList.add('hidden');
-            document.getElementById('login-hint').textContent = 'Demo mode: use the password set as LOCAL_ADMIN_PASSWORD in assets/js/config.js.';
-        } else {
-            document.getElementById('login-email').required = true;
-            document.getElementById('login-hint').textContent = 'Sign in with your Supabase administrator account.';
-        }
+        document.getElementById('login-email-wrap').classList.add('hidden');
+        document.getElementById('login-hint').textContent = Store.mode === 'local'
+            ? 'Demo mode: use the password set as LOCAL_ADMIN_PASSWORD in assets/js/config.js.'
+            : 'Enter the admin password you set in the Google Sheet menu (Website Admin → Set admin password).';
 
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -338,13 +334,13 @@
             const detail = document.getElementById('mode-detail');
             if (Store.mode === 'local') {
                 banner.className = 'px-4 sm:px-6 py-2.5 text-sm flex items-start gap-2 bg-amber-100 text-amber-900 border-b border-amber-200';
-                banner.innerHTML = '<i class="fas fa-triangle-exclamation mt-0.5" aria-hidden="true"></i><span><strong>Demo mode:</strong> changes are saved in this browser only. Connect Supabase in <code>assets/js/config.js</code> to publish changes to all visitors.</span>';
-                detail.innerHTML = '<p><span class="inline-block bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded">Demo (this browser)</span></p><p>Data and uploaded images are stored in this browser\'s IndexedDB. Other visitors and devices will not see these changes.</p><p>To go live, follow <strong>README.md → Production setup</strong>: create a Supabase project, run <code>supabase/schema.sql</code>, and add the URL and anon key to <code>assets/js/config.js</code>.</p>';
+                banner.innerHTML = '<i class="fas fa-triangle-exclamation mt-0.5" aria-hidden="true"></i><span><strong>Demo mode:</strong> changes are saved in this browser only. Connect your private Google Sheet (APPS_SCRIPT_URL in <code>assets/js/config.js</code>) to publish changes to all visitors.</span>';
+                detail.innerHTML = '<p><span class="inline-block bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded">Demo (this browser)</span></p><p>Data and uploaded images are stored in this browser\'s IndexedDB. Other visitors and devices will not see these changes.</p><p>To go live, follow <strong>README.md → Google Sheets setup</strong> and paste your Apps Script Web App URL into <code>assets/js/config.js</code>.</p>';
                 document.getElementById('reset-demo').classList.remove('hidden');
             } else {
                 banner.className = 'px-4 sm:px-6 py-2.5 text-sm flex items-start gap-2 bg-green-50 text-green-800 border-b border-green-200';
-                banner.innerHTML = '<i class="fas fa-circle-check mt-0.5" aria-hidden="true"></i><span>Connected to Supabase – changes are live for all visitors.</span>';
-                detail.innerHTML = `<p><span class="inline-block bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded">Supabase</span></p><p class="break-all">Project: ${escapeHTML(C.SUPABASE_URL)}</p><p>Images upload to the <code>${escapeHTML(C.SUPABASE_BUCKET || 'media')}</code> storage bucket.</p>`;
+                banner.innerHTML = '<i class="fas fa-circle-check mt-0.5" aria-hidden="true"></i><span>Connected to your private Google Sheet – changes are live for all visitors.</span>';
+                detail.innerHTML = '<p><span class="inline-block bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded">Private Google Sheet</span></p><p>Content and leads are stored in your Google Sheet, which is not shared with anyone. The website reaches it only through your Apps Script.</p><p>Uploaded images are saved to the private <strong>Website Media</strong> folder in your Google Drive (each image is viewable by link so the website can show it).</p><p>Admin sessions last 6 hours. To sign everyone out, use <strong>Website Admin → Sign out all admin sessions</strong> in the sheet.</p>';
             }
         }
 

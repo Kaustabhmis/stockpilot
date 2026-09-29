@@ -1,20 +1,19 @@
 /**
  * Ashirbad Enterprise – site configuration
  * ---------------------------------------------------------------
- * DEMO MODE (default): leave SUPABASE_URL / SUPABASE_ANON_KEY empty.
+ * DEMO MODE (default): leave APPS_SCRIPT_URL empty.
  *   All data (projects, posts, images, leads) is stored in the
  *   current browser only (IndexedDB). Good for previewing the admin
  *   panel, NOT for production – visitors will not see your edits.
  *
- * PRODUCTION MODE: create a free Supabase project, run
- *   supabase/schema.sql in its SQL editor, then paste the project URL
- *   and the *anon / publishable* key below. Never put the service_role
- *   key in this file – it is public.
+ * PRODUCTION MODE (private Google Sheet): follow README.md →
+ *   "Google Sheets setup", then paste your Apps Script *Web App URL*
+ *   below. The Google Sheet itself stays private – its link/ID is
+ *   never placed on the website – and the admin password lives only
+ *   inside the Apps Script (hashed), not in this file.
  */
 window.APP_CONFIG = {
-    SUPABASE_URL: '',          // e.g. 'https://abcdxyz.supabase.co'
-    SUPABASE_ANON_KEY: '',     // e.g. 'eyJhbGciOi...' or 'sb_publishable_...'
-    SUPABASE_BUCKET: 'media',  // public storage bucket for uploaded images
+    APPS_SCRIPT_URL: '',       // e.g. 'https://script.google.com/macros/s/AKfy.../exec'
 
     GOOGLE_MAPS_API_KEY: 'YOUR_GOOGLE_MAPS_API_KEY',
 
@@ -28,6 +27,6 @@ window.APP_CONFIG = {
     /** Hero carousel: time each live project stays on screen (ms). */
     CAROUSEL_DELAY_MS: 10000,
 
-    /** Demo-mode admin password only. Ignored once Supabase is configured. */
+    /** Demo-mode admin password only. Ignored once APPS_SCRIPT_URL is set. */
     LOCAL_ADMIN_PASSWORD: 'ashirbad@admin'
 };
