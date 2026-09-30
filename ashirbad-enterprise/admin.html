@@ -573,7 +573,12 @@
 
         document.getElementById('export-csv').addEventListener('click', () => {
             const cols = ['created_at', 'name', 'phone', 'email', 'interest', 'project', 'config', 'budget', 'location', 'visit_date', 'message', 'source', 'status'];
-            const cell = (v) => `"${String(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v).replace(/"/g, '""')}"`;
+            // Quote every cell and neutralise spreadsheet formulas (=, +, -, @) so Excel/Sheets never execute lead data
+            const cell = (v) => {
+                let t = String(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v);
+                if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+                return `"${t.replace(/"/g, '""')}"`;
+            };
             const csv = [cols.join(','), ...filteredLeads().map((l) => cols.map((c) => cell(l[c])).join(','))].join('\r\n');
             download(`ashirbad-leads-${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + csv, 'text/csv;charset=utf-8');
         });

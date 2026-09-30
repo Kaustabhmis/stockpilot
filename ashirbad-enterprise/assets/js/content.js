@@ -382,7 +382,7 @@
         const biz = doc.getElementById('ld-business');
         if (biz && site) biz.textContent = ldText(businessJsonLd(c, site));
         const faq = doc.getElementById('ld-faq');
-        if (faq) { const f = faqJsonLd(c); faq.textContent = f ? ldText(f) : '{}'; }
+        if (faq) { const f = faqJsonLd(c); if (f) faq.textContent = ldText(f); else faq.remove(); }
         if (T.setBrand) T.setBrand(c.business_name);
     }
 
