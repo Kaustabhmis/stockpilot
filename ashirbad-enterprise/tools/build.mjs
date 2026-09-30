@@ -27,6 +27,7 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { parseHTML } from 'linkedom';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -51,7 +52,9 @@ const DEFAULT_SITE = 'https://www.ashirbadenterprise.com';
 globalThis.APP_CONFIG = C;
 const T = require(path.join(ROOT, 'assets/js/templates.js'));
 globalThis.AET = T;
-const { headerHTML, footerHTML, socialLinks } = require(path.join(ROOT, 'assets/js/common.js'));
+const K = require(path.join(ROOT, 'assets/js/content.js'));
+globalThis.AEC = K;
+const { headerHTML, footerHTML } = require(path.join(ROOT, 'assets/js/common.js'));
 
 /* ------------------------------------------------------------
  * 2. Data
@@ -88,7 +91,11 @@ const past = projects.filter((p) => p.stage !== 'live')
 const commercial = (raw.commercial || []).slice().sort(byOrder);
 const posts = (raw.posts || []).filter((p) => p.published !== false && p.slug)
     .sort((a, b) => String(b.published_at || '').localeCompare(String(a.published_at || '')));
-log(`${live.length} live, ${past.length} completed/sold, ${commercial.length} commercial, ${posts.length} posts`);
+const settingsRows = raw.settings || [];
+const CONTENT = K.build(settingsRows);
+T.setBrand(CONTENT.business_name);
+const BRAND = CONTENT.business_name;
+log(`${live.length} live, ${past.length} completed/sold, ${commercial.length} commercial, ${posts.length} posts, ${settingsRows.length} saved content settings`);
 
 /* ------------------------------------------------------------
  * 3. Helpers
@@ -111,21 +118,43 @@ const setMeta = (html, attr, name, value) => {
     return html.replace(re, (_m, a, b) => a + esc(value) + b);
 };
 
+const jsonForScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+
 function headExtra(rootPrefix, extra = '') {
     const tags = [];
-    if (C.GOOGLE_SITE_VERIFICATION) tags.push(`<meta name="google-site-verification" content="${esc(C.GOOGLE_SITE_VERIFICATION)}">`);
-    if (C.BING_SITE_VERIFICATION) tags.push(`<meta name="msvalidate.01" content="${esc(C.BING_SITE_VERIFICATION)}">`);
-    tags.push(`<script>window.AE_ROOT=${JSON.stringify(rootPrefix)};window.AE_BUILD=${JSON.stringify({ posts: builtPosts, builtAt: new Date().toISOString() })};${extra}</script>`);
+    const g = String(CONTENT.google_verification || '').trim();
+    const b = String(CONTENT.bing_verification || '').trim();
+    if (g) tags.push(`<meta name="google-site-verification" content="${esc(g)}">`);
+    if (b) tags.push(`<meta name="msvalidate.01" content="${esc(b)}">`);
+    tags.push(`<script>window.AE_ROOT=${JSON.stringify(rootPrefix)};window.AE_BUILD=${jsonForScript({ posts: builtPosts, builtAt: new Date().toISOString() })};window.AE_SETTINGS=${jsonForScript(settingsRows)};${extra}</script>`);
     return tags.join('\n    ');
 }
 
+/** Escape stray "&" / "<" in <title> and text attributes (outside <script>) for strict HTML validity. */
+const AMP = /&(?![a-zA-Z][a-zA-Z0-9]*;|#\d+;|#x[0-9a-fA-F]+;)/g;
+function tidy(html) {
+    return html.split(/(<script\b[\s\S]*?<\/script>)/).map((part, i) => (i % 2 ? part : part
+        .replace(/ crossorigin=""/g, ' crossorigin')
+        .replace(/(<title[^>]*>)([\s\S]*?)(<\/title>)/, (_m, a, t, z) => a + t.replace(AMP, '&amp;') + z)
+        .replace(/(\s(?:content|alt|aria-label|title|placeholder|data-rendered)=")([^"]*)"/g, (_m, a, v) => `${a}${v.replace(AMP, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"`)
+    )).join('');
+}
+
+/** Fill every data-c / data-c-attr / data-c-list element with the saved website content. */
+function applyContent(html, { stripHead = false } = {}) {
+    const { document } = parseHTML(html);
+    if (stripHead) document.querySelectorAll('head [data-c], head [data-c-attr]').forEach((el) => { el.removeAttribute('data-c'); el.removeAttribute('data-c-attr'); });
+    K.apply(document, CONTENT, SITE);
+    return tidy(document.toString());
+}
+
 /** Common transforms for every generated page. */
-function finish(html, { active, rootPrefix = '', extraHead = '' }) {
+function finish(html, { active, rootPrefix = '', extraHead = '', stripHead = false }) {
     html = fillIf(html, 'head', headExtra(rootPrefix, extraHead));
-    html = fillIf(html, 'header', headerHTML(active, rootPrefix));
-    html = fillIf(html, 'footer', footerHTML(rootPrefix, C));
+    html = fillIf(html, 'header', headerHTML(active, rootPrefix, CONTENT));
+    html = fillIf(html, 'footer', footerHTML(rootPrefix, CONTENT));
     if (SITE !== DEFAULT_SITE) html = html.split(DEFAULT_SITE).join(SITE);
-    return html;
+    return applyContent(html, { stripHead });
 }
 
 /** Rewrite relative URLs for pages that live in a sub-folder (blog/…) or anywhere (404). */
@@ -134,19 +163,18 @@ function rebase(html, prefix) {
 }
 
 /* Organisation / business structured data (shared) */
-const sameAs = socialLinks(C).map(([, url]) => url);
 const orgRef = { '@id': `${SITE}/#organization` };
 const websiteLd = {
     '@context': 'https://schema.org', '@type': 'WebSite', '@id': `${SITE}/#website`, url: `${SITE}/`,
-    name: 'Ashirbad Enterprise', inLanguage: 'en-IN', publisher: orgRef
+    name: BRAND, inLanguage: 'en-IN', publisher: orgRef
 };
 const projectLd = (p) => ({
     '@type': 'ApartmentComplex',
     name: p.title,
-    description: p.description || `${p.config || 'Residential project'} by Ashirbad Enterprise in ${p.location}`,
+    description: p.description || `${p.config || 'Residential project'} by ${BRAND} in ${p.location}`,
     image: abs(T.imgUrl(p.img, 1200)),
     url: `${SITE}/#ongoing-projects`,
-    address: { '@type': 'PostalAddress', streetAddress: p.location, addressLocality: 'Kolkata', addressRegion: 'West Bengal', addressCountry: 'IN' },
+    address: { '@type': 'PostalAddress', streetAddress: p.location, addressLocality: CONTENT.address_city || undefined, addressRegion: CONTENT.address_state || undefined, addressCountry: 'IN' },
     ...(p.lat != null && p.lng != null ? { geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng } } : {}),
     ...(p.rera_no ? { identifier: { '@type': 'PropertyValue', propertyID: 'WBRERA', value: p.rera_no } } : {})
 });
@@ -179,7 +207,7 @@ if (fs.existsSync(twBin)) {
 
 // Cache-busting hashes for local assets
 const assetHash = {};
-for (const f of ['assets/css/tailwind.css', 'assets/js/config.js', 'assets/js/templates.js', 'assets/js/common.js', 'assets/js/store.js']) {
+for (const f of ['assets/css/tailwind.css', 'assets/js/config.js', 'assets/js/templates.js', 'assets/js/content.js', 'assets/js/common.js', 'assets/js/store.js']) {
     assetHash[f] = crypto.createHash('sha1').update(fs.readFileSync(path.join(OUT, f))).digest('hex').slice(0, 10);
 }
 const bust = (html) => html.replace(/((?:href|src)="(?:\.\.\/|\/)?)(assets\/(?:css|js)\/[\w.-]+\.(?:css|js))"/g, (m, a, f) => (assetHash[f] ? `${a}${f}?v=${assetHash[f]}"` : m));
@@ -188,7 +216,7 @@ const write = (rel, html) => { fs.mkdirSync(path.dirname(path.join(OUT, rel)), {
 /* ------------------------------------------------------------
  * 5. Pages
  * ---------------------------------------------------------- */
-const ctxRoot = { root: '', builtPosts };
+const ctxRoot = { root: '', builtPosts, c: CONTENT };
 
 // Home
 {
@@ -202,9 +230,8 @@ const ctxRoot = { root: '', builtPosts };
     const heroImg = live[0] ? T.imgUrl(live[0].img, 1600) : null;
     html = fill(html, 'jsonld', [
         ld(websiteLd),
-        ld({ '@context': 'https://schema.org', '@type': 'RealEstateAgent', '@id': `${SITE}/#organization`, ...(sameAs.length ? { sameAs } : {}) }),
-        live.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: 'Ongoing projects by Ashirbad Enterprise', itemListElement: live.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: projectLd(p) })) }) : '',
-        past.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: 'Completed and sold out projects by Ashirbad Enterprise', itemListElement: past.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: projectLd(p) })) }) : '',
+        live.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: `Ongoing projects by ${BRAND}`, itemListElement: live.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: projectLd(p) })) }) : '',
+        past.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: `Completed and sold out projects by ${BRAND}`, itemListElement: past.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: projectLd(p) })) }) : '',
         heroImg ? `<link rel="preload" as="image" href="${esc(heroImg)}" fetchpriority="high">` : ''
     ].filter(Boolean).join('\n    '));
     write('index.html', finish(html, { active: 'home' }));
@@ -230,16 +257,16 @@ const blogTemplate = read('blog.html');
 // Blog posts – one static page each
 for (const p of posts) {
     const url = `${SITE}/blog/${encodeURIComponent(p.slug)}.html`;
-    const ctx = { root: '../', builtPosts };
+    const ctx = { root: '../', builtPosts, c: CONTENT };
     let html = blogTemplate;
     html = fill(html, 'listview', '');
     html = fill(html, 'listld', '');
     html = fill(html, 'post', T.postArticle(p, T.relatedPosts(p, posts), ctx, url));
     html = fill(html, 'jsonld', T.postJsonLd(p, url, SITE).map(ld).join('\n    '));
-    const title = p.title.length > 44 ? p.title : `${p.title} | Ashirbad Enterprise`;
+    const title = p.title.length + BRAND.length > 57 ? p.title : `${p.title} | ${BRAND}`;
     const desc = (p.excerpt || p.title).slice(0, 300);
     const image = abs(T.imgUrl(p.cover, 1200));
-    html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`);
+    html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`);
     html = setMeta(html, 'name', 'description', desc);
     html = html.replace(/<meta name="keywords"[^>]*>\n\s*/, '');
     html = html.replace(/(<link rel="canonical" id="canonical" href=")[^"]*(")/, `$1${url}$2`);
@@ -251,7 +278,7 @@ for (const p of posts) {
     html = setMeta(html, 'name', 'twitter:title', p.title);
     html = setMeta(html, 'name', 'twitter:image', image);
     html = html.replace('<meta property="og:site_name"', `${p.published_at ? `<meta property="article:published_time" content="${esc(p.published_at)}">\n    ` : ''}${p.category ? `<meta property="article:section" content="${esc(p.category)}">\n    ` : ''}<meta property="og:site_name"`);
-    html = finish(html, { active: 'blog', rootPrefix: '../', extraHead: `window.AE_POST=${JSON.stringify(p.slug)};` });
+    html = finish(html, { active: 'blog', rootPrefix: '../', extraHead: `window.AE_POST=${JSON.stringify(p.slug)};`, stripHead: true });
     html = rebase(html, '../');
     write(`blog/${p.slug}.html`, html);
 }
@@ -261,11 +288,6 @@ log(`${posts.length} blog post pages`);
 {
     let html = read('enquiry.html');
     html = fill(html, 'projects', T.landingProjectCards(live));
-    const reviews = (C.TESTIMONIALS || []).filter((t) => t && t.quote && t.name);
-    if (reviews.length) {
-        html = fill(html, 'testimonials', T.testimonials(reviews));
-        html = html.replace('<section id="testimonials" class="hidden ', '<section id="testimonials" class="');
-    }
     write('enquiry.html', finish(html, { active: 'enquiry' }));
 }
 

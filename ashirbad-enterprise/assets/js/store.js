@@ -13,7 +13,7 @@
     'use strict';
 
     const C = window.APP_CONFIG || {};
-    const COLLECTIONS = ['projects', 'commercial', 'posts', 'leads'];
+    const COLLECTIONS = ['projects', 'commercial', 'posts', 'leads', 'settings'];
 
     const uid = () => (window.crypto && crypto.randomUUID)
         ? crypto.randomUUID()
@@ -142,7 +142,7 @@
             }
         ].map((o) => ({ id: uid(), slug: slugify(o.title), author: 'Ashirbad Enterprise', published: true, created_at: t, ...o }));
 
-        return { projects, commercial, posts, leads: [] };
+        return { projects, commercial, posts, leads: [], settings: [] };
     }
 
     /* ------------------------------------------------------------
@@ -152,7 +152,8 @@
         projects: (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(b.created_at).localeCompare(String(a.created_at)),
         commercial: (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(b.created_at).localeCompare(String(a.created_at)),
         posts: (a, b) => String(b.published_at || '').localeCompare(String(a.published_at || '')) || String(b.created_at).localeCompare(String(a.created_at)),
-        leads: (a, b) => String(b.created_at).localeCompare(String(a.created_at))
+        leads: (a, b) => String(b.created_at).localeCompare(String(a.created_at)),
+        settings: (a, b) => String(a.id).localeCompare(String(b.id))
     };
 
     // Empty strings become null so date/number fields stay consistent
@@ -165,6 +166,7 @@
     function normalise(collection, row) {
         const r = clean({ ...row });
         if (!r.id) r.id = uid();
+        if (collection === 'settings') return { id: String(r.id), value: r.value == null ? '' : String(r.value), updated_at: r.updated_at || nowISO() };
         if (!r.created_at) r.created_at = nowISO();
         if (collection === 'projects') {
             r.images = Array.isArray(r.images) ? r.images.filter(Boolean) : [];
@@ -328,7 +330,7 @@
             try { prev = localStorage.getItem(PUBLIC_CACHE_KEY); localStorage.setItem(PUBLIC_CACHE_KEY, json); } catch (e) { /* storage full or blocked */ }
             publicMemo = Promise.resolve(data);
             // Page rendered from an older cache → tell it to re-render with fresh data
-            if (cached && prev !== json) setTimeout(() => ['projects', 'commercial', 'posts'].forEach((c) => emit(c, true)), 0);
+            if (cached && prev !== json) setTimeout(() => ['projects', 'commercial', 'posts', 'settings'].forEach((c) => emit(c, true)), 0);
             return data;
         });
         if (cached) {
@@ -508,6 +510,9 @@
         onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
         /** Admin utilities */
+        /** Save many rows at once (e.g. website content settings). */
+        async saveMany(collection, rows) { return saveMany(collection, rows.map((r) => normalise(collection, r))); },
+
         async loadSampleData() {
             const seed = buildSeed();
             for (const c of ['projects', 'commercial', 'posts']) await saveMany(c, seed[c]);

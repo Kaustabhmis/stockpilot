@@ -22,24 +22,17 @@
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-12 md:py-16">
         <nav aria-label="Breadcrumb" class="text-sm text-gray-500"><a href="index.html" class="hover:text-brand-orange" aria-label="Home">Home</a> / <span aria-current="page">Privacy Policy</span></nav>
         <h1 class="text-3xl md:text-4xl font-extrabold text-brand-navy mt-3">Privacy Policy</h1>
-        <p class="text-sm text-gray-500 mt-2">Last updated: September 2026</p>
-        <div class="mt-8 space-y-6 text-gray-700 leading-relaxed">
-            <section><h2 class="text-xl font-bold text-brand-navy mb-2">Information we collect</h2><p>When you submit an enquiry or site-visit form we collect the details you provide: name, mobile number, email address (optional), property preferences (project, configuration, budget, location), preferred visit date and your message. We also record the page you enquired from and any campaign parameters in the link (for example <code>utm_source</code>) so we know which advertisements are useful.</p></section>
-            <section><h2 class="text-xl font-bold text-brand-navy mb-2">How we use it</h2><p>Your information is used only to respond to your enquiry, arrange site visits, share project documents and price lists, and send updates about projects you showed interest in. With your consent we may contact you by call, SMS, email or WhatsApp.</p></section>
-            <section><h2 class="text-xl font-bold text-brand-navy mb-2">Sharing</h2><p>We do not sell or rent your personal data. We may share it with our banking or legal partners only when you ask us to (for example for home-loan assistance), or where required by law.</p></section>
-            <section><h2 class="text-xl font-bold text-brand-navy mb-2">Third-party services</h2><p>This website uses Google Maps to display project locations and may load fonts and scripts from trusted content delivery networks. These providers may collect technical data such as your IP address in line with their own privacy policies.</p></section>
-            <section><h2 class="text-xl font-bold text-brand-navy mb-2">Retention &amp; your rights</h2><p>We keep enquiry data only as long as needed to serve you. You may ask us to access, correct or delete your data at any time by writing to <a id="privacy-email" href="#" class="text-brand-orange underline" aria-label="Email our privacy contact"></a>.</p></section>
-        </div>
+        <p class="text-sm text-gray-500 mt-2">Last updated: <span data-c="privacy_updated">September 2026</span></p>
+        <div class="mt-8 space-y-6 text-gray-700 leading-relaxed" data-c-list="privacy_sections"></div>
+        <p class="mt-8 text-gray-700">Contact for privacy requests: <a href="#" class="text-brand-orange underline" data-c-attr="href:email_href" data-c="email" aria-label="Email our privacy contact">info@ashirbadenterprise.com</a></p>
+        <p class="mt-2 text-gray-700"><span data-c="business_legal_name">Ashirbad Enterprise</span>, <span data-c="address">Rajarhat Expressway, Kolkata, West Bengal 700156</span></p>
     </main>
     <!--@footer--><div id="site-footer-root"></div><!--/@footer-->
     <script src="assets/js/config.js"></script>
     <script src="assets/js/templates.js"></script>
+    <script src="assets/js/content.js"></script>
     <script src="assets/js/common.js"></script>
-    <script>
-        AE.layout('privacy');
-        const e = document.getElementById('privacy-email');
-        e.href = `mailto:${AE.C.EMAIL}`;
-        e.textContent = AE.C.EMAIL;
-    </script>
+    <script src="assets/js/store.js"></script>
+    <script>AE.layout('privacy');</script>
 </body>
 </html>

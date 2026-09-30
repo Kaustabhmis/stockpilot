@@ -14,18 +14,36 @@
     const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
     const C = (root.APP_CONFIG) || {};
     const T = root.AET || (typeof require === 'function' ? require('./templates.js') : null);
+    const K = root.AEC || (typeof require === 'function' ? require('./content.js') : null);
     const escapeHTML = T.esc;
     const R = () => (isBrowser && window.AE_ROOT) || '';
 
-    const waLink = (text) => `https://wa.me/${C.WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
+    /** Current website content (defaults until the saved settings load). */
+    let CONTENT = K.build(isBrowser && window.AE_SETTINGS ? window.AE_SETTINGS : []);
+    const content = () => CONTENT;
+    const waLink = (text) => `https://wa.me/${CONTENT.whatsapp}?text=${encodeURIComponent(text)}`;
 
-    const SOCIAL_ICONS = { facebook: 'fa-facebook-f', instagram: 'fa-instagram', youtube: 'fa-youtube', linkedin: 'fa-linkedin-in', x: 'fa-x-twitter' };
-    const socialLinks = (cfg) => Object.entries((cfg || C).SOCIAL || {}).filter(([, url]) => url);
+    const SOCIAL_ICONS = { facebook: 'fa-facebook-f', instagram: 'fa-instagram', youtube: 'fa-youtube', linkedin: 'fa-linkedin-in' };
+
+    // Extra renderers for header/footer blocks (used by AEC.apply)
+    const brandHTML = (name, accent) => {
+        const parts = String(name || '').trim().split(/\s+/);
+        if (parts.length < 2) return escapeHTML(name);
+        const last = parts.pop();
+        return `${escapeHTML(parts.join(' '))} <span class="${accent}">${escapeHTML(last)}</span>`;
+    };
+    K.RENDER['@brand'] = (_v, c) => brandHTML(c.business_name, 'text-brand-orange');
+    K.RENDER['@brand_footer'] = (_v, c) => brandHTML(c.business_name, 'text-brand-gold');
+    K.RENDER['@social'] = (_v, c) => (c.social.length ? `<nav aria-label="Social media"><ul class="flex gap-3 mt-5">${c.social.map(([k, url]) => `<li><a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer me" class="w-11 h-11 rounded-full bg-white/10 hover:bg-brand-orange text-white flex items-center justify-center" aria-label="${escapeHTML(c.business_name)} on ${k.charAt(0).toUpperCase() + k.slice(1)}"><i class="fab ${SOCIAL_ICONS[k] || 'fa-globe'}" aria-hidden="true"></i></a></li>`).join('')}</ul></nav>` : '');
+    K.RENDER['@footer_phones'] = (_v, c) => [[c.phone, c.phone_href], [c.phone_alt, c.phone_alt_href]].filter(([p]) => p)
+        .map(([p, href]) => `<p><a href="${escapeHTML(href)}" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Call ${escapeHTML(p)}"><i class="fas fa-phone mr-2" aria-hidden="true"></i>${escapeHTML(p).replace(/ /g, '&nbsp;')}</a></p>`).join('');
 
     /* ------------------------------------------------------------
-     * Header / Footer markup (pure)
+     * Header / Footer markup (pure). Elements carry data-c markers so
+     * AEC.apply() can update them when content changes.
      * ---------------------------------------------------------- */
-    function headerHTML(active, rootPrefix) {
+    function headerHTML(active, rootPrefix, c) {
+        const k = c || CONTENT;
         const r = rootPrefix == null ? R() : rootPrefix;
         const onHome = active === 'home';
         const h = (hash) => (onHome ? hash : `${r}index.html${hash}`);
@@ -44,9 +62,9 @@
         <header id="site-header" class="bg-white shadow-md fixed w-full z-[100] top-0 transition-all duration-300">
             <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" aria-label="Main navigation">
                 <div class="flex justify-between h-20 items-center gap-4">
-                    <a href="${onHome ? '#ongoing-projects' : `${r}index.html`}" class="flex-shrink-0 flex items-center gap-2 sm:gap-3 min-w-0" aria-label="Ashirbad Enterprise home">
-                        <img src="${r}1000365300.jpg" alt="Ashirbad Enterprise logo" class="h-12 w-12 sm:h-14 sm:w-14 object-contain rounded" width="56" height="56">
-                        <span class="font-extrabold text-lg sm:text-2xl text-brand-navy tracking-tight truncate">Ashirbad <span class="text-brand-orange">Enterprise</span></span>
+                    <a href="${onHome ? '#ongoing-projects' : `${r}index.html`}" class="flex-shrink-0 flex items-center gap-2 sm:gap-3 min-w-0" aria-label="${escapeHTML(k.business_name)} home" data-c-attr="aria-label:home_label">
+                        <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-12 w-12 sm:h-14 sm:w-14 object-contain rounded" width="56" height="56">
+                        <span class="font-extrabold text-lg sm:text-2xl text-brand-navy tracking-tight truncate" data-c-list="@brand">${brandHTML(k.business_name, 'text-brand-orange')}</span>
                     </a>
                     <div class="hidden xl:flex items-center gap-6 text-[15px]">
                         ${links.map((l) => `<a href="${l.href}" class="nav-link ${cls(l)} font-medium hover:text-brand-orange transition whitespace-nowrap" aria-label="${l.label}"${cur(l)}>${l.label}</a>`).join('')}
@@ -68,21 +86,19 @@
         </header>`;
     }
 
-    function footerHTML(rootPrefix, cfg) {
+    function footerHTML(rootPrefix, c) {
+        const k = c || CONTENT;
         const r = rootPrefix == null ? R() : rootPrefix;
-        const c = cfg || C;
-        const year = new Date().getFullYear();
-        const social = socialLinks(c);
         return `
         <footer class="bg-[#0b1f33] text-gray-300 text-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                 <div class="lg:col-span-2">
-                    <a href="${r}index.html" class="inline-flex items-center gap-3" aria-label="Ashirbad Enterprise home">
-                        <img src="${r}1000365300.jpg" alt="Ashirbad Enterprise logo" class="h-14 w-14 rounded bg-white p-1 object-contain" width="56" height="56" loading="lazy">
-                        <span class="text-white font-extrabold text-xl">Ashirbad <span class="text-brand-gold">Enterprise</span></span>
+                    <a href="${r}index.html" class="inline-flex items-center gap-3" aria-label="${escapeHTML(k.business_name)} home" data-c-attr="aria-label:home_label">
+                        <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-14 w-14 rounded bg-white p-1 object-contain" width="56" height="56" loading="lazy">
+                        <span class="text-white font-extrabold text-xl" data-c-list="@brand_footer">${brandHTML(k.business_name, 'text-brand-gold')}</span>
                     </a>
-                    <p class="mt-4 max-w-md leading-relaxed">RERA registered real estate builders and developers in Kolkata, delivering residential apartments and commercial property built on trust for over 15 years.</p>
-                    ${social.length ? `<nav aria-label="Social media"><ul class="flex gap-3 mt-5">${social.map(([k, url]) => `<li><a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer me" class="w-11 h-11 rounded-full bg-white/10 hover:bg-brand-orange text-white flex items-center justify-center" aria-label="Ashirbad Enterprise on ${k.charAt(0).toUpperCase() + k.slice(1)}"><i class="fab ${SOCIAL_ICONS[k] || 'fa-globe'}" aria-hidden="true"></i></a></li>`).join('')}</ul></nav>` : ''}
+                    <p class="mt-4 max-w-md leading-relaxed" data-c="footer_about">${escapeHTML(k.footer_about)}</p>
+                    <div data-c-list="@social">${K.RENDER['@social'](null, k)}</div>
                 </div>
                 <nav aria-label="Footer quick links">
                     <h2 class="text-white font-bold mb-3">Quick Links</h2>
@@ -96,15 +112,19 @@
                 <div>
                     <h2 class="text-white font-bold mb-3">Contact</h2>
                     <address class="not-italic">
-                    <p class="leading-relaxed">${escapeHTML(c.ADDRESS)}</p>
-                    <p class="mt-2"><a href="tel:${escapeHTML(c.PHONE)}" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Call ${escapeHTML(c.PHONE_DISPLAY)}"><i class="fas fa-phone mr-2" aria-hidden="true"></i>${escapeHTML(c.PHONE_DISPLAY).replace(/ /g, '&nbsp;')}</a></p>
-                    <p><a href="mailto:${escapeHTML(c.EMAIL)}" class="inline-block py-1.5 hover:text-brand-gold break-all" aria-label="Email ${escapeHTML(c.EMAIL)}"><i class="fas fa-envelope mr-2" aria-hidden="true"></i>${escapeHTML(c.EMAIL)}</a></p>
+                        <p class="leading-relaxed" data-c="address">${escapeHTML(k.address)}</p>
+                        <div class="mt-2" data-c-list="@footer_phones">${K.RENDER['@footer_phones'](null, k)}</div>
+                        <p><a href="${escapeHTML(k.email_href)}" class="inline-block py-1.5 hover:text-brand-gold break-all" aria-label="Email ${escapeHTML(k.email)}" data-c-attr="href:email_href"><i class="fas fa-envelope mr-2" aria-hidden="true"></i><span data-c="email">${escapeHTML(k.email)}</span></a></p>
+                        <p class="mt-1" data-c="office_hours">${escapeHTML(k.office_hours)}</p>
                     </address>
                 </div>
             </div>
             <div class="border-t border-white/10">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col md:flex-row justify-between items-center gap-3 text-center">
-                    <p>&copy; ${year} Ashirbad Enterprise. All rights reserved.</p>
+                    <div>
+                        <p>&copy; <span data-c="year">${escapeHTML(k.year)}</span> <span data-c="business_legal_name">${escapeHTML(k.business_legal_name || k.business_name)}</span>. All rights reserved.</p>
+                        <p class="text-xs text-gray-400 mt-1${k.registrations ? '' : ' hidden'}" data-c="registrations" data-c-show="registrations">${escapeHTML(k.registrations)}</p>
+                    </div>
                     <a href="${r}privacy.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Privacy Policy">Privacy Policy</a>
                 </div>
             </div>
@@ -112,7 +132,7 @@
     }
 
     if (!isBrowser) {
-        module.exports = { headerHTML, footerHTML, socialLinks };
+        module.exports = { headerHTML, footerHTML };
         return;
     }
 
@@ -165,19 +185,21 @@
         if (document.getElementById('wa-fab')) return;
         const a = document.createElement('a');
         a.id = 'wa-fab';
-        a.href = waLink('Hi Ashirbad Enterprise, I would like to know more about your projects.');
+        a.href = waLink(`Hi ${CONTENT.business_name}, I would like to know more about your projects.`);
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         a.className = 'wa-pulse fixed bottom-5 right-5 md:bottom-8 md:right-8 z-[90] w-14 h-14 md:w-16 md:h-16 rounded-full bg-[#1a9e51] hover:bg-[#15803d] text-white flex items-center justify-center shadow-2xl transition-transform hover:scale-110';
-        a.setAttribute('aria-label', 'Chat with Ashirbad Enterprise on WhatsApp');
+        a.setAttribute('aria-label', `Chat with ${CONTENT.business_name} on WhatsApp`);
         a.innerHTML = '<i class="fab fa-whatsapp text-3xl md:text-4xl" aria-hidden="true"></i>';
         document.body.appendChild(a);
     }
 
-    /** Optional Google Analytics 4 (set GA_MEASUREMENT_ID in config.js). Never on the admin page. */
+    /** Optional Google Analytics 4 (ID set in Admin → Website Content). Never on the admin page. */
+    let analyticsOn = false;
     function initAnalytics() {
-        const id = C.GA_MEASUREMENT_ID;
-        if (!id || !/^G-[A-Z0-9]+$/.test(id) || document.body.dataset.page === 'admin') return;
+        const id = String(CONTENT.ga_id || '').trim();
+        if (analyticsOn || !/^G-[A-Z0-9]+$/.test(id) || document.body.dataset.page === 'admin') return;
+        analyticsOn = true;
         const s = document.createElement('script');
         s.async = true;
         s.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
@@ -280,12 +302,40 @@
     const PHONE_PATTERN = '^(\\+91[\\s-]?)?[6-9]\\d{4}[\\s-]?\\d{5}$';
     const manifest = () => window.AE_BUILD || { posts: [] };
 
+    /* ------------------------------------------------------------
+     * Website content: apply saved business info & texts to the page
+     * ---------------------------------------------------------- */
+    const contentListeners = [];
+    const SITE = () => String(C.SITE_URL || '').replace(/\/$/, '');
+    function setContent(c) {
+        CONTENT = c;
+        K.apply(document, c, SITE());
+        const fab = document.getElementById('wa-fab');
+        if (fab) {
+            fab.href = waLink(`Hi ${c.business_name}, I would like to know more about your projects.`);
+            fab.setAttribute('aria-label', `Chat with ${c.business_name} on WhatsApp`);
+        }
+        initAnalytics();
+        contentListeners.forEach((fn) => { try { fn(c); } catch (e) { console.error(e); } });
+    }
+    async function loadContent() {
+        if (!window.Store) return CONTENT;
+        try { setContent(K.build(await window.Store.list('settings'))); }
+        catch (e) { console.warn('Could not load website content', e); }
+        return CONTENT;
+    }
+
     window.AE = {
-        C, escapeHTML, waLink, formatDate: T.formatDate, renderRichText: T.richText, T,
+        C, escapeHTML, waLink, formatDate: T.formatDate, renderRichText: T.richText, T, K,
+        /** Current website content (business info + page texts). */
+        content,
+        /** Run fn whenever website content is (re)loaded. */
+        onContent(fn) { contentListeners.push(fn); },
+        loadContent,
         headerHTML, footerHTML, renderHeader, renderFooter, renderWhatsApp,
         Modal, toast, validateField, PHONE_PATTERN,
         /** Context for templates: site root + list of pre-rendered post slugs. */
-        ctx: () => ({ root: R(), builtPosts: manifest().posts || [] }),
+        ctx: () => ({ root: R(), builtPosts: manifest().posts || [], c: CONTENT }),
         root: R,
         /** Render header + footer (if not pre-rendered), WhatsApp button, modals, analytics. */
         layout(active) {
@@ -293,7 +343,9 @@
             renderFooter();
             renderWhatsApp();
             Modal.init();
-            initAnalytics();
+            setContent(CONTENT);
+            loadContent();
+            if (window.Store) window.Store.onChange((col) => { if (col === 'settings') loadContent(); });
         }
     };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -9,6 +9,10 @@
 (function (root) {
     'use strict';
 
+    let BRAND = 'Ashirbad Enterprise';
+    /** Business name used in alt texts and structured data (set from Website Content). */
+    const setBrand = (name) => { if (name) BRAND = String(name); };
+
     const esc = (str) => String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
@@ -85,7 +89,7 @@
         }
         return live.map((p, i) => `
             <div class="swiper-slide relative" role="group" aria-label="Project ${i + 1} of ${live.length}: ${esc(p.title)}">
-                <img src="${esc(imgUrl(p.img, 1600))}" alt="${esc(p.title)} - ${esc(p.config || 'residential project')} at ${esc(p.location)} by Ashirbad Enterprise"
+                <img src="${esc(imgUrl(p.img, 1600))}" alt="${esc(p.title)} - ${esc(p.config || 'residential project')} at ${esc(p.location)} by ${esc(BRAND)}"
                      class="absolute inset-0 w-full h-full object-cover" width="1600" height="900" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}>
                 <div class="absolute inset-0 bg-gradient-to-t from-brand-navy/95 via-brand-navy/50 to-black/20" aria-hidden="true"></div>
                 <div class="relative z-10 h-full max-w-7xl mx-auto px-5 sm:px-10 lg:px-16 flex flex-col justify-end pb-14 md:pb-20">
@@ -137,7 +141,7 @@
             <button type="button" data-open-gallery="${esc(p.id)}"
                     class="group relative block w-full aspect-[4/3] rounded-xl overflow-hidden shadow-md hover:shadow-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-flame transition text-left bg-gray-200"
                     aria-label="Open photo gallery of ${esc(p.title)}, ${esc(p.location)} (${n} photos)">
-                <img src="${esc(imgUrl(p.img, 700))}" alt="${esc(p.title)} - ${p.stage === 'sold' ? 'sold out' : 'completed'} project by Ashirbad Enterprise in ${esc(p.location)}"
+                <img src="${esc(imgUrl(p.img, 700))}" alt="${esc(p.title)} - ${p.stage === 'sold' ? 'sold out' : 'completed'} project by ${esc(BRAND)} in ${esc(p.location)}"
                      class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition duration-700" loading="lazy" width="700" height="525">
                 <span class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" aria-hidden="true"></span>
                 <span class="absolute top-3 right-3 bg-white/90 text-brand-navy text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1"><i class="fas fa-images" aria-hidden="true"></i> ${n}</span>
@@ -237,7 +241,7 @@
                     <span class="inline-block mt-5 bg-brand-orange text-white text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full">${esc(p.category || 'News')}</span>
                     <h1 id="post-title" class="text-3xl sm:text-4xl md:text-5xl font-extrabold mt-4 leading-tight">${esc(p.title)}</h1>
                     <p class="mt-4 text-gray-300 text-sm flex flex-wrap gap-x-5 gap-y-1">
-                        <span><i class="fas fa-user-pen mr-1.5 text-brand-gold" aria-hidden="true"></i>${esc(p.author || 'Ashirbad Enterprise')}</span>
+                        <span><i class="fas fa-user-pen mr-1.5 text-brand-gold" aria-hidden="true"></i>${esc(p.author || BRAND)}</span>
                         <span><i class="far fa-calendar mr-1.5 text-brand-gold" aria-hidden="true"></i><time datetime="${esc(p.published_at || '')}">${formatDate(p.published_at)}</time></span>
                         ${p.read_time ? `<span><i class="far fa-clock mr-1.5 text-brand-gold" aria-hidden="true"></i>${esc(p.read_time)}</span>` : ''}
                     </p>
@@ -261,10 +265,10 @@
                 </div>
 
                 <aside class="mt-10 bg-brand-navy text-white rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6" aria-label="Book a site visit">
-                    <img src="${r}1000365300.jpg" alt="Ashirbad Enterprise logo" class="w-20 h-20 rounded-xl bg-white p-1 object-contain flex-shrink-0" loading="lazy" width="80" height="80">
+                    <img src="${r}1000365300.jpg" alt="${esc(BRAND)} logo" class="w-20 h-20 rounded-xl bg-white p-1 object-contain flex-shrink-0" loading="lazy" width="80" height="80">
                     <div class="flex-1 text-center sm:text-left">
-                        <h2 class="text-xl font-bold">Looking for a home in Kolkata?</h2>
-                        <p class="text-gray-300 text-sm mt-1">Get the price list and book a free site visit to our RERA approved projects.</p>
+                        <h2 class="text-xl font-bold">${esc((ctx && ctx.c && ctx.c.post_cta_heading) || 'Looking for a home in Kolkata?')}</h2>
+                        <p class="text-gray-300 text-sm mt-1">${esc((ctx && ctx.c && ctx.c.post_cta_text) || 'Get the price list and book a free site visit to our RERA approved projects.')}</p>
                     </div>
                     <a href="${r}enquiry.html" class="bg-brand-orange hover:bg-white hover:text-brand-navy text-white font-bold px-5 py-3 rounded-md transition whitespace-nowrap" aria-label="Book Site Visit">Book Site Visit</a>
                 </aside>
@@ -299,8 +303,8 @@
                 image: [abs(imgUrl(p.cover, 1200))],
                 datePublished: p.published_at || undefined,
                 dateModified: p.updated_at || p.published_at || undefined,
-                author: { '@type': 'Organization', name: p.author || 'Ashirbad Enterprise', url: `${site}/` },
-                publisher: { '@type': 'Organization', name: 'Ashirbad Enterprise', logo: { '@type': 'ImageObject', url: `${site}/1000365300.jpg` } },
+                author: { '@type': 'Organization', name: p.author || BRAND, url: `${site}/` },
+                publisher: { '@type': 'Organization', name: BRAND, logo: { '@type': 'ImageObject', url: `${site}/1000365300.jpg` } },
                 mainEntityOfPage: { '@type': 'WebPage', '@id': url },
                 articleSection: p.category || undefined,
                 inLanguage: 'en-IN'
@@ -328,7 +332,7 @@
     }
 
     const AET = {
-        esc, formatDate, imgUrl, postUrl, richText, galleryImages,
+        esc, setBrand, formatDate, imgUrl, postUrl, richText, galleryImages,
         heroSlides, commercialCards, galleryCards, blogCard, featuredPost, categoryFilters, landingProjectCards,
         postArticle, relatedPosts, postJsonLd, testimonials
     };

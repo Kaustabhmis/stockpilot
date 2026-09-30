@@ -11,6 +11,23 @@ A fast static website with an admin panel. Content lives in a **private Google S
 | `admin.html` | Admin panel: projects, **Sold Out** button, blog posts, commercial listings, image uploads, leads |
 | `privacy.html`, `404.html` | Privacy policy and "page not found" |
 
+## Editing business information & page texts
+
+**Admin → Website Content** lets you edit everything visitors read, with no code changes:
+
+| Section | What you can edit |
+|---|---|
+| Business Information | Business & legal name, tagline, phone numbers, WhatsApp number, email, full address, office location (map pin), office hours, company WBRERA / GSTIN / CIN numbers, founding year, areas served, languages, footer text |
+| Social Media & Integrations | Facebook / Instagram / YouTube / LinkedIn links, Google Maps API key, Google Analytics ID, Search Console & Bing verification codes, carousel speed |
+| SEO | Google titles & descriptions for the home, blog and landing pages (with live character counters), keywords, social-share text |
+| Home Page | Every section heading and intro, About text, image and badge, key points, the numbers (15+ years, 25 projects…), contact texts |
+| Landing Page | Badge, heading, intro, benefits, form title & button, budget and location options, steps, testimonials, FAQ (also sent to Google), thank-you message |
+| Blog Page / Privacy Policy | Headings, intro, article call-to-action box; every privacy-policy section and the "last updated" date |
+
+Each project's own **WBRERA registration number** is edited on the project itself (Admin → Projects → Edit).
+
+Changes are saved to the `settings` tab of your private Google Sheet (one row per item, so you can also read them there). The website shows them immediately, and the search-engine pages rebuild automatically about 2 minutes later. **Restore defaults** brings back the original text for a section. Form field labels and navigation menu names are fixed.
+
 ## How "Sold Out" works
 
 Every project has a **stage**:
@@ -49,7 +66,7 @@ The admin password is stored only inside the script, as a salted SHA-256 hash, n
 
 1. **Create the sheet.** Go to <https://sheets.new> and give it any name (for example *Website Data*). Keep it private: do **not** use "Share", and do **not** use "Publish to the web".
 2. **Add the script.** In the sheet, open **Extensions → Apps Script**. Delete the sample code, paste the entire contents of `google-apps-script/Code.gs`, then click **Save**.
-3. **Run setup.** Reload the sheet; a **Website Admin** menu appears. Choose **Website Admin → 1. Create / repair tabs** and approve the permission prompt. It asks for access to this sheet, to Drive (image uploads), to send email (lead alerts) and to call external URLs (website rebuilds). This creates the `projects`, `commercial`, `posts` and `leads` tabs and a private Drive folder called **Website Media**.
+3. **Run setup.** Reload the sheet; a **Website Admin** menu appears. Choose **Website Admin → 1. Create / repair tabs** and approve the permission prompt. It asks for access to this sheet, to Drive (image uploads), to send email (lead alerts) and to call external URLs (website rebuilds). This creates the `projects`, `commercial`, `posts`, `settings` and `leads` tabs and a private Drive folder called **Website Media**.
 4. **Set the admin password.** Choose **Website Admin → 2. Set admin password** and enter at least 10 characters.
 5. *(Optional)* **Lead email alerts.** Choose **Website Admin → 3. Set lead notification email** to get an email for every new enquiry.
 6. **Deploy.** In the Apps Script editor, choose **Deploy → New deployment → ⚙ Select type → Web app**:
@@ -61,7 +78,7 @@ The admin password is stored only inside the script, as a salted SHA-256 hash, n
    ```js
    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfy.../exec',
    ```
-8. **Add content.** Open `admin.html`, sign in with your password, and go to **Settings → Load Sample Data** (or start adding your own).
+8. **Add content.** Open `admin.html`, sign in with your password, fill in **Website Content → Business Information**, then add projects (or use **Settings → Load Sample Data** to start from examples).
 
 **After editing `Code.gs` later:** in Apps Script choose **Deploy → Manage deployments → ✏ Edit → Version: New version → Deploy**. The URL stays the same. Then run **Website Admin → 1. Create / repair tabs** once, to add any new columns (for example `rera_no`).
 
@@ -99,19 +116,21 @@ From then on, about a minute after you save anything in the admin panel, Netlify
 
 ### After launch (do these once)
 
-1. **Google Search Console:** add the domain, paste the verification code into `GOOGLE_SITE_VERIFICATION` in `config.js`, and submit `https://your-domain/sitemap.xml`.
+1. **Google Search Console:** add the domain, paste the verification code into **Admin → Website Content → Social Media & Integrations**, and submit `https://your-domain/sitemap.xml`.
 2. **Google Business Profile:** create or claim the listing with the *same* name, address and phone as the website. This matters most for "builders near me" searches.
-3. **Bing Webmaster Tools:** import from Search Console (or use `BING_SITE_VERIFICATION`).
-4. *(Optional)* **Analytics:** set `GA_MEASUREMENT_ID` in `config.js`. Landing-page submissions send a `generate_lead` event.
-5. Add your social profile links to `SOCIAL` in `config.js`. They appear in the footer and in the structured data.
+3. **Bing Webmaster Tools:** import from Search Console (or paste the Bing code in the same admin section).
+4. *(Optional)* **Analytics:** add your GA4 ID in the same admin section. Landing-page submissions send a `generate_lead` event.
+5. Add your social profile links there too. They appear in the footer and in the structured data.
 
-## Other configuration (`assets/js/config.js`)
+## Technical configuration (`assets/js/config.js`)
 
+Only three technical settings live in code; everything else is edited in the admin panel.
+
+- `APPS_SCRIPT_URL`: your Apps Script Web App URL (empty = demo mode).
 - `SITE_URL`: your real domain. The build rewrites every canonical, Open Graph and sitemap URL from it.
-- `GOOGLE_MAPS_API_KEY`: enables the interactive map. Until it is set, the map section shows a list of Google Maps links. Restrict the key to your domain in Google Cloud Console.
-- `WHATSAPP_NUMBER`, `PHONE`, `EMAIL`, `ADDRESS`: contact details used across all pages. Also update the business details in the `RealEstateAgent` JSON-LD in `index.html`.
-- `TESTIMONIALS`: real customer reviews only (with permission). The section stays hidden while the list is empty.
-- The admin page is at `/admin.html`. It is not linked from the public site and tells search engines not to index it.
+- `LOCAL_ADMIN_PASSWORD`: demo-mode password only.
+
+The admin page is at `/admin.html`. It is not linked from the public site and tells search engines not to index it.
 
 ## Writing blog posts
 
@@ -129,6 +148,7 @@ node tools/build.mjs --data backup.json   # build from an admin "Download Backup
 
 ```
 assets/js/config.js        site settings (edit this)
+assets/js/content.js       editable content: fields, defaults, and apply() used by browser + build
 assets/js/templates.js     HTML templates shared by the browser and the build
 assets/js/common.js        header/footer, modals, helpers
 assets/js/store.js         data layer – private Google Sheet (via Apps Script) or browser storage

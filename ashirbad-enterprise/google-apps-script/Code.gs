@@ -26,11 +26,12 @@ var SCHEMA = {
   commercial: ['id', 'title', 'type', 'area', 'size', 'img', 'sort_order', 'created_at'],
   posts: ['id', 'slug', 'title', 'category', 'author', 'excerpt', 'content', 'cover', 'read_time', 'published',
     'published_at', 'created_at'],
+  settings: ['id', 'value', 'updated_at'],
   leads: ['id', 'created_at', 'status', 'name', 'phone', 'email', 'interest', 'project', 'config', 'budget', 'location',
     'visit_date', 'message', 'source', 'utm']
 };
 var TYPES = { images: 'json', utm: 'json', lat: 'num', lng: 'num', sort_order: 'num', published: 'bool' };
-var PUBLIC_COLLECTIONS = ['projects', 'commercial', 'posts'];
+var PUBLIC_COLLECTIONS = ['projects', 'commercial', 'posts', 'settings'];
 var TOKEN_TTL_SECONDS = 6 * 60 * 60;          // admin session length (CacheService max)
 var PUBLIC_CACHE_SECONDS = 300;                // server-side cache of public data
 var MAX_LEADS_PER_10_MIN = 40;                 // basic spam protection
@@ -444,7 +445,7 @@ function setupSheets() {
   var blank = ss.getSheetByName('Sheet1');
   if (blank && ss.getSheets().length > 1 && blank.getLastRow() === 0) ss.deleteSheet(blank);
   mediaFolder_();
-  SpreadsheetApp.getUi().alert('Tabs are ready: projects, commercial, posts, leads.\nA private Drive folder "Website Media" was created for uploads.');
+  SpreadsheetApp.getUi().alert('Tabs are ready: projects, commercial, posts, settings, leads.\nA private Drive folder "Website Media" was created for uploads.');
 }
 
 function setAdminPasswordPrompt() {

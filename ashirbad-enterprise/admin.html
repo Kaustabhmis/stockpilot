@@ -70,6 +70,7 @@
                 <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="posts" aria-label="Blog posts"><i class="fas fa-newspaper w-5" aria-hidden="true"></i> Blog Posts</button>
                 <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="commercial" aria-label="Commercial properties"><i class="fas fa-store w-5" aria-hidden="true"></i> Commercial</button>
                 <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="leads" aria-label="Leads and enquiries"><i class="fas fa-address-book w-5" aria-hidden="true"></i> Leads <span id="new-leads-badge" class="hidden ml-auto bg-brand-gold text-brand-navy text-[11px] rounded-full px-2 py-0.5"></span></button>
+                <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="content" aria-label="Website content and business information"><i class="fas fa-pen-to-square w-5" aria-hidden="true"></i> Website Content</button>
                 <button type="button" class="tab-btn btn !justify-start text-gray-200 hover:bg-white/10 lg:w-full" data-tab="settings" aria-label="Settings and data"><i class="fas fa-gear w-5" aria-hidden="true"></i> Settings</button>
             </nav>
             <div class="hidden lg:block mt-auto p-3 border-t border-white/10">
@@ -163,6 +164,34 @@
                     </div>
                 </section>
 
+                <!-- Website content -->
+                <section data-panel="content" class="hidden" aria-labelledby="content-h">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h1 id="content-h" class="text-2xl font-extrabold text-brand-navy">Website Content</h1>
+                            <p class="text-sm text-gray-500 mt-1">Business information and every text on the website. Changes go live for all visitors after saving<span id="content-rebuild-note"> (search-engine pages update about 2 minutes later)</span>.</p>
+                        </div>
+                        <a href="index.html" target="_blank" rel="noopener" class="btn bg-white border hover:bg-gray-50 text-brand-navy" aria-label="Preview website"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Preview Website</a>
+                    </div>
+                    <div class="mt-5 flex flex-col lg:flex-row gap-5">
+                        <nav id="content-groups" class="flex lg:flex-col gap-2 overflow-x-auto lg:w-64 flex-shrink-0 pb-1" aria-label="Content sections"></nav>
+                        <form id="content-form" class="flex-1 min-w-0 bg-white rounded-xl shadow-sm border" novalidate aria-labelledby="content-group-title">
+                            <div class="p-5 border-b">
+                                <h2 id="content-group-title" class="text-lg font-extrabold text-brand-navy">Section</h2>
+                                <p id="content-group-desc" class="text-sm text-gray-500 mt-1"></p>
+                            </div>
+                            <div id="content-fields" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                            <div class="sticky bottom-0 bg-gray-50 border-t px-5 py-3 flex flex-wrap items-center justify-between gap-3 rounded-b-xl">
+                                <span id="content-dirty" class="text-sm text-amber-700 font-semibold hidden"><i class="fas fa-circle text-[8px] mr-1" aria-hidden="true"></i> Unsaved changes</span>
+                                <div class="flex gap-2 ml-auto">
+                                    <button type="button" id="content-reset" class="btn bg-white border hover:bg-gray-100 text-gray-700" aria-label="Restore default texts for this section"><i class="fas fa-rotate-left" aria-hidden="true"></i> Restore defaults</button>
+                                    <button type="submit" id="content-save" class="btn bg-brand-orange hover:bg-brand-navy text-white" aria-label="Save website content"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save Changes</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
                 <!-- Settings -->
                 <section data-panel="settings" class="hidden" aria-labelledby="set-h">
                     <h1 id="set-h" class="text-2xl font-extrabold text-brand-navy">Settings &amp; Data</h1>
@@ -213,6 +242,7 @@
 
     <script src="assets/js/config.js"></script>
     <script src="assets/js/templates.js"></script>
+    <script src="assets/js/content.js"></script>
     <script src="assets/js/common.js"></script>
     <script src="assets/js/store.js"></script>
     <script>
@@ -221,8 +251,8 @@
         const { C, escapeHTML, formatDate, Modal, toast, waLink } = window.AE;
         Modal.init();
 
-        const COLLECTIONS = ['projects', 'posts', 'commercial', 'leads'];
-        const state = { projects: [], posts: [], commercial: [], leads: [], projectFilter: 'live' };
+        const COLLECTIONS = ['projects', 'posts', 'commercial', 'leads', 'settings'];
+        const state = { projects: [], posts: [], commercial: [], leads: [], settings: [], projectFilter: 'live' };
         const STAGES = { live: 'Live (Carousel)', sold: 'Sold Out (Gallery)', completed: 'Completed (Gallery)' };
         const LEAD_STATUSES = ['New', 'Contacted', 'Site Visit Scheduled', 'Visited', 'Booked', 'Not Interested'];
 
@@ -367,6 +397,7 @@
             renderPosts();
             renderCommercial();
             renderLeads();
+            renderContentEditor();
         }
 
         const stageChip = (stage) => ({
@@ -519,7 +550,7 @@
                         </select>
                     </td>
                     <td class="px-4 py-3 text-right whitespace-nowrap">
-                        <a href="https://wa.me/${escapeHTML(String(l.phone).replace(/\D/g, '').replace(/^(\d{10})$/, '91$1'))}?text=${encodeURIComponent(`Hi ${l.name}, thank you for your enquiry with Ashirbad Enterprise.`)}" target="_blank" rel="noopener noreferrer" class="btn !p-2 bg-[#15803d] text-white" aria-label="WhatsApp ${escapeHTML(l.name)}"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>
+                        <a href="https://wa.me/${escapeHTML(String(l.phone).replace(/\D/g, '').replace(/^(\d{10})$/, '91$1'))}?text=${encodeURIComponent(`Hi ${l.name}, thank you for your enquiry with ${AE.content().business_name}.`)}" target="_blank" rel="noopener noreferrer" class="btn !p-2 bg-[#15803d] text-white" aria-label="WhatsApp ${escapeHTML(l.name)}"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>
                         <button type="button" data-delete="leads:${escapeHTML(l.id)}" class="btn !p-2 bg-white border border-red-200 hover:bg-red-50 text-red-600" aria-label="Delete lead ${escapeHTML(l.name)}"><i class="fas fa-trash" aria-hidden="true"></i></button>
                     </td>
                 </tr>`;
@@ -842,6 +873,210 @@
 
         // Leads submitted in another tab appear without a reload
         Store.onChange((c, fromOtherTab) => { if (fromOtherTab && c && !document.getElementById('app').classList.contains('hidden')) refresh([c]); });
+
+
+        /* ================= Website content editor ================= */
+        const K = window.AEC;
+        const ce = { group: K.GROUPS[0].id, values: null, saved: null, dirty: new Set() };
+        const fid = (key, i, sub) => `c-${key}${i != null ? `-${i}-${sub}` : ''}`;
+        const clone = (v) => JSON.parse(JSON.stringify(v));
+
+        function contentFromState() {
+            const built = K.build(state.settings);
+            const vals = {};
+            Object.keys(K.FIELDS).forEach((k) => { vals[k] = clone(built[k]); });
+            return vals;
+        }
+
+        function renderContentEditor() {
+            // Keep unsaved edits when data refreshes; otherwise load saved values
+            if (!ce.values || !ce.dirty.size) { ce.values = contentFromState(); ce.dirty.clear(); }
+            ce.saved = contentFromState(); // separate copy, so edits are detected as changes
+            document.getElementById('content-rebuild-note').classList.toggle('hidden', Store.mode !== 'sheets');
+            renderContentGroups();
+            renderContentFields();
+        }
+
+        function renderContentGroups() {
+            document.getElementById('content-groups').innerHTML = K.GROUPS.map((g) => {
+                const dirty = g.fields.some((f) => ce.dirty.has(f.key));
+                const active = g.id === ce.group;
+                return `<button type="button" data-cgroup="${g.id}" aria-current="${active ? 'page' : 'false'}" class="btn !justify-start whitespace-nowrap ${active ? 'bg-brand-navy text-white' : 'bg-white border text-brand-navy hover:border-brand-orange'}" aria-label="${escapeHTML(g.title)}"><i class="fas ${g.icon} w-5" aria-hidden="true"></i> ${escapeHTML(g.title)}${dirty ? ' <span class="w-2 h-2 rounded-full bg-amber-500 inline-block" aria-label="unsaved"></span>' : ''}</button>`;
+            }).join('');
+        }
+
+        function counter(f, v) {
+            if (!f.max) return '';
+            const n = String(v || '').length;
+            return `<span class="text-xs ${n > f.max ? 'text-red-700 font-bold' : 'text-gray-500'}" data-counter="${f.key}">${n}/${f.max}</span>`;
+        }
+
+        function inputFor(f, v, id, name) {
+            const common = `id="${id}" data-ckey="${name}" class="inp"${f.required ? ' required aria-required="true"' : ''}`;
+            if (f.type === 'textarea') return `<textarea ${common} rows="${f.rows || 3}">${escapeHTML(v)}</textarea>`;
+            if (f.type === 'number') return `<input ${common} type="number" value="${escapeHTML(v)}">`;
+            if (f.type === 'url') return `<input ${common} type="url" value="${escapeHTML(v)}" placeholder="https://">`;
+            return `<input ${common} type="text" value="${escapeHTML(v)}">`;
+        }
+
+        function listHTML(f) {
+            const rows = ce.values[f.key] || [];
+            const single = f.item.length === 1;
+            return `
+                <div class="space-y-2" data-list="${f.key}">
+                    ${rows.map((row, i) => `
+                    <div class="border rounded-lg p-3 bg-gray-50 flex gap-3 items-start">
+                        <span class="text-xs font-bold text-gray-500 mt-3 w-5 text-right">${i + 1}</span>
+                        <div class="flex-1 grid grid-cols-1 ${single ? '' : 'sm:grid-cols-2'} gap-2">
+                            ${f.item.map((sf) => `<div class="${sf.type === 'textarea' ? 'sm:col-span-2' : ''}"><label for="${fid(f.key, i, sf.key)}" class="${single ? 'sr-only' : 'lbl !text-xs'}">${escapeHTML(sf.label)}</label>${inputFor(sf, row[sf.key] == null ? '' : row[sf.key], fid(f.key, i, sf.key), `${f.key}.${i}.${sf.key}`)}</div>`).join('')}
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <button type="button" class="btn !p-2 bg-white border hover:bg-gray-100 text-gray-700" data-lmove="${f.key}:${i}:-1" aria-label="Move item ${i + 1} up"${i === 0 ? ' disabled' : ''}><i class="fas fa-arrow-up" aria-hidden="true"></i></button>
+                            <button type="button" class="btn !p-2 bg-white border hover:bg-gray-100 text-gray-700" data-lmove="${f.key}:${i}:1" aria-label="Move item ${i + 1} down"${i === rows.length - 1 ? ' disabled' : ''}><i class="fas fa-arrow-down" aria-hidden="true"></i></button>
+                            <button type="button" class="btn !p-2 bg-white border border-red-200 hover:bg-red-50 text-red-600" data-ldel="${f.key}:${i}" aria-label="Remove item ${i + 1}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                        </div>
+                    </div>`).join('') || '<p class="text-sm text-gray-500">No items yet.</p>'}
+                    <button type="button" class="btn bg-gray-100 hover:bg-gray-200 text-brand-navy" data-ladd="${f.key}" aria-label="Add item to ${escapeHTML(f.label)}"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
+                </div>`;
+        }
+
+        function renderContentFields() {
+            const g = K.GROUPS.find((x) => x.id === ce.group) || K.GROUPS[0];
+            document.getElementById('content-group-title').textContent = g.title;
+            document.getElementById('content-group-desc').textContent = g.description || '';
+            document.getElementById('content-fields').innerHTML = g.fields.map((f) => {
+                const v = ce.values[f.key];
+                const full = f.type === 'textarea' || f.type === 'list' || f.type === 'image';
+                const help = f.help ? `<p class="text-xs text-gray-500 mt-1">${escapeHTML(f.help)}</p>` : '';
+                const req = f.required ? ' <span class="text-brand-orange" aria-hidden="true">*</span>' : '';
+                if (f.type === 'list') {
+                    return `<fieldset class="md:col-span-2"><legend class="lbl">${escapeHTML(f.label)}</legend>${help}<div class="mt-2">${listHTML(f)}</div></fieldset>`;
+                }
+                if (f.type === 'image') {
+                    return `<div class="md:col-span-2"><label for="${fid(f.key)}" class="lbl">${escapeHTML(f.label)}</label>
+                        <div class="flex flex-col sm:flex-row gap-3 items-start">
+                            <img id="${fid(f.key)}-preview" src="${escapeHTML(v || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=')}" alt="Preview" class="w-full sm:w-48 h-32 object-cover rounded-lg bg-gray-100 border">
+                            <div class="flex-1 w-full space-y-2">
+                                <label class="btn bg-brand-navy hover:bg-brand-orange text-white cursor-pointer" aria-label="Upload image"><i class="fas fa-cloud-arrow-up" aria-hidden="true"></i> <span data-cupload-label="${f.key}">Upload Image</span><input type="file" accept="image/*" class="sr-only" data-cupload="${f.key}"></label>
+                                <input id="${fid(f.key)}" data-ckey="${f.key}" type="text" class="inp !text-sm" value="${escapeHTML(String(v || '').startsWith('data:') ? '' : v)}" placeholder="…or paste an image URL">
+                            </div>
+                        </div>${help}</div>`;
+                }
+                return `<div class="${full ? 'md:col-span-2' : ''}"><div class="flex items-end justify-between gap-2"><label for="${fid(f.key)}" class="lbl">${escapeHTML(f.label)}${req}</label>${counter(f, v)}</div>${inputFor(f, v, fid(f.key), f.key)}${help}</div>`;
+            }).join('');
+            document.getElementById('content-dirty').classList.toggle('hidden', !ce.dirty.size);
+        }
+
+        function markDirty(key) {
+            const same = JSON.stringify(ce.values[key]) === JSON.stringify(ce.saved[key]);
+            if (same) ce.dirty.delete(key); else ce.dirty.add(key);
+            document.getElementById('content-dirty').classList.toggle('hidden', !ce.dirty.size);
+            renderContentGroups();
+        }
+
+        const contentForm = document.getElementById('content-form');
+        contentForm.addEventListener('input', (e) => {
+            const el = e.target.closest('[data-ckey]');
+            if (!el) return;
+            const path = el.dataset.ckey.split('.');
+            if (path.length === 3) {
+                const [key, i, sub] = path;
+                ce.values[key][Number(i)][sub] = el.value;
+                markDirty(key);
+            } else {
+                ce.values[path[0]] = el.value;
+                const f = K.FIELDS[path[0]];
+                const cnt = contentForm.querySelector(`[data-counter="${path[0]}"]`);
+                if (cnt && f.max) { cnt.textContent = `${el.value.length}/${f.max}`; cnt.className = `text-xs ${el.value.length > f.max ? 'text-red-700 font-bold' : 'text-gray-500'}`; }
+                if (f.type === 'image') document.getElementById(`${fid(f.key)}-preview`).src = el.value || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+                markDirty(path[0]);
+            }
+        });
+        contentForm.addEventListener('change', async (e) => {
+            const up = e.target.closest('[data-cupload]');
+            if (!up || !up.files[0]) return;
+            const key = up.dataset.cupload;
+            const label = contentForm.querySelector(`[data-cupload-label="${key}"]`);
+            label.textContent = 'Uploading…';
+            try {
+                const url = await Store.uploadImage(up.files[0], 'site');
+                ce.values[key] = url;
+                markDirty(key);
+                renderContentFields();
+                toast('Image uploaded – click Save Changes to publish');
+            } catch (ex) { toast(ex.message || 'Upload failed', 'error'); label.textContent = 'Upload Image'; }
+            up.value = '';
+        });
+        contentForm.addEventListener('click', (e) => {
+            const add = e.target.closest('[data-ladd]');
+            const del = e.target.closest('[data-ldel]');
+            const mv = e.target.closest('[data-lmove]');
+            if (!add && !del && !mv) return;
+            if (add) {
+                const f = K.FIELDS[add.dataset.ladd];
+                const row = {}; f.item.forEach((sf) => { row[sf.key] = ''; });
+                ce.values[f.key] = (ce.values[f.key] || []).concat([row]);
+                markDirty(f.key);
+            } else if (del) {
+                const [key, i] = del.dataset.ldel.split(':');
+                ce.values[key].splice(Number(i), 1);
+                markDirty(key);
+            } else {
+                const [key, i, d] = mv.dataset.lmove.split(':');
+                const a = Number(i), b = a + Number(d), list = ce.values[key];
+                if (b < 0 || b >= list.length) return;
+                [list[a], list[b]] = [list[b], list[a]];
+                markDirty(key);
+            }
+            renderContentFields();
+        });
+        document.addEventListener('click', (e) => {
+            const g = e.target.closest('[data-cgroup]');
+            if (!g) return;
+            ce.group = g.dataset.cgroup;
+            renderContentGroups();
+            renderContentFields();
+        });
+        document.getElementById('content-reset').addEventListener('click', () => {
+            const g = K.GROUPS.find((x) => x.id === ce.group);
+            if (!confirm(`Restore the default texts for “${g.title}”? You can review them before saving.`)) return;
+            g.fields.forEach((f) => { ce.values[f.key] = clone(f.default); markDirty(f.key); });
+            renderContentFields();
+        });
+        contentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!ce.dirty.size) { toast('No changes to save', 'info'); return; }
+            for (const key of ce.dirty) {
+                const f = K.FIELDS[key];
+                if (f.required && !String(ce.values[key] || '').trim()) {
+                    ce.group = K.GROUPS.find((g) => g.fields.includes(f)).id;
+                    renderContentGroups(); renderContentFields();
+                    toast(`${f.label} is required`, 'error');
+                    const el = document.getElementById(fid(key)); if (el) el.focus();
+                    return;
+                }
+                if (f.type === 'url' && ce.values[key] && !/^https?:\/\//.test(ce.values[key])) { toast(`${f.label} must start with https://`, 'error'); return; }
+                if (f.type === 'list') ce.values[key] = ce.values[key].filter((row) => Object.values(row).some((v) => String(v || '').trim()));
+            }
+            if (ce.dirty.has('email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ce.values.email)) { toast('Please enter a valid email address', 'error'); return; }
+            if (ce.dirty.has('whatsapp') && String(ce.values.whatsapp).replace(/\D/g, '').length < 10) { toast('WhatsApp number needs the country code, e.g. 919876543210', 'error'); return; }
+            const changed = {};
+            ce.dirty.forEach((k) => { changed[k] = ce.values[k]; });
+            const btn = document.getElementById('content-save');
+            btn.disabled = true;
+            try {
+                await Store.saveMany('settings', K.toRows(changed));
+                ce.dirty.clear();
+                toast(Store.mode === 'sheets' ? `Saved ${Object.keys(changed).length} item(s). The website will update in about 2 minutes.` : `Saved ${Object.keys(changed).length} item(s).`);
+                await refresh(['settings']);
+            } catch (ex) {
+                console.error(ex);
+                toast(ex.message || 'Could not save', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+        window.addEventListener('beforeunload', (e) => { if (ce.dirty.size) { e.preventDefault(); e.returnValue = ''; } });
 
         /* ================= Boot ================= */
         (async () => {
