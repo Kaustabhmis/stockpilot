@@ -934,7 +934,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
 <script>
 /* =================================================================
-   HRMS Lite - Dashboard + 5 modules on Google Sheets
+   HRMS Lite - Dashboard + 5 modules
    ================================================================= */
 
 /* ---------------------------------------------------------------
@@ -2122,7 +2122,7 @@ function start(given) {
   el('login').style.display = 'none';
   el('demo-flag').style.display = S.demo ? 'inline-block' : 'none';
   el('demo-role').style.display = S.demo ? '' : 'none';
-  el('side-mode').textContent = S.demo ? 'Demo mode (browser storage)' : 'Google Sheets connected';
+  el('side-mode').textContent = S.demo ? 'Demo mode (browser storage)' : 'Connected';
   el('who').textContent = S.user.email;
   el('avatar').textContent = (S.user.email[0] || 'U').toUpperCase();
   ['att-month', 'pay-month', 'rep-month', 'leave-month'].forEach(function (id) { el(id).value = thisMonth(); });

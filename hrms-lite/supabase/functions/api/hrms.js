@@ -367,6 +367,16 @@ export function createApi(db, opts = {}) {
       return '';
     }
     if (BOOL_COLS.has(col)) return yes(raw);
+    /* 'month' is 'YYYY-MM', but typed into a spreadsheet that reads as the
+       first of the month and comes back as a date - '2026-08-01', or a full
+       '2026-08-01T00:00:00' from the Apps Script export. Stored like that,
+       the payroll screen looks for '2026-08', finds nothing, and a month of
+       payslips appears to have vanished. The row id says what it should be:
+       2026-08_ST0010. */
+    if (col === 'month') {
+      const m = String(raw).match(/^(\d{4})-(\d{2})/);
+      return m ? m[1] + '-' + m[2] : String(raw);
+    }
     if (DATE_COLS.has(col)) {
       const m = String(raw).match(/(\d{4})-(\d{2})-(\d{2})/);
       if (m) return m[0];
