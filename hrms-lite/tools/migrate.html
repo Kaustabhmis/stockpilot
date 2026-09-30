@@ -57,8 +57,10 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
     <input id="newUrl" placeholder="https://your-project.supabase.co/functions/v1/api">
     <label for="email">Owner sign-in</label>
     <input id="email" placeholder="admin@company.com">
-    <label for="pass">Password</label>
-    <input id="pass" type="password" placeholder="the owner password">
+    <label for="pass">Password on the sheet</label>
+    <input id="pass" type="password" placeholder="the owner password you use now">
+    <label for="pass2">Password on the new system</label>
+    <input id="pass2" type="password" placeholder="leave blank if it is the same">
     <div class="row">
       <button id="check">Check both sides</button>
       <button id="go" class="ghost" disabled>Copy everything across</button>
@@ -104,6 +106,10 @@ el('check').onclick = async () => {
   try {
     const oldUrl = el('oldUrl').value.trim(), newUrl = el('newUrl').value.trim();
     const email = el('email').value.trim(), pass = el('pass').value;
+    /* The two sides can have different owner passwords - the new workspace is
+       seeded with one of its own, and nobody should have to change either to
+       get the move done. Blank means "the same as the sheet". */
+    const pass2 = el('pass2').value || pass;
     if (!oldUrl || !newUrl) throw new Error('Both addresses are needed.');
 
     log('signing in to the sheet...');
@@ -111,7 +117,7 @@ el('check').onclick = async () => {
     log('  signed in');
 
     log('signing in to Postgres...');
-    newTok = (await call(newUrl, 'login', { email, password: pass })).token;
+    newTok = (await call(newUrl, 'login', { email, password: pass2 })).token;
     log('  signed in');
 
     log('asking the sheet what it holds...');
