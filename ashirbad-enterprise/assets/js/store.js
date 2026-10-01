@@ -36,7 +36,7 @@
         const project = (o, i) => ({
             id: uid(), slug: slugify(o.title), sort_order: i, created_at: t, sold_at: null,
             images: [], completed_year: null, plot_size: null, carpet_area: null,
-            config: null, price: null, description: null, ...o
+            config: null, price: null, description: null, details: null, highlights: null, amenities: null, possession: null, video_url: null, brochure_url: null, ...o
         });
         const projects = [
             {
@@ -44,6 +44,10 @@
                 status_label: 'Under Construction', rera_no: 'WBRERA/P/NOR/2025/000000 (sample)', plot_size: '32 Cottah', carpet_area: '850 – 1,420 sq.ft.',
                 config: '2 & 3 BHK Apartments', price: '₹58 Lakh onwards',
                 description: 'Our flagship G+14 residential tower in the heart of New Town, minutes from Eco Park and City Centre II. Featuring a rooftop infinity pool, landscaped podium garden, fully equipped gymnasium, 24x7 CCTV security and 100% power backup. WBRERA registered with possession targeted for December 2027.',
+                possession: 'December 2027',
+                details: 'Ashirbad Heights is a G+14 residential tower on a 32 cottah plot in Action Area I, New Town – one of the best planned neighbourhoods of Kolkata.\n\nEvery apartment is designed for light and cross-ventilation, with large balconies, vitrified flooring and modular kitchen provisions.\n\n## Connectivity\n- 5 minutes to Eco Park and City Centre II\n- 15 minutes to Sector V and the airport\n- Close to schools, hospitals and the upcoming metro',
+                highlights: 'Rooftop infinity pool and sky lounge\nLandscaped podium garden\n100% power backup\nWBRERA registered project',
+                amenities: 'Swimming pool, Gymnasium, Clubhouse, Kids play area, CCTV security, Power backup, Lift, Car parking',
                 img: unsplash('1545324418-cc1a3fa10c00'),
                 images: [unsplash('1600607687939-ce8a6c25118c'), unsplash('1560448204-e02f11c3d0e2')],
                 lat: 22.5807, lng: 88.4770
@@ -53,6 +57,9 @@
                 status_label: 'Booking Open', plot_size: '2.1 Acres', carpet_area: '640 – 1,150 sq.ft.',
                 config: '1, 2 & 3 BHK Apartments', price: '₹39 Lakh onwards',
                 description: 'A green-certified gated community with 70% open space, a jogging track, children\'s play zone and a grand clubhouse. Strategically located near the Rajarhat Expressway with excellent connectivity to the airport and the Sector V IT hub.',
+                possession: 'June 2028',
+                highlights: '70% open green space\nNear Rajarhat Expressway\nGrand clubhouse with indoor games',
+                amenities: 'Jogging track, Clubhouse, Kids play zone, Rainwater harvesting, CCTV security, Power backup',
                 img: unsplash('1600596542815-ffad4c1539a9'),
                 images: [unsplash('1600566753190-17f0baa2a6c3')],
                 lat: 22.6114, lng: 88.4507

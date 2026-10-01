@@ -11,7 +11,7 @@
     <link rel="manifest" href="site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap">
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" referrerpolicy="no-referrer">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer"></noscript>
     <link rel="stylesheet" href="assets/css/tailwind.css">
@@ -270,9 +270,15 @@
                     { name: 'rera_no', label: 'WBRERA Registration No.', placeholder: 'e.g. WBRERA/P/NOR/2025/000123', help: 'Shown on the carousel, project details and landing page (required on ads for registered projects).' },
                     { name: 'plot_size', label: 'Plot Size', placeholder: 'e.g. 32 Cottah' },
                     { name: 'carpet_area', label: 'Carpet Area', placeholder: 'e.g. 850 – 1,420 sq.ft.' },
-                    { name: 'description', label: 'Description', type: 'textarea', rows: 4, full: true },
+                    { name: 'possession', label: 'Possession', placeholder: 'e.g. December 2027' },
+                    { name: 'description', label: 'Short Description', type: 'textarea', rows: 3, full: true, help: 'Used on the project page when no detailed overview is given, and as the Google / WhatsApp preview text (≈ 150 characters).' },
+                    { name: 'details', label: 'Project Overview (detail page)', type: 'textarea', rows: 8, full: true, help: 'Full text for the project page. Leave a blank line between paragraphs. Start a line with "## " for a heading and "- " for a bullet point.' },
+                    { name: 'highlights', label: 'Highlights', type: 'textarea', rows: 4, full: true, placeholder: 'One per line, e.g.\n5 min from Eco Park\nG+14 tower with rooftop pool', help: 'One highlight per line.' },
+                    { name: 'amenities', label: 'Amenities', type: 'textarea', rows: 3, full: true, placeholder: 'Swimming pool, Gymnasium, Clubhouse, 24x7 security', help: 'One per line or separated by commas.' },
+                    { name: 'video_url', label: 'YouTube Video Link', type: 'url', placeholder: 'https://youtu.be/…' },
+                    { name: 'brochure_url', label: 'Brochure Link (PDF)', type: 'url', placeholder: 'https://drive.google.com/…' },
                     { name: 'img', label: 'Main Image (carousel & thumbnail)', type: 'image', required: true, full: true, folder: 'projects' },
-                    { name: 'images', label: 'Gallery Images', type: 'images', full: true, folder: 'projects', help: 'Shown in the gallery lightbox together with the main image.' },
+                    { name: 'images', label: 'Gallery Images', type: 'images', full: true, folder: 'projects', help: 'Shown in the photo slider on the project page together with the main image.' },
                     { name: 'maplink', label: 'Google Maps link (optional helper)', type: 'maplink', full: true, help: 'Paste a Google Maps link to fill latitude & longitude automatically.' },
                     { name: 'lat', label: 'Latitude', type: 'number', step: 'any', placeholder: '22.5807' },
                     { name: 'lng', label: 'Longitude', type: 'number', step: 'any', placeholder: '88.4770' },
@@ -470,6 +476,7 @@
                     </div>
                     <div class="flex flex-wrap sm:flex-col gap-2 sm:w-40">
                         ${stageAction}
+                        <a href="project.html?p=${encodeURIComponent(p.slug || p.id)}" target="_blank" rel="noopener" class="btn bg-white border hover:bg-gray-50 text-brand-navy" aria-label="View ${escapeHTML(p.title)} on the website"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> View</a>
                         <button type="button" data-edit="projects:${escapeHTML(p.id)}" class="btn bg-gray-100 hover:bg-gray-200 text-brand-navy" aria-label="Edit ${escapeHTML(p.title)}"><i class="fas fa-pen" aria-hidden="true"></i> Edit</button>
                         <button type="button" data-delete="projects:${escapeHTML(p.id)}" class="btn bg-white border border-red-200 hover:bg-red-50 text-red-600" aria-label="Delete ${escapeHTML(p.title)}"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
                     </div>

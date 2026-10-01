@@ -45,82 +45,93 @@
     function headerHTML(active, rootPrefix, c) {
         const k = c || CONTENT;
         const r = rootPrefix == null ? R() : rootPrefix;
-        const onHome = active === 'home';
-        const h = (hash) => (onHome ? hash : `${r}index.html${hash}`);
         const links = [
-            { href: h('#ongoing-projects'), label: 'Ongoing Projects' },
-            { href: h('#commercial-properties'), label: 'Commercial' },
-            { href: h('#past-projects-gallery'), label: 'Gallery' },
-            { href: h('#project-locations'), label: 'Map View' },
-            { href: h('#about-us'), label: 'About Us' },
+            { href: `${r}index.html`, label: 'Home', key: 'home' },
+            { href: `${r}gallery.html`, label: 'Gallery', key: 'gallery' },
+            { href: `${r}about.html`, label: 'About Us', key: 'about' },
             { href: `${r}blog.html`, label: 'Blog', key: 'blog' },
-            { href: h('#contact-us'), label: 'Contact' }
+            { href: `${r}contact.html`, label: 'Contact', key: 'contact' }
         ];
-        const cls = (l) => (l.key && l.key === active ? 'text-brand-orange' : 'text-brand-navy');
-        const cur = (l) => (l.key === active ? ' aria-current="page"' : '');
+        const isActive = (l) => l.key === active || (active === 'project' && l.key === 'gallery');
+        const cls = (l) => (isActive(l) ? 'text-brand-orange after:scale-x-100' : 'text-brand-navy after:scale-x-0');
+        const cur = (l) => (isActive(l) ? ' aria-current="page"' : '');
         return `
-        <header id="site-header" class="bg-white shadow-md fixed w-full z-[100] top-0 transition-all duration-300">
+        <header id="site-header" class="bg-white/95 backdrop-blur border-b border-brand-sand fixed w-full z-[100] top-0 transition-all duration-300">
             <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" aria-label="Main navigation">
                 <div class="flex justify-between h-20 items-center gap-4">
-                    <a href="${onHome ? '#ongoing-projects' : `${r}index.html`}" class="flex-shrink-0 flex items-center gap-2 sm:gap-3 min-w-0" aria-label="${escapeHTML(k.business_name)} home" data-c-attr="aria-label:home_label">
-                        <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-12 w-12 sm:h-14 sm:w-14 object-contain rounded" width="56" height="56">
-                        <span class="font-extrabold text-lg sm:text-2xl text-brand-navy tracking-tight truncate" data-c-list="@brand">${brandHTML(k.business_name, 'text-brand-orange')}</span>
+                    <a href="${r}index.html" class="flex-shrink-0 flex items-center gap-3 min-w-0" aria-label="${escapeHTML(k.business_name)} home" data-c-attr="aria-label:home_label">
+                        <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-12 w-12 sm:h-14 sm:w-14 object-contain" width="56" height="56">
+                        <span class="flex flex-col min-w-0">
+                            <span class="font-display text-xl sm:text-2xl font-bold text-brand-navy leading-none truncate" data-c="business_name">${escapeHTML(k.business_name)}</span>
+                            <span class="hidden sm:block text-[10px] tracking-[0.24em] text-brand-orange font-bold mt-1">BUILDERS &amp; DEVELOPERS</span>
+                        </span>
                     </a>
-                    <div class="hidden xl:flex items-center gap-6 text-[15px]">
-                        ${links.map((l) => `<a href="${l.href}" class="nav-link ${cls(l)} font-medium hover:text-brand-orange transition whitespace-nowrap" aria-label="${l.label}"${cur(l)}>${l.label}</a>`).join('')}
-                        <a href="${r}enquiry.html" class="bg-brand-orange text-white font-semibold px-4 py-2.5 rounded shadow hover:bg-brand-navy transition whitespace-nowrap" aria-label="Book Site Visit">Book Site Visit</a>
+                    <div class="hidden lg:flex items-center gap-8 text-[15px] font-semibold">
+                        ${links.map((l) => `<a href="${l.href}" class="nav-link relative py-2 ${cls(l)} hover:text-brand-orange transition after:absolute after:left-0 after:right-0 after:-bottom-0.5 after:h-0.5 after:bg-brand-flame after:origin-left after:transition-transform" aria-label="${l.label}"${cur(l)}>${l.label}</a>`).join('')}
+                        <a href="${r}enquiry.html" class="bg-brand-navy hover:bg-brand-orange text-white px-5 py-3 rounded-sm transition whitespace-nowrap" aria-label="Book a Site Visit">Book a Site Visit</a>
                     </div>
-                    <div class="flex xl:hidden items-center">
+                    <div class="flex lg:hidden items-center">
                         <button id="mobile-menu-btn" type="button" class="text-brand-navy hover:text-brand-orange focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-flame rounded p-3 -mr-2 transition-colors" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false">
                             <i class="fas fa-bars text-2xl w-6 text-center" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
             </nav>
-            <div id="mobile-menu" class="hidden xl:hidden bg-white border-t border-gray-100 shadow-xl absolute w-full left-0 max-h-[calc(100vh-5rem)] overflow-y-auto">
+            <div id="mobile-menu" class="hidden lg:hidden bg-white border-t border-brand-sand shadow-xl absolute w-full left-0 max-h-[calc(100vh-5rem)] overflow-y-auto">
                 <nav class="px-4 pt-2 pb-6 flex flex-col space-y-1" aria-label="Mobile navigation">
-                    ${links.map((l) => `<a href="${l.href}" class="mobile-link block px-4 py-3 text-base font-bold ${cls(l)} hover:text-brand-orange hover:bg-amber-50 rounded-md" aria-label="${l.label}"${cur(l)}>${l.label}</a>`).join('')}
-                    <a href="${r}enquiry.html" class="mobile-link block px-4 py-3 text-base font-bold text-center bg-brand-orange text-white rounded-md mt-4 hover:bg-brand-navy shadow-md" aria-label="Book Site Visit">Book Site Visit</a>
+                    ${links.map((l) => `<a href="${l.href}" class="mobile-link block px-4 py-3 text-base font-bold ${isActive(l) ? 'text-brand-orange' : 'text-brand-navy'} hover:bg-brand-cream rounded-md" aria-label="${l.label}"${cur(l)}>${l.label}</a>`).join('')}
+                    <a href="${r}enquiry.html" class="mobile-link block px-4 py-3 text-base font-bold text-center bg-brand-navy text-white rounded-md mt-4" aria-label="Book a Site Visit">Book a Site Visit</a>
                 </nav>
             </div>
         </header>`;
     }
 
-    function footerHTML(rootPrefix, c) {
+    function footerHTML(rootPrefix, c, projectsHTML) {
         const k = c || CONTENT;
         const r = rootPrefix == null ? R() : rootPrefix;
+        const kr = Object.assign({}, k, { _root: r });
         return `
-        <footer class="bg-[#0b1f33] text-gray-300 text-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                <div class="lg:col-span-2">
+        <footer class="bg-brand-ink text-gray-300 text-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-10">
+                <div class="lg:col-span-4">
                     <a href="${r}index.html" class="inline-flex items-center gap-3" aria-label="${escapeHTML(k.business_name)} home" data-c-attr="aria-label:home_label">
-                        <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-14 w-14 rounded bg-white p-1 object-contain" width="56" height="56" loading="lazy">
-                        <span class="text-white font-extrabold text-xl" data-c-list="@brand_footer">${brandHTML(k.business_name, 'text-brand-gold')}</span>
+                        <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-14 w-14 rounded bg-brand-cream p-1 object-contain" width="56" height="56" loading="lazy">
+                        <span class="font-display text-2xl font-bold text-white" data-c="business_name">${escapeHTML(k.business_name)}</span>
                     </a>
-                    <p class="mt-4 max-w-md leading-relaxed" data-c="footer_about">${escapeHTML(k.footer_about)}</p>
+                    <p class="mt-5 max-w-sm leading-relaxed" data-c="footer_about">${escapeHTML(k.footer_about)}</p>
                     <div data-c-list="@social">${K.RENDER['@social'](null, k)}</div>
                 </div>
-                <nav aria-label="Footer quick links">
-                    <h2 class="text-white font-bold mb-3">Quick Links</h2>
+                <nav class="lg:col-span-2" aria-label="Footer quick links">
+                    <h2 class="!font-sans text-xs font-bold uppercase tracking-[0.2em] text-brand-gold mb-4">Quick Links</h2>
                     <ul class="space-y-1">
-                        <li><a href="${r}index.html#ongoing-projects" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Ongoing Projects">Ongoing Projects</a></li>
-                        <li><a href="${r}index.html#past-projects-gallery" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Completed Projects">Completed Projects</a></li>
-                        <li><a href="${r}blog.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Blog and Insights">Blog &amp; Insights</a></li>
+                        <li><a href="${r}index.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Home">Home</a></li>
+                        <li><a href="${r}gallery.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Gallery">Gallery</a></li>
+                        <li><a href="${r}about.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="About Us">About Us</a></li>
+                        <li><a href="${r}blog.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Blog">Blog</a></li>
+                        <li><a href="${r}contact.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Contact">Contact</a></li>
                         <li><a href="${r}enquiry.html" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Book a Site Visit">Book a Site Visit</a></li>
                     </ul>
                 </nav>
-                <div>
-                    <h2 class="text-white font-bold mb-3">Contact</h2>
-                    <address class="not-italic">
-                        <p class="leading-relaxed" data-c="address">${escapeHTML(k.address)}</p>
+                <nav class="lg:col-span-2" aria-label="Our projects">
+                    <h2 class="!font-sans text-xs font-bold uppercase tracking-[0.2em] text-brand-gold mb-4">Our Projects</h2>
+                    <ul class="space-y-1" id="footer-projects">${projectsHTML || ''}</ul>
+                </nav>
+                <nav class="lg:col-span-2" aria-label="Popular searches">
+                    <h2 class="!font-sans text-xs font-bold uppercase tracking-[0.2em] text-brand-gold mb-4" data-c="seo_links_heading">${escapeHTML(k.seo_links_heading)}</h2>
+                    <ul class="space-y-1" data-c-list="seo_links">${K.RENDER.seo_links(k.seo_links || [], kr)}</ul>
+                </nav>
+                <div class="lg:col-span-2">
+                    <h2 class="!font-sans text-xs font-bold uppercase tracking-[0.2em] text-brand-gold mb-4">Contact</h2>
+                    <address class="not-italic leading-relaxed">
+                        <p data-c="address">${escapeHTML(k.address)}</p>
                         <div class="mt-2" data-c-list="@footer_phones">${K.RENDER['@footer_phones'](null, k)}</div>
-                        <p><a href="${escapeHTML(k.email_href)}" class="inline-block py-1.5 hover:text-brand-gold break-all" aria-label="Email ${escapeHTML(k.email)}" data-c-attr="href:email_href"><i class="fas fa-envelope mr-2" aria-hidden="true"></i><span data-c="email">${escapeHTML(k.email)}</span></a></p>
+                        <p><a href="${escapeHTML(k.email_href)}" class="inline-block py-1.5 hover:text-brand-gold break-all" aria-label="Email ${escapeHTML(k.email)}" data-c-attr="href:email_href"><span data-c="email">${escapeHTML(k.email)}</span></a></p>
                         <p class="mt-1" data-c="office_hours">${escapeHTML(k.office_hours)}</p>
                     </address>
                 </div>
             </div>
             <div class="border-t border-white/10">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col md:flex-row justify-between items-center gap-3 text-center">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-3 text-center">
                     <div>
                         <p>&copy; <span data-c="year">${escapeHTML(k.year)}</span> <span data-c="business_legal_name">${escapeHTML(k.business_legal_name || k.business_name)}</span>. All rights reserved.</p>
                         <p class="text-xs text-gray-400 mt-1${k.registrations ? '' : ' hidden'}" data-c="registrations" data-c-show="registrations">${escapeHTML(k.registrations)}</p>
@@ -171,7 +182,7 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !menu.classList.contains('hidden')) { setOpen(false); btn.focus(); }
         });
-        window.addEventListener('resize', () => { if (window.innerWidth >= 1280) setOpen(false); });
+        window.addEventListener('resize', () => { if (window.innerWidth >= 1024) setOpen(false); });
     }
 
     function initHeaderShadow() {
@@ -309,7 +320,7 @@
     const SITE = () => String(C.SITE_URL || '').replace(/\/$/, '');
     function setContent(c) {
         CONTENT = c;
-        K.apply(document, c, SITE());
+        K.apply(document, Object.assign({}, c, { _root: R() }), SITE());
         const fab = document.getElementById('wa-fab');
         if (fab) {
             fab.href = waLink(`Hi ${c.business_name}, I would like to know more about your projects.`);
@@ -318,6 +329,18 @@
         initAnalytics();
         contentListeners.forEach((fn) => { try { fn(c); } catch (e) { console.error(e); } });
     }
+    /** Fill the footer "Our Projects" list (live first, then completed/sold). */
+    async function loadFooterProjects() {
+        const ul = document.getElementById('footer-projects');
+        if (!ul || !window.Store) return;
+        try {
+            const all = await window.Store.list('projects');
+            const ordered = all.filter((p) => p.stage === 'live').concat(all.filter((p) => p.stage !== 'live'));
+            const html = T.footerProjects(ordered, window.AE.ctx());
+            if (ul.innerHTML.trim() !== html.trim()) ul.innerHTML = html;
+        } catch (e) { /* keep pre-rendered list */ }
+    }
+
     async function loadContent() {
         if (!window.Store) return CONTENT;
         try { setContent(K.build(await window.Store.list('settings'))); }
@@ -335,7 +358,7 @@
         headerHTML, footerHTML, renderHeader, renderFooter, renderWhatsApp,
         Modal, toast, validateField, PHONE_PATTERN,
         /** Context for templates: site root + list of pre-rendered post slugs. */
-        ctx: () => ({ root: R(), builtPosts: manifest().posts || [], c: CONTENT }),
+        ctx: () => ({ root: R(), builtPosts: manifest().posts || [], builtProjects: manifest().projects || [], c: CONTENT }),
         root: R,
         /** Render header + footer (if not pre-rendered), WhatsApp button, modals, analytics. */
         layout(active) {
@@ -345,7 +368,10 @@
             Modal.init();
             setContent(CONTENT);
             loadContent();
-            if (window.Store) window.Store.onChange((col) => { if (col === 'settings') loadContent(); });
+            if (window.Store) {
+                window.Store.onChange((col) => { if (col === 'settings') loadContent(); if (col === 'projects') loadFooterProjects(); });
+                loadFooterProjects();
+            }
         }
     };
 })(typeof window !== 'undefined' ? window : globalThis);

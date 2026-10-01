@@ -28,7 +28,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap">
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" referrerpolicy="no-referrer">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer"></noscript>
     <link rel="stylesheet" href="assets/css/tailwind.css">
@@ -179,7 +179,7 @@
                         <p class="text-gray-600 mt-2" data-c="lp_success">Your enquiry has been received. Our sales team will call you shortly to confirm your site visit.</p>
                         <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
                             <a id="ls-wa" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold px-5 py-3 rounded-md" aria-label="Continue on WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i> Continue on WhatsApp</a>
-                            <a href="index.html#ongoing-projects" class="inline-flex items-center justify-center gap-2 border-2 border-brand-navy text-brand-navy font-bold px-5 py-3 rounded-md hover:bg-brand-navy hover:text-white" aria-label="Browse our projects">Browse Projects</a>
+                            <a href="gallery.html" class="inline-flex items-center justify-center gap-2 border-2 border-brand-navy text-brand-navy font-bold px-5 py-3 rounded-md hover:bg-brand-navy hover:text-white" aria-label="Browse our projects">Browse Projects</a>
                         </div>
                         <button type="button" id="ls-again" class="mt-5 text-sm text-brand-orange underline" aria-label="Submit another enquiry">Submit another enquiry</button>
                     </div>
@@ -251,119 +251,19 @@
     <script src="assets/js/content.js"></script>
     <script src="assets/js/common.js"></script>
     <script src="assets/js/store.js"></script>
+    <script src="assets/js/leadform.js"></script>
     <script>
     (function () {
         'use strict';
-        const { C, escapeHTML, waLink, validateField, PHONE_PATTERN } = window.AE;
         AE.layout('enquiry');
-
-        const params = new URLSearchParams(location.search);
-        const utm = {};
-        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid'].forEach((k) => { if (params.get(k)) utm[k] = params.get(k); });
-
-        const setContactLinks = (c) => { document.getElementById('landing-wa').href = waLink(`Hi ${c.business_name}, I would like to book a site visit.`); };
-        setContactLinks(AE.content());
-        AE.onContent(setContactLinks);
-
-        const visit = document.getElementById('lf-visit');
-        visit.min = new Date().toISOString().slice(0, 10);
-
-        /* ---------- Live projects (dropdown + cards) ---------- */
-        async function loadProjects() {
-            try {
-                const live = (await Store.list('projects')).filter((p) => p.stage === 'live');
-                const select = document.getElementById('lf-project');
-                const current = select.value || params.get('project') || '';
-                select.innerHTML = '<option value="">Not decided yet</option>' +
-                    live.map((p) => `<option value="${escapeHTML(p.title)}">${escapeHTML(p.title)} – ${escapeHTML(p.location)}</option>`).join('');
-                if (current && live.some((p) => p.title === current)) select.value = current;
-
+        AE.initLeadForm({
+            source: 'Landing page – site visit',
+            cards(live) {
                 const grid = document.getElementById('lp-projects');
                 const html = AE.T.landingProjectCards(live);
                 if (grid.innerHTML.trim() !== html.trim()) grid.innerHTML = html;
-            } catch (ex) {
-                console.error(ex);
-            }
-        }
-
-        document.addEventListener('click', (e) => {
-            const pick = e.target.closest('[data-pick]');
-            if (!pick) return;
-            document.getElementById('lf-project').value = pick.dataset.pick;
-            document.getElementById('enquiry-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-            setTimeout(() => document.getElementById('lf-name').focus({ preventScroll: true }), 500);
-        });
-
-        /* ---------- Form ---------- */
-        const form = document.getElementById('leadForm');
-        const nameEl = document.getElementById('lf-name');
-        const phoneEl = document.getElementById('lf-phone');
-        const emailEl = document.getElementById('lf-email');
-        const consent = document.getElementById('lf-consent');
-        const btn = document.getElementById('lf-submit');
-        const errBox = document.getElementById('lf-error');
-        phoneEl.pattern = PHONE_PATTERN;
-        [nameEl, phoneEl, emailEl].forEach((el) => el.addEventListener('blur', () => { if (el.value) validateField(el); }));
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            errBox.classList.add('hidden');
-            const invalid = [nameEl, phoneEl, emailEl].filter((el) => !validateField(el));
-            const consentOk = consent.checked;
-            document.getElementById('lf-consent-error').classList.toggle('hidden', consentOk);
-            if (invalid.length) { invalid[0].focus(); return; }
-            if (!consentOk) { consent.focus(); return; }
-
-            const fd = new FormData(form);
-            if (fd.get('website')) return; // honeypot triggered – silently ignore bots
-
-            const original = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span>Processing...</span>';
-            const lead = {
-                name: fd.get('name').trim(),
-                phone: fd.get('phone').trim(),
-                email: fd.get('email').trim(),
-                interest: fd.get('interest'),
-                project: fd.get('project'),
-                config: fd.get('config'),
-                budget: fd.get('budget'),
-                location: fd.get('location'),
-                visit_date: fd.get('visit_date'),
-                message: [fd.get('message').trim(), fd.get('call_time') ? `Best time to call: ${fd.get('call_time')}` : ''].filter(Boolean).join('\n'),
-                source: 'Landing page – site visit',
-                utm: Object.keys(utm).length ? utm : null
-            };
-            try {
-                await Promise.all([Store.addLead(lead), new Promise((r) => setTimeout(r, 800))]);
-                document.getElementById('ls-name').textContent = lead.name.split(' ')[0];
-                document.getElementById('ls-wa').href = waLink(`Hi, I'm ${lead.name}. I just requested a site visit${lead.project ? ` for ${lead.project}` : ''}.`);
-                document.getElementById('lead-form-wrap').classList.add('hidden');
-                const ok = document.getElementById('lead-success');
-                ok.classList.remove('hidden');
-                ok.focus();
-                // Conversion hooks for analytics / ad pixels, if installed
-                if (typeof window.gtag === 'function') window.gtag('event', 'generate_lead', { event_category: 'enquiry', event_label: lead.project || 'general' });
-                if (typeof window.fbq === 'function') window.fbq('track', 'Lead');
-            } catch (ex) {
-                console.error(ex);
-                errBox.textContent = `Sorry, something went wrong. Please call ${AE.content().phone} or message us on WhatsApp.`;
-                errBox.classList.remove('hidden');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = original;
             }
         });
-
-        document.getElementById('ls-again').addEventListener('click', () => {
-            form.reset();
-            document.getElementById('lead-success').classList.add('hidden');
-            document.getElementById('lead-form-wrap').classList.remove('hidden');
-            nameEl.focus();
-        });
-
-        loadProjects();
-        Store.onChange((c) => { if (c === 'projects') loadProjects(); });
     })();
     </script>
 </body>

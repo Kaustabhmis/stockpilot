@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Heritage typography: serif display headings on the public site */
+body:not([data-page="admin"]) h1,
+body:not([data-page="admin"]) h2,
+.font-display { font-family: "Cormorant Garamond", Georgia, serif; letter-spacing: -0.01em; }
+body:not([data-page="admin"]) h1, body:not([data-page="admin"]) h2 { font-weight: 600; }
+.eyebrow { font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; font-weight: 700; }
+
+
 /* Ashirbad Enterprise – shared styles (Tailwind handles the rest) */
 section[id] { scroll-margin-top: 5rem; }
 

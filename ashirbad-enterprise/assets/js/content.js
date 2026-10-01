@@ -80,39 +80,83 @@
                 { key: 'seo_share_description', label: 'Social share description (WhatsApp / Facebook)', type: 'textarea', default: 'RERA approved residential projects and commercial property in Kolkata. Explore ongoing projects, completed landmarks and book a free site visit.', max: 200 },
                 { key: 'seo_blog_title', label: 'Blog page title', default: 'Real Estate Blog Kolkata | Ashirbad Enterprise', max: 60 },
                 { key: 'seo_blog_description', label: 'Blog page description', type: 'textarea', default: 'Kolkata property guides, RERA tips, commercial investment advice and construction updates from Ashirbad Enterprise, RERA approved builders.', max: 160 },
+                { key: 'seo_gallery_title', label: 'Gallery page title', default: 'Projects & Gallery | Ashirbad Enterprise Kolkata', max: 60 },
+                { key: 'seo_gallery_description', label: 'Gallery page description', type: 'textarea', default: 'Browse ongoing, sold-out and completed projects by Ashirbad Enterprise across New Town, Rajarhat, Salt Lake and Behala, Kolkata.', max: 160 },
+                { key: 'seo_about_title', label: 'About page title', default: 'About Us | Ashirbad Enterprise, Builders in Kolkata', max: 60 },
+                { key: 'seo_about_description', label: 'About page description', type: 'textarea', default: 'Ashirbad Enterprise – 15+ years and 25 projects delivered. RERA registered real estate builders and developers in Kolkata.', max: 160 },
+                { key: 'seo_contact_title', label: 'Contact page title', default: 'Contact Ashirbad Enterprise | Kolkata Builders', max: 60 },
+                { key: 'seo_contact_description', label: 'Contact page description', type: 'textarea', default: 'Call, WhatsApp or visit Ashirbad Enterprise in Kolkata for flat prices, site visits and commercial property enquiries.', max: 160 },
                 { key: 'seo_enquiry_title', label: 'Landing page title', default: 'Book a Free Site Visit – Flats in Kolkata | Ashirbad', max: 60 },
                 { key: 'seo_enquiry_description', label: 'Landing page description', type: 'textarea', default: 'Buying a flat in Kolkata? Book a free site visit to RERA approved 1–4 BHK apartments in New Town, Rajarhat, Salt Lake & Behala. Get the price list today.', max: 160 }
             ]
         },
         {
             id: 'home', title: 'Home Page', icon: 'fa-house',
-            description: 'Headings and text for each section of the home page.',
+            description: 'The banner at the top, the 3D project carousel and the map section.',
             fields: [
-                { key: 'hero_heading', label: 'Top heading over the carousel (H1)', default: 'RERA Approved Real Estate Builders in Kolkata' },
-                { key: 'commercial_eyebrow', label: 'Commercial – small label', default: 'For Business' },
-                { key: 'commercial_heading', label: 'Commercial – heading', default: 'Commercial Property in Kolkata' },
-                { key: 'commercial_intro', label: 'Commercial – intro', type: 'textarea', default: 'Prime office spaces, retail showrooms and warehouses engineered for enterprise growth and high rental yields.' },
-                { key: 'gallery_eyebrow', label: 'Gallery – small label', default: 'Our Legacy' },
-                { key: 'gallery_heading', label: 'Gallery – heading', default: 'Completed & Sold Out Projects' },
-                { key: 'gallery_intro', label: 'Gallery – intro', type: 'textarea', default: 'Explore our legacy of delivered promises and sold-out landmarks across Kolkata. Tap any project to view its photo gallery.' },
-                { key: 'map_eyebrow', label: 'Map – small label', default: 'Map View' },
+                { key: 'home_banner_eyebrow', label: 'Banner – small label', default: 'RERA Approved Builders · Kolkata' },
+                { key: 'home_banner_heading', label: 'Banner – main heading (H1)', default: 'Homes built on trust, blessed for generations.' },
+                { key: 'home_banner_text', label: 'Banner – text', type: 'textarea', default: 'RERA approved apartments and commercial spaces across New Town, Rajarhat, Salt Lake and Behala – planned with care and delivered on time.' },
+                { key: 'home_banner_image', label: 'Banner – background image', type: 'image', default: 'https://images.unsplash.com/photo-1460317442991-0ec209397118?ixlib=rb-4.0.3&auto=format&fit=crop&w=1800&q=70' },
+                { key: 'carousel_eyebrow', label: 'Carousel – small label', default: 'Now Selling' },
+                { key: 'carousel_heading', label: 'Carousel – heading', default: 'Our Ongoing Projects' },
+                { key: 'map_eyebrow', label: 'Map – small label', default: 'Locations' },
                 { key: 'map_heading', label: 'Map – heading', default: 'Explore Our Project Locations' },
-                { key: 'map_intro', label: 'Map – intro', type: 'textarea', default: 'Interactive map featuring our ongoing developments and successfully delivered projects across Kolkata.' },
-                { key: 'about_eyebrow', label: 'About – small label', default: 'About Us' },
-                { key: 'about_heading', label: 'About – heading', default: 'Building The Future with Trust in Kolkata' },
-                { key: 'about_body', label: 'About – text', type: 'textarea', rows: 6, help: 'Leave a blank line between paragraphs.', default: 'At Ashirbad Enterprise, we specialise in transforming prime plots into landmark residential and commercial infrastructure. Guided by traditional values and modern engineering, we oversee every phase of development, from soil testing and groundwork to final handover.\n\nOur in-house architectural planning, transparent pricing and strict adherence to WBRERA compliance ensure that your investment is secure and built to stand the test of time.' },
-                { key: 'about_image', label: 'About – image', type: 'image', default: 'https://images.unsplash.com/photo-1541881451962-7e045053420b?ixlib=rb-4.0.3&auto=format&fit=crop&w=900&q=80' },
-                { key: 'about_image_alt', label: 'About – image description (alt text)', default: 'Construction site with cranes and a residential tower under development in Kolkata' },
-                { key: 'about_badge', label: 'About – badge on image', type: 'textarea', rows: 2, default: '100% RERA\nCompliant' },
-                { key: 'about_points', label: 'About – key points', type: 'list', item: [{ key: 'text', label: 'Point' }], default: [{ text: 'RERA registered projects' }, { text: 'On-time possession record' }, { text: 'Bank loan assistance' }, { text: 'Earthquake resistant design' }] },
-                { key: 'stats', label: 'About – numbers', type: 'list', item: [{ key: 'value', label: 'Number (e.g. 15+)' }, { key: 'label', label: 'Label' }], default: [{ value: '15+', label: 'Years Experience' }, { value: '25', label: 'Projects Delivered' }] },
-                { key: 'blog_eyebrow', label: 'Blog – small label', default: 'Knowledge Hub' },
-                { key: 'blog_heading', label: 'Blog – heading', default: 'Market Insights & News' },
-                { key: 'blog_intro', label: 'Blog – intro', type: 'textarea', default: 'Expert guides and updates on the Kolkata real estate market.' },
-                { key: 'contact_eyebrow', label: 'Contact – small label', default: 'Get In Touch' },
-                { key: 'contact_heading', label: 'Contact – heading', default: 'Contact The Builders Directly' },
-                { key: 'contact_intro', label: 'Contact – intro', type: 'textarea', default: 'Share your requirements and our project head will get back to you within 24 hours.' },
-                { key: 'contact_success', label: 'Contact – thank-you message', type: 'textarea', default: 'Your enquiry has been received. Our project head will contact you shortly.' }
+                { key: 'map_intro', label: 'Map – intro', type: 'textarea', default: 'Ongoing developments and successfully delivered projects across Kolkata.' }
+            ]
+        },
+        {
+            id: 'gallerypage', title: 'Gallery Page', icon: 'fa-images',
+            description: 'The page listing every ongoing, sold-out, completed and commercial project.',
+            fields: [
+                { key: 'gallery_heading', label: 'Heading (H1)', default: 'Our Projects' },
+                { key: 'gallery_intro', label: 'Intro', type: 'textarea', default: 'Ongoing developments, sold-out landmarks and commercial spaces across Kolkata. Tap any project for photos, details and prices.' },
+                { key: 'gallery_image', label: 'Banner image', type: 'image', default: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=1800&q=70' }
+            ]
+        },
+        {
+            id: 'aboutpage', title: 'About Us Page', icon: 'fa-users',
+            description: 'Your story, numbers, mission and values.',
+            fields: [
+                { key: 'about_banner_heading', label: 'Banner heading (H1)', default: 'About Ashirbad Enterprise' },
+                { key: 'about_banner_text', label: 'Banner text', type: 'textarea', default: 'Over 15 years of building homes and commercial landmarks across Kolkata.' },
+                { key: 'about_eyebrow', label: 'Story – small label', default: 'Our Story' },
+                { key: 'about_heading', label: 'Story – heading', default: 'Building the future with trust in Kolkata' },
+                { key: 'about_body', label: 'Story – text', type: 'textarea', rows: 6, help: 'Leave a blank line between paragraphs.', default: 'At Ashirbad Enterprise, we specialise in transforming prime plots into landmark residential and commercial infrastructure. Guided by traditional values and modern engineering, we oversee every phase of development, from soil testing and groundwork to final handover.\n\nOur in-house architectural planning, transparent pricing and strict adherence to WBRERA compliance ensure that your investment is secure and built to stand the test of time.' },
+                { key: 'about_image', label: 'Story – image', type: 'image', default: 'https://images.unsplash.com/photo-1541881451962-7e045053420b?ixlib=rb-4.0.3&auto=format&fit=crop&w=900&q=80' },
+                { key: 'about_image_alt', label: 'Story – image description (alt text)', default: 'Construction site with cranes and a residential tower under development in Kolkata' },
+                { key: 'about_badge', label: 'Story – badge on image', type: 'textarea', rows: 2, default: '100% RERA\nCompliant' },
+                { key: 'stats', label: 'Numbers', type: 'list', item: [{ key: 'value', label: 'Number (e.g. 15+)' }, { key: 'label', label: 'Label' }], default: [{ value: '15+', label: 'Years Experience' }, { value: '25', label: 'Projects Delivered' }] },
+                { key: 'mission_heading', label: 'Mission – heading', default: 'Our Mission' },
+                { key: 'mission_text', label: 'Mission – text', type: 'textarea', default: 'To build homes families are proud of – honestly priced, solidly engineered and delivered on the date we promise.' },
+                { key: 'vision_heading', label: 'Vision – heading', default: 'Our Vision' },
+                { key: 'vision_text', label: 'Vision – text', type: 'textarea', default: 'To be the most trusted name in Kolkata real estate, known for quality, transparency and timely possession.' },
+                { key: 'values_heading', label: 'Values – heading', default: 'Why families choose us' },
+                { key: 'about_points', label: 'Values / reasons', type: 'list', item: [{ key: 'text', label: 'Point' }], default: [{ text: 'RERA registered projects' }, { text: 'On-time possession record' }, { text: 'Bank loan assistance' }, { text: 'Earthquake resistant design' }, { text: 'Transparent, all-inclusive pricing' }, { text: 'Monthly construction updates' }] }
+            ]
+        },
+        {
+            id: 'contactpage', title: 'Contact Page', icon: 'fa-envelope',
+            description: 'Texts on the contact page. Phone, email, address and hours come from Business Information.',
+            fields: [
+                { key: 'contact_heading', label: 'Heading (H1)', default: 'Contact Us' },
+                { key: 'contact_intro', label: 'Intro', type: 'textarea', default: 'Share your requirements and our project head will get back to you within 24 hours.' },
+                { key: 'contact_form_heading', label: 'Form heading', default: 'Send us a message' },
+                { key: 'contact_success', label: 'Thank-you message', type: 'textarea', default: 'Your enquiry has been received. Our project head will contact you shortly.' }
+            ]
+        },
+        {
+            id: 'footer', title: 'Footer & SEO Links', icon: 'fa-link',
+            description: 'The "Popular searches" links in the footer help Google understand the areas you build in.',
+            fields: [
+                { key: 'seo_links_heading', label: 'Popular searches – heading', default: 'Popular Searches' },
+                { key: 'seo_links', label: 'Popular search links', type: 'list', help: 'Link to gallery.html?loc=AREA or gallery.html?status=commercial, or any page.', item: [{ key: 'label', label: 'Link text' }, { key: 'url', label: 'Link (e.g. gallery.html?loc=New%20Town)' }], default: [
+                    { label: 'Flats in New Town', url: 'gallery.html?loc=New%20Town' },
+                    { label: 'Flats in Rajarhat', url: 'gallery.html?loc=Rajarhat' },
+                    { label: 'Apartments in Salt Lake', url: 'gallery.html?loc=Salt%20Lake' },
+                    { label: 'Flats in Behala', url: 'gallery.html?loc=Behala' },
+                    { label: 'Commercial property in Kolkata', url: 'gallery.html?status=commercial' },
+                    { label: 'Completed projects', url: 'gallery.html?status=completed' }] }
             ]
         },
         {
@@ -212,6 +256,7 @@
         c.icbm = c.office_lat && c.office_lng ? `${c.office_lat}, ${c.office_lng}` : '';
         c.year = String(new Date().getFullYear());
         c.home_label = `${c.business_name} home`;
+        c.office_map_embed = c.office_lat && c.office_lng ? `https://www.google.com/maps?q=${Number(c.office_lat)},${Number(c.office_lng)}&z=15&output=embed` : `https://www.google.com/maps?q=${encodeURIComponent(c.address)}&output=embed`;
         c.carousel_ms = Math.max(3, Number(c.carousel_seconds) || 10) * 1000;
         c.social = [['facebook', c.social_facebook], ['instagram', c.social_instagram], ['youtube', c.social_youtube], ['linkedin', c.social_linkedin]].filter(([, u]) => /^https?:\/\//.test(u || ''));
         c.registrations = [
@@ -258,6 +303,22 @@
             <details class="group bg-amber-50/60 border border-amber-100 rounded-lg p-4 open:bg-white open:shadow"><summary class="font-bold text-brand-navy cursor-pointer list-none flex justify-between items-center gap-4">${esc(x.q)}<i class="fas fa-chevron-down text-brand-orange group-open:rotate-180 transition" aria-hidden="true"></i></summary><p class="mt-3 text-gray-600 text-sm">${lines(x.a)}</p></details>`).join(''),
         lp_budgets: (list, c, el) => optionList(list, el, 'Select budget'),
         lp_locations: (list, c, el) => optionList(list, el, 'Any location'),
+        about_values: (list) => list.filter((x) => x.text).map((x) => `
+            <li class="flex items-start gap-3 bg-white border border-brand-sand rounded-xl p-5"><span class="mt-0.5 w-8 h-8 flex-shrink-0 rounded-full bg-brand-navy text-brand-gold flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span><span class="font-semibold text-brand-navy pt-1">${esc(x.text)}</span></li>`).join(''),
+        stats_band: (list) => list.filter((x) => x.value || x.label).map((x) => `
+            <div class="text-center px-4"><span class="block font-display text-6xl md:text-7xl font-semibold text-brand-gold leading-none">${esc(x.value)}</span><span class="block mt-3 eyebrow text-gray-300">${esc(x.label)}</span></div>`).join(''),
+        seo_links: (list, c) => list.filter((x) => x.label && x.url && !/^\s*javascript:/i.test(x.url)).map((x) => `<li><a href="${esc(/^(https?:|\/|#|mailto:|tel:)/.test(x.url) ? x.url : (c._root || '') + x.url)}" class="inline-block py-1.5 hover:text-brand-gold" aria-label="${esc(x.label)}">${esc(x.label)}</a></li>`).join(''),
+        '@contact_cards_light': (_v, c) => {
+            const row = (icon, title, body) => `<div class="flex gap-4 items-start py-5 border-b border-brand-sand last:border-0"><span class="w-11 h-11 flex-shrink-0 rounded-full bg-brand-navy text-brand-gold flex items-center justify-center"><i class="fas ${icon}" aria-hidden="true"></i></span><div><h2 class="!font-sans text-xs font-bold uppercase tracking-[0.2em] text-gray-500">${title}</h2><div class="mt-1 text-brand-navy font-semibold">${body}</div></div></div>`;
+            return [
+                c.address ? row('fa-location-dot', 'Office', esc(c.address)) : '',
+                c.phone ? row('fa-phone', 'Phone', `<a href="${esc(c.phone_href)}" class="hover:text-brand-orange" aria-label="Call ${esc(c.phone)}">${esc(c.phone_nbsp)}</a>${c.phone_alt ? `<br><a href="${esc(c.phone_alt_href)}" class="hover:text-brand-orange" aria-label="Call ${esc(c.phone_alt)}">${esc(c.phone_alt)}</a>` : ''}`) : '',
+                c.whatsapp ? row('fa-whatsapp fab', 'WhatsApp', `<a href="${esc(c.whatsapp_url)}" target="_blank" rel="noopener noreferrer" class="hover:text-brand-orange" aria-label="Chat on WhatsApp">Chat with us</a>`) : '',
+                c.email ? row('fa-envelope', 'Email', `<a href="${esc(c.email_href)}" class="hover:text-brand-orange break-all" aria-label="Email ${esc(c.email)}">${esc(c.email)}</a>`) : '',
+                c.office_hours ? row('fa-clock', 'Office hours', esc(c.office_hours)) : '',
+                c.registrations ? row('fa-certificate', 'Registration', esc(c.registrations)) : ''
+            ].join('');
+        },
         privacy_sections: (list) => list.filter((x) => x.heading || x.text).map((x) => `
             <section><h2 class="text-xl font-bold text-brand-navy mb-2">${esc(x.heading)}</h2>${paras(x.text, 'mb-2')}</section>`).join(''),
         /* Derived blocks */

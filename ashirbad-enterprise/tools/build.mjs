@@ -6,6 +6,7 @@
  *   - every page pre-rendered with real content (header, footer, projects,
  *     commercial listings, gallery, blog cards) so search engines and
  *     WhatsApp/Facebook link previews see it without running JavaScript
+ *   - one static page per project: project/<slug>.html (photo gallery, details, enquiry form)
  *   - one static page per published blog post: blog/<slug>.html
  *     (own title, description, canonical URL, Open Graph, BlogPosting JSON-LD)
  *   - structured data for the business and its projects
@@ -102,6 +103,10 @@ log(`${live.length} live, ${past.length} completed/sold, ${commercial.length} co
  * ---------------------------------------------------------- */
 const esc = T.esc;
 const builtPosts = posts.map((p) => p.slug);
+for (const p of projects) if (!p.slug) p.slug = String(p.title || p.id).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || String(p.id);
+const builtProjects = projects.map((p) => p.slug);
+// Gallery / footer order: ongoing, then sold out, then completed
+const ordered = live.concat(projects.filter((p) => p.stage === 'sold'), projects.filter((p) => p.stage !== 'live' && p.stage !== 'sold'));
 const abs = (u) => (!u || /^data:/.test(u) ? `${SITE}/og-image.jpg` : /^https?:\/\//.test(u) ? u : `${SITE}/${u.replace(/^\.?\//, '')}`);
 
 /** Replace <!--@key-->…<!--/@key--> (or a lone <!--@key-->) with content. */
@@ -126,7 +131,7 @@ function headExtra(rootPrefix, extra = '') {
     const b = String(CONTENT.bing_verification || '').trim();
     if (g) tags.push(`<meta name="google-site-verification" content="${esc(g)}">`);
     if (b) tags.push(`<meta name="msvalidate.01" content="${esc(b)}">`);
-    tags.push(`<script>window.AE_ROOT=${JSON.stringify(rootPrefix)};window.AE_BUILD=${jsonForScript({ posts: builtPosts, builtAt: new Date().toISOString() })};window.AE_SETTINGS=${jsonForScript(settingsRows)};${extra}</script>`);
+    tags.push(`<script>window.AE_ROOT=${JSON.stringify(rootPrefix)};window.AE_BUILD=${jsonForScript({ posts: builtPosts, projects: builtProjects, builtAt: new Date().toISOString() })};window.AE_SETTINGS=${jsonForScript(settingsRows)};${extra}</script>`);
     return tags.join('\n    ');
 }
 
@@ -141,10 +146,10 @@ function tidy(html) {
 }
 
 /** Fill every data-c / data-c-attr / data-c-list element with the saved website content. */
-function applyContent(html, { stripHead = false } = {}) {
+function applyContent(html, { stripHead = false, rootPrefix = '' } = {}) {
     const { document } = parseHTML(html);
     if (stripHead) document.querySelectorAll('head [data-c], head [data-c-attr]').forEach((el) => { el.removeAttribute('data-c'); el.removeAttribute('data-c-attr'); });
-    K.apply(document, CONTENT, SITE);
+    K.apply(document, Object.assign({}, CONTENT, { _root: rootPrefix }), SITE);
     return tidy(document.toString());
 }
 
@@ -152,9 +157,9 @@ function applyContent(html, { stripHead = false } = {}) {
 function finish(html, { active, rootPrefix = '', extraHead = '', stripHead = false }) {
     html = fillIf(html, 'head', headExtra(rootPrefix, extraHead));
     html = fillIf(html, 'header', headerHTML(active, rootPrefix, CONTENT));
-    html = fillIf(html, 'footer', footerHTML(rootPrefix, CONTENT));
+    html = fillIf(html, 'footer', footerHTML(rootPrefix, CONTENT, T.footerProjects(ordered, { root: rootPrefix, builtPosts, builtProjects, c: CONTENT })));
     if (SITE !== DEFAULT_SITE) html = html.split(DEFAULT_SITE).join(SITE);
-    return applyContent(html, { stripHead });
+    return applyContent(html, { stripHead, rootPrefix });
 }
 
 /** Rewrite relative URLs for pages that live in a sub-folder (blog/…) or anywhere (404). */
@@ -173,7 +178,7 @@ const projectLd = (p) => ({
     name: p.title,
     description: p.description || `${p.config || 'Residential project'} by ${BRAND} in ${p.location}`,
     image: abs(T.imgUrl(p.img, 1200)),
-    url: `${SITE}/#ongoing-projects`,
+    url: `${SITE}/project/${encodeURIComponent(p.slug)}.html`,
     address: { '@type': 'PostalAddress', streetAddress: p.location, addressLocality: CONTENT.address_city || undefined, addressRegion: CONTENT.address_state || undefined, addressCountry: 'IN' },
     ...(p.lat != null && p.lng != null ? { geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng } } : {}),
     ...(p.rera_no ? { identifier: { '@type': 'PropertyValue', propertyID: 'WBRERA', value: p.rera_no } } : {})
@@ -207,7 +212,7 @@ if (fs.existsSync(twBin)) {
 
 // Cache-busting hashes for local assets
 const assetHash = {};
-for (const f of ['assets/css/tailwind.css', 'assets/js/config.js', 'assets/js/templates.js', 'assets/js/content.js', 'assets/js/common.js', 'assets/js/store.js']) {
+for (const f of ['assets/css/tailwind.css', 'assets/js/config.js', 'assets/js/templates.js', 'assets/js/content.js', 'assets/js/common.js', 'assets/js/store.js', 'assets/js/leadform.js']) {
     assetHash[f] = crypto.createHash('sha1').update(fs.readFileSync(path.join(OUT, f))).digest('hex').slice(0, 10);
 }
 const bust = (html) => html.replace(/((?:href|src)="(?:\.\.\/|\/)?)(assets\/(?:css|js)\/[\w.-]+\.(?:css|js))"/g, (m, a, f) => (assetHash[f] ? `${a}${f}?v=${assetHash[f]}"` : m));
@@ -216,26 +221,71 @@ const write = (rel, html) => { fs.mkdirSync(path.dirname(path.join(OUT, rel)), {
 /* ------------------------------------------------------------
  * 5. Pages
  * ---------------------------------------------------------- */
-const ctxRoot = { root: '', builtPosts, c: CONTENT };
+const ctxRoot = { root: '', builtPosts, builtProjects, c: CONTENT };
 
-// Home
+// Home: banner, 3D carousel of ongoing projects, site-visit form, map
 {
     let html = read('index.html');
-    const heroKey = JSON.stringify(live.map((p) => [p.id, p.title, p.img, p.status_label, p.price, p.config, p.location, p.rera_no]));
-    html = html.replace('id="hero-carousel-wrapper">', `id="hero-carousel-wrapper" data-rendered="${esc(heroKey)}">`);
-    html = fill(html, 'hero', T.heroSlides(live));
-    html = fill(html, 'commercial', T.commercialCards(commercial));
-    html = fill(html, 'gallery', T.galleryCards(past));
-    html = fill(html, 'blog', posts.slice(0, 3).map((p) => T.blogCard(p, ctxRoot, 'h3')).join('') || '<p class="col-span-full text-center text-gray-500">Articles coming soon.</p>');
-    const heroImg = live[0] ? T.imgUrl(live[0].img, 1600) : null;
+    const key = JSON.stringify(live.map((p) => [p.id, p.slug, p.title, p.img, p.status_label, p.price, p.config, p.carpet_area, p.location, p.rera_no]));
+    html = html.replace('id="carousel-wrapper">', `id="carousel-wrapper" data-rendered="${esc(key)}">`);
+    html = fill(html, 'carousel', T.carouselSlides(live, ctxRoot));
+    html = fill(html, 'tabs', T.carouselTabs(live));
+    const heroImg = live[0] ? T.imgUrl(live[0].img, 1800) : null;
     html = fill(html, 'jsonld', [
         ld(websiteLd),
         live.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: `Ongoing projects by ${BRAND}`, itemListElement: live.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: projectLd(p) })) }) : '',
-        past.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: `Completed and sold out projects by ${BRAND}`, itemListElement: past.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: projectLd(p) })) }) : '',
         heroImg ? `<link rel="preload" as="image" href="${esc(heroImg)}" fetchpriority="high">` : ''
     ].filter(Boolean).join('\n    '));
     write('index.html', finish(html, { active: 'home' }));
 }
+
+const crumbs = (name, file) => ld({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` }, { '@type': 'ListItem', position: 2, name, item: `${SITE}/${file}` }]
+});
+
+// Gallery: every project (ongoing, sold out, completed) + commercial spaces
+{
+    let html = read('gallery.html');
+    html = fill(html, 'grid', ordered.map((p) => T.projectCard(p, ctxRoot)).join('') + commercial.map((b) => T.commercialCard(b, ctxRoot)).join(''));
+    html = fill(html, 'jsonld', [crumbs('Gallery', 'gallery.html'),
+        ordered.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: `Projects by ${BRAND}`, itemListElement: ordered.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/project/${encodeURIComponent(p.slug)}.html`, name: p.title })) }) : ''
+    ].filter(Boolean).join('\n    '));
+    write('gallery.html', finish(html, { active: 'gallery' }));
+}
+
+// About & Contact
+write('about.html', finish(fill(read('about.html'), 'jsonld', crumbs('About Us', 'about.html')), { active: 'about' }));
+write('contact.html', finish(fill(read('contact.html'), 'jsonld', crumbs('Contact', 'contact.html')), { active: 'contact' }));
+
+// Project detail pages – one static page each: project/<slug>.html
+const projectTemplate = read('project.html');
+write('project.html', finish(fill(projectTemplate, 'jsonld', ''), { active: 'gallery' }));
+for (const p of projects) {
+    const url = `${SITE}/project/${encodeURIComponent(p.slug)}.html`;
+    const ctx = { root: '../', builtPosts, builtProjects, c: CONTENT };
+    let html = projectTemplate;
+    html = fill(html, 'project', T.projectPage(p, T.relatedProjects(p, projects), ctx, url));
+    html = fill(html, 'jsonld', T.projectJsonLd(p, url, SITE).map(ld).join('\n    '));
+    const title = p.title.length + BRAND.length > 57 ? p.title : `${p.title} | ${BRAND}`;
+    const desc = (p.description || `${p.title} – ${p.config || 'homes'} in ${p.location} by ${BRAND}.`).slice(0, 300);
+    const image = abs(T.imgUrl(p.img, 1200));
+    html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`);
+    html = setMeta(html, 'name', 'description', desc);
+    html = html.replace(/<meta name="keywords"[^>]*>\n\s*/, '');
+    html = html.replace(/(<link rel="canonical" id="canonical" href=")[^"]*(")/, `$1${url}$2`);
+    html = setMeta(html, 'property', 'og:url', url);
+    html = setMeta(html, 'property', 'og:title', p.title);
+    html = setMeta(html, 'property', 'og:description', desc);
+    html = setMeta(html, 'property', 'og:image', image);
+    html = setMeta(html, 'name', 'twitter:title', p.title);
+    html = setMeta(html, 'name', 'twitter:description', desc);
+    html = setMeta(html, 'name', 'twitter:image', image);
+    html = finish(html, { active: 'gallery', rootPrefix: '../', extraHead: `window.AE_PROJECT=${JSON.stringify(p.slug)};`, stripHead: true });
+    html = rebase(html, '../');
+    write(`project/${p.slug}.html`, html);
+}
+log(`${projects.length} project pages`);
 
 // Blog list
 const blogTemplate = read('blog.html');
@@ -257,7 +307,7 @@ const blogTemplate = read('blog.html');
 // Blog posts – one static page each
 for (const p of posts) {
     const url = `${SITE}/blog/${encodeURIComponent(p.slug)}.html`;
-    const ctx = { root: '../', builtPosts, c: CONTENT };
+    const ctx = { root: '../', builtPosts, builtProjects, c: CONTENT };
     let html = blogTemplate;
     html = fill(html, 'listview', '');
     html = fill(html, 'listld', '');
@@ -304,6 +354,13 @@ const lastPost = posts[0] ? String(posts[0].published_at).slice(0, 10) : today;
 const imgTag = (u, title) => `\n    <image:image><image:loc>${esc(abs(T.imgUrl(u, 1200)))}</image:loc><image:title>${esc(title)}</image:title></image:image>`;
 const urls = [
     { loc: `${SITE}/`, lastmod: today, freq: 'weekly', pri: '1.0', images: projects.filter((p) => p.img && !/^data:/.test(p.img)).map((p) => imgTag(p.img, p.title)).join('') },
+    { loc: `${SITE}/gallery.html`, lastmod: today, freq: 'weekly', pri: '0.9' },
+    ...projects.map((p) => ({
+        loc: `${SITE}/project/${encodeURIComponent(p.slug)}.html`, lastmod: String(p.updated_at || today).slice(0, 10), freq: 'weekly', pri: p.stage === 'live' ? '0.9' : '0.6',
+        images: T.galleryImages(p).filter((u) => u && !/^data:/.test(u)).slice(0, 10).map((u) => imgTag(u, p.title)).join('')
+    })),
+    { loc: `${SITE}/about.html`, lastmod: today, freq: 'monthly', pri: '0.7' },
+    { loc: `${SITE}/contact.html`, lastmod: today, freq: 'monthly', pri: '0.8' },
     { loc: `${SITE}/enquiry.html`, lastmod: today, freq: 'monthly', pri: '0.9' },
     { loc: `${SITE}/blog.html`, lastmod: lastPost, freq: 'weekly', pri: '0.8' },
     ...posts.map((p) => ({

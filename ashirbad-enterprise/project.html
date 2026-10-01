@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en-IN" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-c="seo_gallery_title">Project Details | Ashirbad Enterprise</title>
+    <meta name="description" data-c-attr="content:seo_gallery_description" content="Project details, photos, prices and RERA information by Ashirbad Enterprise, Kolkata.">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+    <meta name="theme-color" content="#12304d">
+    <meta name="format-detection" content="telephone=yes">
+    <link rel="canonical" id="canonical" href="https://www.ashirbadenterprise.com/project.html">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+
+    <meta property="og:type" id="og-type" content="website">
+    <meta property="og:locale" content="en_IN">
+    <meta property="og:site_name" data-c-attr="content:business_name" content="Ashirbad Enterprise">
+    <meta property="og:url" id="og-url" content="https://www.ashirbadenterprise.com/project.html">
+    <meta property="og:title" id="og-title" data-c-attr="content:seo_gallery_title" content="Project Details | Ashirbad Enterprise">
+    <meta property="og:description" id="og-desc" data-c-attr="content:seo_gallery_description" content="Project details, photos, prices and RERA information by Ashirbad Enterprise, Kolkata.">
+    <meta property="og:image" id="og-image" content="https://www.ashirbadenterprise.com/og-image.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" id="tw-title" data-c-attr="content:seo_gallery_title" content="Project Details | Ashirbad Enterprise">
+    <meta name="twitter:description" data-c-attr="content:seo_gallery_description" content="Project details, photos, prices and RERA information by Ashirbad Enterprise, Kolkata.">
+    <meta name="twitter:image" id="tw-image" content="https://www.ashirbadenterprise.com/og-image.jpg">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" referrerpolicy="no-referrer">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer"></noscript>
+    <link rel="stylesheet" href="assets/css/tailwind.css">
+    <!--@head-->
+    <!--@jsonld-->
+    <style>
+        .projectThumbs .swiper-slide-thumb-active { opacity: 1 !important; outline: 2px solid #c9973f; outline-offset: -2px; }
+        .projectSwiper .swiper-button-next, .projectSwiper .swiper-button-prev { color: #fff; }
+        .projectSwiper .swiper-pagination { color: #fff; font-weight: 700; }
+    </style>
+</head>
+<body data-page="project" class="bg-brand-cream text-gray-800 font-sans antialiased overflow-x-hidden pt-20">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:bg-brand-navy focus:text-white focus:px-4 focus:py-2 focus:rounded" aria-label="Skip to main content">Skip to main content</a>
+    <!--@header--><div id="site-header-root"></div><!--/@header-->
+
+    <main id="main-content">
+        <!--@project--><div id="project-view" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24"><div class="skeleton h-96 rounded-2xl"></div></div><!--/@project-->
+        <section id="not-found" class="hidden py-24 text-center px-4" aria-labelledby="nf-title">
+            <h2 id="nf-title" class="text-4xl text-brand-navy">Project not found</h2>
+            <p class="text-gray-600 mt-3">This project may have been renamed or removed.</p>
+            <a href="gallery.html" class="inline-block mt-6 bg-brand-navy text-white font-bold px-6 py-3 rounded-sm" aria-label="Back to the gallery">Back to Gallery</a>
+        </section>
+    </main>
+
+    <!--@footer--><div id="site-footer-root"></div><!--/@footer-->
+
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/templates.js"></script>
+    <script src="assets/js/content.js"></script>
+    <script src="assets/js/common.js"></script>
+    <script src="assets/js/store.js"></script>
+    <script>
+    (function () {
+        'use strict';
+        const T = AE.T;
+        AE.layout('project');
+        const SITE = (AE.C.SITE_URL || '').replace(/\/$/, '');
+        const slug = window.AE_PROJECT || new URLSearchParams(location.search).get('p');
+        let main = null, thumbs = null, current = null;
+
+        /** Wire an enquiry form to Store.addLead (used on contact & project pages). */
+        function wireLeadForm(form, extra, onOk) {
+            const status = form.querySelector('[data-form-status]') || form.querySelector('.pf-status');
+            const nameEl = form.querySelector('[name="name"]');
+            const phoneEl = form.querySelector('[name="phone"]');
+            phoneEl.pattern = AE.PHONE_PATTERN;
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const ok = [nameEl, phoneEl].every((el) => AE.validateField(el));
+                const show = (msg, good) => { status.textContent = msg; status.className = `pf-status text-sm rounded-md p-3 ${good ? 'bg-green-50 text-green-800 border border-green-300' : 'bg-red-50 text-red-800 border border-red-300'}`; };
+                if (!ok) { show('Please enter your name and a valid 10-digit mobile number.', false); (nameEl.getAttribute('aria-invalid') === 'true' ? nameEl : phoneEl).focus(); return; }
+                const btn = form.querySelector('button[type="submit"]');
+                const label = btn.innerHTML;
+                btn.disabled = true; btn.textContent = 'Sending…';
+                const fd = new FormData(form);
+                const lead = { name: fd.get('name').trim(), phone: fd.get('phone').trim(), email: (fd.get('email') || '').trim(), message: (fd.get('message') || '').trim(), interest: fd.get('interest') || null, project: fd.get('project') || null, ...extra() };
+                try {
+                    await Promise.all([Store.addLead(lead), new Promise((r) => setTimeout(r, 700))]);
+                    form.reset();
+                    show(onOk ? onOk() : 'Thank you! We will call you shortly.', true);
+                    if (typeof window.gtag === 'function') window.gtag('event', 'generate_lead', { event_label: lead.project || lead.source });
+                } catch (ex) {
+                    console.error(ex);
+                    show(`Sorry, we could not send your enquiry. Please call ${AE.content().phone} or message us on WhatsApp.`, false);
+                } finally { btn.disabled = false; btn.innerHTML = label; }
+            });
+        }
+
+        function initGallery() {
+            if (typeof Swiper === 'undefined') return;
+            if (main) { main.destroy(true, true); main = null; }
+            if (thumbs) { thumbs.destroy(true, true); thumbs = null; }
+            if (document.querySelector('.projectThumbs')) thumbs = new Swiper('.projectThumbs', { slidesPerView: 'auto', spaceBetween: 10, watchSlidesProgress: true });
+            main = new Swiper('.projectSwiper', {
+                spaceBetween: 0, keyboard: { enabled: true }, grabCursor: true,
+                navigation: { nextEl: '.projectSwiper .swiper-button-next', prevEl: '.projectSwiper .swiper-button-prev' },
+                pagination: { el: '.projectSwiper .swiper-pagination', type: 'fraction' },
+                thumbs: thumbs ? { swiper: thumbs } : undefined
+            });
+        }
+
+        function setMeta(p, url) {
+            const name = AE.content().business_name;
+            document.title = p.title.length + name.length > 57 ? p.title : `${p.title} | ${name}`;
+            document.querySelectorAll('head [data-c], head [data-c-attr]').forEach((el) => { el.removeAttribute('data-c'); el.removeAttribute('data-c-attr'); });
+            const set = (sel, attr, v) => { const el = document.querySelector(sel); if (el) el.setAttribute(attr, v); };
+            const desc = p.description ? p.description.slice(0, 155) : `${p.title} – ${p.config || 'homes'} in ${p.location}.`;
+            set('meta[name="description"]', 'content', desc);
+            set('#canonical', 'href', url); set('#og-url', 'content', url); set('#og-title', 'content', p.title); set('#og-desc', 'content', desc); set('#tw-title', 'content', p.title);
+        }
+
+        function render(p, all) {
+            const built = AE.ctx().builtProjects.includes(p.slug) || window.AE_PROJECT;
+            const url = built ? `${SITE}/project/${encodeURIComponent(p.slug)}.html` : `${SITE}/project.html?p=${encodeURIComponent(p.slug)}`;
+            const html = T.projectPage(p, T.relatedProjects(p, all), AE.ctx(), url);
+            const key = T.hashKey(p);
+            const view = document.getElementById('project-view');
+            // Keep the pre-rendered page when nothing changed, and never wipe a form the visitor is filling in
+            const dirty = [...document.querySelectorAll('[data-project-form] input, [data-project-form] textarea')].some((el) => el.value.trim());
+            if (current === 'prerendered' && (view.dataset.v === key || dirty)) { current = key; return; }
+            if (current !== key) {
+                document.getElementById('project-view').outerHTML = html;
+                current = key;
+                const form = document.querySelector('[data-project-form]');
+                if (form) wireLeadForm(form, () => ({ project: p.title, interest: p.stage === 'live' ? 'Buying a Flat' : 'Similar project', source: 'Project page' }), () => 'Thank you! Our sales team will call you shortly.');
+                initGallery();
+                if (!window.AE_PROJECT) setMeta(p, url);
+            }
+        }
+
+        async function load(fresh) {
+            try {
+                let all = await Store.list('projects', { fresh });
+                let p = all.find((x) => x.slug === slug || x.id === slug);
+                if (!p && !fresh) { all = await Store.list('projects', { fresh: true }); p = all.find((x) => x.slug === slug || x.id === slug); }
+                if (!p) {
+                    document.getElementById('project-view').classList.add('hidden');
+                    document.getElementById('not-found').classList.remove('hidden');
+                    document.querySelector('meta[name="robots"]').setAttribute('content', 'noindex');
+                    return;
+                }
+                render(p, all);
+            } catch (ex) { console.error(ex); }
+        }
+        if (window.AE_PROJECT) {
+            // Pre-rendered page: wire the existing markup, then refresh from live data
+            const form = document.querySelector('[data-project-form]');
+            if (form) wireLeadForm(form, () => ({ project: form.dataset.project, interest: 'Buying a Flat', source: 'Project page' }), () => 'Thank you! Our sales team will call you shortly.');
+            initGallery();
+            current = 'prerendered';
+        }
+        load(false).then(() => { if (location.hash === '#enquire') { const el = document.getElementById('enquire'); if (el) el.scrollIntoView(); } });
+        Store.onChange((c, external) => { if (c === 'projects' && external) load(false); });
+    })();
+    </script>
+</body>
+</html>
