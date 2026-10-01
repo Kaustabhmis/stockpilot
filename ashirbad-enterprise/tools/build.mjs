@@ -188,7 +188,7 @@ const projectLd = (p) => ({
  * 4. Copy static files
  * ---------------------------------------------------------- */
 const EXCLUDE = new Set(['dist', 'node_modules', 'tools', 'google-apps-script', 'README.md', 'package.json', 'package-lock.json',
-    'tailwind.config.js', '.gitignore', 'netlify.toml', 'assets/css/tailwind.src.css']);
+    'tailwind.config.js', '.gitignore', 'netlify.toml', 'release', 'assets/css/tailwind.src.css']);
 fs.rmSync(OUT, { recursive: true, force: true });
 function copyDir(rel = '') {
     for (const entry of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
