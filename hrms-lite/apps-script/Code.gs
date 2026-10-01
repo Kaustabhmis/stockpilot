@@ -82,6 +82,11 @@ var DEFAULT_SETTINGS = {
   bonus_eligibility_ceiling: '21000',
   bonus_calc_ceiling: '7000',
   bonus_min_days: '30',
+  /* Payment of Gratuity Act. */
+  gratuity_min_years: '5',
+  gratuity_days_per_year: '15',
+  gratuity_month_days: '26',
+  gratuity_ceiling: '2000000',
   ot_pay_enabled: 'no',
   ot_rate_multiplier: '1',
   ot_max_hours_month: '60',

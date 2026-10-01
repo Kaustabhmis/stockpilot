@@ -836,6 +836,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
         <div class="tab" data-tab="wages"   onclick="payTab('wages')">Wages</div>
         <div class="tab" data-tab="arrears" onclick="payTab('arrears')">Arrears</div>
         <div class="tab" data-tab="bonus"   onclick="payTab('bonus')">Bonus</div>
+        <div class="tab" data-tab="gratuity" onclick="payTab('gratuity')">Gratuity</div>
       </div>
 
       <div id="pay-pane-salary">
@@ -916,6 +917,26 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           </div>
           <div class="kpis" id="bonus-kpis"></div>
           <div class="table-wrap"><table id="bonus-table"></table></div>
+        </div>
+      </div>
+
+      <!-- Gratuity: what is owed under the Payment of Gratuity Act, both to
+           the people who can claim it today and as a liability for everyone. -->
+      <div id="pay-pane-gratuity" style="display:none">
+        <div class="card">
+          <div class="toolbar">
+            <label class="field">As at<input type="date" id="grat-date" onchange="renderGratuity()"></label>
+            <label class="field">Show
+              <select id="grat-who" onchange="renderGratuity()">
+                <option value="eligible">Eligible to claim today</option>
+                <option value="all">Everyone, as a liability</option>
+                <option value="left">People who have left</option>
+              </select></label>
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="printGratuity()">&#128424; Print register</button>
+          </div>
+          <div class="kpis" id="grat-kpis"></div>
+          <div class="table-wrap"><table id="grat-table"></table></div>
         </div>
       </div>
     </section>
@@ -6162,7 +6183,13 @@ var PAYROLL_RULES = [
   ['bonus_rate_pct', 'Bonus rate % (the Act allows 8.33 to 20)', 'number'],
   ['bonus_eligibility_ceiling', 'Bonus: paid to anyone drawing up to this a month', 'number'],
   ['bonus_calc_ceiling', 'Bonus: worked out on at most this much a month', 'number'],
-  ['bonus_min_days', 'Bonus: days that must be worked in the year to qualify', 'number']
+  ['bonus_min_days', 'Bonus: days that must be worked in the year to qualify', 'number'],
+  /* Payment of Gratuity Act. Fifteen days a year on a 26-day month, after
+     five years, capped. All four move from time to time. */
+  ['gratuity_min_years', 'Gratuity: years of service before it can be claimed', 'number'],
+  ['gratuity_days_per_year', 'Gratuity: days of pay per completed year', 'number'],
+  ['gratuity_month_days', 'Gratuity: days taken as a month', 'number'],
+  ['gratuity_ceiling', 'Gratuity: most that can be paid to one person', 'number']
 ];
 
 /* Saying "the structure wins" is not the same as showing what it charges.
@@ -9784,7 +9811,7 @@ function reportRegister(ym) {
 
 function payTab(tab) {
   S.payTab = tab;
-  ['salary', 'wages', 'arrears', 'bonus'].forEach(function (t) {
+  ['salary', 'wages', 'arrears', 'bonus', 'gratuity'].forEach(function (t) {
     el('pay-pane-' + t).style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('#view-payroll .tab').forEach(function (n) {
@@ -9793,6 +9820,7 @@ function payTab(tab) {
   if (tab === 'wages')   renderWages();
   if (tab === 'arrears') renderArrears();
   if (tab === 'bonus')   renderBonus();
+  if (tab === 'gratuity') renderGratuity();
 }
 
 var isSalaried = function (e) { return String(e.wage_type || 'Salary') !== 'Wages'; };
@@ -10467,6 +10495,144 @@ function printBonus() {
     ['Employee', 'Code', 'Basic + DA', 'Worked on', 'Months', 'Days', 'Bonus'],
     paid.map(function (r) {
       return [r.name, r.emp_code, money(r.wage), money(r.base), r.months, r.days, money(r.amount)];
+    }));
+}
+
+
+/* ---------------------------------------------------------------- */
+/* GRATUITY - the Payment of Gratuity Act                            */
+/* ---------------------------------------------------------------- */
+/* Fifteen days' pay for every completed year, on the last drawn basic and
+   DA, where a month is taken as 26 days:
+       wage x 15/26 x years
+   Payable after five years of continuous service, and a part year of six
+   months or more counts as a whole one. The total is capped.
+
+   Two questions get asked of this, so the tab answers both: what somebody
+   leaving today is owed, and what the company would owe if everyone left -
+   the liability the accounts have to carry. */
+
+function gratuityCfg() {
+  return {
+    minYears:   num(S.settings.gratuity_min_years   || 5),
+    daysPerYear:num(S.settings.gratuity_days_per_year || 15),
+    monthDays:  num(S.settings.gratuity_month_days  || 26),
+    ceiling:    num(S.settings.gratuity_ceiling     || 2000000)
+  };
+}
+
+/* Last drawn basic + DA. A worker on daily rates is taken at 26 days, the
+   same month this formula already works in. */
+function gratuityWage(e) {
+  if (!isSalaried(e)) return (num(e.daily_rate) + num(e.da_rate)) * 26;
+  return num(e.basic) + num(e.special_allowance);
+}
+
+/* Whole months between two dates, which is what the six-month rule needs. */
+function monthsBetweenDates(fromIso, toIso) {
+  var a = new Date(fromIso + 'T00:00:00Z'), b = new Date(toIso + 'T00:00:00Z');
+  if (isNaN(a.getTime()) || isNaN(b.getTime()) || b < a) return 0;
+  var m = (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
+  if (b.getUTCDate() < a.getUTCDate()) m -= 1;        /* not a full month yet */
+  return Math.max(0, m);
+}
+
+function gratuityFor(e, asAt) {
+  var cfg = gratuityCfg();
+  var from = String(e.doj || '');
+  var to = String(e.exit_date || '') || asAt;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    return { emp_code: e.emp_code, name: e.name, wage: gratuityWage(e), months: 0,
+             years: 0, counted: 0, amount: 0, eligible: false, left: !!e.exit_date,
+             why: 'no date of joining on record' };
+  }
+  var months = monthsBetweenDates(from, to);
+  var whole = Math.floor(months / 12), rem = months % 12;
+  var counted = whole + (rem >= 6 ? 1 : 0);   /* six months or more rounds up */
+  var wage = gratuityWage(e);
+  var eligible = whole >= cfg.minYears;
+  var raw = wage * (cfg.daysPerYear / cfg.monthDays) * counted;
+  var amount = eligible ? Math.min(Math.round(raw), cfg.ceiling) : 0;
+  return {
+    emp_code: e.emp_code, name: e.name, doj: from, upto: to, wage: wage,
+    months: months, years: whole + (rem ? ' y ' + rem + ' m' : ' y'),
+    wholeYears: whole, counted: counted, amount: amount, eligible: eligible,
+    left: !!e.exit_date, capped: eligible && Math.round(raw) > cfg.ceiling,
+    why: eligible ? '' : (whole + ' year(s) served, needs ' + cfg.minYears)
+  };
+}
+
+function gratuityRows() {
+  var asAt = el('grat-date').value || today();
+  var who = el('grat-who').value;
+  var people = S.employees.filter(function (e) {
+    var gone = !!e.exit_date;
+    if (who === 'left') return gone;
+    return !gone && String(e.status || 'Active') === 'Active';
+  });
+  var rows = people.map(function (e) { return gratuityFor(e, asAt); });
+  if (who === 'eligible') rows = rows.filter(function (r) { return r.eligible; });
+  return rows.sort(function (a, b) { return b.amount - a.amount || a.name.localeCompare(b.name); });
+}
+
+function renderGratuity() {
+  var d = el('grat-date');
+  if (!d.value) d.value = today();
+  var cfg = gratuityCfg();
+  var rows = gratuityRows();
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+
+  var payable = rows.filter(function (r) { return r.eligible; });
+  var total = payable.reduce(function (sx, r) { return sx + r.amount; }, 0);
+  var nearly = rows.filter(function (r) { return !r.eligible && r.wholeYears === cfg.minYears - 1; });
+
+  el('grat-kpis').innerHTML =
+    kpi('Can claim today', payable.length, 'served ' + cfg.minYears + ' years or more') +
+    kpi('Amount', cur() + money(total),
+        el('grat-who').value === 'all' ? 'liability if everyone left' : 'payable') +
+    kpi('Formula', cfg.daysPerYear + '/' + cfg.monthDays + ' x years',
+        'last basic + DA, ' + cfg.daysPerYear + ' days a year') +
+    kpi('Qualifying next year', nearly.length, 'in their ' + cfg.minYears + 'th year now');
+
+  if (!rows.length) {
+    el('grat-table').innerHTML = '<tbody><tr><td class="empty">' +
+      (el('grat-who').value === 'eligible'
+        ? 'Nobody has completed ' + cfg.minYears + ' years yet. Switch to "Everyone" to see the liability building up.'
+        : 'Nobody to show.') + '</td></tr></tbody>';
+    return;
+  }
+
+  var head = '<thead><tr><th>Employee</th><th>Joined</th><th>Up to</th>' +
+    '<th class="num-col">Service</th><th class="num-col">Years counted</th>' +
+    '<th class="num-col">Last basic + DA</th><th class="num-col">Gratuity</th>' +
+    '<th>Note</th></tr></thead>';
+  var body = rows.map(function (r) {
+    return '<tr' + (r.eligible ? '' : ' style="opacity:.55"') + '>' +
+      '<td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) +
+        (r.left ? ' &middot; left' : '') + '</small></td>' +
+      '<td>' + esc(r.doj || '&mdash;') + '</td>' +
+      '<td>' + esc(r.upto || '&mdash;') + '</td>' +
+      '<td class="num-col">' + esc(String(r.years)) + '</td>' +
+      '<td class="num-col">' + r.counted + '</td>' +
+      '<td class="num-col">' + money(r.wage) + '</td>' +
+      '<td class="num-col"><b>' + (r.eligible ? money(r.amount) : '&mdash;') + '</b></td>' +
+      '<td><small>' + esc(r.why || (r.capped ? 'capped at ' + cur() + money(cfg.ceiling) : '')) +
+      '</small></td></tr>';
+  }).join('');
+  el('grat-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function printGratuity() {
+  var cfg = gratuityCfg();
+  var rows = gratuityRows();
+  if (!rows.length) return toast('Nothing to print', 'bad');
+  printTable('Gratuity ' + (el('grat-who').value === 'all' ? 'liability' : 'register') +
+             ' as at ' + (el('grat-date').value || today()) +
+             ' - ' + cfg.daysPerYear + '/' + cfg.monthDays + ' of last basic + DA per year',
+    ['Employee', 'Code', 'Joined', 'Up to', 'Service', 'Years', 'Last basic + DA', 'Gratuity'],
+    rows.map(function (r) {
+      return [r.name, r.emp_code, r.doj || '', r.upto || '', String(r.years), r.counted,
+              money(r.wage), r.eligible ? money(r.amount) : '-'];
     }));
 }
 
