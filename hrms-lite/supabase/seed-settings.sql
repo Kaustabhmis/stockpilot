@@ -23,6 +23,11 @@ insert into settings (key, value) values
   ('default_shift', 'General'),
   ('late_marks_per_halfday', '3'),
   ('late_mark_slab', '6:1, 12:2, 24:3'),
+  -- Payment of Bonus Act, as amended in 2015
+  ('bonus_rate_pct', '8.33'),
+  ('bonus_eligibility_ceiling', '21000'),
+  ('bonus_calc_ceiling', '7000'),
+  ('bonus_min_days', '30'),
   ('ot_pay_enabled', 'no'),
   ('ot_rate_multiplier', '1'),
   ('ot_max_hours_month', '60'),

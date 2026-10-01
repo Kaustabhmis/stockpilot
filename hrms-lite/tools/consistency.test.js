@@ -94,6 +94,14 @@ const agree = (what, a, aLabel, b, bLabel) => {
   await w.click('#btn-login');
   await w.waitForSelector('#view-dashboard', { state: 'visible', timeout: 25000 });
   await w.waitForTimeout(1500);
+  /* This suite pins itself to a fixed month, but the register comes down a
+     month at a time and only the last couple arrive at sign-in. Ask for the
+     month under test the way the screens do, or every figure reads zero. */
+  const webMonth = async () => {
+    await w.evaluate(ym => ensureMonths([ym]), YM);
+    await w.waitForFunction(ym => haveMonth(ym), YM, { timeout: 20000 });
+  };
+  await webMonth();
 
   const web = await w.evaluate(([code, ym]) => {
     const e = empByCode(code);
@@ -124,7 +132,11 @@ const agree = (what, a, aLabel, b, bLabel) => {
   ph.on('pageerror', e => errs.push('app: ' + e));
   await ph.route('**/app/index.html', async route => {
     const res = await route.fetch(); let t = await res.text();
-    t = t.replace(/API = 'https:\/\/script\.google\.com[^']*'/, "API = '" + BASE + "/exec'");
+    /* Point the phone app at this test server, whatever address it ships
+       with. Matching one provider's URL meant the day the app was pointed
+       somewhere else, this test quietly started driving a phone that could
+       not reach anything. */
+    t = t.replace(/^API = '[^']*';/m, "API = '" + BASE + "/exec';");
     await route.fulfill({ response: res, body: t,
       headers: Object.assign({}, res.headers(), { 'content-type': 'text/html' }) });
   });

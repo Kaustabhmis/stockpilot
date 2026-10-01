@@ -238,10 +238,19 @@ const check = (label, got, want, why) => {
   await p.fill('#in-email', 'admin@company.com'); await p.fill('#in-pass', 'admin123');
   await p.click('#btn-login');
   await p.waitForSelector('#view-dashboard', { state: 'visible', timeout: 25000 });
+  /* The register is fetched a month at a time, and only the last couple of
+     months come down at sign-in. This suite pins itself to a fixed month, so
+     it has to ask for that month the way the screens do - otherwise it reads
+     an empty register and every figure looks like zero. */
+  const loadMonth = async () => {
+    await p.evaluate(ym => ensureMonths([ym]), YM);
+    await p.waitForFunction(ym => haveMonth(ym), YM, { timeout: 20000 });
+  };
   await p.waitForTimeout(1500);
 
   const costs = async codes => {
-    await p.evaluate(() => reload()); await p.waitForTimeout(1200);
+    await p.evaluate(() => reload());
+    await loadMonth(); await p.waitForTimeout(1200);
     return p.evaluate(([cs, ym]) => {
       const want = new Set(cs);
       return S.employees.filter(e => want.has(e.emp_code)).map(e => {

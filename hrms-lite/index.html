@@ -831,19 +831,92 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
     <!-- ---------------- 4. PAYROLL ---------------- -->
     <section class="view" id="view-payroll">
-      <div id="pay-state"></div>
-      <div class="card">
-        <div class="toolbar">
-          <label class="field">Month<input type="month" id="pay-month" onchange="renderPayroll()"></label>
-          <span class="spacer"></span>
-          <button class="ghost sm adm" onclick="exportPayroll()">&#8681; Bank CSV</button>
-          <button class="ghost sm" onclick="printAllPayslips()" id="pay-print-all">&#128424; Print all payslips</button>
-          <button class="ghost sm adm" onclick="emailAllPayslips()">&#9993; Email payslips</button>
-          <button class="ghost sm adm" id="pay-generate" onclick="generatePayroll()">&#9881; Generate from attendance</button>
-          <button class="adm" id="pay-save" onclick="savePayroll()" disabled>Finalise run</button>
+      <div class="tabs">
+        <div class="tab active" data-tab="salary"  onclick="payTab('salary')">Salary</div>
+        <div class="tab" data-tab="wages"   onclick="payTab('wages')">Wages</div>
+        <div class="tab" data-tab="arrears" onclick="payTab('arrears')">Arrears</div>
+        <div class="tab" data-tab="bonus"   onclick="payTab('bonus')">Bonus</div>
+      </div>
+
+      <div id="pay-pane-salary">
+        <div id="pay-state"></div>
+        <div class="card">
+          <div class="toolbar">
+            <label class="field">Month<input type="month" id="pay-month" onchange="renderPayroll()"></label>
+            <span class="spacer"></span>
+            <button class="ghost sm adm" onclick="exportPayroll()">&#8681; Bank CSV</button>
+            <button class="ghost sm" onclick="printAllPayslips()" id="pay-print-all">&#128424; Print all payslips</button>
+            <button class="ghost sm adm" onclick="emailAllPayslips()">&#9993; Email payslips</button>
+            <button class="ghost sm adm" id="pay-generate" onclick="generatePayroll()">&#9881; Generate from attendance</button>
+            <button class="adm" id="pay-save" onclick="savePayroll()" disabled>Finalise run</button>
+          </div>
+          <div class="kpis" id="pay-kpis"></div>
+          <div class="table-wrap"><table id="pay-table"></table></div>
         </div>
-        <div class="kpis" id="pay-kpis"></div>
-        <div class="table-wrap"><table id="pay-table"></table></div>
+      </div>
+
+      <!-- Wages: the same run, on daily rates. Workers are paid per day worked,
+           so basic, DA and HRA are a rate times days, not a monthly figure. -->
+      <div id="pay-pane-wages" style="display:none">
+        <div id="wage-state"></div>
+        <div class="card">
+          <div class="toolbar">
+            <label class="field">Month<input type="month" id="wage-month" onchange="renderWages()"></label>
+            <span class="spacer"></span>
+            <button class="ghost sm adm" onclick="exportWages()">&#8681; Bank CSV</button>
+            <button class="ghost sm" onclick="printWagesRegister()">&#128424; Print register</button>
+            <button class="ghost sm adm" id="wage-generate" onclick="generateWages()">&#9881; Generate from attendance</button>
+            <button class="adm" id="wage-save" onclick="saveWages()" disabled>Finalise run</button>
+          </div>
+          <div class="kpis" id="wage-kpis"></div>
+          <div class="table-wrap"><table id="wage-table"></table></div>
+        </div>
+      </div>
+
+      <!-- Arrears: back-pay after a salary revision that takes effect from a
+           past month. What they should have had, less what they were paid. -->
+      <div id="pay-pane-arrears" style="display:none">
+        <div class="card">
+          <div class="toolbar">
+            <label class="field">Revision effective from
+              <input type="month" id="arr-from" onchange="renderArrears()"></label>
+            <label class="field">Up to and including
+              <input type="month" id="arr-to" onchange="renderArrears()"></label>
+            <label class="field">Rise
+              <select id="arr-mode" onchange="renderArrears()">
+                <option value="pct">a percentage of present gross</option>
+                <option value="amt">a flat amount per month</option>
+                <option value="each">typed in per person</option>
+              </select></label>
+            <label class="field" id="arr-val-wrap">Value
+              <input type="number" id="arr-val" value="0" step="0.01" onchange="renderArrears()"></label>
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="printArrears()">&#128424; Print</button>
+            <button class="adm" id="arr-post" onclick="postArrears()">Post to a month's payroll</button>
+          </div>
+          <div class="kpis" id="arr-kpis"></div>
+          <div class="table-wrap"><table id="arr-table"></table></div>
+        </div>
+      </div>
+
+      <!-- Bonus: the Payment of Bonus Act run, once a year before Puja. -->
+      <div id="pay-pane-bonus" style="display:none">
+        <div id="bonus-state"></div>
+        <div class="card">
+          <div class="toolbar">
+            <label class="field">Accounting year
+              <select id="bonus-fy" onchange="renderBonus()"></select></label>
+            <label class="field">Rate %
+              <input type="number" id="bonus-rate" step="0.01" min="8.33" max="20"
+                     onchange="renderBonus()"></label>
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="printBonus()">&#128424; Print register</button>
+            <button class="ghost sm adm" id="bonus-generate" onclick="generateBonus()">&#9881; Work out bonus</button>
+            <button class="adm" id="bonus-save" onclick="saveBonus()" disabled>Finalise bonus</button>
+          </div>
+          <div class="kpis" id="bonus-kpis"></div>
+          <div class="table-wrap"><table id="bonus-table"></table></div>
+        </div>
       </div>
     </section>
 
@@ -2364,7 +2437,10 @@ var VIEW_RENDER = {
   attendance: function () { renderAttendance(); },
   /* the leave screen carries the requests tabs inside it */
   leave:      function () { renderLeave(); renderRequests(); },
-  payroll:    function () { renderPayroll(); },
+  payroll:    function () {
+    var t = S.payTab || 'salary';
+    if (t === 'salary') renderPayroll(); else payTab(t);
+  },
   reports:    function () { renderReports(); }
 };
 
@@ -4776,7 +4852,10 @@ function renderPayroll() {
     });
   }
   var run = currentRun(ym);
-  var rows = run.rows;
+  var rows = run.rows.filter(function (r) {
+    var e = empByCode(r.emp_code);
+    return !e || isSalaried(e);            /* workers belong to the Wages tab */
+  });
   if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
   var finalised = runFinalised(ym) && !run.draft;
 
@@ -4871,10 +4950,21 @@ function renderPayroll() {
 
 function generatePayroll() {
   var ym = el('pay-month').value || thisMonth();
+  /* The run is worked out from that month's register, so the register has to
+     be here before it starts. Without this, pressing Generate while the month
+     is still arriving builds a run in which nobody was present and everybody
+     is paid as LOP - a whole month's payroll, silently wrong. */
+  if (needMonths([ym], generatePayroll)) {
+    return toast('Fetching ' + monthLabel(ym) + ' attendance first...');
+  }
+  /* Salaried people only. Workers on daily rates are run from the Wages tab,
+     which pays them on rates and days, not on a monthly structure - before
+     this split they were getting salary rows of zero. */
   var emps = S.employees.filter(function (e) {
-    return String(e.status || 'Active') === 'Active' && (!e.doj || String(e.doj) <= ym + '-31');
+    return String(e.status || 'Active') === 'Active' && isSalaried(e) &&
+           (!e.doj || String(e.doj) <= ym + '-31');
   });
-  if (!emps.length) return toast('No active employees to pay for this month', 'bad');
+  if (!emps.length) return toast('No salaried employees to pay for this month', 'bad');
   var existing = {};
   savedRunFor(ym).forEach(function (r) { existing[r.emp_code] = r; });
   S.payDraft = { month: ym, rows: emps.map(function (e) { return computePay(e, ym, existing[e.emp_code]); }) };
@@ -4978,7 +5068,11 @@ function payslipHtml(r, e) {
     '</tbody></table>' +
     '<div class="grid2">' +
       '<table><thead><tr><th>Earnings</th><th class="num-col">Amount</th></tr></thead><tbody>' +
-        line('Basic', r.basic) + line('HRA', r.hra) + line('Special allowance', r.special_allowance) +
+        /* A worker on daily rates has DA where a salaried person has a
+           special allowance - same column, so the payslip names it for
+           whoever is holding it. */
+        line('Basic', r.basic) + line('HRA', r.hra) +
+        line(isSalaried(e) ? 'Special allowance' : 'Dearness allowance', r.special_allowance) +
         line('Other allowance', r.other_allowance) +
         (num(r.arrears) ? line('Arrears', r.arrears) : '') +
         (num(r.bonus) ? line('Bonus', r.bonus) : '') +
@@ -6061,7 +6155,14 @@ var PAYROLL_RULES = [
   ['esi_employee_pct', 'ESI employee %', 'number'],
   ['esi_employer_pct', 'ESI employer %', 'number'],
   ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
-  ['pt_amount', 'Professional tax / month (used only if the CTC structure has no P.Tax slab)', 'number']
+  ['pt_amount', 'Professional tax / month (used only if the CTC structure has no P.Tax slab)', 'number'],
+  /* The Payment of Bonus Act numbers. They sit here because these are the
+     three Parliament keeps moving, and HR should not need a developer the
+     next time one of them changes. */
+  ['bonus_rate_pct', 'Bonus rate % (the Act allows 8.33 to 20)', 'number'],
+  ['bonus_eligibility_ceiling', 'Bonus: paid to anyone drawing up to this a month', 'number'],
+  ['bonus_calc_ceiling', 'Bonus: worked out on at most this much a month', 'number'],
+  ['bonus_min_days', 'Bonus: days that must be worked in the year to qualify', 'number']
 ];
 
 /* Saying "the structure wins" is not the same as showing what it charges.
@@ -9669,6 +9770,704 @@ function reportRegister(ym) {
           kpi('Salary earned', cur() + money(earn), 'before deductions') +
           kpi('Net payable', cur() + money(net), cur() + money(ded) + ' deducted')
   };
+}
+
+
+/* ================================================================
+   PAYROLL TABS - salary, wages, arrears, bonus
+   ================================================================
+   Salary and wages are the same payroll run seen from two sides: an
+   employee is paid one way or the other, never both, so a wage row and a
+   salary row can live in the same Payroll table without colliding. The
+   tab simply decides which people it is looking at.
+*/
+
+function payTab(tab) {
+  S.payTab = tab;
+  ['salary', 'wages', 'arrears', 'bonus'].forEach(function (t) {
+    el('pay-pane-' + t).style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#view-payroll .tab').forEach(function (n) {
+    n.classList.toggle('active', n.dataset.tab === tab);
+  });
+  if (tab === 'wages')   renderWages();
+  if (tab === 'arrears') renderArrears();
+  if (tab === 'bonus')   renderBonus();
+}
+
+var isSalaried = function (e) { return String(e.wage_type || 'Salary') !== 'Wages'; };
+
+/* ---------------------------------------------------------------- */
+/* WAGES                                                             */
+/* ---------------------------------------------------------------- */
+/* Days a worker is paid for. Present, half days at a half, plus the days
+   the company pays anyway - holidays, the weekly off and approved leave. */
+function wageDays(ym, code) {
+  var s = attStats(ym, code);
+  return s.P + s.HD * 0.5 + s.H + s.WO + s.L;
+}
+
+/* A wage row in the same shape as a salary row, so every screen that
+   already reads a payroll row - payslip, bank file, reports - reads this
+   one too. DA has no column of its own in the Payroll tab, so it travels
+   in special_allowance; the wages screen and the payslip both label it DA,
+   and PF here is worked out on basic + DA as the rules require. */
+function computeWage(e, ym, prev) {
+  var days = wageDays(ym, e.emp_code);
+  var step = num(S.settings.payroll_rounding || 1) || 1;
+  var r = function (v) { return Math.round(v / step) * step; };
+
+  var basic = num(e.daily_rate) * days;
+  var da    = num(e.da_rate) * days;
+  var hra   = num(e.hra_rate) * days;
+  var basicDa = basic + da;
+
+  var arrears   = prev && prev.arrears   !== undefined ? num(prev.arrears)   : 0;
+  var bonus     = prev && prev.bonus     !== undefined ? num(prev.bonus)     : 0;
+  var incentive = prev && prev.incentive !== undefined ? num(prev.incentive) : 0;
+  var otherDed  = prev && prev.other_deduction   !== undefined ? num(prev.other_deduction)   : 0;
+  var advance   = prev && prev.advance_deduction !== undefined ? num(prev.advance_deduction) : 0;
+
+  var gross = basicDa + hra + arrears + bonus + incentive;
+
+  /* PF on basic + DA, capped the same way salary is - the ceiling is a
+     flat monthly cap, never prorated. */
+  var pf = 0, pfEmployer = 0;
+  if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
+    var pfWage = Math.min(basicDa, num(S.settings.pf_wage_ceiling || 15000));
+    pf         = pfWage * num(S.settings.pf_employee_pct || 12) / 100;
+    pfEmployer = pfWage * num(S.settings.pf_employer_pct || 13) / 100;
+  }
+  var esi = 0, esiEmployer = 0;
+  if (String(e.esi_applicable || 'yes').toLowerCase() === 'yes' &&
+      gross <= num(S.settings.esi_wage_ceiling || 21000)) {
+    esi         = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
+    esiEmployer = gross * num(S.settings.esi_employer_pct || 3.25) / 100;
+  }
+  var ptComp = ctcComponentByCode('ptax');
+  var pt = ptComp ? num(computeCtc({ gross: gross }, {}).values.ptax)
+                  : num(S.settings.pt_amount || 0);
+
+  var grossR = r(gross);
+  var pfR = r(pf), esiR = r(esi), ptR = r(pt);
+  var otherR = r(otherDed), advanceR = r(advance);
+  var dedR = pfR + esiR + ptR + otherR + advanceR;
+  var pfErR = r(pfEmployer), esiErR = r(esiEmployer);
+
+  return {
+    id: ym + '_' + e.emp_code, month: ym, emp_code: e.emp_code,
+    total_days: daysInMonth(ym), lop_days: 0, paid_days: days,
+    basic: r(basic), hra: r(hra), special_allowance: r(da), other_allowance: 0,
+    arrears: r(arrears), bonus: r(bonus), incentive: r(incentive),
+    ot_hours: 0, ot_amount: 0,
+    gross: grossR, pf: pfR, esi: esiR, pt: ptR, tds: 0,
+    other_deduction: otherR, advance_deduction: advanceR,
+    total_deduction: dedR, net: grossR - dedR,
+    pf_employer: pfErR, esi_employer: esiErR, ctc: grossR + pfErR + esiErR,
+    late_deduction_days: 0, unpaid_leave_days: 0,
+    status: 'Draft', generated_at: today(), generated_by: (S.user && S.user.email) || ''
+  };
+}
+
+function wageWorkers(ym) {
+  return activeEmployees().filter(function (e) {
+    return !isSalaried(e) && (!e.doj || String(e.doj) <= ym + '-31');
+  });
+}
+
+function currentWageRun(ym) {
+  if (S.wageDraft && S.wageDraft.month === ym) return { rows: S.wageDraft.rows, draft: true };
+  var codes = {};
+  wageWorkers(ym).forEach(function (e) { codes[e.emp_code] = 1; });
+  return { rows: savedRunFor(ym).filter(function (r) { return codes[r.emp_code]; }), draft: false };
+}
+
+function generateWages() {
+  var ym = el('wage-month').value || thisMonth();
+  /* same guard as the salary run: no register, no run */
+  if (needMonths([ym], generateWages)) {
+    return toast('Fetching ' + monthLabel(ym) + ' attendance first...');
+  }
+  var people = wageWorkers(ym);
+  if (!people.length) {
+    return toast('Nobody is set to "Wages" this month. Set a person\'s "Paid as" to Wages on their record.', 'bad');
+  }
+  var existing = {};
+  savedRunFor(ym).forEach(function (r) { existing[r.emp_code] = r; });
+  S.wageDraft = { month: ym, rows: people.map(function (e) { return computeWage(e, ym, existing[e.emp_code]); }) };
+  renderWages();
+  toast('Draft built for ' + people.length + ' worker(s). Review the days and rates, then finalise.');
+}
+
+function saveWages() {
+  if (!S.wageDraft) return;
+  var ym = S.wageDraft.month;
+  var rows = S.wageDraft.rows.map(function (r) { return Object.assign({}, r, { status: 'Finalised' }); });
+  showModal('Finalise ' + monthLabel(ym) + ' wages',
+    '<p>This writes <b>' + rows.length + ' wage rows</b> for ' + esc(monthLabel(ym)) + '.</p>' +
+    '<p style="margin-top:10px">Net payable: <b>' + cur() +
+    money(rows.reduce(function (s, r) { return s + num(r.net); }, 0)) + '</b></p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Finalise', onClick: function () { closeModal(); writePayroll(rows); S.wageDraft = null; } }
+  ]);
+}
+
+function renderWages() {
+  var m = el('wage-month');
+  if (!m.value) m.value = el('pay-month').value || thisMonth();
+  var ym = m.value;
+  if (needMonths([ym], renderWages)) return;
+
+  var run = currentWageRun(ym);
+  var rows = run.rows;
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+
+  var people = wageWorkers(ym);
+  el('wage-state').innerHTML = people.length ? (run.draft
+    ? '<div class="locked-note" style="background:#dbeafe;color:#1e40af">&#9998; Draft run - nothing is saved ' +
+      'until you press <b>Finalise run</b>.</div>' : '')
+    : '<div class="locked-note">&#9888; No one is paid on wages yet. Open a person, set <b>Paid as</b> to ' +
+      '<b>Wages</b>, and give them a daily rate, DA rate and HRA rate.</div>';
+
+  el('wage-generate').disabled = !people.length;
+  el('wage-save').disabled = !run.draft;
+  el('wage-save').textContent = run.draft ? 'Finalise run (' + rows.length + ')' : 'Finalise run';
+
+  var t = rows.reduce(function (a, r) {
+    a.days += num(r.paid_days); a.gross += num(r.gross);
+    a.ded += num(r.total_deduction); a.net += num(r.net); a.pf += num(r.pf); return a;
+  }, { days: 0, gross: 0, ded: 0, net: 0, pf: 0 });
+
+  el('wage-kpis').innerHTML =
+    kpi('Workers paid', rows.length, run.draft ? 'draft, not saved' : (rows.length ? 'saved run' : 'nothing generated')) +
+    kpi('Days paid', t.days ? t.days.toFixed(1) : '0', 'present, half days, holidays and offs') +
+    kpi('Gross wages', cur() + money(t.gross), 'basic + DA + HRA') +
+    kpi('Deductions', cur() + money(t.ded), 'PF + ESI + PT') +
+    kpi('Net payable', cur() + money(t.net), 'transfer this to the bank');
+
+  if (!rows.length) {
+    el('wage-table').innerHTML = '<tbody><tr><td class="empty">' +
+      (people.length ? 'Nothing generated for ' + monthLabel(ym) + '. Press "Generate from attendance".'
+                     : 'No one is on wages.') + '</td></tr></tbody>';
+    return;
+  }
+
+  var editable = run.draft && isAdmin();
+  var head = '<thead><tr><th>Worker</th><th class="num-col">Days</th>' +
+    '<th class="num-col">Basic rate</th><th class="num-col">DA rate</th><th class="num-col">HRA rate</th>' +
+    '<th class="num-col">Basic</th><th class="num-col">DA</th><th class="num-col">HRA</th>' +
+    '<th class="num-col">Gross</th><th class="num-col">PF</th><th class="num-col">ESI</th>' +
+    '<th class="num-col">PT</th><th class="num-col">Advance</th><th class="num-col">Other ded.</th>' +
+    '<th class="num-col">Net pay</th><th></th></tr></thead>';
+
+  var body = rows.map(function (r, i) {
+    var e = empByCode(r.emp_code) || {};
+    var cell = function (f) {
+      return editable
+        ? '<input class="grid-in" type="number" step="0.01" value="' + num(r[f]) +
+          '" onchange="wageEdit(' + i + ',\'' + f + '\',this.value)">'
+        : money(num(r[f]));
+    };
+    return '<tr><td><b>' + esc(e.name || r.emp_code) + '</b><br><small>' + esc(r.emp_code) +
+      (e.uan ? ' &middot; UAN ' + esc(e.uan) : '') + '</small></td>' +
+      '<td class="num-col">' + (editable
+        ? '<input class="grid-in" type="number" step="0.5" value="' + num(r.paid_days) +
+          '" onchange="wageEdit(' + i + ',\'paid_days\',this.value)">'
+        : num(r.paid_days)) + '</td>' +
+      '<td class="num-col">' + money(num(e.daily_rate)) + '</td>' +
+      '<td class="num-col">' + money(num(e.da_rate)) + '</td>' +
+      '<td class="num-col">' + money(num(e.hra_rate)) + '</td>' +
+      '<td class="num-col">' + money(num(r.basic)) + '</td>' +
+      '<td class="num-col">' + money(num(r.special_allowance)) + '</td>' +
+      '<td class="num-col">' + money(num(r.hra)) + '</td>' +
+      '<td class="num-col"><b>' + money(num(r.gross)) + '</b></td>' +
+      '<td class="num-col">' + money(num(r.pf)) + '</td>' +
+      '<td class="num-col">' + money(num(r.esi)) + '</td>' +
+      '<td class="num-col">' + money(num(r.pt)) + '</td>' +
+      '<td class="num-col">' + cell('advance_deduction') + '</td>' +
+      '<td class="num-col">' + cell('other_deduction') + '</td>' +
+      '<td class="num-col"><b>' + money(num(r.net)) + '</b></td>' +
+      '<td><button class="ghost sm" onclick="payslip(\'' + esc(r.emp_code) + '\',\'' + ym +
+        '\')">Payslip</button></td></tr>';
+  }).join('');
+
+  el('wage-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+/* Changing days or a deduction re-works the row, so the totals on screen are
+   always the totals that would be saved. */
+function wageEdit(i, field, value) {
+  if (!S.wageDraft) return;
+  var row = S.wageDraft.rows[i];
+  var e = empByCode(row.emp_code);
+  if (!e) return;
+  var keep = { arrears: row.arrears, bonus: row.bonus, incentive: row.incentive,
+               other_deduction: row.other_deduction, advance_deduction: row.advance_deduction };
+  keep[field] = num(value);
+  var fresh = computeWage(e, S.wageDraft.month, keep);
+  if (field === 'paid_days') {
+    /* the days were overridden by hand: rebuild the money from those days */
+    var days = num(value), step = num(S.settings.payroll_rounding || 1) || 1;
+    var rr = function (v) { return Math.round(v / step) * step; };
+    fresh = computeWage(Object.assign({}, e), S.wageDraft.month, keep);
+    var basic = num(e.daily_rate) * days, da = num(e.da_rate) * days, hra = num(e.hra_rate) * days;
+    var gross = basic + da + hra + num(keep.arrears) + num(keep.bonus) + num(keep.incentive);
+    var pfWage = String(e.pf_applicable || 'yes').toLowerCase() === 'yes'
+      ? Math.min(basic + da, num(S.settings.pf_wage_ceiling || 15000)) : 0;
+    var pf = pfWage * num(S.settings.pf_employee_pct || 12) / 100;
+    var pfEr = pfWage * num(S.settings.pf_employer_pct || 13) / 100;
+    var esi = 0, esiEr = 0;
+    if (String(e.esi_applicable || 'yes').toLowerCase() === 'yes' &&
+        gross <= num(S.settings.esi_wage_ceiling || 21000)) {
+      esi = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
+      esiEr = gross * num(S.settings.esi_employer_pct || 3.25) / 100;
+    }
+    var ptC = ctcComponentByCode('ptax');
+    var pt = ptC ? num(computeCtc({ gross: gross }, {}).values.ptax) : num(S.settings.pt_amount || 0);
+    var gR = rr(gross), pfR = rr(pf), esiR = rr(esi), ptR = rr(pt);
+    var oR = rr(num(keep.other_deduction)), aR = rr(num(keep.advance_deduction));
+    var dR = pfR + esiR + ptR + oR + aR;
+    fresh = Object.assign(fresh, {
+      paid_days: days, basic: rr(basic), special_allowance: rr(da), hra: rr(hra),
+      gross: gR, pf: pfR, esi: esiR, pt: ptR, other_deduction: oR, advance_deduction: aR,
+      total_deduction: dR, net: gR - dR,
+      pf_employer: rr(pfEr), esi_employer: rr(esiEr), ctc: gR + rr(pfEr) + rr(esiEr)
+    });
+  }
+  S.wageDraft.rows[i] = fresh;
+  renderWages();
+}
+
+function exportWages() {
+  if (!isAdmin()) return toast('The bank file is for HR administrators only', 'bad');
+  var ym = el('wage-month').value || thisMonth();
+  var rows = currentWageRun(ym).rows;
+  if (!rows.length) return toast('Nothing to export for ' + monthLabel(ym), 'bad');
+  var cols = ['emp_code', 'name', 'bank_account', 'ifsc', 'paid_days', 'basic',
+              'special_allowance', 'hra', 'gross', 'pf', 'esi', 'pt',
+              'advance_deduction', 'other_deduction', 'total_deduction', 'net'];
+  download('wages-' + ym + '.csv', toCSV(cols, rows.map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    return cols.map(function (c) {
+      if (c === 'name') return e.name || '';
+      if (c === 'bank_account') return e.bank_account || '';
+      if (c === 'ifsc') return e.ifsc || '';
+      return r[c];
+    });
+  })));
+}
+
+function printWagesRegister() {
+  var ym = el('wage-month').value || thisMonth();
+  go('reports');
+  el('rep-month').value = ym;
+  if (el('rep-kind')) el('rep-kind').value = 'wages';
+  renderReports();
+}
+
+
+/* A plain table on paper, for the registers that are not one of the
+   named reports: head is a row of column names, body a row per line. */
+function printTable(title, head, body) {
+  printHtml(title,
+    '<h2 style="margin:0 0 4px">' + esc(title) + '</h2>' +
+    '<div style="font-size:.8rem;color:#555;margin-bottom:10px">' +
+      esc(S.settings.company_name || '') + ' &middot; ' + esc(today()) + '</div>' +
+    '<table class="reg-table"><thead><tr>' +
+    head.map(function (h) { return '<th>' + esc(String(h)) + '</th>'; }).join('') +
+    '</tr></thead><tbody>' +
+    body.map(function (r) {
+      return '<tr>' + r.map(function (c, i) {
+        return '<td' + (i ? ' class="num-col"' : '') + '>' + esc(String(c)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody></table>');
+}
+
+/* ---------------------------------------------------------------- */
+/* ARREARS - back-pay after a revision that takes effect from a past month */
+/* ---------------------------------------------------------------- */
+/* What somebody is owed is what they should have been paid, less what they
+   actually were. "Should have been" is the new gross prorated by the days
+   they were paid for that month; "actually were" is the gross on the saved
+   run, so a month nobody ran pays nothing and cannot invent an arrear. */
+
+function monthsFromTo(from, to) {
+  var out = [];
+  if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to) || from > to) return out;
+  var m = from;
+  while (m <= to) { out.push(m); m = addMonths(m, 1); }
+  return out;
+}
+
+function presentGross(e) {
+  return num(e.basic) + num(e.hra) + num(e.special_allowance) + num(e.other_allowance);
+}
+
+/* The rise for one person, by whichever way HR chose to express it. */
+function riseFor(e) {
+  var mode = el('arr-mode').value, v = num(el('arr-val').value);
+  if (mode === 'pct') return presentGross(e) * v / 100;
+  if (mode === 'amt') return v;
+  return num((S.arrEdit || {})[e.emp_code] || 0);     /* typed in per person */
+}
+
+function arrearRows() {
+  var from = el('arr-from').value, to = el('arr-to').value;
+  var months = monthsFromTo(from, to);
+  if (!months.length) return { months: months, rows: [] };
+
+  var rows = activeEmployees().filter(isSalaried).map(function (e) {
+    var rise = riseFor(e);
+    var per = [], total = 0;
+    months.forEach(function (ym) {
+      var saved = savedRunFor(ym).filter(function (r) { return r.emp_code === e.emp_code; })[0];
+      /* Only months that were actually run can carry an arrear. */
+      if (!saved) { per.push({ month: ym, amount: 0, note: 'no run' }); return; }
+      var divisor = num(saved.total_days) || daysInMonth(ym);
+      var factor = divisor ? num(saved.paid_days) / divisor : 0;
+      var amount = rise * factor;
+      total += amount;
+      per.push({ month: ym, amount: amount, note: factor < 1 ? (num(saved.paid_days) + ' of ' + divisor + ' days') : '' });
+    });
+    return { emp_code: e.emp_code, name: e.name, present: presentGross(e),
+             rise: rise, months: per, total: total };
+  }).filter(function (r) { return r.rise !== 0; });
+
+  return { months: months, rows: rows };
+}
+
+function renderArrears() {
+  var f = el('arr-from'), t = el('arr-to');
+  if (!f.value) f.value = addMonths(thisMonth(), -3);
+  if (!t.value) t.value = addMonths(thisMonth(), -1);
+  el('arr-val-wrap').style.display = el('arr-mode').value === 'each' ? 'none' : '';
+
+  var months = monthsFromTo(f.value, t.value);
+  if (needMonths(months, renderArrears)) return;
+
+  var data = arrearRows();
+  var total = data.rows.reduce(function (sx, r) { return sx + r.total; }, 0);
+  var paidMonths = data.months.filter(function (ym) { return savedRunFor(ym).length; });
+
+  el('arr-kpis').innerHTML =
+    kpi('Months covered', data.months.length,
+        paidMonths.length + ' of them have a finalised run') +
+    kpi('People affected', data.rows.length, 'everyone on salary with a rise') +
+    kpi('Arrears payable', cur() + money(total), 'before you post it to a month');
+
+  if (!data.months.length) {
+    el('arr-table').innerHTML = '<tbody><tr><td class="empty">Pick the month the revision takes ' +
+      'effect from, and the last month to pay arrears for.</td></tr></tbody>';
+    return;
+  }
+  if (!paidMonths.length) {
+    el('arr-table').innerHTML = '<tbody><tr><td class="empty">None of those months has a finalised ' +
+      'payroll run, so there is nothing to compare against. Arrears are worked out against what was ' +
+      'actually paid.</td></tr></tbody>';
+    return;
+  }
+
+  var head = '<thead><tr><th>Employee</th><th class="num-col">Present gross</th>' +
+    '<th class="num-col">Rise / month</th>' +
+    data.months.map(function (m) { return '<th class="num-col">' + esc(monthLabel(m)) + '</th>'; }).join('') +
+    '<th class="num-col">Arrears due</th></tr></thead>';
+
+  var body = data.rows.map(function (r) {
+    return '<tr><td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) + '</small></td>' +
+      '<td class="num-col">' + money(r.present) + '</td>' +
+      '<td class="num-col">' + (el('arr-mode').value === 'each'
+        ? '<input class="grid-in" type="number" step="0.01" value="' + r.rise +
+          '" onchange="arrSet(\'' + esc(r.emp_code) + '\',this.value)">'
+        : money(r.rise)) + '</td>' +
+      r.months.map(function (m) {
+        return '<td class="num-col">' + (m.note === 'no run'
+          ? '<small style="color:var(--text-muted)">no run</small>'
+          : money(m.amount) + (m.note ? '<br><small>' + esc(m.note) + '</small>' : '')) + '</td>';
+      }).join('') +
+      '<td class="num-col"><b>' + money(r.total) + '</b></td></tr>';
+  }).join('');
+
+  el('arr-table').innerHTML = head + '<tbody>' + body +
+    (data.rows.length ? '' : '<tr><td class="empty">Set a rise above to work out what is owed.</td></tr>') +
+    '</tbody>';
+}
+
+function arrSet(code, value) {
+  S.arrEdit = S.arrEdit || {};
+  S.arrEdit[code] = num(value);
+  renderArrears();
+}
+
+/* Posting writes the arrear into a month's draft run, where it is reviewed
+   and finalised like any other pay. It never writes to a finalised month. */
+function postArrears() {
+  if (!isAdmin()) return toast('Only HR administrators can post arrears', 'bad');
+  var data = arrearRows();
+  var owed = data.rows.filter(function (r) { return Math.round(r.total) !== 0; });
+  if (!owed.length) return toast('Nothing to post - no arrears worked out', 'bad');
+
+  var into = thisMonth();
+  showModal('Post arrears to a month',
+    '<p><b>' + owed.length + '</b> people, <b>' + cur() +
+    money(owed.reduce(function (sx, r) { return sx + r.total; }, 0)) + '</b> in total.</p>' +
+    '<label class="field" style="margin-top:12px">Add to this month\'s payroll' +
+    '<input type="month" id="arr-into" value="' + into + '"></label>' +
+    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">The amounts land in the ' +
+    'Arrears column of that month\'s draft run. Nothing is paid until you finalise that run.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Post', onClick: function () {
+        var ym = el('arr-into').value;
+        closeModal();
+        if (!/^\d{4}-\d{2}$/.test(ym)) return toast('Pick a month', 'bad');
+        if (runFinalised(ym)) {
+          return toast(monthLabel(ym) + ' is finalised. Reopen that run first.', 'bad');
+        }
+        var byCode = {};
+        owed.forEach(function (r) { byCode[r.emp_code] = r.total; });
+
+        /* build the draft if there is not one yet, so the arrear has somewhere to go */
+        if (!S.payDraft || S.payDraft.month !== ym) {
+          var existing = {};
+          savedRunFor(ym).forEach(function (r) { existing[r.emp_code] = r; });
+          S.payDraft = { month: ym, rows: activeEmployees().filter(isSalaried)
+            .filter(function (e) { return !e.doj || String(e.doj) <= ym + '-31'; })
+            .map(function (e) { return computePay(e, ym, existing[e.emp_code]); }) };
+        }
+        var hit = 0;
+        S.payDraft.rows = S.payDraft.rows.map(function (row) {
+          if (byCode[row.emp_code] === undefined) return row;
+          hit++;
+          var e = empByCode(row.emp_code);
+          var keep = Object.assign({}, row, { arrears: byCode[row.emp_code] });
+          return e ? computePay(e, ym, keep) : row;
+        });
+        el('pay-month').value = ym;
+        payTab('salary');
+        renderPayroll();
+        toast('Arrears posted to ' + hit + ' people in the ' + monthLabel(ym) +
+              ' draft. Review, then finalise.');
+      } }
+  ]);
+}
+
+function printArrears() {
+  var data = arrearRows();
+  if (!data.rows.length) return toast('Nothing to print', 'bad');
+  var head = ['Employee', 'Code', 'Present gross', 'Rise/month']
+    .concat(data.months.map(monthLabel)).concat(['Arrears due']);
+  var body = data.rows.map(function (r) {
+    return [r.name, r.emp_code, money(r.present), money(r.rise)]
+      .concat(r.months.map(function (m) { return money(m.amount); }))
+      .concat([money(r.total)]);
+  });
+  printTable('Arrears - revision effective ' + monthLabel(data.months[0]), head, body);
+}
+
+
+/* ---------------------------------------------------------------- */
+/* BONUS - the Payment of Bonus Act run                              */
+/* ---------------------------------------------------------------- */
+/* The Act, as it stands after the 2015 amendment:
+     - anyone drawing up to bonus_eligibility_ceiling a month qualifies,
+     - the bonus is worked out on at most bonus_calc_ceiling a month,
+     - at least 8.33% and at most 20% of that,
+     - and they must have worked at least 30 days in the year.
+   The three numbers are settings, because they are the ones Parliament
+   keeps moving. Accounting year is April to March.
+
+   A bonus run is kept in the Payroll table like any other pay record, but
+   filed under the year rather than a month - 'FY2026-27' - so a month's
+   salary run never picks it up and it still reaches the payslip screen. */
+
+function fyOf(iso) {
+  var y = Number(String(iso).slice(0, 4)), m = Number(String(iso).slice(5, 7));
+  if (m < 4) y -= 1;                       /* Jan-Mar belongs to the year before */
+  return y + '-' + String((y + 1) % 100).padStart(2, '0');
+}
+function fyMonths(fy) {
+  var y = Number(String(fy).slice(0, 4)), out = [];
+  for (var i = 0; i < 12; i++) {
+    var mm = 4 + i, yy = y;
+    if (mm > 12) { mm -= 12; yy += 1; }
+    out.push(yy + '-' + String(mm).padStart(2, '0'));
+  }
+  return out;
+}
+var bonusKey = function (fy) { return 'FY' + fy; };
+
+/* What a person draws in a month for bonus purposes: basic + DA. A worker
+   on daily rates is taken at 26 days, the usual month for this. */
+function bonusWage(e) {
+  if (!isSalaried(e)) return (num(e.daily_rate) + num(e.da_rate)) * 26;
+  return num(e.basic) + num(e.special_allowance);
+}
+
+function bonusSettings() {
+  return {
+    rate: num(el('bonus-rate').value) || num(S.settings.bonus_rate_pct || 8.33),
+    eligibility: num(S.settings.bonus_eligibility_ceiling || 21000),
+    calcCeiling: num(S.settings.bonus_calc_ceiling || 7000),
+    minDays: num(S.settings.bonus_min_days || 30)
+  };
+}
+
+function bonusRows(fy) {
+  var cfg = bonusSettings();
+  var months = fyMonths(fy);
+  return activeEmployees().map(function (e) {
+    var wage = bonusWage(e);
+    /* months of the year they were actually on the books */
+    var served = months.filter(function (ym) {
+      if (e.doj && String(e.doj) > ym + '-31') return false;
+      if (e.exit_date && String(e.exit_date) < ym + '-01') return false;
+      return true;
+    });
+    /* days worked, from whatever attendance we hold for those months */
+    var days = served.reduce(function (sx, ym) {
+      var st = attStats(ym, e.emp_code);
+      return sx + st.P + st.HD * 0.5;
+    }, 0);
+    var base = Math.min(wage, cfg.calcCeiling);
+    var eligible = wage <= cfg.eligibility && days >= cfg.minDays;
+    var amount = eligible ? base * (cfg.rate / 100) * served.length : 0;
+    var why = wage > cfg.eligibility
+      ? 'draws over ' + cur() + money(cfg.eligibility)
+      : (days < cfg.minDays ? 'worked ' + days + ' days, needs ' + cfg.minDays : '');
+    return { emp_code: e.emp_code, name: e.name, wage: wage, base: base,
+             months: served.length, days: days, eligible: eligible,
+             amount: Math.round(amount), why: why };
+  }).sort(function (a, b) { return (b.eligible - a.eligible) || a.name.localeCompare(b.name); });
+}
+
+function savedBonus(fy) {
+  return S.payroll.filter(function (p) { return String(p.month) === bonusKey(fy); });
+}
+
+function renderBonus() {
+  var sel = el('bonus-fy');
+  if (!sel.options.length) {
+    var now = fyOf(today()), yr = Number(now.slice(0, 4)), opts = '';
+    for (var i = 0; i < 4; i++) {
+      var y = yr - i, f = y + '-' + String((y + 1) % 100).padStart(2, '0');
+      opts += '<option value="' + f + '">April ' + y + ' to March ' + (y + 1) + '</option>';
+    }
+    sel.innerHTML = opts;
+  }
+  if (!el('bonus-rate').value) el('bonus-rate').value = num(S.settings.bonus_rate_pct || 8.33);
+  var fy = sel.value || fyOf(today());
+  var cfg = bonusSettings();
+
+  var saved = savedBonus(fy);
+  var rows = (S.bonusDraft && S.bonusDraft.fy === fy) ? S.bonusDraft.rows : null;
+  var draft = !!rows;
+  if (!rows) {
+    rows = saved.length
+      ? saved.map(function (r) {
+          var e = empByCode(r.emp_code) || {};
+          return { emp_code: r.emp_code, name: e.name || r.emp_code, wage: bonusWage(e),
+                   base: Math.min(bonusWage(e), cfg.calcCeiling),
+                   months: num(r.total_days), days: num(r.paid_days),
+                   eligible: true, amount: num(r.bonus), why: '' };
+        })
+      : [];
+  }
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+
+  el('bonus-state').innerHTML = saved.length && !draft
+    ? '<div class="locked-note">&#128274; Bonus for ' + esc(fy) + ' is finalised - ' + saved.length +
+      ' people.</div>'
+    : (draft ? '<div class="locked-note" style="background:#dbeafe;color:#1e40af">&#9998; Draft - ' +
+        'nothing is saved until you press <b>Finalise bonus</b>.</div>' : '');
+  el('bonus-save').disabled = !draft;
+
+  var paid = rows.filter(function (r) { return r.eligible; });
+  var total = paid.reduce(function (sx, r) { return sx + r.amount; }, 0);
+  el('bonus-kpis').innerHTML =
+    kpi('Eligible', paid.length, 'of ' + rows.length + ' on the books') +
+    kpi('Rate applied', cfg.rate + '%', 'minimum 8.33%, maximum 20%') +
+    kpi('Worked out on', cur() + money(cfg.calcCeiling) + '/month',
+        'ceiling for the calculation') +
+    kpi('Bonus payable', cur() + money(total), 'for ' + esc(fy));
+
+  if (!rows.length) {
+    el('bonus-table').innerHTML = '<tbody><tr><td class="empty">Nothing worked out for ' + esc(fy) +
+      ' yet. Press "Work out bonus".</td></tr></tbody>';
+    return;
+  }
+
+  var head = '<thead><tr><th>Employee</th><th class="num-col">Basic + DA</th>' +
+    '<th class="num-col">Worked on</th><th class="num-col">Months</th>' +
+    '<th class="num-col">Days worked</th><th class="num-col">Bonus</th><th>Note</th></tr></thead>';
+  var body = rows.map(function (r) {
+    return '<tr' + (r.eligible ? '' : ' style="opacity:.55"') + '>' +
+      '<td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) + '</small></td>' +
+      '<td class="num-col">' + money(r.wage) + '</td>' +
+      '<td class="num-col">' + money(r.base) + '</td>' +
+      '<td class="num-col">' + r.months + '</td>' +
+      '<td class="num-col">' + r.days + '</td>' +
+      '<td class="num-col"><b>' + (r.eligible ? money(r.amount) : '&mdash;') + '</b></td>' +
+      '<td><small>' + esc(r.why || (r.eligible ? '' : 'not eligible')) + '</small></td></tr>';
+  }).join('');
+  el('bonus-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function generateBonus() {
+  if (!isAdmin()) return toast('Only HR administrators can work out bonus', 'bad');
+  var fy = el('bonus-fy').value;
+  var months = fyMonths(fy);
+  if (needMonths(months, generateBonus)) return;
+  var cfg = bonusSettings();
+  if (cfg.rate < 8.33 || cfg.rate > 20) {
+    return toast('The Act allows between 8.33% and 20%. ' + cfg.rate + '% is outside that.', 'bad');
+  }
+  S.bonusDraft = { fy: fy, rows: bonusRows(fy) };
+  renderBonus();
+  var n = S.bonusDraft.rows.filter(function (r) { return r.eligible; }).length;
+  toast('Bonus worked out for ' + n + ' eligible people at ' + cfg.rate + '%. Review, then finalise.');
+}
+
+function saveBonus() {
+  if (!S.bonusDraft) return;
+  var fy = S.bonusDraft.fy, cfg = bonusSettings();
+  var paid = S.bonusDraft.rows.filter(function (r) { return r.eligible && r.amount > 0; });
+  if (!paid.length) return toast('Nobody is eligible, so there is nothing to finalise', 'bad');
+  var rows = paid.map(function (r) {
+    return {
+      id: bonusKey(fy) + '_' + r.emp_code, month: bonusKey(fy), emp_code: r.emp_code,
+      total_days: r.months, lop_days: 0, paid_days: r.days,
+      basic: 0, hra: 0, special_allowance: 0, other_allowance: 0,
+      arrears: 0, bonus: r.amount, incentive: 0, ot_hours: 0, ot_amount: 0,
+      gross: r.amount, pf: 0, esi: 0, pt: 0, tds: 0,
+      other_deduction: 0, advance_deduction: 0, total_deduction: 0, net: r.amount,
+      pf_employer: 0, esi_employer: 0, ctc: r.amount,
+      late_deduction_days: 0, unpaid_leave_days: 0,
+      status: 'Finalised', generated_at: today(),
+      generated_by: (S.user && S.user.email) || ''
+    };
+  });
+  showModal('Finalise bonus for ' + esc(fy),
+    '<p><b>' + rows.length + '</b> people, <b>' + cur() +
+    money(rows.reduce(function (sx, r) { return sx + r.net; }, 0)) + '</b> at ' + cfg.rate + '%.</p>' +
+    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">Filed under ' +
+    esc(bonusKey(fy)) + ', separate from any month\'s salary run, and each person can see it ' +
+    'on their payslips.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Finalise', onClick: function () {
+        closeModal(); writePayroll(rows); S.bonusDraft = null;
+      } }
+  ]);
+}
+
+function printBonus() {
+  var fy = el('bonus-fy').value, cfg = bonusSettings();
+  var rows = (S.bonusDraft && S.bonusDraft.fy === fy) ? S.bonusDraft.rows : bonusRows(fy);
+  var paid = rows.filter(function (r) { return r.eligible; });
+  if (!paid.length) return toast('Nothing to print', 'bad');
+  printTable('Bonus register ' + fy + ' - at ' + cfg.rate + '% (Payment of Bonus Act)',
+    ['Employee', 'Code', 'Basic + DA', 'Worked on', 'Months', 'Days', 'Bonus'],
+    paid.map(function (r) {
+      return [r.name, r.emp_code, money(r.wage), money(r.base), r.months, r.days, money(r.amount)];
+    }));
 }
 
 /* ---- wages register: kept available, driven by daily rates ---- */
