@@ -236,15 +236,21 @@ export function createApi(db, opts = {}) {
 
     if (action === 'save') {
       if (p.sheet === 'Employees') {
-        /* their own record, and only the handful of fields that are theirs */
+        /* Their own record, and only the handful of fields that are theirs.
+           The row is rebuilt from the whitelist rather than refused, because
+           the My details screen sends the whole record back: refusing the
+           save because it carried a basic they never typed would stop them
+           correcting their own phone number. upsertRow keeps whatever is
+           left out, so the rest of the record is untouched, and a field the
+           browser was never meant to send cannot survive by any spelling. */
         if (String(p.row && p.row.emp_code) !== code) {
           throw new Error('Not allowed. You can only change your own details.');
         }
-        const touched = Object.keys(p.row || {}).filter(k => k !== 'emp_code');
-        const bad = touched.filter(k => !EMPLOYEE_OWN_FIELDS.has(k));
-        if (bad.length) {
-          throw new Error('Not allowed. HR sets ' + bad.join(', ') + '.');
-        }
+        const sent = p.row || {}, mine = { emp_code: code };
+        Object.keys(sent).forEach(function (f) {
+          if (EMPLOYEE_OWN_FIELDS.has(f)) mine[f] = sent[f];
+        });
+        p.row = mine;
         return;
       }
       if (!EMPLOYEE_WRITE.has(p.sheet)) {

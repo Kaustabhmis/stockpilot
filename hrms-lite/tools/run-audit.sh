@@ -18,8 +18,8 @@ echo "auditing $BASE"
 echo
 
 pass=0; fail=0; failed=""
-for t in payroll-rules attendance-rules leave-rules policy-rules \
-         request-punch-rules latemark-punch-rules consistency browse lock-contention; do
+for t in payroll-rules payroll-tabs attendance-rules leave-rules policy-rules \
+         request-punch-rules latemark-punch-rules permissions consistency browse lock-contention; do
   printf '  %-24s ' "$t"
   out=$(node "$t.test.js" "$BASE" 2>&1); code=$?
   if [ $code -eq 0 ]; then
