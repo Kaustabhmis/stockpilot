@@ -83,7 +83,11 @@ var DEFAULT_SETTINGS = {
   bonus_calc_ceiling: '7000',
   bonus_min_days: '30',
   /* Payment of Gratuity Act. */
-  gratuity_min_years: '5',
+  /* One completed year, following the Social Security Code. The Payment of
+     Gratuity Act's own rule is five, so change this if that is what you
+     apply to permanent staff. */
+  gratuity_min_years: '1',
+  gratuity_prorata: 'no',
   gratuity_days_per_year: '15',
   gratuity_month_days: '26',
   gratuity_ceiling: '2000000',

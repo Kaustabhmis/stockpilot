@@ -6186,7 +6186,8 @@ var PAYROLL_RULES = [
   ['bonus_min_days', 'Bonus: days that must be worked in the year to qualify', 'number'],
   /* Payment of Gratuity Act. Fifteen days a year on a 26-day month, after
      five years, capped. All four move from time to time. */
-  ['gratuity_min_years', 'Gratuity: years of service before it can be claimed', 'number'],
+  ['gratuity_min_years', 'Gratuity: completed years of service before it can be claimed', 'number'],
+  ['gratuity_prorata', 'Gratuity: pay the months actually served, instead of rounding a part year of 6 months up to a whole one', 'select:no,yes'],
   ['gratuity_days_per_year', 'Gratuity: days of pay per completed year', 'number'],
   ['gratuity_month_days', 'Gratuity: days taken as a month', 'number'],
   ['gratuity_ceiling', 'Gratuity: most that can be paid to one person', 'number']
@@ -10505,8 +10506,10 @@ function printBonus() {
 /* Fifteen days' pay for every completed year, on the last drawn basic and
    DA, where a month is taken as 26 days:
        wage x 15/26 x years
-   Payable after five years of continuous service, and a part year of six
-   months or more counts as a whole one. The total is capped.
+   Payable after the qualifying service set in Settings - one year here,
+   following the Social Security Code - and a part year of six months or
+   more counts as a whole one, unless pro rata is switched on, in which case
+   the months actually served are paid. The total is capped.
 
    Two questions get asked of this, so the tab answers both: what somebody
    leaving today is owed, and what the company would owe if everyone left -
@@ -10514,10 +10517,14 @@ function printBonus() {
 
 function gratuityCfg() {
   return {
-    minYears:   num(S.settings.gratuity_min_years   || 5),
+    minYears:   num(S.settings.gratuity_min_years   || 1),
     daysPerYear:num(S.settings.gratuity_days_per_year || 15),
     monthDays:  num(S.settings.gratuity_month_days  || 26),
-    ceiling:    num(S.settings.gratuity_ceiling     || 2000000)
+    ceiling:    num(S.settings.gratuity_ceiling     || 2000000),
+    /* The Act counts six months or more as a whole year. Pro rata instead
+       pays the months actually served - which is how the Social Security
+       Code words it for people who qualify after a single year. */
+    prorata:    String(S.settings.gratuity_prorata || 'no').toLowerCase() === 'yes'
   };
 }
 
@@ -10548,7 +10555,9 @@ function gratuityFor(e, asAt) {
   }
   var months = monthsBetweenDates(from, to);
   var whole = Math.floor(months / 12), rem = months % 12;
-  var counted = whole + (rem >= 6 ? 1 : 0);   /* six months or more rounds up */
+  var counted = cfg.prorata
+    ? Math.round((months / 12) * 100) / 100          /* the months actually served */
+    : whole + (rem >= 6 ? 1 : 0);                    /* six months or more rounds up */
   var wage = gratuityWage(e);
   var eligible = whole >= cfg.minYears;
   var raw = wage * (cfg.daysPerYear / cfg.monthDays) * counted;
@@ -10558,7 +10567,10 @@ function gratuityFor(e, asAt) {
     months: months, years: whole + (rem ? ' y ' + rem + ' m' : ' y'),
     wholeYears: whole, counted: counted, amount: amount, eligible: eligible,
     left: !!e.exit_date, capped: eligible && Math.round(raw) > cfg.ceiling,
-    why: eligible ? '' : (whole + ' year(s) served, needs ' + cfg.minYears)
+    why: eligible ? '' : (months < 12
+      ? months + ' month(s) served, needs ' + cfg.minYears +
+        ' year' + (cfg.minYears > 1 ? 's' : '')
+      : whole + ' year(s) served, needs ' + cfg.minYears)
   };
 }
 
@@ -10592,7 +10604,9 @@ function renderGratuity() {
         el('grat-who').value === 'all' ? 'liability if everyone left' : 'payable') +
     kpi('Formula', cfg.daysPerYear + '/' + cfg.monthDays + ' x years',
         'last basic + DA, ' + cfg.daysPerYear + ' days a year') +
-    kpi('Qualifying next year', nearly.length, 'in their ' + cfg.minYears + 'th year now');
+    kpi(cfg.minYears > 1 ? 'Qualifying next year' : 'Not yet a year',
+        nearly.length,
+        cfg.minYears > 1 ? 'in their ' + cfg.minYears + 'th year now' : 'under a year served');
 
   if (!rows.length) {
     el('grat-table').innerHTML = '<tbody><tr><td class="empty">' +

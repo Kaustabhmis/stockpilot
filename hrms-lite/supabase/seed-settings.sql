@@ -29,7 +29,8 @@ insert into settings (key, value) values
   ('bonus_calc_ceiling', '7000'),
   ('bonus_min_days', '30'),
   -- Payment of Gratuity Act
-  ('gratuity_min_years', '5'),
+  ('gratuity_min_years', '1'),
+  ('gratuity_prorata', 'no'),
   ('gratuity_days_per_year', '15'),
   ('gratuity_month_days', '26'),
   ('gratuity_ceiling', '2000000'),
