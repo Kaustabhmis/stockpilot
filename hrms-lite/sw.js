@@ -6,7 +6,7 @@
  * never be answered out of a cache, and a stale payslip would be worse than
  * no payslip.
  */
-var CACHE = 'biscs-os-v2';
+var CACHE = 'biscs-os-v3';
 var SHELL = ['./index.html', './manifest.webmanifest',
              './app/icons/icon-192.png', './app/icons/icon-512.png'];
 
@@ -17,9 +17,13 @@ self.addEventListener('install', function (e) {
 });
 
 self.addEventListener('activate', function (e) {
+  /* Only our own old copies. The phone app keeps its shell in a cache of
+     its own on this same site, and clearing everything would wipe it - so
+     each one would delete the other's offline copy every time it opened. */
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; })
-      .map(function (k) { return caches.delete(k); }));
+    return Promise.all(keys.filter(function (k) {
+      return k !== CACHE && k.indexOf('biscs-os-') === 0;
+    }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 
@@ -38,6 +42,11 @@ self.addEventListener('fetch', function (e) {
      served from here. What it costs is that a redeploy shows up one open
      later - open it twice after putting a new copy on the site. */
   if (req.mode === 'navigate' || req.destination === 'document') {
+    /* The phone app lives under /app/ and has a service worker of its own.
+       This one is registered at the top of the site, so without this line it
+       would answer the phone app's address with the HR page - and then store
+       that fetch as the HR shell. Hands it back to the app. */
+    if (new URL(req.url).pathname.indexOf('/app/') >= 0) return;
     e.respondWith(
       caches.match('./index.html').then(function (hit) {
         var fresh = fetch(req).then(function (res) {
