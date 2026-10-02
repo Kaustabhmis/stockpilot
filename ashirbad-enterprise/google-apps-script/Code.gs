@@ -318,7 +318,7 @@ function login_(password) {
   var props = PropertiesService.getScriptProperties();
   var stored = props.getProperty('ADMIN_PASSWORD_HASH');
   var salt = props.getProperty('ADMIN_PASSWORD_SALT');
-  if (!stored || !salt) fail_('Admin password is not set yet. Open the Google Sheet and use Website Admin → Set admin password.');
+  if (!stored || !salt) fail_('Admin password is not set up yet.');
 
   var cache = CacheService.getScriptCache();
   var fails = Number(cache.get('login_fail') || 0);

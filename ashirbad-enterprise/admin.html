@@ -324,7 +324,7 @@
         document.getElementById('login-email-wrap').classList.add('hidden');
         document.getElementById('login-hint').textContent = Store.mode === 'local'
             ? 'Demo mode: use the password set as LOCAL_ADMIN_PASSWORD in assets/js/config.js.'
-            : 'Enter the admin password you set in the Google Sheet menu (Website Admin → Set admin password).';
+            : '';
 
         const pwEl = document.getElementById('login-password');
         document.getElementById('login-show').addEventListener('click', (e) => {
@@ -352,7 +352,7 @@
                 loginErr.textContent = !wrongPw ? (ex.message || 'Sign in failed.')
                     : Store.mode === 'local'
                         ? 'Incorrect password. The site is in demo mode, so use the demo password from assets/js/config.js (LOCAL_ADMIN_PASSWORD). It is case-sensitive.'
-                        : 'Incorrect password. The site is connected to the Google Sheet, so use the password you set in the Sheet (Website Admin → 2. Set admin password); the demo password no longer works.';
+                        : 'Incorrect password. Please try again.';
                 loginErr.classList.remove('hidden');
             } finally {
                 btn.disabled = false;
@@ -399,8 +399,8 @@
                 detail.innerHTML = '<p><span class="inline-block bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded">Demo (this browser)</span></p><p>Data and uploaded images are stored in this browser\'s IndexedDB. Other visitors and devices will not see these changes.</p><p>To go live, follow <strong>README.md → Google Sheets setup</strong> and paste your Apps Script Web App URL into <code>assets/js/config.js</code>.</p>';
                 document.getElementById('reset-demo').classList.remove('hidden');
             } else {
-                banner.className = 'px-4 sm:px-6 py-2.5 text-sm flex items-start gap-2 bg-green-50 text-green-800 border-b border-green-200';
-                banner.innerHTML = '<i class="fas fa-circle-check mt-0.5" aria-hidden="true"></i><span>Connected to your private Google Sheet – changes are live for all visitors.</span>';
+                banner.className = 'hidden';
+                banner.innerHTML = '';
                 detail.innerHTML = '<p><span class="inline-block bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded">Private Google Sheet</span></p><p>Content and leads are stored in your Google Sheet, which is not shared with anyone. The website reaches it only through your Apps Script.</p><p>Uploaded images are saved to the private <strong>Website Media</strong> folder in your Google Drive (each image is viewable by link so the website can show it).</p><p>Admin sessions last 6 hours. To sign everyone out, use <strong>Website Admin → Sign out all admin sessions</strong> in the sheet.</p>';
             }
         }
