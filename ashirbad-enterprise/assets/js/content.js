@@ -57,7 +57,7 @@
         },
         {
             id: 'social', title: 'Social Media & Integrations', icon: 'fa-share-nodes',
-            description: 'Social profiles appear in the footer and in Google structured data. Integrations switch on the map, analytics and search-engine verification.',
+            description: 'Social profiles appear in the footer and in Google structured data. Integrations switch on analytics and search-engine verification. (Maps are free and need no key.)',
             fields: [
                 { key: 'social_facebook', label: 'Facebook page URL', type: 'url', default: '' },
                 { key: 'social_instagram', label: 'Instagram URL', type: 'url', default: '' },
@@ -214,7 +214,7 @@
                     { heading: 'Information we collect', text: 'When you submit an enquiry or site-visit form we collect the details you provide: name, mobile number, email address (optional), property preferences (project, configuration, budget, location), preferred visit date and your message. We also record the page you enquired from and any campaign parameters in the link (for example utm_source) so we know which advertisements are useful.' },
                     { heading: 'How we use it', text: 'Your information is used only to respond to your enquiry, arrange site visits, share project documents and price lists, and send updates about projects you showed interest in. With your consent we may contact you by call, SMS, email or WhatsApp.' },
                     { heading: 'Sharing', text: 'We do not sell or rent your personal data. We may share it with our banking or legal partners only when you ask us to (for example for home-loan assistance), or where required by law.' },
-                    { heading: 'Third-party services', text: 'This website uses Google Maps to display project locations and may load fonts and scripts from trusted content delivery networks. These providers may collect technical data such as your IP address in line with their own privacy policies.' },
+                    { heading: 'Third-party services', text: 'This website uses OpenStreetMap maps (with Google Maps links for directions) to display project locations and may load fonts and scripts from trusted content delivery networks. These providers may collect technical data such as your IP address in line with their own privacy policies.' },
                     { heading: 'Retention & your rights', text: 'We keep enquiry data only as long as needed to serve you. You may ask us to access, correct or delete your data at any time by writing to the email address below.' }] }
             ]
         }

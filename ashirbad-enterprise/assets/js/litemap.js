@@ -60,10 +60,17 @@
                 el.innerHTML = '';
                 const map = L.map(el, { scrollWheelZoom: false, zoomControl: true, attributionControl: true });
                 el._aeMap = map;
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                     subdomains: 'abcd', maxZoom: 19,
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
                 }).addTo(map);
+                // If map tiles are blocked on this network, fall back instead of showing a grey box
+                let loaded = 0, failed = 0;
+                tiles.on('tileload', () => { loaded++; });
+                tiles.on('tileerror', () => {
+                    failed++;
+                    if (!loaded && failed >= 4 && opts.onFail && el._aeMap === map) { map.remove(); el._aeMap = null; opts.onFail(new Error('Map tiles blocked')); }
+                });
                 // Scroll-zoom only after the visitor clicks the map, so the page scrolls normally
                 map.on('click focus', () => map.scrollWheelZoom.enable());
                 map.on('mouseout blur', () => map.scrollWheelZoom.disable());
@@ -91,8 +98,11 @@
             const key = `${p.lat},${p.lng},${p.title}`;
             if (el.dataset.mapKey === key) return;
             el.dataset.mapKey = key;
+            const embed = () => { // backup: keyless Google Maps embed (no API key needed)
+                el.innerHTML = `<iframe src="https://maps.google.com/maps?q=${Number(p.lat)},${Number(p.lng)}&amp;z=${Number(el.dataset.zoom) || 15}&amp;output=embed" title="Map: ${esc(p.title)}" class="w-full h-full border-0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+            };
             p.popup = `<strong style="font-family:Manrope,sans-serif;color:#12304d">${esc(p.title)}</strong>${el.dataset.address ? `<br><span style="font-size:12px;color:#555">${esc(el.dataset.address)}</span>` : ''}`;
-            AE.liteMap(el, [p], { zoom: Number(el.dataset.zoom) || 15 });
+            AE.liteMap(el, [p], { zoom: Number(el.dataset.zoom) || 15, onFail: embed });
         });
     };
 
