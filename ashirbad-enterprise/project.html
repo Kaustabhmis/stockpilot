@@ -106,8 +106,9 @@
             if (typeof Swiper === 'undefined') return;
             if (main) { main.destroy(true, true); main = null; }
             if (thumbs) { thumbs.destroy(true, true); thumbs = null; }
-            if (document.querySelector('.projectThumbs')) thumbs = new Swiper('.projectThumbs', { slidesPerView: 'auto', spaceBetween: 10, watchSlidesProgress: true });
+            if (document.querySelector('.projectThumbs')) thumbs = new Swiper('.projectThumbs', { speed: matchMedia('(prefers-reduced-motion: reduce)').matches ? 60 : 300, slidesPerView: 'auto', spaceBetween: 10, watchSlidesProgress: true });
             main = new Swiper('.projectSwiper', {
+                speed: matchMedia('(prefers-reduced-motion: reduce)').matches ? 60 : 300,
                 spaceBetween: 0, keyboard: { enabled: true }, grabCursor: true,
                 navigation: { nextEl: '.projectSwiper .swiper-button-next', prevEl: '.projectSwiper .swiper-button-prev' },
                 pagination: { el: '.projectSwiper .swiper-pagination', type: 'fraction' },

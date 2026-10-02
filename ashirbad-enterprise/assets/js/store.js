@@ -467,6 +467,12 @@
             await ready;
             let rows = await backend.list(collection, { publicView, fresh });
             if (collection === 'posts' && publicView) rows = rows.filter((p) => p.published !== false);
+            // Rows typed straight into the Sheet may say "Live" / "Sold Out" or leave the stage empty
+            if (collection === 'projects') rows = rows.map((p) => {
+                const st = String(p.stage || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+                const stage = !st || st === 'live' || st === 'ongoing' ? 'live' : st.startsWith('sold') ? 'sold' : st.startsWith('complete') ? 'completed' : p.stage;
+                return stage === p.stage ? p : { ...p, stage };
+            });
             return rows.slice().sort(SORTERS[collection]);
         },
 
