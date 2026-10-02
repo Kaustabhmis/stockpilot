@@ -21,7 +21,7 @@
  */
 
 var SCHEMA = {
-  projects: ['id', 'title', 'slug', 'location', 'stage', 'status_label', 'rera_no', 'plot_size', 'carpet_area', 'config', 'price',
+  projects: ['id', 'title', 'slug', 'location', 'stage', 'status_label', 'plot_size', 'carpet_area', 'config', 'price',
     'description', 'details', 'highlights', 'amenities', 'possession', 'video_url', 'brochure_url', 'img', 'images', 'lat', 'lng', 'completed_year', 'sort_order', 'sold_at', 'created_at'],
   commercial: ['id', 'title', 'type', 'area', 'size', 'img', 'sort_order', 'created_at'],
   posts: ['id', 'slug', 'title', 'category', 'author', 'excerpt', 'content', 'cover', 'read_time', 'published',

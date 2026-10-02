@@ -271,7 +271,6 @@
                     { name: 'status_label', label: 'Status Tag', placeholder: 'e.g. Under Construction / Booking Open', list: ['Under Construction', 'Booking Open', 'Newly Launched', 'Nearing Possession', 'Ready to Move', 'Completed'] },
                     { name: 'config', label: 'Configuration', placeholder: 'e.g. 2 & 3 BHK Apartments' },
                     { name: 'price', label: 'Price', placeholder: 'e.g. ₹58 Lakh onwards' },
-                    { name: 'rera_no', label: 'WBRERA Registration No.', placeholder: 'e.g. WBRERA/P/NOR/2025/000123', help: 'Shown on the carousel, project details and landing page (required on ads for registered projects).' },
                     { name: 'plot_size', label: 'Plot Size', placeholder: 'e.g. 32 Cottah' },
                     { name: 'carpet_area', label: 'Carpet Area', placeholder: 'e.g. 850 – 1,420 sq.ft.' },
                     { name: 'possession', label: 'Possession', placeholder: 'e.g. December 2027' },
@@ -894,7 +893,7 @@
         });
         document.getElementById('load-sample').addEventListener('click', async () => {
             if (!(await AE.confirmDialog({ title: 'Add sample data?', message: 'Sample projects, blog posts and commercial listings will be added. You can edit or delete them later.', confirmText: 'Add Samples' }))) return;
-            try { await Store.loadSampleData(); toast('Sample data added'); await refresh(); }
+            try { const n = await Store.loadSampleData(); toast(n ? `${n} sample items added` : 'Sample data is already loaded', n ? 'success' : 'info'); await refresh(); }
             catch (ex) { toast(ex.message || 'Could not add sample data', 'error'); }
         });
         document.getElementById('reset-demo').addEventListener('click', async () => {

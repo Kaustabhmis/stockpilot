@@ -21,7 +21,7 @@ A fast static website with an admin panel. Content lives in a **private Google S
 
 | Section | What you can edit |
 |---|---|
-| Business Information | Business & legal name, tagline, phone numbers, WhatsApp number, email, full address, office location (map pin), office hours, company WBRERA / GSTIN / CIN numbers, founding year, areas served, languages, footer text |
+| Business Information | Business & legal name, tagline, phone numbers, WhatsApp number, email, full address, office location (map pin), office hours, company GSTIN / CIN numbers, founding year, areas served, languages, footer text |
 | Social Media & Integrations | Facebook / Instagram / YouTube / LinkedIn links, Google Analytics ID, Search Console & Bing verification codes, carousel speed |
 | SEO | Google titles & descriptions for the home, gallery, about, contact, blog and landing pages (with live character counters), keywords, social-share text |
 | Home Page | Banner heading, text and image; carousel and map headings |
@@ -30,7 +30,7 @@ A fast static website with an admin panel. Content lives in a **private Google S
 | Landing Page (also the enquiry form on the home page) | Badge, heading, intro, benefits, form title & button, budget and location options, steps, testimonials, FAQ (also sent to Google), thank-you message |
 | Blog Page / Privacy Policy | Headings, intro, article call-to-action box; every privacy-policy section and the "last updated" date |
 
-Each project's own details are edited on the project itself (Admin → Projects → Edit): WBRERA number, price, configuration, possession, short description, full overview, highlights, amenities, main image, photo gallery, YouTube video, brochure link and map location. **View** opens its page on the website.
+Each project's own details are edited on the project itself (Admin → Projects → Edit): price, configuration, possession, short description, full overview, highlights, amenities, main image, photo gallery, YouTube video, brochure link and map location. **View** opens its page on the website.
 
 Changes are saved to the `settings` tab of your private Google Sheet (one row per item, so you can also read them there). The website shows them immediately, and the search-engine pages rebuild automatically about 2 minutes later. **Restore defaults** brings back the original text for a section. Form field labels and navigation menu names are fixed.
 
@@ -90,7 +90,7 @@ The admin password is stored only inside the script, as a salted SHA-256 hash, n
    ```
 8. **Add content.** Open `admin.html`, sign in with your password, fill in **Website Content → Business Information**, then add projects (or use **Settings → Load Sample Data** to start from examples).
 
-**After editing `Code.gs` later:** in Apps Script choose **Deploy → Manage deployments → ✏ Edit → Version: New version → Deploy**. The URL stays the same. Then run **Website Admin → 1. Create / repair tabs** once, to add any new columns (for example `rera_no`).
+**After editing `Code.gs` later:** in Apps Script choose **Deploy → Manage deployments → ✏ Edit → Version: New version → Deploy**. The URL stays the same. Then run **Website Admin → 1. Create / repair tabs** once, to add any new columns (for example `possession`).
 
 ### Good to know
 
@@ -118,11 +118,10 @@ From then on, about a minute after you save anything in the admin panel, Netlify
 
 - **Pre-rendered HTML** for every page and article: projects, listings and articles are in the HTML itself, not injected later by JavaScript.
 - **One URL per article** (`/blog/<slug>.html`), each with its own title, meta description, canonical URL, Open Graph / Twitter tags (article cover image), `BlogPosting` and `BreadcrumbList` structured data.
-- **Structured data:** `RealEstateAgent` (address, geo, phone, hours, service areas), `WebSite`, project lists as `ApartmentComplex` items (with WBRERA number and map location), `FAQPage` on the landing page.
+- **Structured data:** `RealEstateAgent` (address, geo, phone, hours, service areas), `WebSite`, project lists as `ApartmentComplex` items (with map location), `FAQPage` on the landing page.
 - **`sitemap.xml`** with every page, article and project image, plus `robots.txt`, generated on each build.
 - **Titles ≤ 60 and descriptions ≤ 160 characters**, one `<h1>` per page, descriptive `alt` text on every image, and a 1200×630 share image (`og-image.jpg`).
 - **Fast & accessible:** compiled Tailwind CSS (no runtime CDN), lazy-loaded images, resized Google/Unsplash images, cache-busted assets, no layout shift. Lighthouse Accessibility and SEO score 100 on all pages.
-- **WBRERA registration number** field per project, shown on the carousel, project details and landing page.
 
 ### After launch (do these once)
 

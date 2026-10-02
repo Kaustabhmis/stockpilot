@@ -190,15 +190,14 @@ const projectLd = (p) => ({
     image: abs(T.imgUrl(p.img, 1200)),
     url: `${SITE}/project/${encodeURIComponent(p.slug)}.html`,
     address: { '@type': 'PostalAddress', streetAddress: p.location, addressLocality: CONTENT.address_city || undefined, addressRegion: CONTENT.address_state || undefined, addressCountry: 'IN' },
-    ...(p.lat != null && p.lng != null ? { geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng } } : {}),
-    ...(p.rera_no ? { identifier: { '@type': 'PropertyValue', propertyID: 'WBRERA', value: p.rera_no } } : {})
+    ...(p.lat != null && p.lng != null ? { geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng } } : {})
 });
 
 /* ------------------------------------------------------------
  * 4. Copy static files
  * ---------------------------------------------------------- */
 const EXCLUDE = new Set(['dist', 'node_modules', 'tools', 'google-apps-script', 'README.md', 'package.json', 'package-lock.json',
-    'tailwind.config.js', '.gitignore', 'netlify.toml', 'release', 'assets/css/tailwind.src.css']);
+    'tailwind.config.js', '.gitignore', 'netlify.toml', 'release', 'CHANGELOG.md', 'assets/css/tailwind.src.css']);
 fs.rmSync(OUT, { recursive: true, force: true });
 function copyDir(rel = '') {
     for (const entry of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
@@ -236,7 +235,7 @@ const ctxRoot = { root: '', builtPosts, builtProjects, c: CONTENT };
 // Home: banner, 3D carousel of ongoing projects, site-visit form, map
 {
     let html = read('index.html');
-    const key = JSON.stringify(live.map((p) => [p.id, p.slug, p.title, p.img, p.status_label, p.price, p.config, p.carpet_area, p.location, p.rera_no]));
+    const key = JSON.stringify(live.map((p) => [p.id, p.slug, p.title, p.img, p.status_label, p.price, p.config, p.carpet_area, p.location]));
     if (!OFFLINE) html = html.replace('id="carousel-wrapper">', `id="carousel-wrapper" data-rendered="${esc(key)}">`);
     html = fillData(html, 'carousel', T.carouselSlides(live, ctxRoot));
     html = fillData(html, 'tabs', T.carouselTabs(live));

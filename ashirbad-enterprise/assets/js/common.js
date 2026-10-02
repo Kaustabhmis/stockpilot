@@ -36,7 +36,7 @@
     K.RENDER['@brand_footer'] = (_v, c) => brandHTML(c.business_name, 'text-brand-gold');
     K.RENDER['@social'] = (_v, c) => (c.social.length ? `<nav aria-label="Social media"><ul class="flex gap-3 mt-5">${c.social.map(([k, url]) => `<li><a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer me" class="w-11 h-11 rounded-full bg-white/10 hover:bg-brand-orange text-white flex items-center justify-center" aria-label="${escapeHTML(c.business_name)} on ${k.charAt(0).toUpperCase() + k.slice(1)}"><i class="fab ${SOCIAL_ICONS[k] || 'fa-globe'}" aria-hidden="true"></i></a></li>`).join('')}</ul></nav>` : '');
     K.RENDER['@footer_phones'] = (_v, c) => [[c.phone, c.phone_href], [c.phone_alt, c.phone_alt_href]].filter(([p]) => p)
-        .map(([p, href]) => `<p><a href="${escapeHTML(href)}" class="inline-block py-1.5 hover:text-brand-gold" aria-label="Call ${escapeHTML(p)}"><i class="fas fa-phone mr-2" aria-hidden="true"></i>${escapeHTML(p).replace(/ /g, '&nbsp;')}</a></p>`).join('');
+        .map(([p, href]) => `<p><a href="${escapeHTML(href)}" class="inline-block py-1.5 hover:text-brand-gold"><i class="fas fa-phone mr-2" aria-hidden="true"></i>${escapeHTML(p).replace(/ /g, '&nbsp;')}</a></p>`).join('');
 
     /* ------------------------------------------------------------
      * Header / Footer markup (pure). Elements carry data-c markers so
@@ -59,7 +59,7 @@
         <header id="site-header" class="bg-white/95 backdrop-blur border-b border-brand-sand fixed w-full z-[100] top-0 transition-all duration-300">
             <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" aria-label="Main navigation">
                 <div class="flex justify-between h-20 items-center gap-4">
-                    <a href="${r}index.html" class="flex-shrink-0 flex items-center gap-3 min-w-0" aria-label="${escapeHTML(k.business_name)} home" data-c-attr="aria-label:home_label">
+                    <a href="${r}index.html" class="flex-shrink-0 flex items-center gap-3 min-w-0">
                         <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-12 w-12 sm:h-14 sm:w-14 object-contain" width="56" height="56">
                         <span class="flex flex-col min-w-0">
                             <span class="font-display text-xl sm:text-2xl font-bold text-brand-navy leading-none truncate" data-c="business_name">${escapeHTML(k.business_name)}</span>
@@ -67,7 +67,7 @@
                         </span>
                     </a>
                     <div class="hidden lg:flex items-center gap-8 text-[15px] font-semibold">
-                        ${links.map((l) => `<a href="${l.href}" class="nav-link relative py-2 ${cls(l)} hover:text-brand-orange transition after:absolute after:left-0 after:right-0 after:-bottom-0.5 after:h-0.5 after:bg-brand-flame after:origin-left after:transition-transform" aria-label="${l.label}"${cur(l)}>${l.label}</a>`).join('')}
+                        ${links.map((l) => `<a href="${l.href}" class="nav-link relative py-2 ${cls(l)} hover:text-brand-orange transition after:absolute after:left-0 after:right-0 after:-bottom-0.5 after:h-0.5 after:bg-brand-flame after:origin-left after:transition-transform"${cur(l)}>${l.label}</a>`).join('')}
                         <a href="${r}enquiry.html" class="bg-brand-navy hover:bg-brand-orange text-white px-5 py-3 rounded-sm transition whitespace-nowrap" aria-label="Book a Site Visit">Book a Site Visit</a>
                     </div>
                     <div class="flex lg:hidden items-center">
@@ -79,7 +79,7 @@
             </nav>
             <div id="mobile-menu" class="hidden lg:hidden bg-white border-t border-brand-sand shadow-xl absolute w-full left-0 max-h-[calc(100vh-5rem)] overflow-y-auto">
                 <nav class="px-4 pt-2 pb-6 flex flex-col space-y-1" aria-label="Mobile navigation">
-                    ${links.map((l) => `<a href="${l.href}" class="mobile-link block px-4 py-3 text-base font-bold ${isActive(l) ? 'text-brand-orange' : 'text-brand-navy'} hover:bg-brand-cream rounded-md" aria-label="${l.label}"${cur(l)}>${l.label}</a>`).join('')}
+                    ${links.map((l) => `<a href="${l.href}" class="mobile-link block px-4 py-3 text-base font-bold ${isActive(l) ? 'text-brand-orange' : 'text-brand-navy'} hover:bg-brand-cream rounded-md"${cur(l)}>${l.label}</a>`).join('')}
                     <a href="${r}enquiry.html" class="mobile-link block px-4 py-3 text-base font-bold text-center bg-brand-navy text-white rounded-md mt-4" aria-label="Book a Site Visit">Book a Site Visit</a>
                 </nav>
             </div>
@@ -94,7 +94,7 @@
         <footer class="bg-brand-ink text-gray-300 text-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-10">
                 <div class="lg:col-span-4">
-                    <a href="${r}index.html" class="inline-flex items-center gap-3" aria-label="${escapeHTML(k.business_name)} home" data-c-attr="aria-label:home_label">
+                    <a href="${r}index.html" class="inline-flex items-center gap-3" data-c-attr="aria-label:home_label">
                         <img src="${r}1000365300.jpg" alt="${escapeHTML(k.business_name)} logo" class="h-14 w-14 rounded bg-brand-cream p-1 object-contain" width="56" height="56" loading="lazy">
                         <span class="font-display text-2xl font-bold text-white" data-c="business_name">${escapeHTML(k.business_name)}</span>
                     </a>
@@ -125,7 +125,7 @@
                     <address class="not-italic leading-relaxed">
                         <p data-c="address">${escapeHTML(k.address)}</p>
                         <div class="mt-2" data-c-list="@footer_phones">${K.RENDER['@footer_phones'](null, k)}</div>
-                        <p><a href="${escapeHTML(k.email_href)}" class="inline-block py-1.5 hover:text-brand-gold break-all" aria-label="Email ${escapeHTML(k.email)}" data-c-attr="href:email_href"><span data-c="email">${escapeHTML(k.email)}</span></a></p>
+                        <p><a href="${escapeHTML(k.email_href)}" class="inline-block py-1.5 hover:text-brand-gold break-all" data-c-attr="href:email_href"><span data-c="email">${escapeHTML(k.email)}</span></a></p>
                         <p class="mt-1" data-c="office_hours">${escapeHTML(k.office_hours)}</p>
                     </address>
                 </div>

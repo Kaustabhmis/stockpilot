@@ -2,7 +2,7 @@
  * Ashirbad Enterprise – technical configuration
  * ---------------------------------------------------------------
  * Business details and ALL page texts (phone, address, WhatsApp,
- * RERA / GST numbers, headings, FAQ, SEO titles, social links, Google
+ * GST numbers, headings, FAQ, SEO titles, social links, Google
  * Maps & Analytics IDs…) are edited in Admin → Website Content.
  * Only the three technical settings below live in this file.
  *

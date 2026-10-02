@@ -41,12 +41,12 @@
         const projects = [
             {
                 title: 'Ashirbad Heights', location: 'Action Area I, New Town, Kolkata', stage: 'live',
-                status_label: 'Under Construction', rera_no: 'WBRERA/P/NOR/2025/000000 (sample)', plot_size: '32 Cottah', carpet_area: '850 – 1,420 sq.ft.',
+                status_label: 'Under Construction', plot_size: '32 Cottah', carpet_area: '850 – 1,420 sq.ft.',
                 config: '2 & 3 BHK Apartments', price: '₹58 Lakh onwards',
-                description: 'Our flagship G+14 residential tower in the heart of New Town, minutes from Eco Park and City Centre II. Featuring a rooftop infinity pool, landscaped podium garden, fully equipped gymnasium, 24x7 CCTV security and 100% power backup. WBRERA registered with possession targeted for December 2027.',
+                description: 'Our flagship G+14 residential tower in the heart of New Town, minutes from Eco Park and City Centre II. Featuring a rooftop infinity pool, landscaped podium garden, fully equipped gymnasium, 24x7 CCTV security and 100% power backup. Possession is targeted for December 2027.',
                 possession: 'December 2027',
                 details: 'Ashirbad Heights is a G+14 residential tower on a 32 cottah plot in Action Area I, New Town – one of the best planned neighbourhoods of Kolkata.\n\nEvery apartment is designed for light and cross-ventilation, with large balconies, vitrified flooring and modular kitchen provisions.\n\n## Connectivity\n- 5 minutes to Eco Park and City Centre II\n- 15 minutes to Sector V and the airport\n- Close to schools, hospitals and the upcoming metro',
-                highlights: 'Rooftop infinity pool and sky lounge\nLandscaped podium garden\n100% power backup\nWBRERA registered project',
+                highlights: 'Rooftop infinity pool and sky lounge\nLandscaped podium garden\n100% power backup\nVastu-compliant layouts',
                 amenities: 'Swimming pool, Gymnasium, Clubhouse, Kids play area, CCTV security, Power backup, Lift, Car parking',
                 img: unsplash('1545324418-cc1a3fa10c00'),
                 images: [unsplash('1600607687939-ce8a6c25118c'), unsplash('1560448204-e02f11c3d0e2')],
@@ -132,8 +132,8 @@
             {
                 title: '5 Checks Before You Pay a Token Amount', category: 'Real Estate Guide', read_time: '5 min read',
                 published_at: '2026-09-12', cover: unsplash('1600585154340-be6161a56a0c', 1200, 70),
-                excerpt: 'Understanding WBRERA registration status, title deeds and soil testing reports for under-construction projects.',
-                content: 'Paying a token (booking) amount is the first real commitment you make to a property. Before any money changes hands, spend an hour on these five checks – they can save you years of trouble.\n\n## 1. Verify the WBRERA registration\nEvery residential project above 500 sq.m. or 8 units in West Bengal must be registered with WBRERA. Ask for the registration number and verify it on the official RERA portal. Check the approved completion date and the promoter\'s quarterly updates.\n\n## 2. Inspect the title and land documents\nAsk for the chain of title deeds, mutation certificate and the latest land tax receipt. For joint-venture projects, read the development agreement between the landowner and the builder.\n\n## 3. See the sanctioned building plan\nThe municipality or development authority (KMC, NKDA, HIDCO, Bidhannagar) must have sanctioned the plan. Compare the number of floors being constructed against the sanctioned plan.\n\n## 4. Ask about the soil test and structural design\nA reputable builder will happily share the soil test report and confirm that the structure is designed for Seismic Zone III/IV as applicable to Kolkata.\n\n## 5. Read the agreement for sale\n- Carpet area must be clearly stated (as per RERA)\n- Payment schedule should be linked to construction milestones\n- Check the delay-compensation and cancellation clauses\n\nAt Ashirbad Enterprise we share all of these documents before you book. Book a site visit and our team will walk you through them.'
+                excerpt: 'Site progress, title deeds, sanctioned plans and soil testing reports – what to check for under-construction projects.',
+                content: 'Paying a token (booking) amount is the first real commitment you make to a property. Before any money changes hands, spend an hour on these five checks – they can save you years of trouble.\n\n## 1. Visit the site and check progress\nSee the construction with your own eyes. Compare the work done with the promised schedule and ask for the target possession date in writing.\n\n## 2. Inspect the title and land documents\nAsk for the chain of title deeds, mutation certificate and the latest land tax receipt. For joint-venture projects, read the development agreement between the landowner and the builder.\n\n## 3. See the sanctioned building plan\nThe municipality or development authority (KMC, NKDA, HIDCO, Bidhannagar) must have sanctioned the plan. Compare the number of floors being constructed against the sanctioned plan.\n\n## 4. Ask about the soil test and structural design\nA reputable builder will happily share the soil test report and confirm that the structure is designed for Seismic Zone III/IV as applicable to Kolkata.\n\n## 5. Read the agreement for sale\n- Carpet area must be clearly stated\n- Payment schedule should be linked to construction milestones\n- Check the delay-compensation and cancellation clauses\n\nAt Ashirbad Enterprise we share all of these documents before you book. Book a site visit and our team will walk you through them.'
             },
             {
                 title: 'Maximising Commercial Carpet Area', category: 'Commercial', read_time: '4 min read',
@@ -145,7 +145,7 @@
                 title: 'Ashirbad Heights Reaches the 10th Floor', category: 'Project Updates', read_time: '3 min read',
                 published_at: '2026-08-05', cover: unsplash('1503387762-592deb58ef4e', 1200, 70),
                 excerpt: 'A progress report on our flagship New Town residential tower, now ahead of the construction schedule.',
-                content: 'We are delighted to share that the structure of Ashirbad Heights in Action Area I, New Town has reached the 10th floor – nearly six weeks ahead of the schedule filed with WBRERA.\n\n## Work completed this quarter\n- Roof casting up to the 10th floor\n- Brickwork completed up to the 6th floor\n- Plumbing and electrical conduits in progress on floors 1–4\n\n## What\'s next\nThe remaining four floors and the rooftop amenities are planned over the next two quarters. The show flat on the 3rd floor will open for visits next month.\n\nExisting customers receive photo updates every month. Interested in a unit? A few 2 and 3 BHK homes are still available – book a site visit today.'
+                content: 'We are delighted to share that the structure of Ashirbad Heights in Action Area I, New Town has reached the 10th floor – nearly six weeks ahead of schedule.\n\n## Work completed this quarter\n- Roof casting up to the 10th floor\n- Brickwork completed up to the 6th floor\n- Plumbing and electrical conduits in progress on floors 1–4\n\n## What\'s next\nThe remaining four floors and the rooftop amenities are planned over the next two quarters. The show flat on the 3rd floor will open for visits next month.\n\nExisting customers receive photo updates every month. Interested in a unit? A few 2 and 3 BHK homes are still available – book a site visit today.'
             }
         ].map((o) => ({ id: uid(), slug: slugify(o.title), author: 'Ashirbad Enterprise', published: true, created_at: t, ...o }));
 
@@ -532,7 +532,15 @@
 
         async loadSampleData() {
             const seed = buildSeed();
-            for (const c of ['projects', 'commercial', 'posts']) await saveMany(c, seed[c]);
+            let added = 0;
+            for (const c of ['projects', 'commercial', 'posts']) {
+                // Skip samples already present (same title), so clicking twice doesn't duplicate them
+                const have = new Set((await Store.list(c, { fresh: true })).map((r) => String(r.title || '').trim().toLowerCase()));
+                const rows = seed[c].filter((r) => !have.has(String(r.title || '').trim().toLowerCase()));
+                if (rows.length) await saveMany(c, rows);
+                added += rows.length;
+            }
+            return added;
         },
         async exportAll() {
             const out = { exported_at: nowISO(), mode };

@@ -99,7 +99,6 @@
                     <h2 class="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white mt-4 leading-tight drop-shadow-lg">${esc(p.title)}</h2>
                     <p class="text-gray-100 text-sm sm:text-lg mt-2 sm:mt-3 flex items-center gap-2"><i class="fas fa-location-dot text-brand-gold" aria-hidden="true"></i>${esc(p.location)}</p>
                     ${p.config || p.price ? `<p class="text-brand-gold font-semibold text-sm sm:text-base mt-1">${[p.config, p.price].filter(Boolean).map(esc).join(' &middot; ')}</p>` : ''}
-                    ${p.rera_no ? `<p class="text-gray-200 text-xs mt-1">WBRERA Reg. No: ${esc(p.rera_no)}</p>` : ''}
                     <button type="button" data-open-project="${esc(p.id)}"
                             class="self-start mt-6 bg-brand-orange hover:bg-white hover:text-brand-navy text-white font-bold px-6 py-3.5 rounded-md shadow-lg transition flex items-center gap-2 text-sm sm:text-base"
                             aria-label="View development details for ${esc(p.title)}">
@@ -126,8 +125,7 @@
                         ${b.size ? `<li class="flex items-center gap-2"><i class="fas fa-expand text-brand-orange w-4" aria-hidden="true"></i><span><span class="sr-only">Size: </span>${esc(b.size)}</span></li>` : ''}
                     </ul>
                     <a href="contact.html?interest=${encodeURIComponent('Commercial – ' + b.title)}"
-                       class="mt-5 inline-flex items-center justify-center gap-2 border-2 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white font-bold py-2.5 px-4 rounded-md transition"
-                       aria-label="Enquire about ${esc(b.title)} in ${esc(b.area)}">Enquire Now <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
+                       class="mt-5 inline-flex items-center justify-center gap-2 border-2 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white font-bold py-2.5 px-4 rounded-md transition">Enquire Now <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
                 </div>
             </article>`).join('');
     }
@@ -168,11 +166,11 @@
                         <span class="text-brand-orange font-bold uppercase tracking-wider">${esc(p.category || 'News')}</span>
                         <span class="text-gray-500">${esc(p.read_time || '')}</span>
                     </div>
-                    <${h} class="font-bold text-lg md:text-xl text-brand-navy mt-2 mb-2"><a href="${esc(url)}" class="hover:text-brand-orange" aria-label="${esc(p.title)}">${esc(p.title)}</a></${h}>
+                    <${h} class="font-bold text-lg md:text-xl text-brand-navy mt-2 mb-2"><a href="${esc(url)}" class="hover:text-brand-orange">${esc(p.title)}</a></${h}>
                     <p class="text-gray-600 text-sm mb-4 flex-1 line-clamp-3">${esc(p.excerpt || '')}</p>
                     <div class="flex items-center justify-between">
                         <time datetime="${esc(p.published_at || '')}" class="text-xs text-gray-500"><i class="far fa-calendar mr-1" aria-hidden="true"></i>${formatDate(p.published_at)}</time>
-                        <a href="${esc(url)}" class="text-brand-orange font-bold hover:text-brand-navy text-sm" aria-label="Read article: ${esc(p.title)}">Read &rarr;</a>
+                        <a href="${esc(url)}" class="text-brand-orange font-bold hover:text-brand-navy text-sm">Read<span class="sr-only"> article: ${esc(p.title)}</span> &rarr;</a>
                     </div>
                 </div>
             </article>`;
@@ -187,7 +185,7 @@
                 </a>
                 <div class="p-6 md:p-10 flex flex-col justify-center">
                     <span class="text-xs font-bold uppercase tracking-wider text-brand-orange"><i class="fas fa-star mr-1" aria-hidden="true"></i> Latest · ${esc(p.category || 'News')}</span>
-                    <h2 class="text-2xl md:text-3xl font-extrabold text-brand-navy mt-3"><a href="${esc(url)}" class="hover:text-brand-orange" aria-label="${esc(p.title)}">${esc(p.title)}</a></h2>
+                    <h2 class="text-2xl md:text-3xl font-extrabold text-brand-navy mt-3"><a href="${esc(url)}" class="hover:text-brand-orange">${esc(p.title)}</a></h2>
                     <p class="text-gray-600 mt-3">${esc(p.excerpt || '')}</p>
                     <p class="text-xs text-gray-500 mt-4"><time datetime="${esc(p.published_at || '')}">${formatDate(p.published_at)}</time>${p.read_time ? ' · ' + esc(p.read_time) : ''}</p>
                     <a href="${esc(url)}" class="self-start mt-6 bg-brand-orange hover:bg-brand-navy text-white font-bold px-5 py-3 rounded-md transition" aria-label="Read article: ${esc(p.title)}">Read Article</a>
@@ -199,7 +197,7 @@
         const cats = ['All'].concat(Array.from(new Set(posts.map((p) => p.category).filter(Boolean))));
         return cats.map((c) => `
             <button type="button" data-cat="${esc(c)}" aria-pressed="${c === active}"
-                    class="px-4 py-2.5 rounded-full text-sm font-bold border transition ${c === active ? 'bg-brand-navy text-white border-brand-navy' : 'bg-white text-brand-navy border-gray-300 hover:border-brand-orange'}" aria-label="Show ${esc(c)} articles">${esc(c)}</button>`).join('');
+                    class="px-4 py-2.5 rounded-full text-sm font-bold border transition ${c === active ? 'bg-brand-navy text-white border-brand-navy' : 'bg-white text-brand-navy border-gray-300 hover:border-brand-orange'}">${esc(c)}</button>`).join('');
     }
 
     /* ---------------- Landing page project cards ---------------- */
@@ -216,8 +214,7 @@
                     <p class="text-xs text-gray-500 mt-1"><i class="fas fa-location-dot text-brand-orange mr-1" aria-hidden="true"></i>${esc(p.location)}</p>
                     <p class="text-sm text-gray-700 mt-2">${esc(p.config || '')}</p>
                     <p class="text-brand-orange font-bold mt-1 flex-1">${esc(p.price || 'Price on request')}</p>
-                    ${p.rera_no ? `<p class="text-[11px] text-gray-500 mt-1">WBRERA: ${esc(p.rera_no)}</p>` : ''}
-                    <button type="button" data-pick="${esc(p.title)}" class="mt-3 w-full border-2 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white font-bold py-2.5 rounded-md text-sm transition" aria-label="Enquire about ${esc(p.title)}">Enquire About This</button>
+                    <button type="button" data-pick="${esc(p.title)}" class="mt-3 w-full border-2 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white font-bold py-2.5 rounded-md text-sm transition">Enquire About This</button>
                 </div>
             </article>`).join('');
     }
@@ -268,7 +265,7 @@
                     <img src="${r}1000365300.jpg" alt="${esc(BRAND)} logo" class="w-20 h-20 rounded-xl bg-white p-1 object-contain flex-shrink-0" loading="lazy" width="80" height="80">
                     <div class="flex-1 text-center sm:text-left">
                         <h2 class="text-xl font-bold">${esc((ctx && ctx.c && ctx.c.post_cta_heading) || 'Looking for a home in Kolkata?')}</h2>
-                        <p class="text-gray-300 text-sm mt-1">${esc((ctx && ctx.c && ctx.c.post_cta_text) || 'Get the price list and book a free site visit to our RERA approved projects.')}</p>
+                        <p class="text-gray-300 text-sm mt-1">${esc((ctx && ctx.c && ctx.c.post_cta_text) || 'Get the price list and book a free site visit to our ongoing projects.')}</p>
                     </div>
                     <a href="${r}enquiry.html" class="bg-brand-orange hover:bg-white hover:text-brand-navy text-white font-bold px-5 py-3 rounded-md transition whitespace-nowrap" aria-label="Book Site Visit">Book Site Visit</a>
                 </aside>
@@ -385,10 +382,9 @@
                             <h2 class="text-4xl sm:text-5xl lg:text-7xl leading-[0.95]">${esc(p.title)}</h2>
                             <p class="mt-3 flex items-center gap-2 text-gray-100 text-sm md:text-lg">${ICON.pin}${esc(p.location)}</p>
                             ${facts.length ? `<ul class="mt-5 flex flex-wrap gap-2">${facts.map((f) => `<li class="bg-white/15 backdrop-blur border border-white/20 rounded-full px-4 py-2 text-sm font-semibold">${esc(f)}</li>`).join('')}</ul>` : ''}
-                            ${p.rera_no ? `<p class="mt-4 text-xs text-gray-300">WBRERA Reg. No: ${esc(p.rera_no)}</p>` : ''}
                         </div>
                         <div class="flex flex-wrap gap-3 flex-shrink-0">
-                            <a href="${esc(url)}" class="inline-flex items-center gap-2 bg-brand-gold hover:bg-white text-brand-navy font-bold px-6 py-4 rounded-sm transition" aria-label="View ${esc(p.title)} project details">View project ${ICON.arrow}</a>
+                            <a href="${esc(url)}" class="inline-flex items-center gap-2 bg-brand-gold hover:bg-white text-brand-navy font-bold px-6 py-4 rounded-sm transition">View project ${ICON.arrow}</a>
                             <a href="#enquire" data-pick="${esc(p.title)}" class="inline-flex items-center gap-2 border border-white/60 hover:bg-white hover:text-brand-navy text-white font-bold px-6 py-4 rounded-sm transition" aria-label="Enquire about ${esc(p.title)}">Enquire</a>
                         </div>
                     </div>
@@ -400,7 +396,7 @@
     /** Clickable project names under the carousel. */
     function carouselTabs(live) {
         return live.map((p, i) => `
-            <button type="button" data-slide-to="${i}" class="carousel-tab text-left px-4 py-3 border-t-2 border-white/15 text-gray-300 hover:text-white transition min-w-[160px]" aria-label="Show ${esc(p.title)}">
+            <button type="button" data-slide-to="${i}" class="carousel-tab text-left px-4 py-3 border-t-2 border-white/15 text-gray-300 hover:text-white transition min-w-[160px]">
                 <span class="block text-[11px] tracking-[0.2em] text-brand-gold font-bold">${String(i + 1).padStart(2, '0')}</span>
                 <span class="block font-semibold mt-1">${esc(p.title)}</span>
             </button>`).join('');
@@ -412,7 +408,7 @@
         const sold = p.stage === 'sold';
         return `
         <article class="project-card group" data-stage="${esc(p.stage)}" data-location="${esc(p.location)}" data-search="${esc([p.title, p.location, p.config, p.status_label].join(' ').toLowerCase())}">
-            <a href="${esc(url)}" class="block" aria-label="${esc(p.title)}, ${esc(p.location)} – view details">
+            <a href="${esc(url)}" class="block">
                 <div class="relative aspect-[4/3] overflow-hidden rounded-xl bg-brand-sand">
                     <img src="${esc(imgUrl(p.img, 800))}" alt="${esc(p.title)} – ${esc(statusText(p).toLowerCase())} project in ${esc(p.location)}" class="w-full h-full object-cover group-hover:scale-105 transition duration-700" loading="lazy" width="800" height="600">
                     <span class="absolute top-4 left-4 ${sold ? 'bg-red-800 text-white' : p.stage === 'live' ? 'bg-brand-navy text-white' : 'bg-white text-brand-navy'} text-[11px] font-bold uppercase tracking-[0.16em] px-3 py-1.5 rounded-sm">${esc(statusText(p))}</span>
@@ -432,7 +428,7 @@
         const r = (ctx && ctx.root) || '';
         return `
         <article class="project-card group" data-stage="commercial" data-location="${esc(b.area)}" data-search="${esc([b.title, b.area, b.type].join(' ').toLowerCase())}">
-            <a href="${r}contact.html?interest=${encodeURIComponent('Commercial – ' + b.title)}" class="block" aria-label="Enquire about ${esc(b.title)}, ${esc(b.area)}">
+            <a href="${r}contact.html?interest=${encodeURIComponent('Commercial – ' + b.title)}" class="block">
                 <div class="relative aspect-[4/3] overflow-hidden rounded-xl bg-brand-sand">
                     <img src="${esc(imgUrl(b.img, 800))}" alt="${esc(b.title)} – ${esc(b.type || 'commercial space')} in ${esc(b.area)}" class="w-full h-full object-cover group-hover:scale-105 transition duration-700" loading="lazy" width="800" height="600">
                     <span class="absolute top-4 left-4 bg-brand-gold text-brand-navy text-[11px] font-bold uppercase tracking-[0.16em] px-3 py-1.5 rounded-sm">Commercial</span>
@@ -469,7 +465,7 @@
         const facts = [
             ['Configuration', p.config], ['Carpet area', p.carpet_area], ['Plot size', p.plot_size],
             ['Possession', p.possession || (p.stage === 'completed' && p.completed_year ? `Completed ${p.completed_year}` : '')],
-            ['Price', live ? p.price : ''], ['WBRERA No.', p.rera_no]
+            ['Price', live ? p.price : '']
         ].filter(([, v]) => v);
         const amen = listItems(p.amenities);
         const high = lines(p.highlights);
@@ -523,7 +519,7 @@
 
                     ${yt ? `<section class="mt-12" aria-labelledby="video-h"><h2 id="video-h" class="text-4xl text-brand-navy">Video tour</h2><div class="mt-6 aspect-video rounded-xl overflow-hidden bg-brand-ink"><iframe src="https://www.youtube-nocookie.com/embed/${yt}" title="${esc(p.title)} video tour" class="w-full h-full" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div></section>` : ''}
 
-                    ${hasGeo ? `<section class="mt-12" aria-labelledby="loc-h"><h2 id="loc-h" class="text-4xl text-brand-navy">Location</h2><p class="mt-2 text-gray-600">${esc(p.location)}</p><div class="mt-6 aspect-[16/9] rounded-xl overflow-hidden border border-brand-sand bg-brand-cream relative z-0" data-lite-map data-lat="${Number(p.lat)}" data-lng="${Number(p.lng)}" data-title="${esc(p.title)}" data-address="${esc(p.location)}" role="region" aria-label="Map showing ${esc(p.title)}"><p class="h-full flex items-center justify-center text-sm text-gray-500">Loading map…</p></div><a href="https://www.google.com/maps/dir/?api=1&amp;destination=${Number(p.lat)},${Number(p.lng)}" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-2 font-bold text-brand-orange" aria-label="Get directions to ${esc(p.title)}">Get directions ${ICON.arrow}</a></section>` : ''}
+                    ${hasGeo ? `<section class="mt-12" aria-labelledby="loc-h"><h2 id="loc-h" class="text-4xl text-brand-navy">Location</h2><p class="mt-2 text-gray-600">${esc(p.location)}</p><div class="mt-6 aspect-[16/9] rounded-xl overflow-hidden border border-brand-sand bg-brand-cream relative z-0" data-lite-map data-lat="${Number(p.lat)}" data-lng="${Number(p.lng)}" data-title="${esc(p.title)}" data-address="${esc(p.location)}" role="region" aria-label="Map showing ${esc(p.title)}"><p class="h-full flex items-center justify-center text-sm text-gray-600">Loading map…</p></div><a href="https://www.google.com/maps/dir/?api=1&amp;destination=${Number(p.lat)},${Number(p.lng)}" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-2 font-bold text-brand-orange">Get directions ${ICON.arrow}</a></section>` : ''}
                 </div>
 
                 <aside class="lg:col-span-1" aria-label="Enquire about this project">
@@ -538,10 +534,10 @@
                             <p class="pf-status hidden text-sm rounded-md p-3" role="status" aria-live="polite"></p>
                         </form>
                         <div class="mt-5 grid grid-cols-2 gap-3">
-                            <a href="${esc(c.phone_href || '#')}" class="text-center border-2 border-brand-navy text-brand-navy font-bold py-3 rounded-md hover:bg-brand-navy hover:text-white transition" aria-label="Call us">Call now</a>
+                            <a href="${esc(c.phone_href || '#')}" class="text-center border-2 border-brand-navy text-brand-navy font-bold py-3 rounded-md hover:bg-brand-navy hover:text-white transition">Call now</a>
                             <a href="${esc(wa)}" target="_blank" rel="noopener noreferrer" class="text-center bg-[#15803d] hover:bg-[#166534] text-white font-bold py-3 rounded-md transition" aria-label="Chat on WhatsApp">WhatsApp</a>
                         </div>
-                        ${/^https?:\/\//i.test(p.brochure_url || "") ? `<a href="${esc(p.brochure_url)}" target="_blank" rel="noopener noreferrer" class="mt-3 block text-center text-brand-orange font-bold py-2" aria-label="Download the brochure">Download brochure ${ICON.arrow}</a>` : ''}
+                        ${/^https?:\/\//i.test(p.brochure_url || "") ? `<a href="${esc(p.brochure_url)}" target="_blank" rel="noopener noreferrer" class="mt-3 block text-center text-brand-orange font-bold py-2">Download brochure ${ICON.arrow}</a>` : ''}
                     </div>
                 </aside>
             </div>
@@ -571,7 +567,6 @@
         };
         if (!ld.amenityFeature.length) delete ld.amenityFeature;
         if (p.lat != null && p.lng != null && p.lat !== '') ld.geo = { '@type': 'GeoCoordinates', latitude: Number(p.lat), longitude: Number(p.lng) };
-        if (p.rera_no) ld.identifier = { '@type': 'PropertyValue', propertyID: 'WBRERA', value: p.rera_no };
         return [ld, {
             '@context': 'https://schema.org', '@type': 'BreadcrumbList',
             itemListElement: [
@@ -583,7 +578,7 @@
     }
 
     function footerProjects(projects, ctx) {
-        return projects.slice(0, 8).map((p) => `<li><a href="${esc(projectUrl(p, ctx))}" class="inline-block py-1.5 hover:text-brand-gold" aria-label="${esc(p.title)}">${esc(p.title)}</a></li>`).join('');
+        return projects.slice(0, 8).map((p) => `<li><a href="${esc(projectUrl(p, ctx))}" class="inline-block py-1.5 hover:text-brand-gold">${esc(p.title)}</a></li>`).join('');
     }
 
     const AET = {
