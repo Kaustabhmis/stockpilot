@@ -45,8 +45,13 @@
     # Geofenced punching needs the browser's location on this site, and
     # nothing else needs a camera, a microphone or a payment sheet.
     Permissions-Policy = "geolocation=(self), camera=(), microphone=(), payment=()"
-    # The app is a single self-contained file. The only place it may talk to
-    # is the Apps Script workspace; script.google.com is also listed under
-    # script-src because the JSONP fallback loads from there when a browser
-    # cannot POST.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+    # The app is a single self-contained file. The only places it may talk to
+    # are the two possible workspaces - the Apps Script one and a Supabase
+    # one. script.google.com is also under script-src because the JSONP
+    # fallback loads from there when a browser cannot POST.
+    #
+    # Both are listed on purpose. A site serving the Postgres build with only
+    # the Apps Script host allowed would fail at the browser, after a
+    # deploy that looked perfectly successful, with nothing in the app to
+    # say why. Allowing a host the build never calls costs nothing.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.supabase.co; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
