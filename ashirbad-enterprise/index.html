@@ -48,8 +48,6 @@
         #project-map-container { height: 460px; width: 100%; border-radius: 1rem; }
         @media (min-width: 768px) { #project-map-container { height: 560px; } }
         @media (max-width: 639px) { .heroCarousel { height: 72vh; min-height: 480px; } .heroCarousel .carousel-slide { width: 90vw; } }
-        .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: .75rem !important; }
-        .gm-style .gm-style-iw-d { overflow: auto !important; padding: 0 !important; }
     </style>
 </head>
 <body data-page="home" class="bg-brand-cream text-gray-800 font-sans antialiased overflow-x-hidden pt-20">
@@ -241,8 +239,8 @@
                         <p class="mt-4 text-gray-600 max-w-2xl" data-c="map_intro">Ongoing developments and successfully delivered projects across Kolkata.</p>
                     </div>
                     <ul class="flex flex-wrap gap-5 text-sm font-semibold text-gray-700">
-                        <li class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full bg-blue-600 ring-2 ring-white shadow" aria-hidden="true"></span>Ongoing</li>
-                        <li class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full bg-orange-500 ring-2 ring-white shadow" aria-hidden="true"></span>Completed / Sold out</li>
+                        <li class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full bg-brand-navy ring-2 ring-white shadow" aria-hidden="true"></span>Ongoing</li>
+                        <li class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full bg-brand-flame ring-2 ring-white shadow" aria-hidden="true"></span>Completed / Sold out</li>
                     </ul>
                 </div>
                 <div class="rounded-2xl overflow-hidden border border-brand-sand bg-white shadow-xl p-1.5">
@@ -263,6 +261,7 @@
     <script src="assets/js/common.js"></script>
     <script src="assets/js/store.js"></script>
     <script src="assets/js/leadform.js"></script>
+    <script src="assets/js/litemap.js"></script>
     <script>
     (function () {
         'use strict';
@@ -318,60 +317,32 @@
             if (t && swiper) swiper.slideTo(Number(t.dataset.slideTo));
         });
 
-        /* ---------- Map ---------- */
-        let map = null, infoWindow = null, markers = [], mapsRequested = false;
+        /* ---------- Map (free OpenStreetMap lite map, no API key) ---------- */
+        let mapKey = '';
         const allPins = () => live.map((p) => ({ p, live: true })).concat(past.map((p) => ({ p, live: false }))).filter(({ p }) => p.lat != null && p.lng != null && p.lat !== '');
 
-        function renderMapFallback(reason) {
+        function renderMapFallback() {
             const el = document.getElementById('project-map-container');
             el.style.height = 'auto';
             el.innerHTML = `<div class="p-5 sm:p-7 bg-brand-cream rounded-xl">
-                <p class="text-sm text-gray-600 mb-5">${escapeHTML(reason)}</p>
+                <p class="text-sm text-gray-600 mb-5">Our project locations:</p>
                 <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${allPins().map(({ p, live: isLive }) => `
                     <li><a href="${escapeHTML(T.projectUrl(p, AE.ctx()))}" class="flex items-center gap-3 bg-white rounded-lg p-4 border border-brand-sand hover:border-brand-flame transition" aria-label="${escapeHTML(p.title)} – view project">
-                        <span class="w-3.5 h-3.5 rounded-full ${isLive ? 'bg-blue-600' : 'bg-orange-500'} flex-shrink-0" aria-hidden="true"></span>
+                        <span class="w-3.5 h-3.5 rounded-full ${isLive ? 'bg-brand-navy' : 'bg-brand-flame'} flex-shrink-0" aria-hidden="true"></span>
                         <span class="min-w-0"><span class="block font-bold text-brand-navy truncate">${escapeHTML(p.title)}</span><span class="block text-xs text-gray-600 truncate">${escapeHTML(p.location)}</span></span>
                     </a></li>`).join('')}</ul></div>`;
         }
 
-        function plotMarkers() {
-            if (!map) return;
-            markers.forEach((m) => m.setMap(null));
-            markers = [];
-            const path = 'M12 0C7.03 0 3 4.03 3 9c0 6.75 9 15 9 15s9-8.25 9-15c0-4.97-4.03-9-9-9zm0 12.5A3.5 3.5 0 1 1 12 5.5a3.5 3.5 0 0 1 0 7z';
-            const bounds = new google.maps.LatLngBounds();
-            allPins().forEach(({ p, live: isLive }) => {
-                const position = { lat: Number(p.lat), lng: Number(p.lng) };
-                const marker = new google.maps.Marker({ position, map, title: p.title, optimized: false,
-                    icon: { path, fillColor: isLive ? '#2563eb' : '#f97316', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5, scale: 1.8, anchor: new google.maps.Point(12, 24) } });
-                marker.addListener('click', () => {
-                    infoWindow.setContent(`<div style="width:250px;font-family:Manrope,sans-serif"><img src="${escapeHTML(T.imgUrl(p.img, 500))}" alt="${escapeHTML(p.title)}" style="width:100%;height:130px;object-fit:cover"><div style="padding:12px"><strong style="display:block;color:#12304d;font-size:16px">${escapeHTML(p.title)}</strong><span style="display:block;color:#4b5563;font-size:12px;margin-top:2px">${escapeHTML(p.location)}</span><a href="${escapeHTML(T.projectUrl(p, AE.ctx()))}" style="display:inline-block;margin-top:10px;background:#12304d;color:#fff;padding:8px 14px;font-weight:700;font-size:13px;text-decoration:none">View project</a></div></div>`);
-                    infoWindow.open({ anchor: marker, map });
-                });
-                markers.push(marker);
-                bounds.extend(position);
-            });
-            if (markers.length) map.fitBounds(bounds, 48);
-        }
-        window.initMap = function () {
-            map = new google.maps.Map(document.getElementById('project-map-container'), {
-                center: { lat: 22.5726, lng: 88.3939 }, zoom: 11, mapTypeControl: false, streetViewControl: false, gestureHandling: 'cooperative',
-                styles: [{ featureType: 'poi.business', stylers: [{ visibility: 'off' }] }]
-            });
-            infoWindow = new google.maps.InfoWindow({ maxWidth: 270 });
-            plotMarkers();
-        };
-        window.gm_authFailure = () => { map = null; renderMapFallback('Our project locations:'); };
-        function loadGoogleMaps() {
-            if (mapsRequested) return;
-            mapsRequested = true;
-            const key = String(AE.content().google_maps_key || '').trim();
-            if (!key) { renderMapFallback('Our project locations (add a Google Maps key in Admin → Website Content → Integrations for the interactive map):'); return; }
-            const s = document.createElement('script');
-            s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=initMap&loading=async`;
-            s.async = true;
-            s.onerror = () => renderMapFallback('Our project locations:');
-            document.head.appendChild(s);
+        function renderMap() {
+            const pins = allPins();
+            const key = JSON.stringify(pins.map(({ p, live: l }) => [p.id, p.lat, p.lng, p.title, p.img, p.location, l]));
+            if (key === mapKey) return;
+            mapKey = key;
+            const el = document.getElementById('project-map-container');
+            AE.liteMap(el, pins.map(({ p, live: isLive }) => ({
+                lat: p.lat, lng: p.lng, title: p.title, color: isLive ? '#12304d' : '#c9973f',
+                popup: `<div class="ae-pop"><img src="${escapeHTML(T.imgUrl(p.img, 500))}" alt="${escapeHTML(p.title)}"><div class="ae-pop-body"><strong>${escapeHTML(p.title)}</strong><span>${escapeHTML(p.location)}</span><a href="${escapeHTML(T.projectUrl(p, AE.ctx()))}">View project</a></div></div>`
+            })), { onFail: renderMapFallback });
         }
 
         /* ---------- Data ---------- */
@@ -381,10 +352,10 @@
                 live = projects.filter((p) => p.stage === 'live');
                 past = projects.filter((p) => p.stage !== 'live');
                 renderCarousel();
-                if (map) plotMarkers(); else if (mapsRequested && !window.google) renderMapFallback('Our project locations:');
+                renderMap();
             } catch (ex) { console.error(ex); }
         }
-        Promise.all([load(), AE.loadContent()]).then(loadGoogleMaps);
+        load();
         let t = null;
         Store.onChange((c) => { if (c === 'projects') { clearTimeout(t); t = setTimeout(load, 150); } });
     })();

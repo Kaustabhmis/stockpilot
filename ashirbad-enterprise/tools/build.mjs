@@ -17,6 +17,8 @@
  *   --data file.json          a backup exported from Admin → Settings
  *   APPS_SCRIPT_URL           the private Google Sheet (via Apps Script)
  *   sample data               when nothing is connected yet
+ *   --offline                 no data at build time: lists keep their loading placeholders and
+ *                             fill from the Google Sheet in the browser (nothing sample is published)
  *
  * Usage:  npm run build          (or: node tools/build.mjs --data backup.json)
  * Env:    SITE_URL, APPS_SCRIPT_URL override values from assets/js/config.js
@@ -60,7 +62,12 @@ const { headerHTML, footerHTML } = require(path.join(ROOT, 'assets/js/common.js'
 /* ------------------------------------------------------------
  * 2. Data
  * ---------------------------------------------------------- */
+const OFFLINE = args.includes('--offline');
 async function loadData() {
+    if (OFFLINE) {
+        log('Data: none (--offline) – pages load projects, posts and texts from the Google Sheet in the browser');
+        return { projects: [], commercial: [], posts: [], settings: [] };
+    }
     const file = argVal('--data');
     if (file) {
         log(`Data: ${file}`);
@@ -108,6 +115,9 @@ const builtProjects = projects.map((p) => p.slug);
 // Gallery / footer order: ongoing, then sold out, then completed
 const ordered = live.concat(projects.filter((p) => p.stage === 'sold'), projects.filter((p) => p.stage !== 'live' && p.stage !== 'sold'));
 const abs = (u) => (!u || /^data:/.test(u) ? `${SITE}/og-image.jpg` : /^https?:\/\//.test(u) ? u : `${SITE}/${u.replace(/^\.?\//, '')}`);
+
+/** Data lists: in --offline builds keep the template's loading placeholder for the browser to fill. */
+const fillData = (html, key, content) => (OFFLINE ? html : fill(html, key, content));
 
 /** Replace <!--@key-->…<!--/@key--> (or a lone <!--@key-->) with content. */
 function fill(html, key, content) {
@@ -212,7 +222,7 @@ if (fs.existsSync(twBin)) {
 
 // Cache-busting hashes for local assets
 const assetHash = {};
-for (const f of ['assets/css/tailwind.css', 'assets/js/config.js', 'assets/js/templates.js', 'assets/js/content.js', 'assets/js/common.js', 'assets/js/store.js', 'assets/js/leadform.js']) {
+for (const f of ['assets/css/tailwind.css', 'assets/js/config.js', 'assets/js/templates.js', 'assets/js/content.js', 'assets/js/common.js', 'assets/js/store.js', 'assets/js/leadform.js', 'assets/js/litemap.js']) {
     assetHash[f] = crypto.createHash('sha1').update(fs.readFileSync(path.join(OUT, f))).digest('hex').slice(0, 10);
 }
 const bust = (html) => html.replace(/((?:href|src)="(?:\.\.\/|\/)?)(assets\/(?:css|js)\/[\w.-]+\.(?:css|js))"/g, (m, a, f) => (assetHash[f] ? `${a}${f}?v=${assetHash[f]}"` : m));
@@ -227,9 +237,9 @@ const ctxRoot = { root: '', builtPosts, builtProjects, c: CONTENT };
 {
     let html = read('index.html');
     const key = JSON.stringify(live.map((p) => [p.id, p.slug, p.title, p.img, p.status_label, p.price, p.config, p.carpet_area, p.location, p.rera_no]));
-    html = html.replace('id="carousel-wrapper">', `id="carousel-wrapper" data-rendered="${esc(key)}">`);
-    html = fill(html, 'carousel', T.carouselSlides(live, ctxRoot));
-    html = fill(html, 'tabs', T.carouselTabs(live));
+    if (!OFFLINE) html = html.replace('id="carousel-wrapper">', `id="carousel-wrapper" data-rendered="${esc(key)}">`);
+    html = fillData(html, 'carousel', T.carouselSlides(live, ctxRoot));
+    html = fillData(html, 'tabs', T.carouselTabs(live));
     const heroImg = live[0] ? T.imgUrl(live[0].img, 1800) : null;
     html = fill(html, 'jsonld', [
         ld(websiteLd),
@@ -247,7 +257,7 @@ const crumbs = (name, file) => ld({
 // Gallery: every project (ongoing, sold out, completed) + commercial spaces
 {
     let html = read('gallery.html');
-    html = fill(html, 'grid', ordered.map((p) => T.projectCard(p, ctxRoot)).join('') + commercial.map((b) => T.commercialCard(b, ctxRoot)).join(''));
+    html = fillData(html, 'grid', ordered.map((p) => T.projectCard(p, ctxRoot)).join('') + commercial.map((b) => T.commercialCard(b, ctxRoot)).join(''));
     html = fill(html, 'jsonld', [crumbs('Gallery', 'gallery.html'),
         ordered.length ? ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: `Projects by ${BRAND}`, itemListElement: ordered.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/project/${encodeURIComponent(p.slug)}.html`, name: p.title })) }) : ''
     ].filter(Boolean).join('\n    '));
@@ -291,10 +301,10 @@ log(`${projects.length} project pages`);
 const blogTemplate = read('blog.html');
 {
     let html = blogTemplate;
-    html = fill(html, 'filters', T.categoryFilters(posts, 'All'));
-    html = fill(html, 'featured', posts[0] ? T.featuredPost(posts[0], ctxRoot) : '');
-    html = fill(html, 'posts', posts.slice(1).map((p) => T.blogCard(p, ctxRoot, 'h2')).join(''));
-    html = html.replace('<p id="no-posts" class="hidden', posts.length ? '<p id="no-posts" class="hidden' : '<p id="no-posts" class="');
+    html = fillData(html, 'filters', T.categoryFilters(posts, 'All'));
+    html = fillData(html, 'featured', posts[0] ? T.featuredPost(posts[0], ctxRoot) : '');
+    html = fillData(html, 'posts', posts.slice(1).map((p) => T.blogCard(p, ctxRoot, 'h2')).join(''));
+    html = html.replace('<p id="no-posts" class="hidden', posts.length || OFFLINE ? '<p id="no-posts" class="hidden' : '<p id="no-posts" class="');
     html = fill(html, 'jsonld', ld({
         '@context': 'https://schema.org', '@type': 'BreadcrumbList',
         itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` }, { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE}/blog.html` }]
@@ -337,7 +347,7 @@ log(`${posts.length} blog post pages`);
 // Landing page
 {
     let html = read('enquiry.html');
-    html = fill(html, 'projects', T.landingProjectCards(live));
+    html = fillData(html, 'projects', T.landingProjectCards(live));
     write('enquiry.html', finish(html, { active: 'enquiry' }));
 }
 
@@ -387,8 +397,30 @@ fs.writeFileSync(path.join(OUT, '_headers'), `# Netlify / Cloudflare Pages respo
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
 
-/assets/*
+/assets/css/*
   Cache-Control: public, max-age=31536000, immutable
+
+/assets/js/templates.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/js/content.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/js/common.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/js/store.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/js/leadform.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/js/litemap.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# config.js may be edited by hand after a build (Apps Script URL), so browsers always re-check it
+/assets/js/config.js
+  Cache-Control: public, max-age=0, must-revalidate
 
 /*.html
   Cache-Control: public, max-age=0, must-revalidate

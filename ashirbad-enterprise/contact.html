@@ -72,7 +72,7 @@
             </div>
         </section>
         <section aria-label="Office location map">
-            <iframe src="https://www.google.com/maps?q=22.5979,88.4608&amp;z=15&amp;output=embed" data-c-attr="src:office_map_embed" title="Map showing our office" class="w-full h-[420px] border-0 grayscale-[30%]" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            <div id="office-map" class="w-full h-[420px] bg-brand-cream relative z-0" data-lite-map data-lat="22.5979" data-lng="88.4608" data-title="Ashirbad Enterprise" data-c-attr="data-lat:office_lat;data-lng:office_lng;data-title:business_name;data-address:address" role="region" aria-label="Map showing our office"><p class="h-full flex items-center justify-center text-sm text-gray-500">Loading map…</p></div>
         </section>
     </main>
 
@@ -83,10 +83,12 @@
     <script src="assets/js/content.js"></script>
     <script src="assets/js/common.js"></script>
     <script src="assets/js/store.js"></script>
+    <script src="assets/js/litemap.js"></script>
     <script>
     (function () {
         'use strict';
         AE.layout('contact');
+        AE.onContent(() => AE.initLiteMaps());
 
         /** Wire an enquiry form to Store.addLead (used on contact & project pages). */
         function wireLeadForm(form, extra, onOk) {

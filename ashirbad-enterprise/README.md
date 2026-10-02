@@ -22,7 +22,7 @@ A fast static website with an admin panel. Content lives in a **private Google S
 | Section | What you can edit |
 |---|---|
 | Business Information | Business & legal name, tagline, phone numbers, WhatsApp number, email, full address, office location (map pin), office hours, company WBRERA / GSTIN / CIN numbers, founding year, areas served, languages, footer text |
-| Social Media & Integrations | Facebook / Instagram / YouTube / LinkedIn links, Google Maps API key, Google Analytics ID, Search Console & Bing verification codes, carousel speed |
+| Social Media & Integrations | Facebook / Instagram / YouTube / LinkedIn links, Google Analytics ID, Search Console & Bing verification codes, carousel speed |
 | SEO | Google titles & descriptions for the home, gallery, about, contact, blog and landing pages (with live character counters), keywords, social-share text |
 | Home Page | Banner heading, text and image; carousel and map headings |
 | Gallery / About / Contact pages | Banner headings and intros; About story, image, badge, numbers (15+ years, 25 projects…), mission, vision and values; contact texts |
@@ -33,6 +33,10 @@ A fast static website with an admin panel. Content lives in a **private Google S
 Each project's own details are edited on the project itself (Admin → Projects → Edit): WBRERA number, price, configuration, possession, short description, full overview, highlights, amenities, main image, photo gallery, YouTube video, brochure link and map location. **View** opens its page on the website.
 
 Changes are saved to the `settings` tab of your private Google Sheet (one row per item, so you can also read them there). The website shows them immediately, and the search-engine pages rebuild automatically about 2 minutes later. **Restore defaults** brings back the original text for a section. Form field labels and navigation menu names are fixed.
+
+## Maps
+
+All maps (home page project map, each project page, contact page) are free OpenStreetMap "lite" maps (Leaflet with CARTO light tiles). No Google API key or billing is needed. Pins come from each project's latitude/longitude and the office latitude/longitude in **Website Content → Business Information**.
 
 ## How "Sold Out" works
 
@@ -141,6 +145,10 @@ The admin page is at `/admin.html`. It is not linked from the public site and te
 ## Writing blog posts
 
 In the article content box, leave a blank line between paragraphs. Start a line with `## ` for a heading and `- ` for a bullet point. The **Short Summary** is used on cards and as the page's SEO description, so aim for about 150 characters.
+
+## Building without access to the Sheet
+
+`node tools/build.mjs --offline` builds the site without reading any data. Project, gallery and blog lists keep their loading placeholders and fill from the Google Sheet in the visitor's browser, so no sample content is ever published. Pre-rendered project and blog pages (best for SEO) need a normal build that can read the Sheet, or `--data backup.json` with a backup from **Admin → Settings**.
 
 ## Developing
 

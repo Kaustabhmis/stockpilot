@@ -44,3 +44,22 @@ section[id] { scroll-margin-top: 5rem; }
     html { scroll-behavior: auto; }
     *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Confirmation dialog */
+.ae-dialog-backdrop { animation: ae-fade .18s ease-out; }
+.ae-dialog-panel { animation: ae-pop .22s cubic-bezier(.2,.9,.3,1.2); }
+.ae-dialog.is-closing .ae-dialog-backdrop, .ae-dialog.is-closing .ae-dialog-panel { opacity: 0; transition: opacity .15s; }
+@keyframes ae-fade { from { opacity: 0; } }
+@keyframes ae-pop { from { opacity: 0; transform: translateY(8px) scale(.96); } }
+
+/* Lite map (Leaflet) */
+.ae-pin { background: none; border: 0; }
+.ae-popup .leaflet-popup-content-wrapper { padding: 0; border-radius: .75rem; overflow: hidden; }
+.ae-popup .leaflet-popup-content { margin: 0; width: 240px !important; }
+.ae-pop { font-family: Manrope, sans-serif; }
+.ae-pop img { width: 100%; height: 130px; object-fit: cover; display: block; }
+.ae-pop-body { padding: 12px 14px 14px; }
+.ae-pop-body strong { display: block; color: #12304d; font-size: 16px; }
+.ae-pop-body span { display: block; color: #4b5563; font-size: 12px; margin-top: 2px; }
+.ae-pop-body a { display: inline-block; margin-top: 10px; background: #12304d; color: #fff !important; padding: 8px 14px; font-weight: 700; font-size: 13px; text-decoration: none; border-radius: 4px; }
+.leaflet-container { font-family: Manrope, sans-serif; }

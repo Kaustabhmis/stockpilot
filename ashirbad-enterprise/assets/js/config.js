@@ -12,10 +12,10 @@
  *   Apps Script Web App URL below. The Google Sheet itself stays private.
  */
 window.APP_CONFIG = {
-    APPS_SCRIPT_URL: '',       // e.g. 'https://script.google.com/macros/s/AKfy.../exec'
+    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxhYwcBC9QBgKXKVwvIteU8vg7Upo95onnhRLErRm7_kD07sgmkuW_4z7iPfQZePZEp/exec',       // e.g. 'https://script.google.com/macros/s/AKfy.../exec'
 
     /** Your website address – used for canonical URLs, sitemap and share links. */
-    SITE_URL: 'https://www.ashirbadenterprise.com',
+    SITE_URL: 'https://ashirbadenterprise.in',
 
     /** Demo-mode admin password only. Ignored once APPS_SCRIPT_URL is set. */
     LOCAL_ADMIN_PASSWORD: 'ashirbad@admin'

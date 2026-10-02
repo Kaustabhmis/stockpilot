@@ -40,7 +40,7 @@
                 { key: 'address_city', label: 'City', default: 'Kolkata' },
                 { key: 'address_state', label: 'State', default: 'West Bengal' },
                 { key: 'address_pin', label: 'PIN code', default: '700156' },
-                { key: 'office_lat', label: 'Office latitude', default: '22.5979', help: 'For Google Maps and local SEO. Right-click your office in Google Maps to copy it.' },
+                { key: 'office_lat', label: 'Office latitude', default: '22.5979', help: 'For the office map and local SEO. Right-click your office in Google Maps to copy it.' },
                 { key: 'office_lng', label: 'Office longitude', default: '88.4608' },
                 { key: 'office_hours', label: 'Office hours (display)', default: 'Mon – Sat: 10:00 AM – 7:00 PM' },
                 { key: 'open_days', label: 'Open days', default: 'Monday, Tuesday, Wednesday, Thursday, Friday, Saturday', help: 'Comma separated – used by Google.' },
@@ -63,7 +63,6 @@
                 { key: 'social_instagram', label: 'Instagram URL', type: 'url', default: '' },
                 { key: 'social_youtube', label: 'YouTube URL', type: 'url', default: '' },
                 { key: 'social_linkedin', label: 'LinkedIn URL', type: 'url', default: '' },
-                { key: 'google_maps_key', label: 'Google Maps API key', default: '', help: 'Enables the interactive map. Restrict the key to your domain in Google Cloud Console.' },
                 { key: 'ga_id', label: 'Google Analytics 4 ID', default: '', help: 'Looks like G-XXXXXXXXXX.' },
                 { key: 'google_verification', label: 'Google Search Console verification code', default: '', help: 'Only the content="…" value of the HTML tag.' },
                 { key: 'bing_verification', label: 'Bing Webmaster verification code', default: '' },
@@ -256,7 +255,6 @@
         c.icbm = c.office_lat && c.office_lng ? `${c.office_lat}, ${c.office_lng}` : '';
         c.year = String(new Date().getFullYear());
         c.home_label = `${c.business_name} home`;
-        c.office_map_embed = c.office_lat && c.office_lng ? `https://www.google.com/maps?q=${Number(c.office_lat)},${Number(c.office_lng)}&z=15&output=embed` : `https://www.google.com/maps?q=${encodeURIComponent(c.address)}&output=embed`;
         c.carousel_ms = Math.max(3, Number(c.carousel_seconds) || 10) * 1000;
         c.social = [['facebook', c.social_facebook], ['instagram', c.social_instagram], ['youtube', c.social_youtube], ['linkedin', c.social_linkedin]].filter(([, u]) => /^https?:\/\//.test(u || ''));
         c.registrations = [

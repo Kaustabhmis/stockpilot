@@ -633,7 +633,7 @@
             const sold = e.target.closest('[data-sold]');
             if (sold) {
                 const p = state.projects.find((x) => x.id === sold.dataset.sold);
-                if (!p || !confirm(`Mark “${p.title}” as SOLD OUT?\n\nIt will be removed from the homepage carousel and shown in the Completed & Sold Out gallery.`)) return;
+                if (!p || !(await AE.confirmDialog({ title: `Mark “${p.title}” as sold out?`, message: 'It will be removed from the homepage carousel and shown in the gallery with the other sold out projects. You can make it live again at any time.', confirmText: 'Mark Sold Out', tone: 'warning' }))) return;
                 sold.disabled = true;
                 try { await Store.setSold(p.id, true); toast(`${p.title} marked as sold out and moved to the gallery`); await refresh(['projects']); }
                 catch (ex) { toast(ex.message || 'Could not update project', 'error'); sold.disabled = false; }
@@ -643,7 +643,7 @@
             const rs = e.target.closest('[data-restore]');
             if (rs) {
                 const p = state.projects.find((x) => x.id === rs.dataset.restore);
-                if (!p || !confirm(`Move “${p.title}” back to the live homepage carousel?`)) return;
+                if (!p || !(await AE.confirmDialog({ title: `Make “${p.title}” live again?`, message: 'It will move back to the homepage carousel of ongoing projects.', confirmText: 'Make Live' }))) return;
                 rs.disabled = true;
                 try { await Store.setSold(p.id, false); toast(`${p.title} is live on the carousel again`); await refresh(['projects']); }
                 catch (ex) { toast(ex.message || 'Could not update project', 'error'); rs.disabled = false; }
@@ -654,7 +654,7 @@
             if (del) {
                 const [c, id] = del.dataset.delete.split(':');
                 const row = state[c].find((r) => r.id === id);
-                if (!row || !confirm(`Delete “${row.title || row.name}” permanently? This cannot be undone.`)) return;
+                if (!row || !(await AE.confirmDialog({ title: `Delete “${row.title || row.name}”?`, message: 'This permanently removes it from the website. This cannot be undone.', confirmText: 'Delete', tone: 'danger' }))) return;
                 try { await Store.remove(c, id); toast('Deleted'); await refresh([c]); }
                 catch (ex) { toast(ex.message || 'Could not delete', 'error'); }
             }
@@ -886,19 +886,19 @@
             if (!file) return;
             try {
                 const data = JSON.parse(await file.text());
-                if (!confirm('Restore this backup? Records with the same ID will be overwritten.')) return;
+                if (!(await AE.confirmDialog({ title: 'Restore this backup?', message: 'Records with the same ID will be overwritten by the backup.', confirmText: 'Restore Backup', tone: 'warning' }))) return;
                 await Store.importAll(data);
                 toast('Backup restored');
                 await refresh();
             } catch (ex) { toast(`Could not restore: ${ex.message}`, 'error'); }
         });
         document.getElementById('load-sample').addEventListener('click', async () => {
-            if (!confirm('Add the sample projects, posts and commercial listings?')) return;
+            if (!(await AE.confirmDialog({ title: 'Add sample data?', message: 'Sample projects, blog posts and commercial listings will be added. You can edit or delete them later.', confirmText: 'Add Samples' }))) return;
             try { await Store.loadSampleData(); toast('Sample data added'); await refresh(); }
             catch (ex) { toast(ex.message || 'Could not add sample data', 'error'); }
         });
         document.getElementById('reset-demo').addEventListener('click', async () => {
-            if (!confirm('Reset ALL demo data in this browser back to the samples? Your changes and leads will be lost.')) return;
+            if (!(await AE.confirmDialog({ title: 'Reset all demo data?', message: 'Everything in this browser goes back to the samples. Your changes and leads will be lost.', confirmText: 'Reset Everything', tone: 'danger' }))) return;
             try { await Store.resetDemo(); toast('Demo data reset'); await refresh(); }
             catch (ex) { toast(ex.message, 'error'); }
         });
@@ -1069,9 +1069,9 @@
             renderContentGroups();
             renderContentFields();
         });
-        document.getElementById('content-reset').addEventListener('click', () => {
+        document.getElementById('content-reset').addEventListener('click', async () => {
             const g = K.GROUPS.find((x) => x.id === ce.group);
-            if (!confirm(`Restore the default texts for “${g.title}”? You can review them before saving.`)) return;
+            if (!(await AE.confirmDialog({ title: `Restore default texts for “${g.title}”?`, message: 'The original texts are filled in. Nothing is published until you click Save.', confirmText: 'Restore Defaults', tone: 'warning' }))) return;
             g.fields.forEach((f) => { ce.values[f.key] = clone(f.default); markDirty(f.key); });
             renderContentFields();
         });

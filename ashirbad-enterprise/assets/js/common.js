@@ -276,6 +276,64 @@
         }
     };
 
+    /**
+     * Centred confirmation dialog (replaces the browser's confirm()).
+     * await AE.confirmDialog({ title, message, confirmText, cancelText, tone: 'danger' | 'warning' | 'primary' }) → true / false
+     */
+    function confirmDialog(opts = {}) {
+        const o = Object.assign({ title: 'Are you sure?', message: '', confirmText: 'Confirm', cancelText: 'Cancel', tone: 'primary' }, opts);
+        const tones = {
+            danger: { ring: 'bg-red-50 text-red-600', btn: 'bg-red-600 hover:bg-red-700 focus-visible:ring-red-300', icon: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>' },
+            warning: { ring: 'bg-amber-50 text-brand-orange', btn: 'bg-brand-orange hover:bg-brand-navy focus-visible:ring-amber-300', icon: '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>' },
+            primary: { ring: 'bg-brand-cream text-brand-navy', btn: 'bg-brand-navy hover:bg-brand-orange focus-visible:ring-blue-200', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>' }
+        };
+        const t = tones[o.tone] || tones.primary;
+        const last = document.activeElement;
+        return new Promise((resolve) => {
+            const root = document.createElement('div');
+            root.className = 'ae-dialog fixed inset-0 z-[400] flex items-center justify-center p-4';
+            root.innerHTML = `
+                <div class="ae-dialog-backdrop absolute inset-0 bg-brand-ink/60 backdrop-blur-sm" data-dlg-cancel></div>
+                <div class="ae-dialog-panel relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden" role="alertdialog" aria-modal="true" aria-labelledby="ae-dlg-title" aria-describedby="ae-dlg-msg">
+                    <div class="h-1.5 bg-gradient-to-r from-brand-navy via-brand-flame to-brand-gold" aria-hidden="true"></div>
+                    <div class="p-6 sm:p-7 text-center">
+                        <span class="mx-auto w-14 h-14 rounded-full ${t.ring} flex items-center justify-center"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${t.icon}</svg></span>
+                        <h2 id="ae-dlg-title" class="mt-4 text-xl font-extrabold text-brand-navy">${escapeHTML(o.title)}</h2>
+                        <div id="ae-dlg-msg" class="mt-2 text-sm text-gray-600 leading-relaxed space-y-2">${String(o.message).split(/\n{2,}/).map((x) => `<p>${escapeHTML(x)}</p>`).join('')}</div>
+                    </div>
+                    <div class="px-6 sm:px-7 pb-6 sm:pb-7 flex flex-col-reverse sm:flex-row gap-3">
+                        <button type="button" class="flex-1 px-5 py-3 rounded-lg border border-gray-300 text-brand-navy font-bold hover:bg-gray-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-gray-200 transition" data-dlg-cancel>${escapeHTML(o.cancelText)}</button>
+                        <button type="button" class="flex-1 px-5 py-3 rounded-lg text-white font-bold shadow-lg ${t.btn} focus:outline-none focus-visible:ring-4 transition" data-dlg-ok>${escapeHTML(o.confirmText)}</button>
+                    </div>
+                </div>`;
+            const close = (val) => {
+                document.removeEventListener('keydown', onKey, true);
+                root.classList.add('is-closing');
+                setTimeout(() => { root.remove(); document.body.style.overflow = prevOverflow; }, 160);
+                if (last && last.focus) last.focus();
+                resolve(val);
+            };
+            const onKey = (e) => {
+                if (e.key === 'Escape') { e.preventDefault(); close(false); }
+                if (e.key === 'Tab') { // keep focus inside the dialog
+                    const f = [...root.querySelectorAll('button')];
+                    const i = f.indexOf(document.activeElement);
+                    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+                    else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+                }
+            };
+            root.addEventListener('click', (e) => {
+                if (e.target.closest('[data-dlg-ok]')) close(true);
+                else if (e.target.closest('[data-dlg-cancel]')) close(false);
+            });
+            const prevOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            document.addEventListener('keydown', onKey, true);
+            document.body.appendChild(root);
+            root.querySelector(o.tone === 'danger' ? '[data-dlg-cancel].flex-1' : '[data-dlg-ok]').focus();
+        });
+    }
+
     function toast(message, type = 'success') {
         let wrap = document.getElementById('toast-wrap');
         if (!wrap) {
@@ -356,7 +414,7 @@
         onContent(fn) { contentListeners.push(fn); },
         loadContent,
         headerHTML, footerHTML, renderHeader, renderFooter, renderWhatsApp,
-        Modal, toast, validateField, PHONE_PATTERN,
+        Modal, toast, confirmDialog, validateField, PHONE_PATTERN,
         /** Context for templates: site root + list of pre-rendered post slugs. */
         ctx: () => ({ root: R(), builtPosts: manifest().posts || [], builtProjects: manifest().projects || [], c: CONTENT }),
         root: R,
