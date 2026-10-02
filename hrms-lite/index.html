@@ -834,6 +834,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
       <div class="tabs">
         <div class="tab active" data-tab="salary"  onclick="payTab('salary')">Salary</div>
         <div class="tab" data-tab="wages"   onclick="payTab('wages')">Wages</div>
+        <div class="tab" data-tab="increment" onclick="payTab('increment')">Increment</div>
         <div class="tab" data-tab="arrears" onclick="payTab('arrears')">Arrears</div>
         <div class="tab" data-tab="bonus"   onclick="payTab('bonus')">Bonus</div>
         <div class="tab" data-tab="gratuity" onclick="payTab('gratuity')">Gratuity</div>
@@ -876,6 +877,57 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
       <!-- Arrears: back-pay after a salary revision that takes effect from a
            past month. What they should have had, less what they were paid. -->
+      <!-- Increment: the record of every salary revision. Arrears are worked
+           out from these rather than typed in again, and a question about
+           somebody's pay three years ago has an answer. -->
+      <div id="pay-pane-increment" style="display:none">
+        <div id="inc-state"></div>
+        <div class="card">
+          <div class="toolbar">
+            <label class="field">Effective from
+              <input type="month" id="inc-from" onchange="renderIncrement()"></label>
+            <label class="field">Rise
+              <select id="inc-mode" onchange="renderIncrement()">
+                <option value="pct">a percentage of present gross</option>
+                <option value="amt">a flat amount per month</option>
+                <option value="each">typed in per person</option>
+              </select></label>
+            <label class="field" id="inc-val-wrap">Value
+              <input type="number" id="inc-val" value="0" step="0.01" onchange="renderIncrement()"></label>
+            <label class="field">Lands on
+              <select id="inc-spread" onchange="renderIncrement()">
+                <option value="prorata">every component, in its present proportion</option>
+                <option value="basic">basic only</option>
+              </select></label>
+            <label class="field">Who
+              <select id="inc-who" onchange="renderIncrement()">
+                <option value="salary">everyone on salary</option>
+                <option value="all">everyone, wages included</option>
+              </select></label>
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="printIncrement()">&#128424; Print</button>
+            <button class="adm" id="inc-apply" onclick="applyIncrement()">Apply revision</button>
+          </div>
+          <label class="field" style="max-width:420px">Reason
+            <input type="text" id="inc-reason" placeholder="Annual revision 2026-27"
+                   onchange="renderIncrement()"></label>
+          <div class="kpis" id="inc-kpis"></div>
+          <div class="table-wrap"><table id="inc-table"></table></div>
+          <div class="hint-line" style="margin-top:10px">Applying writes one row per person to the
+            <b>Increment</b> tab <i>and</i> updates their pay on the Employees tab. The old figures
+            stay in the Increment row, which is what makes arrears exact instead of typed in from
+            memory.</div>
+        </div>
+
+        <div class="card" id="inc-history-card">
+          <div class="toolbar"><h3 style="margin:0">Revisions already made</h3>
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="printIncrementHistory()">&#128424; Print history</button>
+          </div>
+          <div class="table-wrap"><table id="inc-history"></table></div>
+        </div>
+      </div>
+
       <div id="pay-pane-arrears" style="display:none">
         <div class="card">
           <div class="toolbar">
@@ -885,16 +937,20 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
               <input type="month" id="arr-to" onchange="renderArrears()"></label>
             <label class="field">Rise
               <select id="arr-mode" onchange="renderArrears()">
+                <option value="rev">from a recorded revision</option>
                 <option value="pct">a percentage of present gross</option>
                 <option value="amt">a flat amount per month</option>
                 <option value="each">typed in per person</option>
               </select></label>
+            <label class="field" id="arr-rev-wrap">Revision
+              <select id="arr-rev" onchange="renderArrears()"></select></label>
             <label class="field" id="arr-val-wrap">Value
               <input type="number" id="arr-val" value="0" step="0.01" onchange="renderArrears()"></label>
             <span class="spacer"></span>
             <button class="ghost sm" onclick="printArrears()">&#128424; Print</button>
             <button class="adm" id="arr-post" onclick="postArrears()">Post to a month's payroll</button>
           </div>
+          <div id="arr-paid-note"></div>
           <div class="kpis" id="arr-kpis"></div>
           <div class="table-wrap"><table id="arr-table"></table></div>
         </div>
@@ -934,9 +990,24 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
               </select></label>
             <span class="spacer"></span>
             <button class="ghost sm" onclick="printGratuity()">&#128424; Print register</button>
+            <button class="sm" id="grat-save" onclick="freezeGratuity()">&#128190; Freeze this as at date</button>
           </div>
+          <div id="grat-state"></div>
           <div class="kpis" id="grat-kpis"></div>
           <div class="table-wrap"><table id="grat-table"></table></div>
+          <div class="hint-line" style="margin-top:10px">Gratuity is worked out live from
+            joining date and current basic + DA, so it is right the day you open it and goes
+            out of date the day after. <b>Freeze</b> writes what is on screen into the
+            <b>Gratuity</b> tab as a dated snapshot - that is what the accounts carry at year
+            end, and what a settlement is paid against.</div>
+        </div>
+
+        <div class="card" id="grat-saved-card">
+          <div class="toolbar"><h3 style="margin:0">Frozen snapshots</h3>
+            <span class="spacer"></span>
+            <button class="ghost sm" onclick="printFrozenGratuity()">&#128424; Print</button>
+          </div>
+          <div class="table-wrap"><table id="grat-saved-table"></table></div>
         </div>
       </div>
     </section>
@@ -1048,6 +1119,8 @@ var BRAND = {
 var S = {
   api: '', demo: false, user: null, view: 'dashboard',
   settings: {}, employees: [], attendance: [], leave: [], payroll: [], holidays: [], secrets: {},
+  /* each kept in its own tab, because each is asked about years later */
+  bonus: [], gratuity: [], increment: [],
   shifts: [], leaveTypes: [], leaveVersion: 0,
   ctcVariables: [], ctcComponents: [], ctcValues: [], events: [], calCursor: null,
   requestTypes: [], requests: [], punch: null, sites: [], notices: [], noticesExpanded: false,
@@ -1640,6 +1713,7 @@ function demoDb() {
         created_at: '2026-09-02' }
     ],
     employees: [], attendance: [], leave: [], payroll: [], holidays: [], punches: [], events: [],
+    bonus: [], gratuity: [], increment: [],
     requests: [],
     shifts: [
       { id: 'SH1', name: 'General', start_time: '09:30', end_time: '18:30', grace_minutes: 15,
@@ -1844,7 +1918,8 @@ var SHEET_TO_LIST = {
   Payroll: 'payroll', Users: 'users', Holidays: 'holidays', Punches: 'punches',
   Events: 'events', Sites: 'sites', RequestTypes: 'requestTypes', Requests: 'requests', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
   CtcComponents: 'ctcComponents', CtcValues: 'ctcValues', Notices: 'notices',
-  ApprovalLevels: 'approvalLevels'
+  ApprovalLevels: 'approvalLevels',
+  Bonus: 'bonus', Gratuity: 'gratuity', Increment: 'increment'
 };
 /* The demo has no server to work out where an application has got to, so the
    same rules are applied here. Kept deliberately small and next to the demo
@@ -1902,7 +1977,9 @@ function demoApi(action, p) {
                  ctcValues: db.ctcValues || [], events: db.events || [],
                  requestTypes: db.requestTypes || [], requests: db.requests || [],
                  sites: db.sites || [], users: [], secrets: {},
-                 notices: db.notices || [], approvalLevels: db.approvalLevels || [] };
+                 notices: db.notices || [], approvalLevels: db.approvalLevels || [],
+                 bonus: db.bonus || [], gratuity: db.gratuity || [],
+                 increment: db.increment || [] };
       }
       if (!S.user || !(S.user.role === 'admin' || S.user.role === 'owner')) {
         var code = String((S.user && S.user.emp_code) || '');
@@ -1925,6 +2002,8 @@ function demoApi(action, p) {
                  requestTypes: db.requestTypes || [],
                  notices: (db.notices || []).filter(function (n) { return noticeLive(n); }),
                  approvalLevels: db.approvalLevels || [],
+                 bonus: mineOnly(db.bonus), gratuity: mineOnly(db.gratuity),
+                 increment: mineOnly(db.increment),
                  sites: [], ctcVariables: [], ctcComponents: [], users: [], secrets: {} };
       }
       return { role: 'owner', settings: db.settings, employees: db.employees, attendance: db.attendance,
@@ -1937,6 +2016,8 @@ function demoApi(action, p) {
                requests: (db.requests || []).map(demoStamp(db, 'Requests')),
                sites: db.sites || [], notices: db.notices || [],
                approvalLevels: db.approvalLevels || [],
+               bonus: db.bonus || [], gratuity: db.gratuity || [],
+               increment: db.increment || [],
                secrets: { essl_api_password: false, sql_password: false, ingest_token: false, push_token: false } };
     case 'save':
       list = db[SHEET_TO_LIST[p.sheet]]; key = demoKey(p.sheet);
@@ -2276,6 +2357,9 @@ function reload(given) {
     S.attFetching = {};
     S.leave = d.leave || [];
     S.payroll = d.payroll || [];
+    S.bonus = d.bonus || [];
+    S.gratuity = d.gratuity || [];
+    S.increment = d.increment || [];
     S.holidays = d.holidays || [];
     S.events = d.events || [];
     S.sites = d.sites || [];
@@ -5021,6 +5105,32 @@ function savePayroll() {
     { label: 'Cancel', cls: 'ghost', onClick: closeModal },
     { label: 'Finalise', onClick: function () { closeModal(); writePayroll(rows); } }
   ]);
+}
+
+/* Write rows to one of the tabs that keeps its own record - Bonus, Gratuity
+   or Increment - and fold them into the copy this screen is holding, so the
+   table redraws from the same rows the sheet now has rather than waiting for
+   the next refresh. Same shape as writePayroll, one tab wider. */
+function writeRows(sheet, stateKey, rows, btnId, done) {
+  var btn = btnId && el(btnId), label = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving...'; }
+  return api('saveMany', { sheet: sheet, rows: rows }).then(function () {
+    var have = S[stateKey] || (S[stateKey] = []);
+    var index = {};
+    have.forEach(function (r, i) { index[String(r.id)] = i; });
+    rows.forEach(function (r) {
+      var k = String(r.id);
+      if (index[k] !== undefined) have[index[k]] = r;
+      else { index[k] = have.length; have.push(r); }
+    });
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+    if (done) done();
+    refreshWhenFree();
+  }).catch(function (e) {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+    toast(e.message, 'bad');
+    throw e;
+  });
 }
 
 function writePayroll(rows) {
@@ -9828,13 +9938,14 @@ function reportRegister(ym) {
 
 function payTab(tab) {
   S.payTab = tab;
-  ['salary', 'wages', 'arrears', 'bonus', 'gratuity'].forEach(function (t) {
+  ['salary', 'wages', 'increment', 'arrears', 'bonus', 'gratuity'].forEach(function (t) {
     el('pay-pane-' + t).style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('#view-payroll .tab').forEach(function (n) {
     n.classList.toggle('active', n.dataset.tab === tab);
   });
   if (tab === 'wages')   renderWages();
+  if (tab === 'increment') renderIncrement();
   if (tab === 'arrears') renderArrears();
   if (tab === 'bonus')   renderBonus();
   if (tab === 'gratuity') renderGratuity();
@@ -10136,6 +10247,318 @@ function printTable(title, head, body) {
    they were paid for that month; "actually were" is the gross on the saved
    run, so a month nobody ran pays nothing and cannot invent an arrear. */
 
+/* ---------------------------------------------------------------- */
+/* INCREMENT - the record of every salary revision                   */
+/* ---------------------------------------------------------------- */
+/* Two reasons this is a tab of its own and not a figure typed into the
+   Employees row.
+ *
+ * The first is arrears. A revision signed in August but effective from April
+ * owes four months of back pay, and working that out needs the OLD pay as
+ * well as the new. Once the Employees row has been overwritten the old
+ * figure is gone, and the arrears get typed in from somebody's memory of
+ * what the rise was. The Increment row keeps both sides, so the Arrears tab
+ * can read the exact difference per person.
+ *
+ * The second is the question that gets asked years later - what was this
+ * person on in 2026, and who approved the change. A pay history nobody kept
+ * is one nobody can answer.
+ */
+
+var INC_COMPONENTS = ['basic', 'hra', 'special_allowance', 'other_allowance'];
+
+function incPeople() {
+  var who = el('inc-who') ? el('inc-who').value : 'salary';
+  return activeEmployees().filter(function (e) {
+    return who === 'all' ? true : isSalaried(e);
+  });
+}
+
+/* The rise for one person, by whichever way HR chose to express it. */
+function incRiseFor(e) {
+  var mode = el('inc-mode').value, v = num(el('inc-val').value);
+  if (mode === 'pct') return presentGross(e) * v / 100;
+  if (mode === 'amt') return v;
+  return num((S.incEdit || {})[e.emp_code] || 0);
+}
+
+/* Where the rise lands. Proportional keeps the shape of the package they
+   already have; basic-only is the other thing companies actually do, and it
+   is worth being able to see what it does to PF and gratuity before
+   committing to it. */
+function incSplit(e, rise) {
+  var out = {};
+  INC_COMPONENTS.forEach(function (c) { out[c] = num(e[c]); });
+  if (!rise) return out;
+  if (el('inc-spread').value === 'basic') { out.basic = num(e.basic) + rise; return out; }
+  var gross = presentGross(e);
+  if (gross <= 0) { out.basic = num(e.basic) + rise; return out; }
+  /* Spread in proportion, then put the rounding difference on basic so the
+     four components still add up to the gross exactly. */
+  var spent = 0;
+  INC_COMPONENTS.forEach(function (c) {
+    if (c === 'basic') return;
+    var add = Math.round(rise * (num(e[c]) / gross));
+    out[c] = num(e[c]) + add; spent += add;
+  });
+  out.basic = num(e.basic) + (Math.round(rise) - spent);
+  return out;
+}
+
+function incrementRows() {
+  return incPeople().map(function (e) {
+    var rise = incRiseFor(e);
+    var now = {}; INC_COMPONENTS.forEach(function (c) { now[c] = num(e[c]); });
+    var next = incSplit(e, rise);
+    var oldGross = presentGross(e);
+    var newGross = INC_COMPONENTS.reduce(function (sx, c) { return sx + next[c]; }, 0);
+    return { emp_code: e.emp_code, name: e.name, old: now, next: next,
+             oldGross: oldGross, newGross: newGross,
+             rise: newGross - oldGross,
+             pct: oldGross ? ((newGross - oldGross) / oldGross) * 100 : 0 };
+  }).filter(function (r) { return Math.round(r.rise) !== 0; });
+}
+
+function incSet(code, value) {
+  S.incEdit = S.incEdit || {};
+  S.incEdit[code] = num(value);
+  renderIncrement();
+}
+
+function renderIncrement() {
+  var f = el('inc-from');
+  if (!f.value) f.value = thisMonth();
+  el('inc-val-wrap').style.display = el('inc-mode').value === 'each' ? 'none' : '';
+  if (el('inc-apply')) el('inc-apply').style.display = isAdmin() ? '' : 'none';
+
+  var rows = incrementRows();
+  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+  var total = rows.reduce(function (sx, r) { return sx + r.rise; }, 0);
+  var done = (S.increment || []).filter(function (i) {
+    return String(i.effective_from).slice(0, 7) === f.value;
+  });
+
+  el('inc-state').innerHTML = done.length
+    ? '<div class="locked-note">&#128274; ' + done.length + ' revisions are already recorded ' +
+      'effective ' + esc(monthLabel(f.value)) + '. Applying again adds a second revision for ' +
+      'the same month - check the history below first.</div>'
+    : '';
+
+  el('inc-kpis').innerHTML =
+    kpi('People affected', rows.length, 'of ' + incPeople().length + ' on the books') +
+    kpi('Rise a month', cur() + money(total), 'added to the wage bill') +
+    kpi('Rise a year', cur() + money(total * 12), 'twelve months of it') +
+    kpi('Average rise', rows.length
+        ? (Math.round(rows.reduce(function (sx, r) { return sx + r.pct; }, 0) / rows.length * 10) / 10) + '%'
+        : '0%', 'across the people affected');
+
+  if (!rows.length) {
+    el('inc-table').innerHTML = '<tbody><tr><td class="empty">Set a rise above to see what it ' +
+      'does to each package.</td></tr></tbody>';
+    renderIncrementHistory();
+    return;
+  }
+
+  var each = el('inc-mode').value === 'each';
+  el('inc-table').innerHTML =
+    '<thead><tr><th>Employee</th><th class="num-col">Present gross</th>' +
+    '<th class="num-col">Rise</th><th class="num-col">New gross</th><th class="num-col">%</th>' +
+    '<th class="num-col">Basic</th><th class="num-col">HRA</th>' +
+    '<th class="num-col">Special</th><th class="num-col">Other</th></tr></thead><tbody>' +
+    rows.map(function (r) {
+      var cell = function (c) {
+        var moved = r.next[c] !== r.old[c];
+        return '<td class="num-col">' + money(r.next[c]) +
+          (moved ? '<br><small style="color:var(--text-muted)">was ' + money(r.old[c]) + '</small>' : '') +
+          '</td>';
+      };
+      return '<tr><td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) + '</small></td>' +
+        '<td class="num-col">' + money(r.oldGross) + '</td>' +
+        '<td class="num-col">' + (each
+          ? '<input class="grid-in" type="number" step="0.01" value="' + r.rise +
+            '" onchange="incSet(\'' + esc(r.emp_code) + '\',this.value)">'
+          : '<b>' + money(r.rise) + '</b>') + '</td>' +
+        '<td class="num-col"><b>' + money(r.newGross) + '</b></td>' +
+        '<td class="num-col">' + (Math.round(r.pct * 10) / 10) + '%</td>' +
+        INC_COMPONENTS.map(cell).join('') + '</tr>';
+    }).join('') + '</tbody>';
+  renderIncrementHistory();
+}
+
+/* Applying is two writes, and the order matters: the Increment rows go first,
+   carrying the OLD pay. If the second write fails the history is still
+   complete and the pay is simply unchanged - which is recoverable. The other
+   way round loses the old figures for good. */
+function applyIncrement() {
+  if (!isAdmin()) return toast('Only HR administrators can apply a revision', 'bad');
+  var ym = el('inc-from').value;
+  if (!/^\d{4}-\d{2}$/.test(ym)) return toast('Pick the month the revision takes effect', 'bad');
+  var rows = incrementRows();
+  if (!rows.length) return toast('Nothing to apply - no rise worked out', 'bad');
+  var reason = String(el('inc-reason').value || '').trim();
+  var total = rows.reduce(function (sx, r) { return sx + r.rise; }, 0);
+  var eff = ym + '-01';
+
+  showModal('Apply the revision',
+    '<p><b>' + rows.length + '</b> people, <b>' + cur() + money(total) + '</b> a month more, ' +
+      'effective <b>' + esc(monthLabel(ym)) + '</b>.</p>' +
+    '<p style="margin-top:10px">Two things happen, both now:</p>' +
+    '<ul style="margin:6px 0 0 18px;font-size:.85rem;line-height:1.7">' +
+      '<li>one row per person written to the <b>Increment</b> tab, keeping the old pay</li>' +
+      '<li>their pay updated on the <b>Employees</b> tab</li></ul>' +
+    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">Months already ' +
+      'finalised keep the pay they were finalised with. Go to <b>Arrears</b> afterwards to pay ' +
+      'the back pay this creates.</p>' +
+    (reason ? '' : '<p style="margin-top:10px;color:#92400e">No reason typed. Worth one - it is ' +
+      'what the row will say when somebody asks in three years.</p>'), [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Apply', onClick: function () {
+        closeModal();
+        var stamp = Date.now().toString(36);
+        var incRows = rows.map(function (r) {
+          return {
+            id: 'INC' + ym + '_' + r.emp_code + '_' + stamp,
+            emp_code: r.emp_code, name: r.name, effective_from: eff,
+            reason: reason,
+            old_basic: r.old.basic, old_hra: r.old.hra,
+            old_special_allowance: r.old.special_allowance,
+            old_other_allowance: r.old.other_allowance,
+            new_basic: r.next.basic, new_hra: r.next.hra,
+            new_special_allowance: r.next.special_allowance,
+            new_other_allowance: r.next.other_allowance,
+            old_gross: r.oldGross, new_gross: r.newGross,
+            rise: r.rise, rise_pct: Math.round(r.pct * 1000) / 1000,
+            status: 'Applied', arrears_paid_upto: '', note: '',
+            created_at: today(), created_by: (S.user && S.user.email) || ''
+          };
+        });
+        writeRows('Increment', 'increment', incRows, 'inc-apply', function () {
+          var staff = rows.map(function (r) {
+            var e = empByCode(r.emp_code) || {};
+            return Object.assign({}, e, r.next);
+          });
+          api('saveMany', { sheet: 'Employees', rows: staff }).then(function () {
+            staff.forEach(function (row) {
+              for (var i = 0; i < S.employees.length; i++) {
+                if (String(S.employees[i].emp_code) === String(row.emp_code)) S.employees[i] = row;
+              }
+            });
+            S.incEdit = {};
+            el('inc-val').value = 0;
+            toast(rows.length + ' revisions recorded and pay updated. Pay the back pay from ' +
+                  'the Arrears tab.', 'good');
+            renderIncrement(); renderEmployees(); renderDashboard();
+          }).catch(function (e) {
+            toast('The revision is recorded, but the pay on the Employees tab did not update: ' +
+                  e.message + ' - nothing is lost, try Apply again.', 'bad');
+            renderIncrement();
+          });
+        });
+      } }
+  ]);
+}
+
+function incHistoryGroups() {
+  var all = (S.increment || []).slice();
+  if (!isAdmin()) all = all.filter(function (i) { return String(i.emp_code) === myCode(); });
+  var by = {};
+  all.forEach(function (i) {
+    var k = String(i.effective_from).slice(0, 7) + '|' + String(i.reason || '');
+    if (!by[k]) by[k] = { month: String(i.effective_from).slice(0, 7), reason: i.reason || '',
+                          n: 0, total: 0, by: '', on: '', rows: [] };
+    by[k].n++; by[k].total += num(i.rise); by[k].rows.push(i);
+    by[k].by = i.created_by || by[k].by;
+    by[k].on = i.created_at || by[k].on;
+  });
+  return Object.keys(by).map(function (k) { return by[k]; })
+    .sort(function (a, b) { return String(b.month).localeCompare(String(a.month)); });
+}
+
+function renderIncrementHistory() {
+  var tbl = el('inc-history');
+  if (!tbl) return;
+  var groups = incHistoryGroups();
+  if (!groups.length) {
+    tbl.innerHTML = '<tbody><tr><td class="empty">No revisions recorded yet. Once you apply one, ' +
+      'it is listed here for good - and the Arrears tab can pay the back pay from it.</td></tr></tbody>';
+    return;
+  }
+  tbl.innerHTML = '<thead><tr><th>Effective from</th><th>Reason</th><th class="num-col">People</th>' +
+    '<th class="num-col">Rise a month</th><th>Applied</th><th></th></tr></thead><tbody>' +
+    groups.map(function (g) {
+      return '<tr><td><b>' + esc(monthLabel(g.month)) + '</b></td>' +
+        '<td>' + esc(g.reason || '<small style="color:var(--text-muted)">no reason given</small>') + '</td>' +
+        '<td class="num-col">' + g.n + '</td>' +
+        '<td class="num-col"><b>' + money(g.total) + '</b></td>' +
+        '<td><small>' + esc(String(g.on || '')) + (g.by ? ' by ' + esc(g.by) : '') + '</small></td>' +
+        '<td class="num-col">' +
+          '<button class="ghost sm" onclick="showIncrement(\'' + esc(g.month) + '\')">Open</button>' +
+          (isAdmin() ? ' <button class="ghost sm" onclick="arrearsFromIncrement(\'' + esc(g.month) +
+            '\')">Pay arrears</button>' : '') +
+        '</td></tr>';
+    }).join('') + '</tbody>';
+}
+
+function showIncrement(month) {
+  var rows = (S.increment || []).filter(function (i) {
+    return String(i.effective_from).slice(0, 7) === String(month);
+  });
+  if (!isAdmin()) rows = rows.filter(function (i) { return String(i.emp_code) === myCode(); });
+  if (!rows.length) return toast('Nothing recorded for ' + month, 'bad');
+  showModal('Revision effective ' + esc(monthLabel(month)),
+    '<div class="table-wrap" style="max-height:50vh"><table>' +
+    '<thead><tr><th>Employee</th><th class="num-col">Was</th><th class="num-col">Became</th>' +
+    '<th class="num-col">Rise</th><th class="num-col">%</th></tr></thead><tbody>' +
+    rows.sort(function (a, b) { return num(b.rise) - num(a.rise); }).map(function (i) {
+      return '<tr><td><b>' + esc(i.name || i.emp_code) + '</b><br><small>' + esc(i.emp_code) +
+        '</small></td><td class="num-col">' + money(i.old_gross) + '</td>' +
+        '<td class="num-col">' + money(i.new_gross) + '</td>' +
+        '<td class="num-col"><b>' + money(i.rise) + '</b></td>' +
+        '<td class="num-col">' + (Math.round(num(i.rise_pct) * 10) / 10) + '%</td></tr>';
+    }).join('') + '</tbody></table></div>', [
+    { label: 'Close', cls: 'ghost', onClick: closeModal },
+    { label: 'Print', onClick: function () {
+        printTable('Revision effective ' + monthLabel(month),
+          ['Employee', 'Code', 'Was', 'Became', 'Rise', '%', 'Reason'],
+          rows.map(function (i) {
+            return [i.name || '', i.emp_code, money(i.old_gross), money(i.new_gross),
+                    money(i.rise), (Math.round(num(i.rise_pct) * 10) / 10) + '%', i.reason || ''];
+          }));
+      } }
+  ]);
+}
+
+function printIncrement() {
+  var rows = incrementRows();
+  if (!rows.length) return toast('Nothing to print', 'bad');
+  printTable('Proposed revision effective ' + monthLabel(el('inc-from').value || thisMonth()) +
+             (el('inc-reason').value ? ' - ' + el('inc-reason').value : ''),
+    ['Employee', 'Code', 'Present gross', 'Rise', 'New gross', '%',
+     'Basic', 'HRA', 'Special', 'Other'],
+    rows.map(function (r) {
+      return [r.name, r.emp_code, money(r.oldGross), money(r.rise), money(r.newGross),
+              (Math.round(r.pct * 10) / 10) + '%',
+              money(r.next.basic), money(r.next.hra),
+              money(r.next.special_allowance), money(r.next.other_allowance)];
+    }));
+}
+
+function printIncrementHistory() {
+  var all = (S.increment || []);
+  if (!isAdmin()) all = all.filter(function (i) { return String(i.emp_code) === myCode(); });
+  if (!all.length) return toast('No revisions recorded yet', 'bad');
+  printTable('Salary revision history',
+    ['Effective from', 'Employee', 'Code', 'Was', 'Became', 'Rise', '%', 'Reason', 'Applied by'],
+    all.slice().sort(function (a, b) {
+      return String(b.effective_from).localeCompare(String(a.effective_from)) ||
+             String(a.name || '').localeCompare(String(b.name || ''));
+    }).map(function (i) {
+      return [String(i.effective_from).slice(0, 7), i.name || '', i.emp_code,
+              money(i.old_gross), money(i.new_gross), money(i.rise),
+              (Math.round(num(i.rise_pct) * 10) / 10) + '%', i.reason || '', i.created_by || ''];
+    }));
+}
+
 function monthsFromTo(from, to) {
   var out = [];
   if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to) || from > to) return out;
@@ -10148,12 +10571,41 @@ function presentGross(e) {
   return num(e.basic) + num(e.hra) + num(e.special_allowance) + num(e.other_allowance);
 }
 
-/* The rise for one person, by whichever way HR chose to express it. */
+/* The rise for one person, by whichever way HR chose to express it.
+   The first way is the one to use: a revision recorded on the Increment tab
+   knows exactly what each person was on before and what they went to, per
+   person, so nothing is estimated and nobody is paid a percentage that was
+   never theirs. The other three are for a rise that was never recorded. */
 function riseFor(e) {
   var mode = el('arr-mode').value, v = num(el('arr-val').value);
+  if (mode === 'rev') {
+    var month = el('arr-rev').value;
+    var row = (S.increment || []).filter(function (i) {
+      return String(i.effective_from).slice(0, 7) === month &&
+             String(i.emp_code) === String(e.emp_code);
+    }).sort(function (a, b) {
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    })[0];
+    return row ? num(row.rise) : 0;        /* not in that revision, nothing owed */
+  }
   if (mode === 'pct') return presentGross(e) * v / 100;
   if (mode === 'amt') return v;
   return num((S.arrEdit || {})[e.emp_code] || 0);     /* typed in per person */
+}
+
+/* Jump from a revision in the history straight to the arrears it creates,
+   with the dates already set: from the month it took effect, up to the last
+   month that has been run. */
+function arrearsFromIncrement(month) {
+  payTab('arrears');
+  var sel = el('arr-mode');
+  sel.value = 'rev';
+  renderArrears();                          /* fills the revision list */
+  el('arr-rev').value = month;
+  el('arr-from').value = month;
+  var last = addMonths(thisMonth(), -1);
+  el('arr-to').value = last >= month ? last : month;
+  renderArrears();
 }
 
 function arrearRows() {
@@ -10185,7 +10637,49 @@ function renderArrears() {
   var f = el('arr-from'), t = el('arr-to');
   if (!f.value) f.value = addMonths(thisMonth(), -3);
   if (!t.value) t.value = addMonths(thisMonth(), -1);
-  el('arr-val-wrap').style.display = el('arr-mode').value === 'each' ? 'none' : '';
+
+  var mode = el('arr-mode').value;
+  var groups = incHistoryGroups();
+  var rev = el('arr-rev');
+  var keep = rev.value;
+  rev.innerHTML = groups.length
+    ? groups.map(function (g) {
+        return '<option value="' + esc(g.month) + '">' + esc(monthLabel(g.month)) +
+          ' \u00b7 ' + g.n + ' people' + (g.reason ? ' \u00b7 ' + esc(g.reason) : '') + '</option>';
+      }).join('')
+    : '<option value="">no revisions recorded yet</option>';
+  if (keep && groups.some(function (g) { return g.month === keep; })) rev.value = keep;
+
+  el('arr-rev-wrap').style.display = mode === 'rev' ? '' : 'none';
+  el('arr-val-wrap').style.display = (mode === 'each' || mode === 'rev') ? 'none' : '';
+
+  /* Arrears paid twice is the expensive mistake here, and it is an easy one:
+     the revision is still on screen, the figures still look right, and
+     nothing about pressing Post a second time feels different. The Increment
+     row remembers how far it has been paid, so say so. */
+  if (mode === 'rev' && rev.value) {
+    var paidTo = '';
+    (S.increment || []).forEach(function (i) {
+      if (String(i.effective_from).slice(0, 7) !== rev.value) return;
+      var u = String(i.arrears_paid_upto || '');
+      if (u && (!paidTo || u > paidTo)) paidTo = u;
+    });
+    el('arr-paid-note').innerHTML = paidTo
+      ? '<div class="locked-note" style="background:#fef3c7;color:#92400e">&#9888; Arrears for ' +
+        'this revision have already been posted up to <b>' + esc(monthLabel(paidTo)) + '</b>. ' +
+        'Set "Up to and including" past that month, or you will pay the same months twice.</div>'
+      : '';
+  } else if (el('arr-paid-note')) {
+    el('arr-paid-note').innerHTML = '';
+  }
+
+  if (mode === 'rev' && !groups.length) {
+    el('arr-kpis').innerHTML = '';
+    el('arr-table').innerHTML = '<tbody><tr><td class="empty">No revisions have been recorded ' +
+      'yet. Record one on the <b>Increment</b> tab and the arrears work themselves out from it - ' +
+      'or switch the Rise box above to a percentage if the rise was never recorded.</td></tr></tbody>';
+    return;
+  }
 
   var months = monthsFromTo(f.value, t.value);
   if (needMonths(months, renderArrears)) return;
@@ -10286,6 +10780,23 @@ function postArrears() {
           var keep = Object.assign({}, row, { arrears: byCode[row.emp_code] });
           return e ? computePay(e, ym, keep) : row;
         });
+        /* Remember how far this revision has now been paid, so posting it
+           again cannot quietly pay the same months a second time. */
+        if (el('arr-mode').value === 'rev' && el('arr-rev').value) {
+          var revMonth = el('arr-rev').value, upto = el('arr-to').value;
+          var stamp = (S.increment || []).filter(function (i) {
+            return String(i.effective_from).slice(0, 7) === revMonth &&
+                   byCode[i.emp_code] !== undefined &&
+                   String(i.arrears_paid_upto || '') < upto;
+          }).map(function (i) { return Object.assign({}, i, { arrears_paid_upto: upto }); });
+          if (stamp.length) {
+            writeRows('Increment', 'increment', stamp, null, function () { renderArrears(); })
+              .catch(function () {
+                toast('Arrears posted, but the revision was not marked as paid up to ' +
+                      monthLabel(upto) + ' - check before posting it again.', 'bad');
+              });
+          }
+        }
         el('pay-month').value = ym;
         payTab('salary');
         renderPayroll();
@@ -10320,9 +10831,12 @@ function printArrears() {
    The three numbers are settings, because they are the ones Parliament
    keeps moving. Accounting year is April to March.
 
-   A bonus run is kept in the Payroll table like any other pay record, but
-   filed under the year rather than a month - 'FY2026-27' - so a month's
-   salary run never picks it up and it still reaches the payslip screen. */
+   A bonus run has its own tab. It is asked about years later - by an auditor
+   checking the Act was followed, by somebody who left in 2027 - and a record
+   you have to sieve out of a month's salary run is one that gets read wrong
+   eventually. The tab carries the whole working, not just the amount: the
+   wage it was based on, the ceiling applied, the months and days that made
+   somebody eligible. That is what an inspector asks for. */
 
 function fyOf(iso) {
   var y = Number(String(iso).slice(0, 4)), m = Number(String(iso).slice(5, 7));
@@ -10385,7 +10899,44 @@ function bonusRows(fy) {
 }
 
 function savedBonus(fy) {
+  return (S.bonus || []).filter(function (b) { return String(b.fy) === String(fy); });
+}
+
+/* Bonus runs finalised before the tab existed are still sitting in Payroll
+   under 'FY2026-27'. Found, named, and moved on one press - never silently,
+   because a row that moves itself is a row nobody can account for. */
+function legacyBonus(fy) {
   return S.payroll.filter(function (p) { return String(p.month) === bonusKey(fy); });
+}
+
+function moveLegacyBonus(fy) {
+  var old = legacyBonus(fy), cfg = bonusSettings();
+  if (!old.length) return;
+  var rows = old.map(function (r) {
+    var e = empByCode(r.emp_code) || {};
+    var wage = bonusWage(e);
+    return {
+      id: 'BON' + fy + '_' + r.emp_code, fy: fy, emp_code: r.emp_code,
+      name: e.name || r.emp_code, wage: wage,
+      worked_on: Math.min(wage, cfg.calcCeiling),
+      months: num(r.total_days), days: num(r.paid_days),
+      rate_pct: cfg.rate, amount: num(r.bonus) || num(r.net),
+      status: 'Finalised', note: 'moved from the Payroll tab',
+      generated_at: r.generated_at || today(),
+      generated_by: r.generated_by || ((S.user && S.user.email) || '')
+    };
+  });
+  writeRows('Bonus', 'bonus', rows, 'bonus-save', function () {
+    api('removeMany', { sheet: 'Payroll', ids: old.map(function (r) { return r.id; }) })
+      .then(function () {
+        S.payroll = S.payroll.filter(function (p) { return String(p.month) !== bonusKey(fy); });
+        toast(rows.length + ' bonus rows moved out of Payroll into the Bonus tab', 'good');
+        renderBonus(); renderPayroll();
+      }).catch(function (e) {
+        toast('Copied to Bonus, but the old Payroll rows are still there: ' + e.message, 'bad');
+        renderBonus();
+      });
+  });
 }
 
 function renderBonus() {
@@ -10408,21 +10959,24 @@ function renderBonus() {
   if (!rows) {
     rows = saved.length
       ? saved.map(function (r) {
-          var e = empByCode(r.emp_code) || {};
-          return { emp_code: r.emp_code, name: e.name || r.emp_code, wage: bonusWage(e),
-                   base: Math.min(bonusWage(e), cfg.calcCeiling),
-                   months: num(r.total_days), days: num(r.paid_days),
-                   eligible: true, amount: num(r.bonus), why: '' };
+          return { emp_code: r.emp_code, name: r.name || r.emp_code, wage: num(r.wage),
+                   base: num(r.worked_on), months: num(r.months), days: num(r.days),
+                   eligible: true, amount: num(r.amount), why: r.note || '' };
         })
       : [];
   }
   if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
 
+  var stray = (!saved.length && isAdmin()) ? legacyBonus(fy) : [];
   el('bonus-state').innerHTML = saved.length && !draft
     ? '<div class="locked-note">&#128274; Bonus for ' + esc(fy) + ' is finalised - ' + saved.length +
-      ' people.</div>'
+      ' people. Kept in the <b>Bonus</b> tab of the sheet.</div>'
     : (draft ? '<div class="locked-note" style="background:#dbeafe;color:#1e40af">&#9998; Draft - ' +
-        'nothing is saved until you press <b>Finalise bonus</b>.</div>' : '');
+        'nothing is saved until you press <b>Finalise bonus</b>.</div>'
+      : (stray.length ? '<div class="locked-note" style="background:#fef3c7;color:#92400e">' +
+          stray.length + ' bonus rows for ' + esc(fy) + ' are still filed in the <b>Payroll</b> tab, ' +
+          'from before bonus had its own. <button class="btn small" style="margin-left:8px" ' +
+          'onclick="moveLegacyBonus(\'' + esc(fy) + '\')">Move them to the Bonus tab</button></div>' : ''));
   el('bonus-save').disabled = !draft;
 
   var paid = rows.filter(function (r) { return r.eligible; });
@@ -10476,29 +11030,32 @@ function saveBonus() {
   var fy = S.bonusDraft.fy, cfg = bonusSettings();
   var paid = S.bonusDraft.rows.filter(function (r) { return r.eligible && r.amount > 0; });
   if (!paid.length) return toast('Nobody is eligible, so there is nothing to finalise', 'bad');
+  /* The whole working, not just the figure. An inspector asks how the
+     amount was arrived at, and the answer has to be in the row. */
   var rows = paid.map(function (r) {
     return {
-      id: bonusKey(fy) + '_' + r.emp_code, month: bonusKey(fy), emp_code: r.emp_code,
-      total_days: r.months, lop_days: 0, paid_days: r.days,
-      basic: 0, hra: 0, special_allowance: 0, other_allowance: 0,
-      arrears: 0, bonus: r.amount, incentive: 0, ot_hours: 0, ot_amount: 0,
-      gross: r.amount, pf: 0, esi: 0, pt: 0, tds: 0,
-      other_deduction: 0, advance_deduction: 0, total_deduction: 0, net: r.amount,
-      pf_employer: 0, esi_employer: 0, ctc: r.amount,
-      late_deduction_days: 0, unpaid_leave_days: 0,
-      status: 'Finalised', generated_at: today(),
-      generated_by: (S.user && S.user.email) || ''
+      id: 'BON' + fy + '_' + r.emp_code, fy: fy, emp_code: r.emp_code, name: r.name,
+      wage: r.wage, worked_on: r.base, months: r.months, days: r.days,
+      rate_pct: cfg.rate, amount: r.amount,
+      status: 'Finalised', note: '',
+      generated_at: today(), generated_by: (S.user && S.user.email) || ''
     };
   });
   showModal('Finalise bonus for ' + esc(fy),
     '<p><b>' + rows.length + '</b> people, <b>' + cur() +
-    money(rows.reduce(function (sx, r) { return sx + r.net; }, 0)) + '</b> at ' + cfg.rate + '%.</p>' +
-    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">Filed under ' +
-    esc(bonusKey(fy)) + ', separate from any month\'s salary run, and each person can see it ' +
-    'on their payslips.</p>', [
+    money(rows.reduce(function (sx, r) { return sx + r.amount; }, 0)) + '</b> at ' + cfg.rate + '%.</p>' +
+    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">Written to the <b>Bonus</b> ' +
+    'tab of the sheet, one row per person for ' + esc(fy) + ', with the wage, the ceiling and the ' +
+    'days it was worked out from. Separate from every month\'s salary run, and each person sees ' +
+    'their own on their payslip screen.</p>', [
     { label: 'Cancel', cls: 'ghost', onClick: closeModal },
     { label: 'Finalise', onClick: function () {
-        closeModal(); writePayroll(rows); S.bonusDraft = null;
+        closeModal();
+        writeRows('Bonus', 'bonus', rows, 'bonus-save', function () {
+          S.bonusDraft = null;
+          toast('Bonus for ' + fy + ' written to the Bonus tab', 'good');
+          renderBonus(); renderDashboard();
+        });
       } }
   ]);
 }
@@ -10610,6 +11167,20 @@ function renderGratuity() {
   var rows = gratuityRows();
   if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
 
+  if (el('grat-save')) el('grat-save').style.display = isAdmin() ? '' : 'none';
+  /* Say plainly which of the two numbers is on screen. Somebody reading a
+     live figure and filing it as the year-end liability is the mistake this
+     whole tab exists to prevent. */
+  var asOn = d.value;
+  var frozen = frozenAt(asOn);
+  el('grat-state').innerHTML = frozen.length
+    ? '<div class="locked-note">&#128274; ' + frozen.length + ' rows are frozen at ' + esc(asOn) +
+      ' in the Gratuity tab. The table below is still the <b>live</b> figure - press Open ' +
+      'under Frozen snapshots to see what was recorded.</div>'
+    : '<div class="locked-note" style="background:#dbeafe;color:#1e40af">&#9998; Live figure, ' +
+      'worked out just now. Nothing is written to the sheet until you freeze it.</div>';
+  renderFrozenGratuity();
+
   var payable = rows.filter(function (r) { return r.eligible; });
   var total = payable.reduce(function (sx, r) { return sx + r.amount; }, 0);
   var nearly = rows.filter(function (r) { return !r.eligible && r.wholeYears === cfg.minYears - 1; });
@@ -10650,6 +11221,156 @@ function renderGratuity() {
       '</small></td></tr>';
   }).join('');
   el('grat-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+/* Freezing.
+ *
+ * The live figure is the one you want when somebody walks in and asks what
+ * they would get. It is the wrong one for the accounts, which have to carry
+ * a number that was true on a stated date and stays that number after the
+ * next increment moves everybody's wage.
+ *
+ * So the tab does both, and the difference is visible: what is on screen is
+ * live, and what is in the Gratuity tab is dated. A snapshot is never
+ * written over - freezing the same date twice replaces that date's rows and
+ * leaves every other date alone, because an auditor comparing March to March
+ * needs last March still to be there.
+ */
+function gratuitySnapshotRows(asOn, kind, who) {
+  var cfg = gratuityCfg();
+  return who.filter(function (r) { return r.amount > 0 || kind === 'Settlement'; })
+    .map(function (r) {
+      return {
+        id: 'GRA' + asOn + '_' + r.emp_code, as_on: asOn, kind: kind,
+        emp_code: r.emp_code, name: r.name, doj: r.doj || '', upto: r.upto || '',
+        service_months: r.months, years_counted: r.counted, last_wage: r.wage,
+        days_per_year: cfg.daysPerYear, month_days: cfg.monthDays,
+        amount: r.amount, capped: r.capped ? 'yes' : 'no',
+        status: kind === 'Settlement' ? 'Payable' : 'Frozen',
+        note: r.eligible ? '' : r.why,
+        generated_at: today(), generated_by: (S.user && S.user.email) || ''
+      };
+    });
+}
+
+function freezeGratuity() {
+  if (!isAdmin()) return toast('Only HR administrators can freeze gratuity', 'bad');
+  var asOn = el('grat-date').value || today();
+  var who = el('grat-who').value;
+  var rows = gratuityRows().filter(function (r) { return r.eligible; });
+  if (!rows.length) return toast('Nobody is eligible as at ' + asOn + ', so there is nothing to freeze', 'bad');
+
+  var kind = who === 'left' ? 'Settlement' : 'Liability';
+  var total = rows.reduce(function (sx, r) { return sx + r.amount; }, 0);
+  var already = (S.gratuity || []).filter(function (g) { return String(g.as_on) === asOn; });
+
+  showModal('Freeze gratuity as at ' + esc(asOn),
+    '<p><b>' + rows.length + '</b> people, <b>' + cur() + money(total) + '</b> in total, ' +
+      'filed as <b>' + kind + '</b>.</p>' +
+    (already.length
+      ? '<p style="margin-top:10px;color:#92400e"><b>' + already.length + '</b> rows are already ' +
+        'frozen at this date. They will be replaced. Snapshots at other dates are untouched.</p>'
+      : '') +
+    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">Written to the ' +
+      '<b>Gratuity</b> tab with the service, the last wage and the ' + gratuityCfg().daysPerYear +
+      '/' + gratuityCfg().monthDays + ' formula each amount came from, so the figure can be ' +
+      'checked years later without rebuilding it.</p>', [
+    { label: 'Cancel', cls: 'ghost', onClick: closeModal },
+    { label: 'Freeze', onClick: function () {
+        closeModal();
+        var out = gratuitySnapshotRows(asOn, kind, rows);
+        writeRows('Gratuity', 'gratuity', out, 'grat-save', function () {
+          toast(out.length + ' rows frozen as at ' + asOn + ' in the Gratuity tab', 'good');
+          renderGratuity();
+        });
+      } }
+  ]);
+}
+
+/* The snapshots already taken, newest date first, so year on year is one
+   glance rather than a sort in the sheet. */
+function renderFrozenGratuity() {
+  var card = el('grat-saved-card'), tbl = el('grat-saved-table');
+  if (!card || !tbl) return;
+  var all = (S.gratuity || []).slice();
+  if (!isAdmin()) all = all.filter(function (g) { return String(g.emp_code) === myCode(); });
+  if (!all.length) {
+    card.style.display = isAdmin() ? '' : 'none';
+    tbl.innerHTML = '<tbody><tr><td class="empty">Nothing frozen yet. Press ' +
+      '"Freeze this as at date" to record what is on screen above.</td></tr></tbody>';
+    return;
+  }
+  card.style.display = '';
+  var byDate = {};
+  all.forEach(function (g) {
+    var k = String(g.as_on) + '|' + String(g.kind || 'Liability');
+    if (!byDate[k]) byDate[k] = { as_on: g.as_on, kind: g.kind || 'Liability', n: 0, total: 0, by: '' };
+    byDate[k].n++; byDate[k].total += num(g.amount);
+    byDate[k].by = g.generated_by || byDate[k].by;
+  });
+  var groups = Object.keys(byDate).map(function (k) { return byDate[k]; })
+    .sort(function (a, b) { return String(b.as_on).localeCompare(String(a.as_on)); });
+
+  tbl.innerHTML = '<thead><tr><th>As at</th><th>Kind</th><th class="num-col">People</th>' +
+    '<th class="num-col">Amount</th><th>Frozen by</th><th></th></tr></thead><tbody>' +
+    groups.map(function (g) {
+      return '<tr><td><b>' + esc(String(g.as_on)) + '</b></td>' +
+        '<td>' + esc(g.kind) + '</td>' +
+        '<td class="num-col">' + g.n + '</td>' +
+        '<td class="num-col"><b>' + money(g.total) + '</b></td>' +
+        '<td><small>' + esc(g.by || '') + '</small></td>' +
+        '<td class="num-col"><button class="ghost sm" onclick="showFrozenGratuity(\'' +
+          esc(String(g.as_on)) + '\')">Open</button></td></tr>';
+    }).join('') + '</tbody>';
+}
+
+function frozenAt(asOn) {
+  var rows = (S.gratuity || []).filter(function (g) { return String(g.as_on) === String(asOn); });
+  if (!isAdmin()) rows = rows.filter(function (g) { return String(g.emp_code) === myCode(); });
+  return rows.sort(function (a, b) { return num(b.amount) - num(a.amount); });
+}
+
+function showFrozenGratuity(asOn) {
+  var rows = frozenAt(asOn);
+  if (!rows.length) return toast('Nothing frozen at ' + asOn, 'bad');
+  var total = rows.reduce(function (sx, g) { return sx + num(g.amount); }, 0);
+  showModal('Gratuity frozen as at ' + esc(asOn),
+    '<p><b>' + rows.length + '</b> people, <b>' + cur() + money(total) + '</b>.</p>' +
+    '<div class="table-wrap" style="max-height:50vh;margin-top:12px"><table>' +
+    '<thead><tr><th>Employee</th><th>Joined</th><th class="num-col">Years</th>' +
+    '<th class="num-col">Wage then</th><th class="num-col">Gratuity</th></tr></thead><tbody>' +
+    rows.map(function (g) {
+      return '<tr><td><b>' + esc(g.name || g.emp_code) + '</b><br><small>' + esc(g.emp_code) +
+        '</small></td><td>' + esc(String(g.doj || '')) + '</td>' +
+        '<td class="num-col">' + num(g.years_counted) + '</td>' +
+        '<td class="num-col">' + money(g.last_wage) + '</td>' +
+        '<td class="num-col"><b>' + money(g.amount) + '</b></td></tr>';
+    }).join('') + '</tbody></table></div>', [
+    { label: 'Close', cls: 'ghost', onClick: closeModal },
+    { label: 'Print', onClick: function () {
+        printTable('Gratuity frozen as at ' + asOn,
+          ['Employee', 'Code', 'Joined', 'Up to', 'Years counted', 'Wage then', 'Gratuity'],
+          rows.map(function (g) {
+            return [g.name || '', g.emp_code, String(g.doj || ''), String(g.upto || ''),
+                    num(g.years_counted), money(g.last_wage), money(g.amount)];
+          }));
+      } }
+  ]);
+}
+
+function printFrozenGratuity() {
+  var all = (S.gratuity || []);
+  if (!isAdmin()) all = all.filter(function (g) { return String(g.emp_code) === myCode(); });
+  if (!all.length) return toast('Nothing frozen yet', 'bad');
+  printTable('Gratuity - every frozen snapshot',
+    ['As at', 'Kind', 'Employee', 'Code', 'Joined', 'Years counted', 'Wage then', 'Gratuity'],
+    all.slice().sort(function (a, b) {
+      return String(b.as_on).localeCompare(String(a.as_on)) ||
+             String(a.name || '').localeCompare(String(b.name || ''));
+    }).map(function (g) {
+      return [String(g.as_on), g.kind || '', g.name || '', g.emp_code, String(g.doj || ''),
+              num(g.years_counted), money(g.last_wage), money(g.amount)];
+    }));
 }
 
 function printGratuity() {

@@ -231,6 +231,84 @@ create table if not exists payroll (
 create index if not exists payroll_month_idx on payroll (month);
 create index if not exists payroll_emp_idx   on payroll (emp_code);
 
+/* Bonus, gratuity and increments keep their own tables rather than riding in
+   payroll. Each is asked about long after the fact - by an auditor, by a CA
+   closing the year, by somebody who left three years ago - and a record you
+   have to sieve a month's salary run out of is one you will read wrong one
+   day. The column names match the sheet version tab for tab. */
+
+create table if not exists bonus (
+  id            text primary key,        -- fy || '_' || emp_code
+  fy            text not null,           -- '2026-27', April to March
+  emp_code      text not null references employees(emp_code) on delete cascade,
+  name          text,
+  wage          numeric(12,2) not null default 0,   -- basic + DA a month
+  worked_on     numeric(12,2) not null default 0,   -- after the calc ceiling
+  months        numeric(6,2)  not null default 0,   -- months on the books
+  days          numeric(8,2)  not null default 0,   -- days actually worked
+  rate_pct      numeric(6,3)  not null default 8.33,
+  amount        numeric(12,2) not null default 0,
+  status        text not null default 'Draft',
+  note          text,
+  generated_at  date,
+  generated_by  text,
+  unique (fy, emp_code)
+);
+create index if not exists bonus_fy_idx  on bonus (fy);
+create index if not exists bonus_emp_idx on bonus (emp_code);
+
+create table if not exists gratuity (
+  id             text primary key,
+  as_on          date not null,
+  kind           text not null default 'Liability',  -- or 'Settlement' on exit
+  emp_code       text not null references employees(emp_code) on delete cascade,
+  name           text,
+  doj            date,
+  upto           date,
+  service_months numeric(8,2)  not null default 0,
+  years_counted  numeric(8,2)  not null default 0,
+  last_wage      numeric(12,2) not null default 0,
+  days_per_year  numeric(6,2)  not null default 15,
+  month_days     numeric(6,2)  not null default 26,
+  amount         numeric(14,2) not null default 0,
+  capped         boolean not null default false,
+  status         text not null default 'Frozen',
+  note           text,
+  generated_at   date,
+  generated_by   text
+);
+create index if not exists gratuity_as_on_idx on gratuity (as_on);
+create index if not exists gratuity_emp_idx   on gratuity (emp_code);
+
+create table if not exists increment (
+  id                    text primary key,
+  emp_code              text not null references employees(emp_code) on delete cascade,
+  name                  text,
+  effective_from        date not null,          -- the month it takes effect
+  reason                text,
+  old_basic             numeric(12,2) not null default 0,
+  old_hra               numeric(12,2) not null default 0,
+  old_special_allowance numeric(12,2) not null default 0,
+  old_other_allowance   numeric(12,2) not null default 0,
+  new_basic             numeric(12,2) not null default 0,
+  new_hra               numeric(12,2) not null default 0,
+  new_special_allowance numeric(12,2) not null default 0,
+  new_other_allowance   numeric(12,2) not null default 0,
+  old_gross             numeric(12,2) not null default 0,
+  new_gross             numeric(12,2) not null default 0,
+  rise                  numeric(12,2) not null default 0,
+  rise_pct              numeric(8,3)  not null default 0,
+  status                text not null default 'Applied',
+  arrears_paid_upto     text,                   -- 'YYYY-MM', blank until paid
+  note                  text,
+  /* text, not a date: 'created_at' is a timestamptz on notices and the edge
+     converts by column name, so a date here would truncate that one. */
+  created_at            text,
+  created_by            text
+);
+create index if not exists increment_emp_idx on increment (emp_code);
+create index if not exists increment_eff_idx on increment (effective_from);
+
 create table if not exists payslip_mail (
   id       text primary key,
   month    text not null,

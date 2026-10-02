@@ -152,7 +152,8 @@ el('go').onclick = async () => {
     const order = ['Settings', 'Employees', 'Users', 'Shifts', 'LeaveTypes',
       'RequestTypes', 'ApprovalLevels', 'Sites', 'Holidays', 'Events',
       'CtcVariables', 'CtcComponents', 'CtcValues', 'Notices',
-      'Attendance', 'Leave', 'Requests', 'Payroll', 'Punches', 'PayslipMail'];
+      'Attendance', 'Leave', 'Requests', 'Payroll', 'Bonus', 'Gratuity',
+      'Increment', 'Punches', 'PayslipMail'];
     const tabs = order.filter(n => plan.tabs.some(t => t.sheet === n))
       .concat(plan.tabs.map(t => t.sheet).filter(n => !order.includes(n)));
 

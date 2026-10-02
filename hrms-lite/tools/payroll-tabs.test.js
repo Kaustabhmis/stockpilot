@@ -1,5 +1,5 @@
-/* The four payroll tabs added beside Salary - Wages, Arrears, Bonus and
- * Gratuity - checked against the rules written out here in words.
+/* The five payroll tabs added beside Salary - Wages, Increment, Arrears,
+ * Bonus and Gratuity - checked against the rules written out here in words.
  *
  * Same two rules as payroll-rules.test.js, for the same reason:
  *
@@ -118,6 +118,12 @@ function monthsBetween(from, to) {
     }
   };
   await wipe('Payroll', p => String(p.month) === YM || String(p.month).indexOf('FY') === 0);
+  /* Bonus, gratuity and increments each keep their own tab now, so each
+     has to be cleared too - a run left behind by the last pass would be
+     read as 'already finalised' and the generate step would be skipped. */
+  await wipe('Bonus', () => true);
+  await wipe('Gratuity', () => true);
+  await wipe('Increment', () => true);
 
   /* Pin every rule this file depends on, rather than inheriting whatever the
      workspace was left in by another suite. */
@@ -338,6 +344,143 @@ function monthsBetween(from, to) {
     check('gratuity', r.amount, want,
           eligible ? Math.round(basic) + ' x 15/26 x ' + counted : 'under the qualifying service');
   }
+
+  /* ================= EACH TAB KEEPS ITS OWN RECORD ================= */
+  /* The point of the three new tabs is that the record survives, apart from
+     the salary run, and carries enough of the working to be checked years
+     later. Being right on screen is not the claim being tested here - being
+     right in the sheet, after a round trip, is. */
+
+  /* --- bonus is finalised into the Bonus tab, not Payroll --- */
+  console.log('\nbonus: finalised into its own tab');
+  await p.evaluate(() => payTab('bonus')); await p.waitForTimeout(400);
+  await p.evaluate(() => generateBonus()); await p.waitForTimeout(2500);
+  const bonusDraft = await p.evaluate(() => S.bonusDraft ? S.bonusDraft.rows : []);
+  const wantBonus = bonusDraft.filter(r => r.eligible && r.amount > 0);
+  await p.evaluate(() => { saveBonus(); });
+  await p.waitForTimeout(600);
+  await p.evaluate(() => {
+    /* the modal's Finalise button, pressed the way a person would */
+    const b = [...document.querySelectorAll('.modal button')].find(x => /Finalise/.test(x.textContent));
+    if (b) b.click();
+  });
+  await p.waitForTimeout(3000);
+
+  const bonusSheet = await call('list', { sheet: 'Bonus' }, token);
+  const strayFy = (await call('list', { sheet: 'Payroll' }, token))
+    .filter(r => String(r.month).indexOf('FY') === 0);
+  check('rows in the Bonus tab', bonusSheet.length, wantBonus.length,
+        'one per eligible person, written where bonus belongs');
+  check('FY rows left in Payroll', strayFy.length, 0,
+        'a bonus run must not land in the salary tab any more');
+
+  const bAr = bonusSheet.find(r => r.emp_code === 'AR-01');
+  if (!bAr) { bad++; console.log('   AR-01 MISSING from the Bonus tab **'); }
+  else {
+    const want = wantBonus.find(r => r.emp_code === 'AR-01');
+    check('amount survived', bAr.amount, want.amount, 'the same figure came back out');
+    check('wage it was based on', bAr.wage, want.wage, 'basic + DA, kept with the row');
+    check('ceiling applied', bAr.worked_on, BONUS_CALC, 'the working is in the row, not just the answer');
+    check('rate recorded', bAr.rate_pct, 8.33, 'the percentage it was run at');
+    check('filed under the year', /^\d{4}-\d{2}$/.test(String(bAr.fy)) ? 1 : 0, 1, 'fy = ' + bAr.fy);
+  }
+
+  /* --- gratuity freezes into a dated snapshot --- */
+  /* The live figure moves with every increment. The frozen one must not:
+     that is the whole reason for a snapshot, and what the accounts carry. */
+  console.log('\ngratuity: frozen as at a date, with the working kept');
+  await p.evaluate(() => payTab('gratuity')); await p.waitForTimeout(400);
+  await p.evaluate(d => { el('grat-date').value = d; el('grat-who').value = 'all'; renderGratuity(); }, ASAT);
+  await p.waitForTimeout(700);
+  const liveGrat = await p.evaluate(() => gratuityRows().filter(r => r.eligible));
+  await p.evaluate(() => freezeGratuity()); await p.waitForTimeout(600);
+  await p.evaluate(() => {
+    const b = [...document.querySelectorAll('.modal button')].find(x => /Freeze/.test(x.textContent));
+    if (b) b.click();
+  });
+  await p.waitForTimeout(3000);
+
+  const gratSheet = await call('list', { sheet: 'Gratuity' }, token);
+  check('rows frozen', gratSheet.length, liveGrat.length, 'one per person who could claim');
+  const g3 = gratSheet.find(r => r.emp_code === 'GR-03');
+  const l3 = liveGrat.find(r => r.emp_code === 'GR-03');
+  if (!g3 || !l3) { bad++; console.log('   GR-03 MISSING from the frozen snapshot **'); }
+  else {
+    check('amount frozen', g3.amount, l3.amount, 'what was on screen is what was written');
+    check('date stamped', String(g3.as_on).slice(0, 10) === ASAT ? 1 : 0, 1, 'as at ' + g3.as_on);
+    check('wage kept with it', g3.last_wage, l3.wage, 'so the figure can be checked later');
+    check('formula kept with it', g3.days_per_year, GRAT_DAYS, '15/26, recorded in the row');
+  }
+
+  /* --- an increment: recorded, applied, and arrears read from it --- */
+  /* IN-01 is on 20,000 (basic 12,000 + HRA 8,000). A 10% rise is 2,000 a
+     month. Spread in proportion that is 1,200 on basic and 800 on HRA, so
+     the new package is 13,200 + 8,800 = 22,000. */
+  console.log('\nincrement: the old pay is kept, which is what makes arrears exact');
+  await call('save', { sheet: 'Employees', row: {
+    emp_code: 'IN-01', name: 'Increment Case', status: 'Active', wage_type: 'Salary',
+    basic: 12000, hra: 8000, special_allowance: 0, other_allowance: 0,
+    pf_applicable: 'yes', esi_applicable: 'yes', doj: '2022-01-01', department: 'INC' } }, token);
+  await p.evaluate(() => reload()); await p.waitForTimeout(3500);
+
+  await p.evaluate(() => payTab('increment')); await p.waitForTimeout(500);
+  await p.evaluate(m => {
+    el('inc-from').value = m; el('inc-mode').value = 'pct'; el('inc-val').value = '10';
+    el('inc-spread').value = 'prorata'; el('inc-reason').value = 'Audit revision';
+    el('inc-who').value = 'salary';
+    renderIncrement();
+  }, YM);
+  await p.waitForTimeout(800);
+  const incPreview = await p.evaluate(() => incrementRows().find(r => r.emp_code === 'IN-01'));
+  if (!incPreview) { bad++; console.log('   IN-01 MISSING from the increment table **'); }
+  else {
+    check('present gross', incPreview.oldGross, 20000, 'basic 12,000 + hra 8,000');
+    check('rise', incPreview.rise, 2000, '10% of 20,000');
+    check('new basic', incPreview.next.basic, 13200, '12,000 share of the rise is 1,200');
+    check('new hra', incPreview.next.hra, 8800, '8,000 share of the rise is 800');
+    check('components still add up', incPreview.next.basic + incPreview.next.hra,
+          incPreview.newGross, 'the rounding has to land somewhere, and it lands on basic');
+  }
+
+  await p.evaluate(() => applyIncrement()); await p.waitForTimeout(600);
+  await p.evaluate(() => {
+    const b = [...document.querySelectorAll('.modal button')].find(x => /^Apply$/.test(x.textContent.trim()));
+    if (b) b.click();
+  });
+  await p.waitForTimeout(3500);
+
+  const incSheet = (await call('list', { sheet: 'Increment' }, token))
+    .filter(r => r.emp_code === 'IN-01');
+  const empAfter = (await call('list', { sheet: 'Employees' }, token))
+    .find(r => r.emp_code === 'IN-01');
+  if (!incSheet.length) { bad++; console.log('   nothing written to the Increment tab **'); }
+  else {
+    const i = incSheet[0];
+    check('old basic kept', i.old_basic, 12000, 'the figure arrears are worked out against');
+    check('old gross kept', i.old_gross, 20000, 'gone from the Employees row, kept here');
+    check('new gross recorded', i.new_gross, 22000, 'what they went to');
+    check('rise recorded', i.rise, 2000, 'per month');
+    check('effective month', String(i.effective_from).slice(0, 7) === YM ? 1 : 0, 1,
+          'effective ' + i.effective_from);
+    check('reason kept', String(i.reason || '') === 'Audit revision' ? 1 : 0, 1,
+          'the answer to "why" in three years');
+  }
+  check('pay actually updated', empAfter ? empAfter.basic : 0, 13200,
+        'the Employees row moved, not just the history');
+  check('and the HRA with it', empAfter ? empAfter.hra : 0, 8800, 'both sides of the split');
+
+  /* And now the point of all of it: arrears read the exact per-person rise
+     from the revision, rather than a percentage typed in again. */
+  await p.evaluate(() => payTab('arrears')); await p.waitForTimeout(500);
+  await p.evaluate(m => {
+    el('arr-mode').value = 'rev'; renderArrears();
+    el('arr-rev').value = m; el('arr-from').value = m; el('arr-to').value = m;
+    renderArrears();
+  }, YM);
+  await p.waitForTimeout(900);
+  const fromRev = await p.evaluate(() => arrearRows().rows.find(r => r.emp_code === 'IN-01'));
+  check('rise read from the revision', fromRev ? fromRev.rise : 0, 2000,
+        'not typed in - taken from the Increment row');
 
   if (errs.length) { bad += errs.length; console.log('\nscript errors on the page:', errs.slice(0, 5)); }
   console.log('\n' + checks + ' figures checked');

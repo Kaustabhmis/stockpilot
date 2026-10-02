@@ -527,6 +527,8 @@ function reload(given) {
        This app used to drop them on the floor while its own sign-in screen
        promised "attendance, leave and payslips". */
     S.slips = d.payroll || [];
+    S.bonus = d.bonus || [];
+    S.gratuity = d.gratuity || [];
     S.leave = d.leave || [];
     S.reqs = d.requests || [];
     S.types = d.leaveTypes || [];
@@ -1296,6 +1298,33 @@ function renderMe() {
             '<b>' + cur() + money(p.net) + ' <span style="color:var(--muted);width:auto">&rsaquo;</span></b>' +
           '</div>';
         }).join('') + '</div></div>';
+    })() +
+
+    /* Bonus and gratuity: their own, from their own tabs. Shown apart from
+       the payslips because neither is a month's pay - one is a year's, the
+       other is what has built up over all of them. */
+    (function () {
+      var bon = (S.bonus || []).slice().sort(function (a, b) {
+        return String(b.fy).localeCompare(String(a.fy));
+      });
+      var gr = (S.gratuity || []).slice().sort(function (a, b) {
+        return String(b.as_on).localeCompare(String(a.as_on));
+      })[0];
+      if (!bon.length && !gr) return '';
+      return '<div class="card"><h3>Bonus and gratuity</h3><div class="rows">' +
+        bon.map(function (b) {
+          return '<div><span>Bonus ' + esc(String(b.fy)) + '</span><b>' +
+            cur() + money(b.amount) + '</b></div>';
+        }).join('') +
+        (gr ? '<div><span>Gratuity as at ' + esc(String(gr.as_on)) + '</span><b>' +
+              cur() + money(gr.amount) + '</b></div>' : '') +
+        '</div>' +
+        '<div class="cs" style="margin:10px 0 0">' +
+          (gr ? 'Gratuity is what you would be due if you left on that date, and it ' +
+                'grows with your service. It is paid when you leave, not monthly. '
+              : '') +
+          'Ask HR if a figure here looks wrong.</div>' +
+      '</div>';
     })() +
 
     '<div class="card"><h3>Statutory</h3>' +

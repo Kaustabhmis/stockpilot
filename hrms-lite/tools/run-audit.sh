@@ -31,6 +31,14 @@ for t in payroll-rules payroll-tabs attendance-rules leave-rules policy-rules \
   fi
 done
 
+# One more, written as a module because it drives the page as well as the API.
+printf '  %-24s ' "legacy-bonus"
+out=$(node legacy-bonus.test.mjs "$BASE" 2>&1); code=$?
+if [ $code -eq 0 ]; then pass=$((pass+1)); echo "ok"
+else fail=$((fail+1)); failed="$failed legacy-bonus"; echo "FAILED"
+  echo "$out" | grep -E '\*\*' | sed 's/^/      /'
+fi
+
 echo
 if [ $fail -eq 0 ]; then
   echo "all $pass checks passed - every figure matched the rule as written"

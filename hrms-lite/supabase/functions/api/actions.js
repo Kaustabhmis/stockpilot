@@ -683,6 +683,9 @@ export function createActions(api, db, deps) {
         attMonths: months,
         leave: await listSheet('Leave'),
         payroll: await listSheet('Payroll'),
+        bonus: await listSheet('Bonus'),
+        gratuity: await listSheet('Gratuity'),
+        increment: await listSheet('Increment'),
         holidays: await listSheet('Holidays'),
         events: await listSheet('Events'),
         sites: await listSheet('Sites'),
@@ -719,6 +722,11 @@ export function createActions(api, db, deps) {
       punch: code ? await punchState(code) : null,
       leave: code ? (await all('select * from hrms.leave where emp_code = $1', [code])).map(rowOut) : [],
       payroll: code ? (await all('select * from hrms.payroll where emp_code = $1 order by month', [code])).map(rowOut) : [],
+      /* Their own only. Bonus and gratuity are money owed to them and
+         belong on their payslip screen; increment is their own pay history. */
+      bonus: code ? (await all('select * from hrms.bonus where emp_code = $1 order by fy', [code])).map(rowOut) : [],
+      gratuity: code ? (await all('select * from hrms.gratuity where emp_code = $1 order by as_on', [code])).map(rowOut) : [],
+      increment: code ? (await all('select * from hrms.increment where emp_code = $1 order by effective_from', [code])).map(rowOut) : [],
       requests: code ? (await all('select * from hrms.requests where emp_code = $1', [code])).map(rowOut) : [],
       ctcValues: code ? (await all('select * from hrms.ctc_values where emp_code = $1', [code])).map(rowOut) : [],
       holidays: await listSheet('Holidays'),

@@ -79,6 +79,20 @@ const ok = (pass, label, why) => {
     ['the punch log',             'punchLog', { from: '2026-08-01', to: '2026-08-31' }],
     ['the whole register',        'monthAtt', { month: '2026-08' }],
     ['deleting their own record', 'remove', { sheet: 'Employees', id: CODE }],
+    /* The three tabs that keep their own record. An employee is handed their
+       own rows in the workspace - that is what puts bonus and gratuity on
+       their phone - but reading the TAB means reading everybody's, and
+       writing to it means setting their own bonus. Both are refused. */
+    ['the whole bonus run',       'list', { sheet: 'Bonus' }],
+    ['the gratuity register',     'list', { sheet: 'Gratuity' }],
+    ["everyone's salary history", 'list', { sheet: 'Increment' }],
+    ['giving themselves a bonus', 'save', { sheet: 'Bonus', row: {
+        id: 'BON2026-27_' + CODE, fy: '2026-27', emp_code: CODE, amount: 500000 } }],
+    ['freezing their own gratuity', 'save', { sheet: 'Gratuity', row: {
+        id: 'GRA2026-10-01_' + CODE, as_on: '2026-10-01', emp_code: CODE, amount: 900000 } }],
+    ['writing their own rise',    'save', { sheet: 'Increment', row: {
+        id: 'INC2026-10_' + CODE, emp_code: CODE, effective_from: '2026-10-01',
+        old_basic: 12000, new_basic: 99000, rise: 87000 } }],
   ];
   for (const [label, action, payload] of refusals) {
     const r = await call(action, payload, emp);
@@ -137,6 +151,14 @@ const ok = (pass, label, why) => {
   const foreignStaff = (ws.employees || []).filter(e => String(e.emp_code) !== CODE).length;
   ok(foreignPay === 0, 'their workspace carries no one else’s pay', foreignPay + ' foreign rows');
   ok(foreignStaff === 0, 'nor anyone else’s record', foreignStaff + ' foreign people');
+
+  /* The three new tabs ride down the same wire. Filtering them in the browser
+     would still have sent every bonus in the company to every phone, so the
+     check is on what the workspace CONTAINS, not on what a screen shows. */
+  for (const key of ['bonus', 'gratuity', 'increment']) {
+    const foreign = (ws[key] || []).filter(r => String(r.emp_code) !== CODE).length;
+    ok(foreign === 0, 'nor anyone else’s ' + key, foreign + ' foreign rows');
+  }
 
   console.log('\n' + (bad ? '** ' + bad + ' rule(s) did not hold'
                           : 'every rule held - on the backend, not just on screen'));

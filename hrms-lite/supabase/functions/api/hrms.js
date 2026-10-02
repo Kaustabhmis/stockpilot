@@ -31,7 +31,8 @@ const TABLE = {
   CtcVariables: 'ctc_variables', CtcComponents: 'ctc_components',
   CtcValues: 'ctc_values', Notices: 'notices',
   ApprovalLevels: 'approval_levels', PayslipMail: 'payslip_mail',
-  Punches: 'punches', Leave: 'leave', Payroll: 'payroll'
+  Punches: 'punches', Leave: 'leave', Payroll: 'payroll',
+  Bonus: 'bonus', Gratuity: 'gratuity', Increment: 'increment'
 };
 
 /* Columns the front ends send as 'yes'/'no' but Postgres holds as booleans,
@@ -40,12 +41,13 @@ const TABLE = {
 const BOOL_COLS = new Set([
   'active', 'optional', 'pinned', 'paid', 'carry_forward', 'allow_half_day',
   'allow_half', 'needs_approval', 'taxable', 'in_gross', 'in_pf_wage',
-  'in_esi_wage', 'show_payslip', 'pf_applicable', 'esi_applicable'
+  'in_esi_wage', 'show_payslip', 'pf_applicable', 'esi_applicable',
+  'capped'
 ]);
 const DATE_COLS = new Set([
   'date', 'doj', 'exit_date', 'dob', 'from_date', 'to_date', 'applied_at',
   'decided_at', 'adjust_date', 'start_date', 'end_date', 'updated_at',
-  'generated_at'
+  'generated_at', 'as_on', 'effective_from'
 ]);
 const TIME_COLS = new Set(['in_time', 'out_time', 'start_time', 'end_time']);
 
@@ -133,7 +135,10 @@ export function createApi(db, opts = {}) {
   /* -------------------------------------------------------------- */
   const STAFF_TABS = new Set(['Leave', 'Requests', 'Notices', 'Holidays', 'Settings',
     'Employees', 'Payroll', 'Shifts', 'LeaveTypes', 'RequestTypes',
-    'ApprovalLevels', 'Sites', 'Users']);
+    'ApprovalLevels', 'Sites', 'Users',
+    /* a staff screen shows their own bonus and gratuity, so a run has to
+       reach the phone the same way a payslip does */
+    'Bonus', 'Gratuity', 'Increment']);
 
   async function bumpRevision(dirty) {
     const tabs = Object.keys(dirty || {});
@@ -283,7 +288,8 @@ export function createApi(db, opts = {}) {
   async function listSheet(sheet) {
     const t = tableFor(sheet);
     const order = { Attendance: 'date', Punches: 'punch_time', Payroll: 'month',
-                    CtcComponents: 'seq' }[sheet];
+                    CtcComponents: 'seq', Bonus: 'fy', Gratuity: 'as_on',
+                    Increment: 'effective_from' }[sheet];
     const rows = await all(`select * from hrms.${t}` + (order ? ` order by ${order}` : ''));
     return rows.map(rowOut);
   }

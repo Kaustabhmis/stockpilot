@@ -45,6 +45,22 @@ var SHEETS = {
   Leave:      ['id', 'emp_code', 'type', 'from_date', 'to_date', 'days', 'reason',
                'status', 'applied_at', 'decided_by', 'decided_at', 'decision_note',
                'level', 'approvals'],
+  /* Bonus, gratuity and increments each keep their own tab rather than
+     riding in Payroll. They are asked about years after the fact - by an
+     auditor, by a CA at year end, by somebody who has left - and a record
+     you have to sieve a month's salary run out of is a record you will get
+     wrong one day. */
+  Bonus:      ['id', 'fy', 'emp_code', 'name', 'wage', 'worked_on', 'months', 'days',
+               'rate_pct', 'amount', 'status', 'note', 'generated_at', 'generated_by'],
+  Gratuity:   ['id', 'as_on', 'kind', 'emp_code', 'name', 'doj', 'upto',
+               'service_months', 'years_counted', 'last_wage', 'days_per_year',
+               'month_days', 'amount', 'capped', 'status', 'note',
+               'generated_at', 'generated_by'],
+  Increment:  ['id', 'emp_code', 'name', 'effective_from', 'reason',
+               'old_basic', 'old_hra', 'old_special_allowance', 'old_other_allowance',
+               'new_basic', 'new_hra', 'new_special_allowance', 'new_other_allowance',
+               'old_gross', 'new_gross', 'rise', 'rise_pct',
+               'status', 'arrears_paid_upto', 'note', 'created_at', 'created_by'],
   Payroll:    ['id', 'month', 'emp_code', 'total_days', 'lop_days', 'paid_days',
                'basic', 'hra', 'special_allowance', 'other_allowance', 'gross',
                'pf', 'esi', 'pt', 'tds', 'other_deduction', 'total_deduction', 'net',
@@ -1206,6 +1222,9 @@ function bootstrap(caller, byMonth) {
       attMonths:  bootstrapMonths(byMonth ? undefined : 6),
       leave:      readSheet('Leave').map(stamped('Leave')),
       payroll:    readSheet('Payroll'),
+      bonus:      readSheet('Bonus'),
+      gratuity:   readSheet('Gratuity'),
+      increment:  readSheet('Increment'),
       holidays:   readSheet('Holidays'),
       events:     readSheet('Events'),
       sites:      readSheet('Sites'),
@@ -1248,6 +1267,12 @@ function bootstrap(caller, byMonth) {
       punch:       code ? punchState(code, myAttendance) : null,
       leave:       code ? onlyMine('Leave', code).map(stamped('Leave')) : [],
       payroll:     code ? onlyMine('Payroll', code) : [],
+      /* Their own, and only their own. Bonus and gratuity are money owed
+         to them and belong on their payslip screen; the increment rows are
+         the record of their own revisions. Nobody else's reaches them. */
+      bonus:       code ? onlyMine('Bonus', code) : [],
+      gratuity:    code ? onlyMine('Gratuity', code) : [],
+      increment:   code ? onlyMine('Increment', code) : [],
       requests:    code ? onlyMine('Requests', code).map(stamped('Requests')) : [],
       ctcValues:   code ? onlyMine('CtcValues', code) : [],
       holidays:    readSheet('Holidays'),
