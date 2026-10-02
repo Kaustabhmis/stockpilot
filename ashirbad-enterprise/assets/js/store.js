@@ -235,6 +235,7 @@
         };
     })();
 
+    let localAdmin = false; // demo sign-in for this tab (fallback when sessionStorage is blocked)
     const localBackend = {
         async init() {
             if (await KV.get('seeded')) return;
@@ -265,11 +266,12 @@
         },
         auth: {
             async signIn(_email, password) {
-                if (password !== C.LOCAL_ADMIN_PASSWORD) throw new Error('Incorrect password.');
-                sessionStorage.setItem('ae-admin', '1');
+                if (String(password || '').trim() !== String(C.LOCAL_ADMIN_PASSWORD || '').trim()) throw new Error('Incorrect password.');
+                localAdmin = true;
+                try { sessionStorage.setItem('ae-admin', '1'); } catch (e) { /* storage blocked (private mode / in-app browser): stay signed in for this tab */ }
             },
-            async signOut() { sessionStorage.removeItem('ae-admin'); },
-            async isAdmin() { try { return sessionStorage.getItem('ae-admin') === '1'; } catch (e) { return false; } }
+            async signOut() { localAdmin = false; try { sessionStorage.removeItem('ae-admin'); } catch (e) { /* ignore */ } },
+            async isAdmin() { if (localAdmin) return true; try { return sessionStorage.getItem('ae-admin') === '1'; } catch (e) { return false; } }
         }
     };
 
@@ -280,8 +282,10 @@
      * ---------------------------------------------------------- */
     const TOKEN_KEY = 'ae-admin-token';
     const PUBLIC_CACHE_KEY = 'ae-public-cache-v1';
-    const getToken = () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; } };
-    const setToken = (t) => { try { if (t) sessionStorage.setItem(TOKEN_KEY, t); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ } };
+    // Kept in memory too, so sign-in still works where sessionStorage is blocked (private mode, in-app browsers)
+    let memToken = null;
+    const getToken = () => { try { return sessionStorage.getItem(TOKEN_KEY) || memToken; } catch (e) { return memToken; } };
+    const setToken = (t) => { memToken = t || null; try { if (t) sessionStorage.setItem(TOKEN_KEY, t); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ } };
 
     async function api(action, payload = {}) {
         const body = { action, ...payload };

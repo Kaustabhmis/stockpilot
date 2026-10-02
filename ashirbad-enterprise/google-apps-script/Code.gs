@@ -324,7 +324,8 @@ function login_(password) {
   var fails = Number(cache.get('login_fail') || 0);
   if (fails >= 5) Utilities.sleep(Math.min(fails, 10) * 1000); // slow down password guessing
 
-  if (typeof password !== 'string' || hash_(salt, password) !== stored) {
+  // Accept the password with or without stray spaces (copy-paste / phone keyboards add them)
+  if (typeof password !== 'string' || (hash_(salt, password) !== stored && hash_(salt, password.trim()) !== stored)) {
     cache.put('login_fail', String(fails + 1), 900);
     fail_('Incorrect password.');
   }
@@ -452,7 +453,7 @@ function setAdminPasswordPrompt() {
   var ui = SpreadsheetApp.getUi();
   var res = ui.prompt('Set admin password', 'Enter a strong password (at least 10 characters). It is stored only as a salted hash.', ui.ButtonSet.OK_CANCEL);
   if (res.getSelectedButton() !== ui.Button.OK) return;
-  var pw = res.getResponseText();
+  var pw = res.getResponseText().trim();
   if (pw.length < 10) { ui.alert('Password must be at least 10 characters.'); return; }
   setAdminPassword_(pw);
   ui.alert('Admin password saved. Any existing admin sessions were signed out.');

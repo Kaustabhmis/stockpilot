@@ -43,7 +43,11 @@
                 </div>
                 <div>
                     <label for="login-password" class="lbl">Password</label>
-                    <input id="login-password" type="password" autocomplete="current-password" required class="inp">
+                    <div class="relative">
+                        <input id="login-password" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" required class="inp pr-12">
+                        <button type="button" id="login-show" class="absolute inset-y-0 right-0 w-12 flex items-center justify-center text-gray-500 hover:text-brand-navy" aria-label="Show password" aria-pressed="false"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                    </div>
+                    <p id="login-caps" class="hidden text-xs text-amber-700 mt-1" role="status">Caps Lock is on.</p>
                 </div>
                 <button type="submit" id="login-btn" class="btn w-full bg-brand-orange hover:bg-brand-navy text-white py-3" aria-label="Sign in to admin panel"><i class="fas fa-right-to-bracket" aria-hidden="true"></i> Sign In</button>
                 <p id="login-error" class="hidden text-sm text-red-600 text-center" role="alert"></p>
@@ -322,6 +326,18 @@
             ? 'Demo mode: use the password set as LOCAL_ADMIN_PASSWORD in assets/js/config.js.'
             : 'Enter the admin password you set in the Google Sheet menu (Website Admin → Set admin password).';
 
+        const pwEl = document.getElementById('login-password');
+        document.getElementById('login-show').addEventListener('click', (e) => {
+            const show = pwEl.type === 'password';
+            pwEl.type = show ? 'text' : 'password';
+            e.currentTarget.setAttribute('aria-pressed', String(show));
+            e.currentTarget.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            e.currentTarget.innerHTML = `<i class="fas ${show ? 'fa-eye-slash' : 'fa-eye'}" aria-hidden="true"></i>`;
+        });
+        pwEl.addEventListener('keyup', (e) => {
+            if (e.getModifierState) document.getElementById('login-caps').classList.toggle('hidden', !e.getModifierState('CapsLock'));
+        });
+
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             loginErr.classList.add('hidden');
@@ -332,7 +348,11 @@
                 document.getElementById('login-password').value = '';
                 await enterApp();
             } catch (ex) {
-                loginErr.textContent = ex.message || 'Sign in failed.';
+                const wrongPw = /incorrect password/i.test(ex.message || '');
+                loginErr.textContent = !wrongPw ? (ex.message || 'Sign in failed.')
+                    : Store.mode === 'local'
+                        ? 'Incorrect password. The site is in demo mode, so use the demo password from assets/js/config.js (LOCAL_ADMIN_PASSWORD). It is case-sensitive.'
+                        : 'Incorrect password. The site is connected to the Google Sheet, so use the password you set in the Sheet (Website Admin → 2. Set admin password); the demo password no longer works.';
                 loginErr.classList.remove('hidden');
             } finally {
                 btn.disabled = false;
