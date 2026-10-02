@@ -36,7 +36,7 @@ Changes are saved to the `settings` tab of your private Google Sheet (one row pe
 
 ## Maps
 
-All maps (home page project map, each project page, contact page) are free OpenStreetMap "lite" maps (Leaflet with CARTO light tiles). No Google API key or billing is needed. Pins come from each project's latitude/longitude and the office latitude/longitude in **Website Content → Business Information**.
+All maps (home page project map, each project page, contact page) are free OpenStreetMap "lite" maps (Leaflet with OpenStreetMap tiles in a soft grey style). No Google API key or billing is needed. Pins come from each project's latitude/longitude and the office latitude/longitude in **Website Content → Business Information**.
 
 ## How "Sold Out" works
 

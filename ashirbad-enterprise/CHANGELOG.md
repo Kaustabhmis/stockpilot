@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1 – 2026-10-03
+
+- Fixed: map showed "API KEY REQUIRED" – map tiles now come from OpenStreetMap (free, no key), softened to a light grey style
+
 ## 2.0.0 – 2026-10-03
 
 Multipage redesign and Google Sheet go-live.

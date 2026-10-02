@@ -65,3 +65,5 @@ section[id] { scroll-margin-top: 5rem; }
 .ae-pop-body span { display: block; color: #4b5563; font-size: 12px; margin-top: 2px; }
 .ae-pop-body a { display: inline-block; margin-top: 10px; background: #12304d; color: #fff !important; padding: 8px 14px; font-weight: 700; font-size: 13px; text-decoration: none; border-radius: 4px; }
 .leaflet-container { font-family: Manrope, sans-serif; }
+/* Lite look: soft grey OpenStreetMap tiles so the navy and gold pins stand out */
+.leaflet-tile-pane { filter: grayscale(0.9) brightness(1.06) contrast(0.92); }

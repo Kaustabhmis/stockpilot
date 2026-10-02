@@ -1,5 +1,5 @@
 /**
- * Ashirbad Enterprise – free "lite" map (Leaflet + OpenStreetMap / CARTO light tiles)
+ * Ashirbad Enterprise – free "lite" map (Leaflet + OpenStreetMap tiles, softened with a CSS filter)
  * No API key, no billing. Leaflet loads only when the map scrolls into view.
  *
  *   AE.liteMap(el, pins, { zoom })   pins: [{ lat, lng, title, color, popup }]
@@ -60,9 +60,10 @@
                 el.innerHTML = '';
                 const map = L.map(el, { scrollWheelZoom: false, zoomControl: true, attributionControl: true });
                 el._aeMap = map;
-                const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                    subdomains: 'abcd', maxZoom: 19,
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                // OpenStreetMap's own tile server: free, no account, no API key (the "lite" look is a CSS filter)
+                const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 }).addTo(map);
                 // If map tiles are blocked on this network, fall back instead of showing a grey box
                 let loaded = 0, failed = 0;
