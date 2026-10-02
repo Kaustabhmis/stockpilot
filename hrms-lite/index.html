@@ -7322,9 +7322,25 @@ function refreshUsers() {
   });
 }
 
+/* What the code falls back to when a workspace has no row for a setting -
+   an existing sheet, upgraded, will not have the newer keys. Showing the
+   box empty while the arithmetic quietly applies 8.33% is how somebody
+   ends up believing a number that is not the one being used. */
+var SETTING_DEFAULTS = {
+  bonus_rate_pct: '8.33', bonus_eligibility_ceiling: '21000',
+  bonus_calc_ceiling: '7000', bonus_min_days: '30',
+  gratuity_min_years: '1', gratuity_prorata: 'no',
+  gratuity_days_per_year: '15', gratuity_month_days: '26',
+  gratuity_ceiling: '2000000'
+};
+function settingShown(key) {
+  var v = S.settings[key];
+  return (v === undefined || v === null || v === '') ? SETTING_DEFAULTS[key] : v;
+}
+
 function payrollRulesPane() {
   return '<div class="grid2">' + PAYROLL_RULES.map(function (f) {
-    return fieldInput(f, S.settings[f[0]]);
+    return fieldInput(f, settingShown(f[0]));
   }).join('') + '</div>' +
     '<p style="margin-top:16px;font-size:.75rem;color:var(--text-muted);line-height:1.8">' +
     '<b>Salary divisor</b> decides what one day of pay is worth:<br>' +
