@@ -207,6 +207,7 @@ function renderTemplate(template, contact, campaign) {
     campaignname: firstNonEmpty_(campaign['Campaign Name'], campaign.campaignName),
     storephone: formatDisplayPhone_(firstNonEmpty_(campaign['Store Phone'], campaign.storePhone)),
     website: firstNonEmpty_(campaign['Website URL'], campaign.website),
+    storelink: firstNonEmpty_(campaign['Store Link'], campaign.storeLink),
   };
   return String(template).replace(/\{\{\s*([A-Za-z_][\w ]*?)\s*\}\}/g, (match, key) => {
     const k = key.replace(/[\s_]/g, '').toLowerCase();

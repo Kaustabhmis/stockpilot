@@ -32,7 +32,7 @@ function makeApi() {
     ok: true,
     profile: { clientId: 'CLI-2026-0001', businessName: 'Sunrise Bakery', email: 'owner@sunrise.example', phone: '+919800000000', website: 'https://sunrise.example' },
     settings: { timezone: 'Asia/Kolkata', today: '2026-10-04', nowTime: '10:00', ctaTextMaxLength: 20, maxImageMb: 5, maxUploadRows: 5000,
-      imageCtaStyle: 'IMAGE_THEN_BUTTONS', defaultContactName: 'Customer', defaultCountryCode: '91',
+      imageCtaStyle: 'CAPTION_LINK', defaultContactName: 'Customer', defaultCountryCode: '91',
       variables: ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website'], systemName: 'WhatsApp Campaign Automation' },
     stats: { contacts: 3, optedIn: 2, optedOut: 1 },
     lists: [{ name: 'VIP', count: 2 }],
@@ -160,7 +160,19 @@ async function run(viewport, label) {
   await page.fill('#ovSub', 'This weekend only');
   await page.fill('#cMsg', 'Hi {{Name}},\n\nCelebrate with *fresh* treats from {{ClientName}}. Call {{StorePhone}}.');
   await page.fill('#ctaText', 'Order Now');
+  await page.fill('#cStoreLink', 'maps.app.goo.gl/sunrise');
   await page.waitForTimeout(500);
+  // One bubble: image + text + website/store lines + CTA link line.
+  const bubble = await page.evaluate(() => {
+    const host = document.querySelector('#livePreview .bubble') ? '#livePreview' : null;
+    return host ? { count: document.querySelectorAll(host + ' .bubble').length, text: document.querySelector(host + ' .bubble').innerText } : null;
+  });
+  if (bubble) {
+    assert.strictEqual(bubble.count, 1, 'image, text and button must be ONE bubble');
+    assert.ok(bubble.text.includes('📍 Visit our store: https://maps.app.goo.gl/sunrise'), bubble.text);
+    assert.ok(bubble.text.includes('👉 Order Now: https://sunrise.example'), bubble.text);
+    assert.ok(!bubble.text.includes('🌐'), 'website line is skipped when the button already links to it');
+  }
   if (viewport.width < 960) {
     await page.click('#fabPreview');
     await page.waitForSelector('#sheet:not(.hidden) canvas');
@@ -184,6 +196,9 @@ async function run(viewport, label) {
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await noHorizontalScroll();
 
+  await page.click('#ctaSeg button[data-cta=STORE]');
+  await page.fill('#ctaText', 'Visit Store');
+  await page.waitForTimeout(300);
   await page.click('#toStep2');
   await page.check('input[name=aud][value=lists]');
   await page.check('#listPicker input[value=VIP]');
@@ -193,7 +208,7 @@ async function run(viewport, label) {
   await page.fill('#sTime', '19:00');
   await shot('6-audience');
   await page.click('#toStep3');
-  await page.waitForSelector('#reviewPreview canvas');
+  await page.waitForSelector('#reviewPreview canvas', { state: 'attached' });
   assert.ok((await page.textContent('#summary')).includes('2026-10-10 at 19:00'));
   await shot('7-review');
   await page.click('#launchBtn');
@@ -201,6 +216,9 @@ async function run(viewport, label) {
   const p = state.lastPayload;
   assert.ok(p.imageDataUrl.startsWith('data:image/jpeg;base64,'));
   assert.strictEqual(p.ctaType, 'URL'); assert.strictEqual(p.sendMode, 'SCHEDULE');
+  assert.strictEqual(p.ctaValue, '{{StoreLink}}');
+  assert.strictEqual(p.storeLink, 'maps.app.goo.gl/sunrise');
+  assert.ok(p.message.endsWith('🌐 {{Website}}'), 'website line added; store line skipped because the button opens the store: ' + p.message);
   assert.strictEqual(JSON.stringify(p.audience), JSON.stringify({ lists: ['VIP'] }));
   assert.ok((await page.textContent('#doneMsg')).includes('SCHEDULED'));
   await shot('8-launched');

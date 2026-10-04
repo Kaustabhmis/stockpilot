@@ -61,6 +61,7 @@ function notifyAdminOfSubmission_(d, campaignId, status, errors, warnings) {
     'Schedule: ' + (d.sendMode === SEND_MODES.SCHEDULE ? d.scheduleDate + ' ' + d.scheduleTime + ' ' + d.timezone : d.sendMode || '—'),
     'Audience: ' + (d.audience || '—'),
     'CTA: ' + (d.ctaType ? d.ctaType + ' "' + d.ctaText + '" → ' + d.ctaValue : 'none'),
+    'Store link: ' + (d.storeLink || '—'),
     'Website: ' + (d.website || '—'),
     'Store phone: ' + (d.storePhone ? '+' + d.storePhone : '—'),
     'Image: ' + (d.imageFileId ? d.imageName + ' (' + d.imageFileId + ')' : 'none'),

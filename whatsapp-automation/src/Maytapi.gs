@@ -144,9 +144,13 @@ function sendMaytapiMedia_(toNumber, media, caption, filename, cfg) {
  * Sends an interactive button message.
  * @param buttons [{ type: 'URL'|'PHONE'|'QUICK_REPLY', text, value }]
  */
-function sendMaytapiButtons_(toNumber, body, buttons, cfg) {
+function sendMaytapiButtons_(toNumber, body, buttons, cfg, image) {
   cfg = cfg || getConfig_();
-  return maytapiRequest_('post', phonePath_(cfg, 'sendMessage'), buildButtonsPayload_(toNumber, body, buttons), cfg);
+  const payload = buildButtonsPayload_(toNumber, body, buttons);
+  // Optional image header (BUTTONS_WITH_IMAGE). The field name comes from SETTINGS → BUTTON_IMAGE_FIELD,
+  // copied from Maytapi's documentation, because it could not be verified here.
+  if (image && image.field && image.media) payload[image.field] = image.media;
+  return maytapiRequest_('post', phonePath_(cfg, 'sendMessage'), payload, cfg);
 }
 
 /**

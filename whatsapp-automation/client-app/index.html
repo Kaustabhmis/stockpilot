@@ -176,6 +176,7 @@
     .create-grid { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
     .preview-col { display: block; position: sticky; top: 120px; }
     .fab-preview { display: none; }
+    #reviewPreviewWrap { display: none; }
     #toast { bottom: 24px; }
   }
   @media print { .protected, .preview-col, .sheet { display: none !important; } body::before { content: "Printing is disabled for campaign previews."; } }
@@ -284,6 +285,7 @@
               <div class="seg" id="ctaSeg" style="margin-bottom:14px">
                 <button data-cta="NONE" type="button">None</button>
                 <button data-cta="URL" class="on" type="button">Website</button>
+                <button data-cta="STORE" type="button">Store</button>
                 <button data-cta="PHONE" type="button">Call</button>
                 <button data-cta="QUICK_REPLY" type="button">Quick reply</button>
               </div>
@@ -294,12 +296,17 @@
                 <label class="field"><span id="ctaValueLabel">Link</span><input class="input" id="ctaValue"><div class="hint" id="ctaValueHint"></div></label>
               </div>
             </div>
-            <details class="more">
-              <summary>Business details used in the message</summary>
+            <div class="field">
+              <span style="display:block;font-weight:600;font-size:14px;margin-bottom:6px">Links <span class="muted" style="font-weight:400">(optional)</span></span>
               <div class="row">
-                <label class="field"><span>Website</span><input class="input" id="cWebsite" placeholder="https://"></label>
-                <label class="field"><span>Store phone</span><input class="input" id="cStorePhone" inputmode="tel"></label>
+                <label class="field"><span class="small">Website</span><input class="input" id="cWebsite" inputmode="url" placeholder="https://yourwebsite.com"></label>
+                <label class="field"><span class="small">Store link (Google Maps / store page)</span><input class="input" id="cStoreLink" inputmode="url" placeholder="https://maps.app.goo.gl/…"></label>
               </div>
+              <label class="check" style="margin-top:-4px"><input type="checkbox" id="cAddLinks" checked><div class="small">Add these links at the end of the message</div></label>
+            </div>
+            <details class="more">
+              <summary>More details</summary>
+              <label class="field"><span>Store phone</span><input class="input" id="cStorePhone" inputmode="tel"><div class="hint">Used for the Call button and {{StorePhone}}.</div></label>
               <label class="field"><span>Preview customer name</span><input class="input" id="cPreviewName" maxlength="40"></label>
             </details>
             <div id="step1Err"></div>
@@ -513,6 +520,7 @@
       name: previewName || S.boot.settings.defaultContactName, phone: '', email: '', company: '',
       clientname: p.businessName, campaignname: $('cName').value.trim(),
       storephone: sp ? '+' + sp : $('cStorePhone').value.trim(), website: normUrl($('cWebsite').value) || $('cWebsite').value.trim(),
+      storelink: normUrl($('cStoreLink').value) || $('cStoreLink').value.trim(),
     };
     return String(text || '').replace(/\{\{\s*([A-Za-z_][\w ]*?)\s*\}\}/g, function (m, k) {
       k = k.replace(/[\s_]/g, '').toLowerCase();
@@ -521,7 +529,11 @@
   }
   /** WhatsApp-style formatting for the preview (after escaping). */
   function waFormat(t) {
-    return esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/_([^_\n]+)_/g, '<i>$1</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>');
+    // Links are shielded first (so _ or * inside URLs is not treated as formatting), then shown in WhatsApp blue.
+    var links = [];
+    var out = esc(t).replace(/https?:\/\/[^\s<]+/g, function (u) { links.push(u); return '\u0000' + (links.length - 1) + '\u0001'; })
+      .replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|[\s(])_([^_\n]+)_/g, '$1<i>$2</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>');
+    return out.replace(/\u0000(\d+)\u0001/g, function (m, i) { return '<span style="color:var(--wa-link)">' + links[+i] + '</span>'; });
   }
 
   /* =================================================================
@@ -725,7 +737,7 @@
     var p = S.boot.profile, st = S.boot.settings;
     S.step = 1; S.image = null; S.cta = 'URL'; S.when = 'NOW'; S.aud = 'all'; S.lists = [];
     ['cName', 'cMsg', 'ctaText', 'ctaValue', 'ovHead', 'ovSub', 'sDate', 'sTime'].forEach(function (id) { $(id).value = ''; });
-    $('cWebsite').value = p.website || ''; $('cStorePhone').value = p.phone || ''; $('cPreviewName').value = st.defaultContactName || 'Customer';
+    $('cWebsite').value = p.website || ''; $('cStoreLink').value = p.storeLink || ''; $('cAddLinks').checked = true; $('cStorePhone').value = p.phone || ''; $('cPreviewName').value = st.defaultContactName || 'Customer';
     $('cMsg').value = 'Hi {{Name}},\n\n';
     $('ctaText').maxLength = st.ctaTextMaxLength; show('thumbRow', false); imgStatus('', '');
     $('varChips').innerHTML = st.variables.map(function (v) { return '<button type="button" class="chip" data-var="' + esc(v) + '">{{' + esc(v) + '}}</button>'; }).join('');
@@ -744,9 +756,10 @@
     updateMsgCount(); renderPreviewTargets();
   });
   function updateMsgCount() { $('msgCount').textContent = $('cMsg').value.length; }
-  ['cMsg', 'cName', 'ctaText', 'ctaValue', 'cWebsite', 'cStorePhone', 'cPreviewName'].forEach(function (id) {
+  ['cMsg', 'cName', 'ctaText', 'ctaValue', 'cWebsite', 'cStoreLink', 'cStorePhone', 'cPreviewName'].forEach(function (id) {
     $(id).addEventListener('input', function () { updateMsgCount(); renderPreviewTargets(); });
   });
+  $('cAddLinks').addEventListener('change', function () { renderPreviewTargets(); });
   $('ctaSeg').addEventListener('click', function (e) {
     var b = e.target.closest('[data-cta]'); if (!b) return;
     S.cta = b.getAttribute('data-cta'); setSeg('ctaSeg', 'data-cta', S.cta); $('ctaValue').value = ''; updateCtaFields(); renderPreviewTargets();
@@ -755,16 +768,30 @@
     var t = S.cta; show('ctaFields', t !== 'NONE');
     var max = S.boot.settings.ctaTextMaxLength;
     $('ctaTextHint').textContent = 'Max ' + max + ' characters';
-    var ph = { URL: ['Explore Now', 'Link', 'https://… (blank = your website)'], PHONE: ['Call Store', 'Phone number', 'Blank = your store phone'], QUICK_REPLY: ['View Offers', 'Reply keyword', 'e.g. offers — your auto-reply for this word is sent back'] }[t];
-    if (ph) { $('ctaText').placeholder = ph[0]; $('ctaValueLabel').textContent = ph[1]; $('ctaValueHint').textContent = ph[2]; $('ctaValue').placeholder = t === 'URL' ? 'https://' : ''; }
+    var ph = { URL: ['Explore Now', 'Link', 'https://… (blank = your website)'], STORE: ['Visit Store', 'Store link', 'Blank = the store link below'],
+      PHONE: ['Call Store', 'Phone number', 'Blank = your store phone'], QUICK_REPLY: ['View Offers', 'Reply keyword', 'e.g. offers — your auto-reply for this word is sent back'] }[t];
+    if (ph) { $('ctaText').placeholder = ph[0]; $('ctaValueLabel').textContent = ph[1]; $('ctaValueHint').textContent = ph[2]; $('ctaValue').placeholder = t === 'URL' || t === 'STORE' ? 'https://' : ''; }
   }
   function ctaResolved() {
     var t = S.cta; if (t === 'NONE') return null;
     var text = $('ctaText').value.trim() || $('ctaText').placeholder, v = $('ctaValue').value.trim();
     if (t === 'URL') v = normUrl(v || $('cWebsite').value);
+    if (t === 'STORE') return { type: 'URL', text: text, value: normUrl(v || $('cStoreLink').value), store: true };
     if (t === 'PHONE') { v = normPhone(v || $('cStorePhone').value); v = v ? '+' + v : ''; }
     if (t === 'QUICK_REPLY') v = v || text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
     return { type: t, text: text, value: v };
+  }
+
+  /** The message actually sent: the client's text plus optional website / store link lines. */
+  function finalMessageTemplate() {
+    var msg = $('cMsg').value.replace(/\s+$/, '');
+    if (!$('cAddLinks').checked) return msg;
+    var cta = ctaResolved(), lines = [];
+    var web = normUrl($('cWebsite').value), store = normUrl($('cStoreLink').value);
+    var ctaUrl = cta && cta.type === 'URL' ? cta.value : '';
+    if (web && web !== ctaUrl && !/\{\{\s*website\s*\}\}/i.test(msg)) lines.push('🌐 {{Website}}');
+    if (store && store !== ctaUrl && !/\{\{\s*store_?link\s*\}\}/i.test(msg)) lines.push('📍 Visit our store: {{StoreLink}}');
+    return lines.length ? msg + '\n\n' + lines.join('\n') : msg;
   }
 
   function validateStep1() {
@@ -772,11 +799,13 @@
     if (!$('cName').value.trim()) errs.push('Enter a campaign name.');
     if (!$('cMsg').value.trim() || $('cMsg').value.trim() === 'Hi {{Name}},') errs.push('Write your message.');
     if ($('cWebsite').value.trim() && !normUrl($('cWebsite').value)) errs.push('Website is not a valid web address.');
+    if ($('cStoreLink').value.trim() && !normUrl($('cStoreLink').value)) errs.push('Store link is not a valid web address.');
+    if (S.image && S.boot.settings.imageCtaStyle !== 'IMAGE_THEN_BUTTONS' && finalMessageTemplate().length > 900) errs.push('With an image the message (including links) must be at most 900 characters.');
     if ($('cStorePhone').value.trim() && !normPhone($('cStorePhone').value)) errs.push('Store phone number is not valid.');
     if (cta) {
       if (!$('ctaText').value.trim()) errs.push('Enter the button text.');
       else if ($('ctaText').value.trim().length > max) errs.push('Button text must be at most ' + max + ' characters.');
-      if (cta.type === 'URL' && !cta.value) errs.push('Enter a valid link for the button (or a website).');
+      if (cta.type === 'URL' && !cta.value) errs.push(cta.store ? 'Enter a store link for the button.' : 'Enter a valid link for the button (or a website).');
       if (cta.type === 'PHONE' && !cta.value) errs.push('Enter a valid phone number for the button (or a store phone).');
     }
     $('step1Err').innerHTML = alertBox('error', errs.length ? 'Please fix:' : '', errs);
@@ -858,6 +887,7 @@
       '<dt>When</dt><dd>' + esc(when) + '</dd>' +
       '<dt>Image</dt><dd>' + (S.image ? 'Yes' : 'No (text only)') + '</dd>' +
       '<dt>Button</dt><dd>' + (cta ? esc(cta.text) + ' → ' + esc(cta.value) : 'None') + '</dd>' +
+      '<dt>Links</dt><dd>' + esc([normUrl($('cWebsite').value), normUrl($('cStoreLink').value)].filter(Boolean).join(' · ') || 'None') + '</dd>' +
       '</dl>';
   }
   $('launchBtn').addEventListener('click', function () {
@@ -865,10 +895,11 @@
     if (!validateStep2()) return setStep(2);
     var cta = ctaResolved(), btn = $('launchBtn');
     var payload = {
-      campaignName: $('cName').value.trim(), message: $('cMsg').value,
-      imageDataUrl: S.image ? S.image.final : '', website: $('cWebsite').value.trim(), storePhone: $('cStorePhone').value.trim(),
+      campaignName: $('cName').value.trim(), message: finalMessageTemplate(),
+      imageDataUrl: S.image ? S.image.final : '', website: $('cWebsite').value.trim(), storeLink: $('cStoreLink').value.trim(),
+      storePhone: $('cStorePhone').value.trim(),
       ctaType: cta ? cta.type : 'NONE', ctaText: cta ? $('ctaText').value.trim() : '',
-      ctaValue: cta ? ($('ctaValue').value.trim() || (cta.type === 'QUICK_REPLY' ? cta.value : '')) : '',
+      ctaValue: cta ? (cta.store ? ($('ctaValue').value.trim() || '{{StoreLink}}') : ($('ctaValue').value.trim() || (cta.type === 'QUICK_REPLY' ? cta.value : ''))) : '',
       audience: audienceSel(), sendMode: S.when, date: $('sDate').value, time: $('sTime').value,
     };
     btn.disabled = true; busy(true); $('launchErr').innerHTML = '';
@@ -921,15 +952,19 @@
   function buildPreview(target, data) {
     var label = 'PREVIEW · ' + data.business;
     var time = new Date().toTimeString().slice(0, 5);
-    var captionStyle = S.boot.settings.imageCtaStyle === 'CAPTION_LINK';
+    var style = S.boot.settings.imageCtaStyle || 'CAPTION_LINK';
     var html = '<div class="protected"><div class="phone"><div class="screen">' +
       '<div class="wa-head"><div class="avatar">' + esc((data.business || '?').charAt(0).toUpperCase()) + '</div><div><b>' + esc(data.business) + '</b><span>WhatsApp</span></div></div>' +
       '<div class="chat">';
     var textHtml = waFormat(data.text || '');
     var ctaHtml = data.cta ? '<div class="cta">' + (ICONS[data.cta.type] || '') + esc(data.cta.text) + '</div>' : '';
-    if (data.img && captionStyle) {
-      var cap = data.text + (data.cta ? '\n\n' + ctaLine(data.cta) : '');
-      html += '<div class="bubble"><canvas data-img="1"></canvas>' + (cap.trim() ? '<div class="txt">' + waFormat(cap) + '</div>' : '') + '<div class="time">' + time + '</div></div>';
+    if (style === 'CAPTION_LINK' && (data.img || data.text || data.cta)) {
+      // ONE message: image + text + the CTA as a tappable link line (what customers really get).
+      var cap = (data.text || '') + (data.cta ? (data.text ? '\n\n' : '') + ctaLine(data.cta) : '');
+      html += '<div class="bubble">' + (data.img ? '<canvas data-img="1"></canvas>' : '') + (cap.trim() ? '<div class="txt">' + waFormat(cap) + '</div>' : '') + '<div class="time">' + time + '</div></div>';
+    } else if (style === 'BUTTONS_WITH_IMAGE' && (data.img || data.text || data.cta)) {
+      // ONE message: image header + text + real button.
+      html += '<div class="bubble">' + (data.img ? '<canvas data-img="1"></canvas>' : '') + (data.text ? '<div class="txt">' + textHtml + '</div>' : '') + '<div class="time">' + time + '</div>' + ctaHtml + '</div>';
     } else {
       if (data.img) html += '<div class="bubble"><canvas data-img="1"></canvas>' + (data.cta || data.text ? '' : '<div class="time">' + time + '</div>') + '</div>';
       if (data.text || data.cta) html += '<div class="bubble">' + (data.text ? '<div class="txt">' + textHtml + '</div>' : '') + '<div class="time">' + time + '</div>' + ctaHtml + '</div>';
@@ -941,7 +976,7 @@
     if (cv && data.img) drawPreviewImage(cv, data.img, label);
   }
   function currentPreviewData() {
-    return { business: S.boot.profile.businessName, text: renderVars($('cMsg').value, $('cPreviewName').value.trim()),
+    return { business: S.boot.profile.businessName, text: renderVars(finalMessageTemplate(), $('cPreviewName').value.trim()),
       img: S.image && S.image.finalImg, cta: ctaResolved() };
   }
   function renderPreviewTargets() {
@@ -1105,10 +1140,10 @@
   });
   function previewCampaign(id) {
     var c = S.boot.campaigns.find(function (x) { return x.id === id; }); if (!c) return;
-    var cta = c.ctaType ? { type: c.ctaType, text: c.ctaText, value: c.ctaType === 'URL' ? (c.ctaValue.indexOf('{{') >= 0 ? c.website : c.ctaValue) : c.ctaType === 'PHONE' ? (c.ctaValue.indexOf('{{') >= 0 ? c.storePhone : '+' + digits(c.ctaValue)) : c.ctaValue } : null;
+    var cta = c.ctaType ? { type: c.ctaType, text: c.ctaText, value: c.ctaType === 'URL' ? (/store_?link/i.test(c.ctaValue) ? c.storeLink : c.ctaValue.indexOf('{{') >= 0 ? c.website : c.ctaValue) : c.ctaType === 'PHONE' ? (c.ctaValue.indexOf('{{') >= 0 ? c.storePhone : '+' + digits(c.ctaValue)) : c.ctaValue } : null;
     var text = c.message.replace(/\{\{\s*([A-Za-z_][\w ]*?)\s*\}\}/g, function (m, k) {
       k = k.replace(/[\s_]/g, '').toLowerCase();
-      return { name: S.boot.settings.defaultContactName, clientname: S.boot.profile.businessName, campaignname: c.name, storephone: c.storePhone, website: c.website }[k] || '';
+      return { name: S.boot.settings.defaultContactName, clientname: S.boot.profile.businessName, campaignname: c.name, storephone: c.storePhone, website: c.website, storelink: c.storeLink }[k] || '';
     });
     openSheet(c.name, 'campaign');
     var data = { business: S.boot.profile.businessName, text: text, img: null, cta: cta };
@@ -1136,10 +1171,10 @@
       var ymd = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
       demoState = {
         ok: true, token: 'd'.repeat(64),
-        profile: { clientId: 'CLI-DEMO-0001', businessName: 'Demo Business', email: 'owner@demo.example', phone: '+919800000000', website: 'https://example.com' },
+        profile: { clientId: 'CLI-DEMO-0001', businessName: 'Demo Business', email: 'owner@demo.example', phone: '+919800000000', website: 'https://example.com', storeLink: '' },
         settings: { timezone: 'Asia/Kolkata', today: ymd, nowTime: '10:00', ctaTextMaxLength: 20, maxImageMb: 5, maxUploadRows: 5000,
-          imageCtaStyle: 'IMAGE_THEN_BUTTONS', defaultContactName: 'Customer', defaultCountryCode: '91',
-          variables: ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website'], systemName: BRAND },
+          imageCtaStyle: 'CAPTION_LINK', defaultContactName: 'Customer', defaultCountryCode: '91',
+          variables: ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website', 'StoreLink'], systemName: BRAND },
         stats: { contacts: 128, optedIn: 120, optedOut: 8 },
         lists: [{ name: 'VIP', count: 24 }, { name: 'Regular customers', count: 96 }],
         subscription: { plan: 'Demo', validUntil: '', quota: 1000, used: 240, remaining: 760, canSend: true, reason: '', dedicatedNumber: false },
@@ -1169,7 +1204,7 @@
         d.campaigns.unshift({ id: id, name: p.campaignName, status: p.sendMode === 'SCHEDULE' ? 'SCHEDULED' : 'ACTIVE', sendMode: p.sendMode === 'SCHEDULE' ? 'SCHEDULE' : 'SEND NOW',
           scheduleDate: p.date, scheduleTime: p.time, timezone: 'Asia/Kolkata', createdAt: d.settings.today + ' ' + new Date().toTimeString().slice(0, 5),
           audience: '', hasImage: !!p.imageDataUrl, _image: p.imageDataUrl, message: p.message, ctaType: p.ctaType === 'NONE' ? '' : p.ctaType,
-          ctaText: p.ctaText, ctaValue: p.ctaValue, website: p.website, storePhone: p.storePhone,
+          ctaText: p.ctaText, ctaValue: p.ctaValue, website: p.website, storeLink: p.storeLink, storePhone: p.storePhone,
           stats: { recipients: S.audCount || 0, sent: 0, delivered: 0, read: 0, failed: 0, pending: S.audCount || 0 }, replies: 0 });
         return { ok: true, created: true, campaignId: id, status: d.campaigns[0].status, errors: [], warnings: ['Demo mode: this campaign was not really sent.'], campaigns: d.campaigns };
       },

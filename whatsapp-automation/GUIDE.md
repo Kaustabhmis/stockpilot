@@ -91,13 +91,14 @@ image question by hand (Apps Script's FormApp **cannot create File Upload questi
 |---|---|---|---|---|
 | 1 | Client / Business Name | Short answer | Yes | |
 | 2 | Campaign Name | Short answer | Yes | Used for duplicate detection |
-| 3 | Campaign Message | Paragraph | Yes | Variables: `{{Name}} {{Phone}} {{Email}} {{Company}} {{ClientName}} {{CampaignName}} {{StorePhone}} {{Website}}` |
+| 3 | Campaign Message | Paragraph | Yes | Variables: `{{Name}} {{Phone}} {{Email}} {{Company}} {{ClientName}} {{CampaignName}} {{StorePhone}} {{Website}} {{StoreLink}}` |
 | 4 | Campaign Image | **File upload** (add manually): images only, 1 file, 10 MB | Recommended | JPG or PNG ≤ 5 MB accepted. Blank means a text-only campaign |
 | 5 | Website / Landing Page URL | Short answer + URL validation | No | |
 | 6 | Store / Business Phone Number | Short answer | Yes | Client's public number. Never the sender |
 | 7 | CTA Button Text | Short answer | No | ≤ 20 characters (WhatsApp button limit) |
 | 8 | CTA Button Type | Multiple choice: URL, PHONE, QUICK_REPLY, NONE | Yes | |
-| 9 | CTA Button Value | Short answer | No | URL: blank uses the Website. PHONE: blank uses the Store Phone. QUICK_REPLY: keyword |
+| 9 | CTA Button Value | Short answer | No | URL: blank uses the Website (or `{{StoreLink}}`). PHONE: blank uses the Store Phone. QUICK_REPLY: keyword |
+| 9b | Store Link | Short answer + URL validation | No | Google Maps / store page, available as `{{StoreLink}}` |
 | 10 | Target Audience | Checkboxes (from `AUDIENCE_OPTIONS`) + Other | Yes | e.g. `ALL_OPTED_IN`, `VIP`, `TAG:KOLKATA` |
 | 11 | Campaign Date | Date | When Schedule | |
 | 12 | Campaign Time | Time | When Schedule | Interpreted in `TIMEZONE` |
@@ -136,7 +137,7 @@ plain text so Sheets doesn't convert them to numbers or dates.
 
 **SETTINGS keys** (seeded with defaults): `DEFAULT_COUNTRY_CODE=91`, `TIMEZONE=Asia/Kolkata`, `BATCH_SIZE=10`,
 `DELAY_MIN_MS=3000`, `DELAY_MAX_MS=7000`, `DAILY_SEND_LIMIT=100`, `MAX_RETRIES=3`, `RETRY_BASE_MINUTES=5`,
-`QUEUE_INTERVAL_MINUTES=5`, `WEBHOOK_URL`, `MEDIA_MODE=BASE64`, `IMAGE_CTA_STYLE=IMAGE_THEN_BUTTONS`,
+`QUEUE_INTERVAL_MINUTES=5`, `WEBHOOK_URL`, `CLIENT_APP_URL`, `MEDIA_MODE=BASE64`, `IMAGE_CTA_STYLE=CAPTION_LINK`, `BUTTON_IMAGE_FIELD`,
 `CTA_FALLBACK_TO_TEXT=YES`, `MAX_IMAGE_MB=5`, `CTA_TEXT_MAX_LENGTH=20`, `DEFAULT_CONTACT_NAME=Customer`,
 `REQUIRE_ADMIN_APPROVAL=NO`, `NOTIFY_ADMIN=YES`, `AUTO_REPLY_ENABLED=YES`, `OPT_OUT_KEYWORDS=STOP,UNSUBSCRIBE,REMOVE,NO`,
 `OPT_OUT_REPLY`, `CREATE_INBOUND_CONTACTS=YES`, `AUDIENCE_OPTIONS`, `SYSTEM_NAME`. **No credentials are stored here.**
@@ -234,9 +235,20 @@ The sending number is chosen **only** by `MAYTAPI_PHONE_ID`. A client's Store Ph
   instead of image bytes, and would require making client files public. To add a host, add one branch in `resolveMedia_()`.
 
 ### Message shape (`IMAGE_CTA_STYLE`)
-- `IMAGE_THEN_BUTTONS` (default): the client's image, then the personalised message with a real interactive button. This matches the reference creative.
-- `CAPTION_LINK`: a single image whose caption ends with `👉 Explore Collection: https://…`.
-- Image + Text (no CTA) and Text only are always supported.
+- `CAPTION_LINK` (**default**): **one WhatsApp message**. The client's image, the personalised text, the optional website and store-link lines,
+  and the button written as a tappable link line (e.g. `👉 Explore Collection: https://…`). This works on every account, and
+  WhatsApp shows long text with its own "Read more".
+- `BUTTONS_WITH_IMAGE`: **one message** with the image, the text and a **real tappable button**, as in the reference creative. Maytapi's button message
+  must accept an image for this. Look up the field name in Maytapi's docs ("Buttons" example) and put it in `SETTINGS → BUTTON_IMAGE_FIELD`.
+  If it's blank, campaigns use `CAPTION_LINK`. If Maytapi rejects the payload, that message falls back to `CAPTION_LINK` automatically
+  (logged as `BUTTON_FALLBACK`). Check with **Send Test Message** that the image actually appears.
+- `IMAGE_THEN_BUTTONS`: the image as one message, then a second message with the text and a real button.
+- Image + text (no button) and text only are always single messages.
+
+**Website and store link** are both optional. The client app has a *Links* section (Website, Store link such as Google Maps) with
+"Add these links at the end of the message", which appends `🌐 {{Website}}` and `📍 Visit our store: {{StoreLink}}` lines. A line is
+skipped when the button already opens that link. The **Store** button choice is a URL button to the store link. `{{StoreLink}}` works
+in any message. The Google Form has an optional *Store Link* question.
 
 ---
 
@@ -499,8 +511,8 @@ and signs out their open sessions.
      (interpreted in `TIMEZONE`).
    - *Review*: a summary plus the **protected preview**, then **Launch**. Validation errors appear inline. Nothing is emailed for errors,
      and a confirmation email is sent on success.
-   - The live preview shows exactly what the customer will get. With `IMAGE_THEN_BUTTONS` that's the image, then the text with the button.
-     With `CAPTION_LINK` it's one bubble.
+   - The live preview shows exactly what the customer will get. With the default `CAPTION_LINK` that's **one bubble**: image, text, links and the
+     button as a link line. With `BUTTONS_WITH_IMAGE` it's one bubble with a real button, and with `IMAGE_THEN_BUTTONS` it's two messages.
 3. **Customers**: upload **.xlsx, .xls or .csv** (up to 5,000 rows per file). Columns are auto-detected (phone, name, email, company,
    tags, opt-in) and can be re-mapped, with a preview of the first rows. They give the file a **list name** (it becomes a tag to target later) and
    must tick a **consent confirmation**. New numbers are added with Opt In = YES (or NO if the file says so). Existing numbers are

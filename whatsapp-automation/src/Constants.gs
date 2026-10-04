@@ -24,7 +24,7 @@ const SHEETS = {
 const HEADERS = {
   SETTINGS: ['Key', 'Value', 'Description'],
   CLIENTS: ['Client ID', 'Business Name', 'Client Email', 'Business Phone', 'Website', 'Status', 'Created At', 'Updated At', 'Access Code Hash', 'Last Login',
-    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until'],
+    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until', 'Store Link'],
   CONTACTS: [
     'Contact ID', 'Client ID', 'Name', 'Phone', 'Email', 'Company', 'Tags', 'Audience', 'Opt In', 'Status',
     'Last Sent', 'Last Message ID', 'Last Response', 'Created At', 'Updated At', 'Source',
@@ -32,7 +32,7 @@ const HEADERS = {
   CAMPAIGNS: [
     'Campaign ID', 'Client ID', 'Client Name', 'Campaign Name', 'Status', 'Message', 'Image File ID', 'Image URL',
     'Website URL', 'Store Phone', 'CTA Text', 'CTA Type', 'CTA Value', 'Target Audience', 'Send Mode',
-    'Schedule Date', 'Schedule Time', 'Timezone', 'Created At', 'Updated At', 'Submitted By', 'Notes',
+    'Schedule Date', 'Schedule Time', 'Timezone', 'Created At', 'Updated At', 'Submitted By', 'Notes', 'Store Link',
   ],
   MESSAGE_QUEUE: [
     'Queue ID', 'Campaign ID', 'Client ID', 'Contact ID', 'Phone', 'Name', 'Rendered Message', 'Image File ID',
@@ -96,6 +96,7 @@ const FORM_FIELDS = {
   message: ['Campaign Message', 'Message'],
   image: ['Campaign Image', 'Image'],
   website: ['Website / Landing Page URL', 'Website', 'Landing Page URL'],
+  storeLink: ['Store Link', 'Store Location Link', 'Google Maps Link'],
   storePhone: ['Store / Business Phone Number', 'Business Phone Number', 'Store Phone'],
   ctaText: ['CTA Button Text', 'CTA Text'],
   ctaType: ['CTA Button Type', 'CTA Type'],
@@ -109,7 +110,7 @@ const FORM_FIELDS = {
 };
 
 /** Personalisation variables supported in campaign messages and reply templates. */
-const TEMPLATE_VARIABLES = ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website'];
+const TEMPLATE_VARIABLES = ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website', 'StoreLink'];
 
 /** WhatsApp-accepted image MIME types for regular image messages. */
 const SUPPORTED_IMAGE_MIME = ['image/jpeg', 'image/png'];

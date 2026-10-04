@@ -273,7 +273,7 @@ function sendTemplateReply_(tpl, phone, ctx, cfg) {
 function clientAsCampaign_(clientId) {
   if (!clientId) return {};
   const c = findRow_(readTable_(SHEETS.CLIENTS), 'Client ID', clientId);
-  return c ? { 'Client Name': c['Business Name'], 'Store Phone': c['Business Phone'], 'Website URL': c['Website'] } : {};
+  return c ? { 'Client Name': c['Business Name'], 'Store Phone': c['Business Phone'], 'Website URL': c['Website'], 'Store Link': c['Store Link'] } : {};
 }
 
 /* ============================== ACKS ============================== */

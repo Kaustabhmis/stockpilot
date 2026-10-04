@@ -90,6 +90,7 @@ function createCampaignFromInput_(input, source, opts) {
     'Image File ID': d.imageFileId,
     'Image URL': '',
     'Website URL': d.website,
+    'Store Link': d.storeLink,
     'Store Phone': d.storePhone,
     'CTA Text': d.ctaText,
     'CTA Type': d.ctaType,
@@ -163,6 +164,7 @@ function readFormInput_(e) {
     message: get('message'),
     imageRef: get('image'),
     website: get('website'),
+    storeLink: get('storeLink'),
     storePhone: get('storePhone'),
     ctaText: get('ctaText'),
     ctaType: get('ctaType'),
@@ -213,6 +215,9 @@ function createCampaignForm() {
     .setHelpText('ADMIN: add a "File upload" question titled "Campaign Image" here (FormApp cannot create it automatically).');
   form.addTextItem().setTitle(FORM_FIELDS.website[0]).setRequired(false)
     .setValidation(FormApp.createTextValidation().requireTextIsUrl().setHelpText('Enter a full URL, e.g. https://example.com').build());
+  form.addTextItem().setTitle(FORM_FIELDS.storeLink[0]).setRequired(false)
+    .setHelpText('Optional: Google Maps or store page link. Use {{StoreLink}} in the message, or choose it as the button link.')
+    .setValidation(FormApp.createTextValidation().requireTextIsUrl().setHelpText('Enter a full URL, e.g. https://maps.app.goo.gl/…').build());
   form.addTextItem().setTitle(FORM_FIELDS.storePhone[0]).setRequired(true)
     .setHelpText('Your public business number (used for the Call button and {{StorePhone}}). Include country code if outside +' + cfg.defaultCountryCode + '.');
   form.addTextItem().setTitle(FORM_FIELDS.ctaText[0]).setRequired(false)

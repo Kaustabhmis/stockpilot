@@ -40,6 +40,13 @@ function validateCampaignInput_(input) {
     if (!data.website) errors.push('Website / Landing Page URL "' + input.website + '" is not a valid web address.');
   }
 
+  // Store link (optional): Google Maps / store page, available as {{StoreLink}}.
+  data.storeLink = '';
+  if (String(input.storeLink || '').trim()) {
+    data.storeLink = normalizeUrl_(input.storeLink);
+    if (!data.storeLink) errors.push('Store link "' + input.storeLink + '" is not a valid web address.');
+  }
+
   // Store phone (client's public number — NOT the Maytapi sending number)
   data.storePhone = '';
   if (String(input.storePhone || '').trim()) {
@@ -57,8 +64,8 @@ function validateCampaignInput_(input) {
   } else {
     warnings.push('No image uploaded — the campaign will be sent as text only.');
   }
-  if (data.imageFileId && data.message.length > 1024 && cfg.imageCtaStyle === 'CAPTION_LINK') {
-    errors.push('With an image, the message must be at most 1024 characters (WhatsApp caption limit).');
+  if (data.imageFileId && data.message.length > 900 && cfg.imageCtaStyle !== 'IMAGE_THEN_BUTTONS') {
+    errors.push('With an image, the message must be at most 900 characters (WhatsApp captions are limited to 1024, and the button link is added at the end).');
   }
 
   // CTA
@@ -73,7 +80,8 @@ function validateCampaignInput_(input) {
 
     if (data.ctaType === 'URL') {
       if (!data.ctaValue) data.ctaValue = data.website ? '{{Website}}' : '';
-      const resolved = /\{\{\s*website\s*\}\}/i.test(data.ctaValue) ? data.website : normalizeUrl_(data.ctaValue);
+      const resolved = /\{\{\s*website\s*\}\}/i.test(data.ctaValue) ? data.website
+        : /\{\{\s*store_?link\s*\}\}/i.test(data.ctaValue) ? data.storeLink : normalizeUrl_(data.ctaValue);
       if (!resolved) errors.push('CTA Button Value must be a valid URL (or leave blank to use the Website).');
       else if (!/\{\{/.test(data.ctaValue)) data.ctaValue = resolved;
     } else if (data.ctaType === 'PHONE') {
@@ -182,6 +190,7 @@ function findOrCreateClient_(data) {
     const updates = { 'Updated At': now };
     if (data.storePhone) updates['Business Phone'] = data.storePhone;
     if (data.website) updates['Website'] = data.website;
+    if (data.storeLink) updates['Store Link'] = data.storeLink;
     if (data.businessName) updates['Business Name'] = data.businessName;
     updateFields_(table, existing._row, updates);
     return String(existing['Client ID']);
@@ -193,6 +202,7 @@ function findOrCreateClient_(data) {
     'Client Email': data.email,
     'Business Phone': data.storePhone,
     'Website': data.website,
+    'Store Link': data.storeLink || '',
     'Status': 'Active',
     'Created At': now,
     'Updated At': now,

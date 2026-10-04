@@ -31,7 +31,7 @@ const SHEETS = {
 const HEADERS = {
   SETTINGS: ['Key', 'Value', 'Description'],
   CLIENTS: ['Client ID', 'Business Name', 'Client Email', 'Business Phone', 'Website', 'Status', 'Created At', 'Updated At', 'Access Code Hash', 'Last Login',
-    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until'],
+    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until', 'Store Link'],
   CONTACTS: [
     'Contact ID', 'Client ID', 'Name', 'Phone', 'Email', 'Company', 'Tags', 'Audience', 'Opt In', 'Status',
     'Last Sent', 'Last Message ID', 'Last Response', 'Created At', 'Updated At', 'Source',
@@ -39,7 +39,7 @@ const HEADERS = {
   CAMPAIGNS: [
     'Campaign ID', 'Client ID', 'Client Name', 'Campaign Name', 'Status', 'Message', 'Image File ID', 'Image URL',
     'Website URL', 'Store Phone', 'CTA Text', 'CTA Type', 'CTA Value', 'Target Audience', 'Send Mode',
-    'Schedule Date', 'Schedule Time', 'Timezone', 'Created At', 'Updated At', 'Submitted By', 'Notes',
+    'Schedule Date', 'Schedule Time', 'Timezone', 'Created At', 'Updated At', 'Submitted By', 'Notes', 'Store Link',
   ],
   MESSAGE_QUEUE: [
     'Queue ID', 'Campaign ID', 'Client ID', 'Contact ID', 'Phone', 'Name', 'Rendered Message', 'Image File ID',
@@ -103,6 +103,7 @@ const FORM_FIELDS = {
   message: ['Campaign Message', 'Message'],
   image: ['Campaign Image', 'Image'],
   website: ['Website / Landing Page URL', 'Website', 'Landing Page URL'],
+  storeLink: ['Store Link', 'Store Location Link', 'Google Maps Link'],
   storePhone: ['Store / Business Phone Number', 'Business Phone Number', 'Store Phone'],
   ctaText: ['CTA Button Text', 'CTA Text'],
   ctaType: ['CTA Button Type', 'CTA Type'],
@@ -116,7 +117,7 @@ const FORM_FIELDS = {
 };
 
 /** Personalisation variables supported in campaign messages and reply templates. */
-const TEMPLATE_VARIABLES = ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website'];
+const TEMPLATE_VARIABLES = ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website', 'StoreLink'];
 
 /** WhatsApp-accepted image MIME types for regular image messages. */
 const SUPPORTED_IMAGE_MIME = ['image/jpeg', 'image/png'];
@@ -152,7 +153,8 @@ const SETTINGS_DEFAULTS = [
   ['WEBHOOK_URL', '', 'Deployed Web App /exec URL (without ?key=). Filled by "Configure Webhook" if empty.'],
   ['CLIENT_APP_URL', '', 'Where you host client-app/ (e.g. https://app.yourbrand.com). Shown to you when creating client logins.'],
   ['MEDIA_MODE', 'BASE64', 'BASE64 = send Drive image bytes inline (file stays private). URL = send a public HTTPS URL (Image URL column or MEDIA_BASE_URL).'],
-  ['IMAGE_CTA_STYLE', 'IMAGE_THEN_BUTTONS', 'IMAGE_THEN_BUTTONS = image message, then text with interactive button. CAPTION_LINK = single image message with the CTA written into the caption.'],
+  ['IMAGE_CTA_STYLE', 'CAPTION_LINK', 'CAPTION_LINK = ONE message: image + text + CTA link line (works everywhere). BUTTONS_WITH_IMAGE = ONE message: image + text + real button (needs BUTTON_IMAGE_FIELD; falls back to CAPTION_LINK if rejected). IMAGE_THEN_BUTTONS = image, then a second message with the button.'],
+  ['BUTTON_IMAGE_FIELD', '', 'For BUTTONS_WITH_IMAGE only: the field name Maytapi\'s button message uses for an image header (copy it from the Maytapi docs "Buttons" example). Blank = disabled.'],
   ['CTA_FALLBACK_TO_TEXT', 'YES', 'If Maytapi rejects the button payload, send the CTA as a text link instead.'],
   ['MAX_IMAGE_MB', '5', 'Largest accepted campaign image (WhatsApp image limit is 5 MB).'],
   ['CTA_TEXT_MAX_LENGTH', '20', 'Maximum CTA button label length (WhatsApp button titles are limited to 20 characters).'],
@@ -213,7 +215,8 @@ function getConfig_(forceReload) {
     webhookUrl: pick('WEBHOOK_URL', ''),
     clientAppUrl: pick('CLIENT_APP_URL', ''),
     mediaMode: pick('MEDIA_MODE', 'BASE64').toUpperCase(),
-    imageCtaStyle: pick('IMAGE_CTA_STYLE', 'IMAGE_THEN_BUTTONS').toUpperCase(),
+    imageCtaStyle: pick('IMAGE_CTA_STYLE', 'CAPTION_LINK').toUpperCase(),
+    buttonImageField: pick('BUTTON_IMAGE_FIELD', '').replace(/[^A-Za-z0-9_]/g, ''),
     ctaFallbackToText: yes('CTA_FALLBACK_TO_TEXT', 'YES'),
     maxImageMb: num('MAX_IMAGE_MB', 5),
     ctaTextMaxLength: num('CTA_TEXT_MAX_LENGTH', 20),
@@ -264,7 +267,8 @@ function validateConfig_(cfg) {
   if (!cfg.defaultCountryCode) errors.push('DEFAULT_COUNTRY_CODE is empty.');
   try { Utilities.formatDate(new Date(), cfg.timezone, 'yyyy'); } catch (err) { errors.push('TIMEZONE "' + cfg.timezone + '" is not a valid IANA timezone.'); }
   if (['BASE64', 'URL'].indexOf(cfg.mediaMode) < 0) errors.push('MEDIA_MODE must be BASE64 or URL.');
-  if (['IMAGE_THEN_BUTTONS', 'CAPTION_LINK'].indexOf(cfg.imageCtaStyle) < 0) errors.push('IMAGE_CTA_STYLE must be IMAGE_THEN_BUTTONS or CAPTION_LINK.');
+  if (['IMAGE_THEN_BUTTONS', 'CAPTION_LINK', 'BUTTONS_WITH_IMAGE'].indexOf(cfg.imageCtaStyle) < 0) errors.push('IMAGE_CTA_STYLE must be CAPTION_LINK, BUTTONS_WITH_IMAGE or IMAGE_THEN_BUTTONS.');
+  if (cfg.imageCtaStyle === 'BUTTONS_WITH_IMAGE' && !cfg.buttonImageField) warnings.push('IMAGE_CTA_STYLE is BUTTONS_WITH_IMAGE but BUTTON_IMAGE_FIELD is empty — image campaigns will use CAPTION_LINK (one message, CTA as a link line).');
   if ([1, 5, 10, 15, 30].indexOf(cfg.queueIntervalMinutes) < 0) errors.push('QUEUE_INTERVAL_MINUTES must be 1, 5, 10, 15 or 30.');
   if (!cfg.webhookSecret) warnings.push('WEBHOOK_SECRET is not set — the webhook will accept unauthenticated requests.');
   if (!cfg.adminEmail) warnings.push('ADMIN_EMAIL is not set — admin notifications are disabled.');
@@ -542,6 +546,7 @@ function renderTemplate(template, contact, campaign) {
     campaignname: firstNonEmpty_(campaign['Campaign Name'], campaign.campaignName),
     storephone: formatDisplayPhone_(firstNonEmpty_(campaign['Store Phone'], campaign.storePhone)),
     website: firstNonEmpty_(campaign['Website URL'], campaign.website),
+    storelink: firstNonEmpty_(campaign['Store Link'], campaign.storeLink),
   };
   return String(template).replace(/\{\{\s*([A-Za-z_][\w ]*?)\s*\}\}/g, (match, key) => {
     const k = key.replace(/[\s_]/g, '').toLowerCase();
@@ -768,6 +773,13 @@ function validateCampaignInput_(input) {
     if (!data.website) errors.push('Website / Landing Page URL "' + input.website + '" is not a valid web address.');
   }
 
+  // Store link (optional): Google Maps / store page, available as {{StoreLink}}.
+  data.storeLink = '';
+  if (String(input.storeLink || '').trim()) {
+    data.storeLink = normalizeUrl_(input.storeLink);
+    if (!data.storeLink) errors.push('Store link "' + input.storeLink + '" is not a valid web address.');
+  }
+
   // Store phone (client's public number — NOT the Maytapi sending number)
   data.storePhone = '';
   if (String(input.storePhone || '').trim()) {
@@ -785,8 +797,8 @@ function validateCampaignInput_(input) {
   } else {
     warnings.push('No image uploaded — the campaign will be sent as text only.');
   }
-  if (data.imageFileId && data.message.length > 1024 && cfg.imageCtaStyle === 'CAPTION_LINK') {
-    errors.push('With an image, the message must be at most 1024 characters (WhatsApp caption limit).');
+  if (data.imageFileId && data.message.length > 900 && cfg.imageCtaStyle !== 'IMAGE_THEN_BUTTONS') {
+    errors.push('With an image, the message must be at most 900 characters (WhatsApp captions are limited to 1024, and the button link is added at the end).');
   }
 
   // CTA
@@ -801,7 +813,8 @@ function validateCampaignInput_(input) {
 
     if (data.ctaType === 'URL') {
       if (!data.ctaValue) data.ctaValue = data.website ? '{{Website}}' : '';
-      const resolved = /\{\{\s*website\s*\}\}/i.test(data.ctaValue) ? data.website : normalizeUrl_(data.ctaValue);
+      const resolved = /\{\{\s*website\s*\}\}/i.test(data.ctaValue) ? data.website
+        : /\{\{\s*store_?link\s*\}\}/i.test(data.ctaValue) ? data.storeLink : normalizeUrl_(data.ctaValue);
       if (!resolved) errors.push('CTA Button Value must be a valid URL (or leave blank to use the Website).');
       else if (!/\{\{/.test(data.ctaValue)) data.ctaValue = resolved;
     } else if (data.ctaType === 'PHONE') {
@@ -910,6 +923,7 @@ function findOrCreateClient_(data) {
     const updates = { 'Updated At': now };
     if (data.storePhone) updates['Business Phone'] = data.storePhone;
     if (data.website) updates['Website'] = data.website;
+    if (data.storeLink) updates['Store Link'] = data.storeLink;
     if (data.businessName) updates['Business Name'] = data.businessName;
     updateFields_(table, existing._row, updates);
     return String(existing['Client ID']);
@@ -921,6 +935,7 @@ function findOrCreateClient_(data) {
     'Client Email': data.email,
     'Business Phone': data.storePhone,
     'Website': data.website,
+    'Store Link': data.storeLink || '',
     'Status': 'Active',
     'Created At': now,
     'Updated At': now,
@@ -1231,6 +1246,7 @@ function buildBootstrap_(clientId) {
       email: String(client['Client Email'] || ''),
       phone: client['Business Phone'] ? '+' + normalizePhoneNumber(client['Business Phone']) : '',
       website: String(client['Website'] || ''),
+      storeLink: String(client['Store Link'] || ''),
     },
     settings: {
       timezone: cfg.timezone,
@@ -1239,7 +1255,8 @@ function buildBootstrap_(clientId) {
       ctaTextMaxLength: cfg.ctaTextMaxLength,
       maxImageMb: cfg.maxImageMb,
       maxUploadRows: MAX_UPLOAD_ROWS,
-      imageCtaStyle: cfg.imageCtaStyle,
+      // Effective style, so the preview matches what customers really receive.
+      imageCtaStyle: cfg.imageCtaStyle === 'BUTTONS_WITH_IMAGE' && !cfg.buttonImageField ? 'CAPTION_LINK' : cfg.imageCtaStyle,
       defaultContactName: cfg.defaultContactName,
       defaultCountryCode: cfg.defaultCountryCode,
       variables: TEMPLATE_VARIABLES,
@@ -1301,6 +1318,7 @@ function clientCampaignSummaries_(clientId) {
       ctaText: String(c['CTA Text'] || ''),
       ctaValue: String(c['CTA Value'] || ''),
       website: String(c['Website URL'] || ''),
+      storeLink: String(c['Store Link'] || ''),
       storePhone: c['Store Phone'] ? '+' + normalizePhoneNumber(c['Store Phone']) : '',
       stats: Object.assign({ recipients: 0, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0 }, stats[id] || {}),
       replies: replies[id] || 0,
@@ -1442,7 +1460,8 @@ function apiCreateCampaign_(token, p) {
       campaignName: p.campaignName,
       message: p.message,
       imageRef: imageFileId,
-      website: p.website || s.client['Website'],
+      website: p.website || '',
+      storeLink: p.storeLink || '',
       storePhone: p.storePhone || s.client['Business Phone'],
       ctaText: p.ctaType && p.ctaType !== 'NONE' ? p.ctaText : '',
       ctaType: p.ctaType && p.ctaType !== 'NONE' ? p.ctaType : '',
@@ -1893,6 +1912,7 @@ function notifyAdminOfSubmission_(d, campaignId, status, errors, warnings) {
     'Schedule: ' + (d.sendMode === SEND_MODES.SCHEDULE ? d.scheduleDate + ' ' + d.scheduleTime + ' ' + d.timezone : d.sendMode || '—'),
     'Audience: ' + (d.audience || '—'),
     'CTA: ' + (d.ctaType ? d.ctaType + ' "' + d.ctaText + '" → ' + d.ctaValue : 'none'),
+    'Store link: ' + (d.storeLink || '—'),
     'Website: ' + (d.website || '—'),
     'Store phone: ' + (d.storePhone ? '+' + d.storePhone : '—'),
     'Image: ' + (d.imageFileId ? d.imageName + ' (' + d.imageFileId + ')' : 'none'),
@@ -2018,6 +2038,7 @@ function createCampaignFromInput_(input, source, opts) {
     'Image File ID': d.imageFileId,
     'Image URL': '',
     'Website URL': d.website,
+    'Store Link': d.storeLink,
     'Store Phone': d.storePhone,
     'CTA Text': d.ctaText,
     'CTA Type': d.ctaType,
@@ -2091,6 +2112,7 @@ function readFormInput_(e) {
     message: get('message'),
     imageRef: get('image'),
     website: get('website'),
+    storeLink: get('storeLink'),
     storePhone: get('storePhone'),
     ctaText: get('ctaText'),
     ctaType: get('ctaType'),
@@ -2141,6 +2163,9 @@ function createCampaignForm() {
     .setHelpText('ADMIN: add a "File upload" question titled "Campaign Image" here (FormApp cannot create it automatically).');
   form.addTextItem().setTitle(FORM_FIELDS.website[0]).setRequired(false)
     .setValidation(FormApp.createTextValidation().requireTextIsUrl().setHelpText('Enter a full URL, e.g. https://example.com').build());
+  form.addTextItem().setTitle(FORM_FIELDS.storeLink[0]).setRequired(false)
+    .setHelpText('Optional: Google Maps or store page link. Use {{StoreLink}} in the message, or choose it as the button link.')
+    .setValidation(FormApp.createTextValidation().requireTextIsUrl().setHelpText('Enter a full URL, e.g. https://maps.app.goo.gl/…').build());
   form.addTextItem().setTitle(FORM_FIELDS.storePhone[0]).setRequired(true)
     .setHelpText('Your public business number (used for the Call button and {{StorePhone}}). Include country code if outside +' + cfg.defaultCountryCode + '.');
   form.addTextItem().setTitle(FORM_FIELDS.ctaText[0]).setRequired(false)
@@ -2327,9 +2352,13 @@ function sendMaytapiMedia_(toNumber, media, caption, filename, cfg) {
  * Sends an interactive button message.
  * @param buttons [{ type: 'URL'|'PHONE'|'QUICK_REPLY', text, value }]
  */
-function sendMaytapiButtons_(toNumber, body, buttons, cfg) {
+function sendMaytapiButtons_(toNumber, body, buttons, cfg, image) {
   cfg = cfg || getConfig_();
-  return maytapiRequest_('post', phonePath_(cfg, 'sendMessage'), buildButtonsPayload_(toNumber, body, buttons), cfg);
+  const payload = buildButtonsPayload_(toNumber, body, buttons);
+  // Optional image header (BUTTONS_WITH_IMAGE). The field name comes from SETTINGS → BUTTON_IMAGE_FIELD,
+  // copied from Maytapi's documentation, because it could not be verified here.
+  if (image && image.field && image.media) payload[image.field] = image.media;
+  return maytapiRequest_('post', phonePath_(cfg, 'sendMessage'), payload, cfg);
 }
 
 /**
@@ -2625,14 +2654,31 @@ function sendCampaignMessage_(spec, cfg, mediaCache) {
     return finalize_(r, [r]);
   }
 
-  // 2) CTA as text inside the caption/body (single bubble, always supported).
-  if (cfg.imageCtaStyle === 'CAPTION_LINK') {
+  const singleCaption = () => {
     const body = withCtaText_(text, cta);
     const r = media ? sendMaytapiMedia_(to, media.media, captionSafe_(body), media.filename, cfg) : sendMaytapiText_(to, body, cfg);
+    return r;
+  };
+
+  // 2) CAPTION_LINK (default): ONE message — image + text + CTA link line. Always supported.
+  if (cfg.imageCtaStyle === 'CAPTION_LINK' || (cfg.imageCtaStyle === 'BUTTONS_WITH_IMAGE' && media && !cfg.buttonImageField)) {
+    const r = singleCaption();
     return finalize_(r, [r]);
   }
 
-  // 3) IMAGE_THEN_BUTTONS: image first (no caption), then the message with an interactive button.
+  // 3) BUTTONS_WITH_IMAGE: ONE message — image header + text + real button.
+  //    If Maytapi rejects the payload, fall back to CAPTION_LINK so it is still one message.
+  if (cfg.imageCtaStyle === 'BUTTONS_WITH_IMAGE') {
+    const rb = sendMaytapiButtons_(to, text, [cta], cfg, media ? { field: cfg.buttonImageField, media: media.media } : null);
+    if (rb.success || rb.retryable || rb.authError || !cfg.ctaFallbackToText) return finalize_(rb, [rb]);
+    logEvent_(LOG_LEVEL.WARNING, 'BUTTON_FALLBACK', { phone: to, httpStatus: rb.httpStatus, error: rb.error, details: 'Image+button message rejected; sending one image message with the CTA as a link.' });
+    const rc = singleCaption();
+    const out = finalize_(rc, [rb, rc]);
+    out.fallbackUsed = true;
+    return out;
+  }
+
+  // 4) IMAGE_THEN_BUTTONS: image first (no caption), then the message with an interactive button.
   const results = [];
   if (media) {
     const r1 = sendMaytapiMedia_(to, media.media, '', media.filename, cfg);
@@ -3726,7 +3772,7 @@ function sendTemplateReply_(tpl, phone, ctx, cfg) {
 function clientAsCampaign_(clientId) {
   if (!clientId) return {};
   const c = findRow_(readTable_(SHEETS.CLIENTS), 'Client ID', clientId);
-  return c ? { 'Client Name': c['Business Name'], 'Store Phone': c['Business Phone'], 'Website URL': c['Website'] } : {};
+  return c ? { 'Client Name': c['Business Name'], 'Store Phone': c['Business Phone'], 'Website URL': c['Website'], 'Store Link': c['Store Link'] } : {};
 }
 
 /* ============================== ACKS ============================== */

@@ -27,7 +27,8 @@ const SETTINGS_DEFAULTS = [
   ['WEBHOOK_URL', '', 'Deployed Web App /exec URL (without ?key=). Filled by "Configure Webhook" if empty.'],
   ['CLIENT_APP_URL', '', 'Where you host client-app/ (e.g. https://app.yourbrand.com). Shown to you when creating client logins.'],
   ['MEDIA_MODE', 'BASE64', 'BASE64 = send Drive image bytes inline (file stays private). URL = send a public HTTPS URL (Image URL column or MEDIA_BASE_URL).'],
-  ['IMAGE_CTA_STYLE', 'IMAGE_THEN_BUTTONS', 'IMAGE_THEN_BUTTONS = image message, then text with interactive button. CAPTION_LINK = single image message with the CTA written into the caption.'],
+  ['IMAGE_CTA_STYLE', 'CAPTION_LINK', 'CAPTION_LINK = ONE message: image + text + CTA link line (works everywhere). BUTTONS_WITH_IMAGE = ONE message: image + text + real button (needs BUTTON_IMAGE_FIELD; falls back to CAPTION_LINK if rejected). IMAGE_THEN_BUTTONS = image, then a second message with the button.'],
+  ['BUTTON_IMAGE_FIELD', '', 'For BUTTONS_WITH_IMAGE only: the field name Maytapi\'s button message uses for an image header (copy it from the Maytapi docs "Buttons" example). Blank = disabled.'],
   ['CTA_FALLBACK_TO_TEXT', 'YES', 'If Maytapi rejects the button payload, send the CTA as a text link instead.'],
   ['MAX_IMAGE_MB', '5', 'Largest accepted campaign image (WhatsApp image limit is 5 MB).'],
   ['CTA_TEXT_MAX_LENGTH', '20', 'Maximum CTA button label length (WhatsApp button titles are limited to 20 characters).'],
@@ -88,7 +89,8 @@ function getConfig_(forceReload) {
     webhookUrl: pick('WEBHOOK_URL', ''),
     clientAppUrl: pick('CLIENT_APP_URL', ''),
     mediaMode: pick('MEDIA_MODE', 'BASE64').toUpperCase(),
-    imageCtaStyle: pick('IMAGE_CTA_STYLE', 'IMAGE_THEN_BUTTONS').toUpperCase(),
+    imageCtaStyle: pick('IMAGE_CTA_STYLE', 'CAPTION_LINK').toUpperCase(),
+    buttonImageField: pick('BUTTON_IMAGE_FIELD', '').replace(/[^A-Za-z0-9_]/g, ''),
     ctaFallbackToText: yes('CTA_FALLBACK_TO_TEXT', 'YES'),
     maxImageMb: num('MAX_IMAGE_MB', 5),
     ctaTextMaxLength: num('CTA_TEXT_MAX_LENGTH', 20),
@@ -139,7 +141,8 @@ function validateConfig_(cfg) {
   if (!cfg.defaultCountryCode) errors.push('DEFAULT_COUNTRY_CODE is empty.');
   try { Utilities.formatDate(new Date(), cfg.timezone, 'yyyy'); } catch (err) { errors.push('TIMEZONE "' + cfg.timezone + '" is not a valid IANA timezone.'); }
   if (['BASE64', 'URL'].indexOf(cfg.mediaMode) < 0) errors.push('MEDIA_MODE must be BASE64 or URL.');
-  if (['IMAGE_THEN_BUTTONS', 'CAPTION_LINK'].indexOf(cfg.imageCtaStyle) < 0) errors.push('IMAGE_CTA_STYLE must be IMAGE_THEN_BUTTONS or CAPTION_LINK.');
+  if (['IMAGE_THEN_BUTTONS', 'CAPTION_LINK', 'BUTTONS_WITH_IMAGE'].indexOf(cfg.imageCtaStyle) < 0) errors.push('IMAGE_CTA_STYLE must be CAPTION_LINK, BUTTONS_WITH_IMAGE or IMAGE_THEN_BUTTONS.');
+  if (cfg.imageCtaStyle === 'BUTTONS_WITH_IMAGE' && !cfg.buttonImageField) warnings.push('IMAGE_CTA_STYLE is BUTTONS_WITH_IMAGE but BUTTON_IMAGE_FIELD is empty — image campaigns will use CAPTION_LINK (one message, CTA as a link line).');
   if ([1, 5, 10, 15, 30].indexOf(cfg.queueIntervalMinutes) < 0) errors.push('QUEUE_INTERVAL_MINUTES must be 1, 5, 10, 15 or 30.');
   if (!cfg.webhookSecret) warnings.push('WEBHOOK_SECRET is not set — the webhook will accept unauthenticated requests.');
   if (!cfg.adminEmail) warnings.push('ADMIN_EMAIL is not set — admin notifications are disabled.');

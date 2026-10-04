@@ -241,7 +241,7 @@ function submit(answers) {
   const sheet = spreadsheet.getSheetByName('FORM_RESPONSES');
   const headers = ['Timestamp', 'Client / Business Name', 'Campaign Name', 'Campaign Message', 'Campaign Image', 'Website / Landing Page URL',
     'Store / Business Phone Number', 'CTA Button Text', 'CTA Button Type', 'CTA Button Value', 'Target Audience', 'Send Mode',
-    'Campaign Date', 'Campaign Time', 'Client Email', 'Additional Notes'];
+    'Campaign Date', 'Campaign Time', 'Client Email', 'Additional Notes', 'Store Link'];
   sheet.data[0] = headers;
   const row = headers.map(h => (h === 'Timestamp' ? new Date() : (answers[h] !== undefined ? answers[h] : '')));
   sheet.data.push(row);
@@ -322,21 +322,20 @@ test('buildCampaignQueue is idempotent', () => {
 });
 
 console.log('Sending');
-test('processMessageQueue sends image then buttons with correct Maytapi payloads', () => {
+test('default CAPTION_LINK: ONE message per customer — image + text + CTA link in the caption', () => {
   fetchLog.length = 0;
   const r = G.processMessageQueue_();
   assert.strictEqual(r.sent, 2);
-  assert.strictEqual(fetchLog.length, 4);
-  const [img, btn] = fetchLog;
+  assert.strictEqual(fetchLog.length, 2, 'one API call (one bubble) per customer');
+  const img = fetchLog.find(f => f.payload.to_number === '919876543210');
   assert.strictEqual(img.url, 'https://api.maytapi.com/api/prod-1/12345/sendMessage');
   assert.strictEqual(img.opts.headers['x-maytapi-key'], 'super-secret-token');
   assert.strictEqual(img.opts.muteHttpExceptions, true);
   assert.strictEqual(img.payload.type, 'media');
   assert.ok(img.payload.message.startsWith('data:image/jpeg;base64,'));
-  assert.strictEqual(btn.payload.type, 'buttons');
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(btn.payload.buttons)), [{ text: 'Explore Collection', url: 'https://acme.example.com' }]);
+  assert.strictEqual(img.payload.text, 'Hi Asha, discover our new collection at Acme Store. Call +919800000000.\n\n👉 Explore Collection: https://acme.example.com');
   const q = table('MESSAGE_QUEUE').filter(x => x['Campaign ID'] === campaignId);
-  assert.ok(q.every(x => x.Status === 'SENT' && /MSG\d,MSG\d/.test(x['Message ID'])));
+  assert.ok(q.every(x => x.Status === 'SENT' && /^MSG\d+$/.test(x['Message ID'])));
   assert.strictEqual(table('CAMPAIGNS').find(c => c['Campaign ID'] === campaignId).Status, 'COMPLETED');
 });
 
@@ -375,7 +374,7 @@ test('button rejection falls back to text CTA; 5xx retries; 401 stops batch', ()
 });
 
 console.log('Webhook');
-const firstMsgId = table('MESSAGE_QUEUE').find(x => x['Campaign ID'] === campaignId && x.Name === 'Asha')['Message ID'].split(',')[1];
+const firstMsgId = table('MESSAGE_QUEUE').find(x => x['Campaign ID'] === campaignId && x.Name === 'Asha')['Message ID'].split(',')[0];
 test('rejects webhook without key', () => {
   const out = JSON.parse(G.doPost({ parameter: {}, postData: { contents: '{}' } }).text);
   assert.strictEqual(out.ok, false);
@@ -461,6 +460,75 @@ test('doGet health exposes no secrets', () => {
   assert.ok(JSON.parse(t).status === 'ok' && !t.includes('secret'));
 });
 
+console.log('Message styles + store link');
+function setSetting(key, value) { const t = G.readTable_('SETTINGS'); G.updateFields_(t, G.findRow_(t, 'Key', key)._row, { Value: value }); G.__api.CONFIG_RESET(); }
+function freshCampaign(name, extra) {
+  G.updateQueueStatusWhere_('*', ['PENDING', 'QUEUED'], 'CANCELLED', 'isolation');
+  return submit(Object.assign({}, baseAnswers, { 'Campaign Name': name }, extra || {}));
+}
+test('IMAGE_THEN_BUTTONS (opt-in): image, then a second message with the button', () => {
+  setSetting('IMAGE_CTA_STYLE', 'IMAGE_THEN_BUTTONS');
+  const r = freshCampaign('Two bubbles');
+  fetchLog.length = 0;
+  G.processMessageQueue_();
+  const toR = fetchLog.filter(f => f.payload.to_number === '919876500000');
+  assert.strictEqual(JSON.stringify(toR.map(f => f.payload.type)), JSON.stringify(['media', 'buttons']));
+  assert.ok(r.ok);
+});
+test('BUTTONS_WITH_IMAGE without BUTTON_IMAGE_FIELD stays one caption message', () => {
+  setSetting('IMAGE_CTA_STYLE', 'BUTTONS_WITH_IMAGE');
+  freshCampaign('No field');
+  fetchLog.length = 0;
+  G.processMessageQueue_();
+  const toR = fetchLog.filter(f => f.payload.to_number === '919876500000');
+  assert.strictEqual(toR.length, 1); assert.strictEqual(toR[0].payload.type, 'media');
+  assert.ok(G.validateConfig_().warnings.some(w => /BUTTON_IMAGE_FIELD/.test(w)));
+});
+test('BUTTONS_WITH_IMAGE with field: ONE buttons message carrying the image; rejected => one caption message', () => {
+  setSetting('BUTTON_IMAGE_FIELD', 'image');
+  freshCampaign('With field');
+  fetchLog.length = 0;
+  G.processMessageQueue_();
+  let toR = fetchLog.filter(f => f.payload.to_number === '919876500000');
+  assert.strictEqual(toR.length, 1);
+  assert.strictEqual(toR[0].payload.type, 'buttons');
+  assert.ok(toR[0].payload.image.startsWith('data:image/jpeg;base64,'));
+  assert.ok(toR[0].payload.message.startsWith('Hi Ravi'));
+  // Maytapi rejects the image+button payload => falls back to one image message with a link line.
+  freshCampaign('Field rejected');
+  fetchResponder = (url, opts) => JSON.parse(opts.payload).type === 'buttons'
+    ? { code: 400, body: { success: false, message: 'Invalid field image' } }
+    : { code: 200, body: { success: true, data: { msgId: 'CAP' + fetchLog.length } } };
+  fetchLog.length = 0;
+  G.processMessageQueue_();
+  toR = fetchLog.filter(f => f.payload.to_number === '919876500000');
+  assert.strictEqual(JSON.stringify(toR.map(f => f.payload.type)), JSON.stringify(['buttons', 'media']));
+  assert.ok(toR[1].payload.text.includes('👉 Explore Collection: https://acme.example.com'));
+  assert.ok(table('LOGS').some(l => l.Action === 'BUTTON_FALLBACK'));
+  fetchResponder = () => ({ code: 200, body: { success: true, data: { msgId: 'OK' + fetchLog.length } } });
+  setSetting('IMAGE_CTA_STYLE', 'CAPTION_LINK'); setSetting('BUTTON_IMAGE_FIELD', '');
+});
+test('store link: optional field, {{StoreLink}} variable and as the button link; website optional', () => {
+  const r = freshCampaign('Store visit', {
+    'Website / Landing Page URL': '',
+    'Store Link': 'maps.app.goo.gl/abc123',
+    'Campaign Message': 'Hi {{Name}}! Find us here: {{StoreLink}}',
+    'CTA Button Text': 'Visit Store', 'CTA Button Type': 'URL', 'CTA Button Value': '{{StoreLink}}',
+  });
+  assert.ok(r.ok, JSON.stringify(r));
+  const camp = table('CAMPAIGNS').find(c => c['Campaign ID'] === r.campaignId);
+  assert.strictEqual(camp['Store Link'], 'https://maps.app.goo.gl/abc123');
+  assert.strictEqual(camp['Website URL'], '');
+  const q = table('MESSAGE_QUEUE').find(x => x['Campaign ID'] === r.campaignId && x.Name === 'Ravi');
+  assert.strictEqual(q['Rendered Message'], 'Hi Ravi! Find us here: https://maps.app.goo.gl/abc123');
+  assert.strictEqual(q['CTA Value'], 'https://maps.app.goo.gl/abc123');
+  const bad = freshCampaign('Bad store', { 'Store Link': 'not a link' });
+  assert.ok(!bad.ok && bad.errors.some(e => /Store link/.test(e)));
+  // URL button with neither a value nor a website is rejected with a clear message.
+  const noLink = freshCampaign('No link', { 'Website / Landing Page URL': '', 'CTA Button Value': '' });
+  assert.ok(!noLink.ok && noLink.errors.some(e => /valid URL/.test(e)));
+});
+
 console.log('Spec §39 example + §40 multi-client');
 test('ABC Jewellery scheduled example reaches only its own customers, personalised, with image + URL button', () => {
   // Two new clients, each with their own contacts. Client B must never receive Client A's campaign.
@@ -510,12 +578,12 @@ test('ABC Jewellery scheduled example reaches only its own customers, personalis
   G.processMessageQueue_();
   const toRahul = fetchLog.filter(f => f.payload.to_number === '919830000001');
   assert.ok(!fetchLog.some(f => f.payload.to_number === '919830000002'), 'Client B customer must not receive Client A campaign');
+  assert.strictEqual(toRahul.length, 1, 'one bubble');
   assert.strictEqual(toRahul[0].payload.type, 'media');
   assert.ok(toRahul[0].payload.message.startsWith('data:image/jpeg;base64,'));
-  assert.strictEqual(toRahul[1].payload.type, 'buttons');
-  assert.ok(toRahul[1].payload.message.startsWith('Hi Rahul,\n\nDiscover our latest jewellery collection ✨'));
-  assert.ok(toRahul[1].payload.message.includes('+919830012345'));
-  assert.strictEqual(JSON.stringify(toRahul[1].payload.buttons), JSON.stringify([{ text: 'Explore Collection', url: 'https://example.com/collection' }]));
+  assert.ok(toRahul[0].payload.text.startsWith('Hi Rahul,\n\nDiscover our latest jewellery collection ✨'));
+  assert.ok(toRahul[0].payload.text.includes('+919830012345'));
+  assert.ok(toRahul[0].payload.text.endsWith('👉 Explore Collection: https://example.com/collection'));
   assert.ok(/^CMP-\d{4}-\d{4}$/.test(r.campaignId));
 });
 
@@ -591,7 +659,7 @@ test('create campaign from dashboard: image saved privately, audience by list, o
   assert.strictEqual(G.apiCountAudience_(tokenA, { lists: ['Diwali 2026'] }).count, 1);
   const jpg = 'data:image/jpeg;base64,' + Buffer.from('fakejpegbytes').toString('base64');
   const r = G.apiCreateCampaign_(tokenA, {
-    campaignName: 'Dashboard Launch', message: 'Hi {{Name}}, welcome to {{ClientName}}', imageDataUrl: jpg,
+    campaignName: 'Dashboard Launch', message: 'Hi {{Name}}, welcome to {{ClientName}}', imageDataUrl: jpg, website: 'https://a.example',
     ctaType: 'URL', ctaText: 'Shop Now', ctaValue: '', audience: { lists: ['Diwali 2026'] }, sendMode: 'NOW',
   });
   assert.ok(r.ok && r.created, JSON.stringify(r));

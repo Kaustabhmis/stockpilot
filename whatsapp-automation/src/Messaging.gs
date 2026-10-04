@@ -83,14 +83,31 @@ function sendCampaignMessage_(spec, cfg, mediaCache) {
     return finalize_(r, [r]);
   }
 
-  // 2) CTA as text inside the caption/body (single bubble, always supported).
-  if (cfg.imageCtaStyle === 'CAPTION_LINK') {
+  const singleCaption = () => {
     const body = withCtaText_(text, cta);
     const r = media ? sendMaytapiMedia_(to, media.media, captionSafe_(body), media.filename, cfg) : sendMaytapiText_(to, body, cfg);
+    return r;
+  };
+
+  // 2) CAPTION_LINK (default): ONE message — image + text + CTA link line. Always supported.
+  if (cfg.imageCtaStyle === 'CAPTION_LINK' || (cfg.imageCtaStyle === 'BUTTONS_WITH_IMAGE' && media && !cfg.buttonImageField)) {
+    const r = singleCaption();
     return finalize_(r, [r]);
   }
 
-  // 3) IMAGE_THEN_BUTTONS: image first (no caption), then the message with an interactive button.
+  // 3) BUTTONS_WITH_IMAGE: ONE message — image header + text + real button.
+  //    If Maytapi rejects the payload, fall back to CAPTION_LINK so it is still one message.
+  if (cfg.imageCtaStyle === 'BUTTONS_WITH_IMAGE') {
+    const rb = sendMaytapiButtons_(to, text, [cta], cfg, media ? { field: cfg.buttonImageField, media: media.media } : null);
+    if (rb.success || rb.retryable || rb.authError || !cfg.ctaFallbackToText) return finalize_(rb, [rb]);
+    logEvent_(LOG_LEVEL.WARNING, 'BUTTON_FALLBACK', { phone: to, httpStatus: rb.httpStatus, error: rb.error, details: 'Image+button message rejected; sending one image message with the CTA as a link.' });
+    const rc = singleCaption();
+    const out = finalize_(rc, [rb, rc]);
+    out.fallbackUsed = true;
+    return out;
+  }
+
+  // 4) IMAGE_THEN_BUTTONS: image first (no caption), then the message with an interactive button.
   const results = [];
   if (media) {
     const r1 = sendMaytapiMedia_(to, media.media, '', media.filename, cfg);
