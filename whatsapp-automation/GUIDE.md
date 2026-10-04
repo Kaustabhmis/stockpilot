@@ -399,7 +399,7 @@ or a restaurant ("View Menu" QUICK_REPLY with value `menu` plus a TEMPLATES row 
   every implementation is private (ends in `_`), and every public admin function starts with `requireAdmin_()` (it passes only when the
   person running the code is the account it runs as: sheet menu or editor). `getConfig()` masks the token even for admins, and
   `onFormSubmit` only accepts genuine trigger events.
-- **Hosting the client app**: serve it over HTTPS only. It refuses to run inside another site's frame (frame-buster), sends no cookies
+- **Hosting the client app**: serve it over HTTPS only. Framing by other sites is blocked by the host headers in `_headers`. The page also sends no cookies
   (`credentials: omit`), sets `no-referrer`, and stores the session token only in `sessionStorage`. The Apps Script URL is in `config.js`, so
   technical users who open the page source or network tools can see it. That's harmless, because everything behind it requires a session. If you want
   even that hidden, put a reverse proxy (e.g. a Cloudflare Worker on `api.yourbrand.com`) in front and set `apiUrl` to it.
@@ -462,6 +462,10 @@ The client app is a static website in `whatsapp-automation/client-app/`:
 | `index.html` | The whole app (login, home, ad builder, customers, campaigns). Mobile-first, no build step, no framework. |
 | `config.js` | Per-installation settings: `apiUrl`, `brandName`, `logoUrl`, `primaryColor`, `supportText`. |
 | `logo.png` (optional) | Your logo. Reference it as `logoUrl: 'logo.png'`. |
+| `_headers` | Security headers for Netlify / Cloudflare Pages (no framing by other sites, no referrer). Set the same headers on other hosts. |
+
+**Demo mode**: open `index.html` without a configured `apiUrl` (or add `?demo` to the URL) and click **Preview with demo data** to explore
+every screen with sample data. Nothing is saved or sent. It's useful for sales demos.
 
 **Set it up**
 1. Deploy the Apps Script Web App (Part 8) and copy the `/exec` URL (menu **Show Client App URLs** shows it ready-made).

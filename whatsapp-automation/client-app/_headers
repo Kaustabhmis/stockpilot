@@ -1,0 +1,7 @@
+# Security headers for Netlify / Cloudflare Pages (other hosts: set the same headers in their config).
+# Blocks other sites from embedding the app in a frame (clickjacking protection).
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff

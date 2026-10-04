@@ -184,7 +184,10 @@
 <body>
 
 <!-- ======================= LOGIN ======================= -->
-<section id="login" class="hidden">
+<noscript><div style="padding:16px;background:#fff4dc;color:#6b4600;text-align:center">Please enable JavaScript to use this app.</div></noscript>
+<div id="fatal" class="hidden" style="position:fixed;left:12px;right:12px;top:12px;z-index:90;background:#fdecea;color:#8a2318;border-radius:10px;padding:12px 14px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.12)"></div>
+<div id="demoBar" class="hidden" style="background:#fff4dc;color:#6b4600;text-align:center;font-size:13px;padding:8px 12px">Demo mode: sample data only. Nothing is saved or sent.</div>
+<section id="login">
   <div class="card">
     <div class="logo" id="loginLogo">W</div>
     <h1 id="loginTitle">Campaign Studio</h1>
@@ -195,6 +198,7 @@
       <label class="field"><span>Access code</span><input class="input" type="password" id="loginCode" autocomplete="current-password" placeholder="XXXXX-XXXXX" required></label>
       <button class="btn primary block" type="submit" id="loginBtn">Sign in</button>
     </form>
+    <button class="btn block hidden" type="button" id="demoBtn" style="margin-top:10px">Preview with demo data</button>
     <p class="hint" style="margin-top:14px" id="loginSupport">Your access code is provided by your service provider.</p>
   </div>
 </section>
@@ -407,13 +411,20 @@
 <div id="toast" class="hidden"></div>
 <div id="busy" class="hidden"><div class="spinner"></div></div>
 
+<script>
+  // Show unexpected errors on screen instead of leaving a blank page.
+  window.addEventListener('error', function (e) {
+    var f = document.getElementById('fatal'); if (!f) return;
+    f.textContent = 'Something went wrong while loading the app: ' + (e.message || 'unknown error') + '. Please refresh the page.';
+    f.classList.remove('hidden');
+  });
+</script>
 <script src="config.js"></script>
 <script>
 (function () {
   'use strict';
-
-  // Never run inside someone else's frame (clickjacking protection).
-  if (window.top !== window.self) { try { window.top.location = window.self.location; } catch (e) { document.body.innerHTML = ''; return; } }
+  // Framing (clickjacking) protection is done with HTTP headers by the host — see _headers.
+  // Do not blank the page when framed: previews and site builders render pages in frames.
 
   /* =================================================================
    * Configuration (config.js) — white-label branding + API endpoint
@@ -423,6 +434,7 @@
   if (/PASTE_YOUR/i.test(API_URL)) API_URL = '';
   if (API_URL && !/[?&]route=api\b/.test(API_URL)) API_URL += (API_URL.indexOf('?') >= 0 ? '&' : '?') + 'route=api';
   var BRAND = CFG.brandName || 'Campaign Studio';
+  var DEMO = /[?&]demo\b/.test(location.search || '');
   (function applyBrand() {
     document.title = BRAND;
     if (CFG.primaryColor && /^#[0-9a-f]{6}$/i.test(CFG.primaryColor)) {
@@ -462,6 +474,7 @@
    */
   function api(fn) {
     var args = Array.prototype.slice.call(arguments, 1);
+    if (DEMO) return demoApi(fn, args);
     if (!API_URL) return Promise.reject(new Error('This app is not configured yet (config.js → apiUrl).'));
     return fetch(API_URL, {
       method: 'POST', redirect: 'follow', credentials: 'omit', cache: 'no-store',
@@ -520,6 +533,7 @@
   function signOut(msg) {
     if (S.token) api('apiLogout', S.token).catch(function () { /* ignore */ });
     S.token = null; store('cs_token', null); showLogin(msg);
+    if (DEMO) { DEMO = false; demoState = null; show('demoBar', false); show('demoBtn', !API_URL); }
   }
   $('loginForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -762,6 +776,7 @@
     ['1', '2', '3'].forEach(function (k) { show('step-' + k, String(n) === k); });
     show('step-done', n === 'done');
     show('steps', n !== 'done');
+    show('fabPreview', n !== 'done');
     qsa('#steps button').forEach(function (b) { var k = +b.getAttribute('data-step'); b.classList.toggle('on', k === n); b.classList.toggle('done', n !== 'done' && k < n); });
     if (n === 3) renderSummary();
     renderPreviewTargets(); window.scrollTo(0, 0);
@@ -1096,15 +1111,76 @@
   });
 
   /* =================================================================
+   * Demo mode: a built-in sample backend so the app can be explored without Apps Script
+   * (opened with ?demo, or via the button when config.js is not set up yet).
+   * ================================================================= */
+  var demoState = null;
+  function demoApi(fn, args) {
+    if (!demoState) {
+      var today = new Date(), pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      var ymd = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
+      demoState = {
+        ok: true, token: 'd'.repeat(64),
+        profile: { clientId: 'CLI-DEMO-0001', businessName: 'Demo Business', email: 'owner@demo.example', phone: '+919800000000', website: 'https://example.com' },
+        settings: { timezone: 'Asia/Kolkata', today: ymd, nowTime: '10:00', ctaTextMaxLength: 20, maxImageMb: 5, maxUploadRows: 5000,
+          imageCtaStyle: 'IMAGE_THEN_BUTTONS', defaultContactName: 'Customer', defaultCountryCode: '91',
+          variables: ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website'], systemName: BRAND },
+        stats: { contacts: 128, optedIn: 120, optedOut: 8 },
+        lists: [{ name: 'VIP', count: 24 }, { name: 'Regular customers', count: 96 }],
+        subscription: { plan: 'Demo', validUntil: '', quota: 1000, used: 240, remaining: 760, canSend: true, reason: '', dedicatedNumber: false },
+        campaigns: [{ id: 'CMP-DEMO-0001', name: 'Welcome offer', status: 'COMPLETED', sendMode: 'SEND NOW', scheduleDate: '', scheduleTime: '',
+          timezone: 'Asia/Kolkata', createdAt: ymd + ' 09:00', audience: 'ALL_OPTED_IN', hasImage: false,
+          message: 'Hi {{Name}}, welcome to *{{ClientName}}*! Enjoy 10% off your next visit.', ctaType: 'URL', ctaText: 'Visit Website',
+          ctaValue: 'https://example.com', website: 'https://example.com', storePhone: '+919800000000',
+          stats: { recipients: 120, sent: 118, delivered: 112, read: 87, failed: 2, pending: 0 }, replies: 14 }],
+      };
+    }
+    var d = demoState, h = {
+      apiLogin: function () { return d; },
+      apiLogout: function () { return { ok: true }; },
+      apiBootstrap: function () { return d; },
+      apiCountAudience: function (t, sel) {
+        var n = sel.all ? d.stats.optedIn : d.lists.filter(function (l) { return (sel.lists || []).indexOf(l.name) >= 0; }).reduce(function (a, l) { return a + l.count; }, 0);
+        return { ok: true, count: n };
+      },
+      apiUploadContacts: function (t, p) {
+        if (!p.consent) return { ok: false, error: 'Please confirm consent.' };
+        var valid = p.rows.filter(function (r) { return normPhone(r.phone); }).length;
+        d.lists.push({ name: p.listName, count: valid }); d.stats.contacts += valid; d.stats.optedIn += valid;
+        return { ok: true, list: p.listName, added: valid, updated: 0, invalid: p.rows.length - valid, invalidRows: [], duplicatesInFile: 0, keptOptedOut: 0, bootstrap: d };
+      },
+      apiCreateCampaign: function (t, p) {
+        var id = 'CMP-DEMO-' + ('000' + (d.campaigns.length + 1)).slice(-4);
+        d.campaigns.unshift({ id: id, name: p.campaignName, status: p.sendMode === 'SCHEDULE' ? 'SCHEDULED' : 'ACTIVE', sendMode: p.sendMode === 'SCHEDULE' ? 'SCHEDULE' : 'SEND NOW',
+          scheduleDate: p.date, scheduleTime: p.time, timezone: 'Asia/Kolkata', createdAt: d.settings.today + ' ' + new Date().toTimeString().slice(0, 5),
+          audience: '', hasImage: !!p.imageDataUrl, _image: p.imageDataUrl, message: p.message, ctaType: p.ctaType === 'NONE' ? '' : p.ctaType,
+          ctaText: p.ctaText, ctaValue: p.ctaValue, website: p.website, storePhone: p.storePhone,
+          stats: { recipients: S.audCount || 0, sent: 0, delivered: 0, read: 0, failed: 0, pending: S.audCount || 0 }, replies: 0 });
+        return { ok: true, created: true, campaignId: id, status: d.campaigns[0].status, errors: [], warnings: ['Demo mode: this campaign was not really sent.'], campaigns: d.campaigns };
+      },
+      apiCancelCampaign: function (t, id) { d.campaigns.forEach(function (c) { if (c.id === id) c.status = 'CANCELLED'; }); return { ok: true, message: 'Cancelled', campaigns: d.campaigns }; },
+      apiGetCampaignImage: function (t, id) { var c = d.campaigns.find(function (x) { return x.id === id; }); return { ok: true, image: c && c._image || '' }; },
+    };
+    return new Promise(function (resolve) { setTimeout(function () { resolve(h[fn] ? h[fn].apply(null, args) : { ok: false, error: 'Unknown action.' }); }, 250); });
+  }
+  function startDemo() {
+    DEMO = true; show('demoBar', true); show('loginError', false);
+    api('apiLogin').then(function (r) { S.token = r.token; startApp(r); });
+  }
+  $('demoBtn').addEventListener('click', startDemo);
+
+  /* =================================================================
    * Boot
    * ================================================================= */
   $('loginTitle').textContent = BRAND;
   if (CFG.logoUrl) $('loginLogo').innerHTML = '<img src="' + esc(CFG.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:14px">';
   else $('loginLogo').textContent = BRAND.charAt(0).toUpperCase();
   if (CFG.supportText) $('loginSupport').textContent = CFG.supportText;
+  if (DEMO) { startDemo(); return; }
   if (!API_URL) {
-    showLogin('This app is not configured yet. Set apiUrl in config.js.');
+    showLogin('This app is not connected to a server yet (set apiUrl in config.js). You can still explore it with demo data.');
     $('loginBtn').disabled = true;
+    show('demoBtn', true);
     return;
   }
   var saved = load('cs_token');

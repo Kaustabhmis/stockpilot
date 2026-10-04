@@ -12,5 +12,11 @@ so clients never see Apps Script or Google.
 3. Set the hosted address in the spreadsheet: `SETTINGS → CLIENT_APP_URL`.
 4. Create client logins from the spreadsheet menu (**Create Client Login**) and send each client the URL + access code.
 
+**Try it first:** open `index.html` directly (or add `?demo` to the hosted URL) and click **Preview with demo data**.
+Demo mode uses built-in sample data, and nothing is saved or sent.
+
+`_headers` sets security headers on Netlify / Cloudflare Pages, including blocking other sites from framing the app. On other
+hosts, set the same headers (`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`) in their settings.
+
 No build step, no server, no framework. The only external script is the SheetJS Excel reader, loaded from cdnjs when a
 client uploads a file. See `../GUIDE.md` Part 15 for details.

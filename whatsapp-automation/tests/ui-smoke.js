@@ -223,8 +223,44 @@ async function run(viewport, label) {
   console.log('  ✓ ' + label + ' (' + viewport.width + 'x' + viewport.height + ')');
 }
 
+/** Opened as a bare file inside a sandboxed frame (like a file preview panel), with no config.js: must not be blank, demo must work. */
+async function runDemoInSandbox() {
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const page = await browser.newPage({ viewport: { width: 420, height: 900 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.setContent('<iframe sandbox="allow-scripts" id="f" style="width:400px;height:880px;border:0"></iframe>');
+  await page.$eval('#f', (f, h) => { f.srcdoc = h; }, HTML);
+  await page.waitForTimeout(400);
+  const fr = page.frames()[1];
+  await fr.waitForSelector('#login:not(.hidden)');
+  assert.ok((await fr.textContent('#loginError')).includes('demo data'));
+  await fr.click('#demoBtn');
+  await fr.waitForSelector('#app:not(.hidden)');
+  assert.ok(!(await fr.$eval('#demoBar', el => el.classList.contains('hidden'))), 'demo banner visible');
+  assert.strictEqual(await fr.textContent('#hdrName'), 'Demo Business');
+  await fr.click('#tabs button[data-view=create]');
+  await fr.fill('#cName', 'Demo launch');
+  await fr.fill('#cMsg', 'Hi {{Name}}, see our new menu!');
+  await fr.fill('#ctaText', 'View Menu');
+  await fr.click('#fabPreview');
+  await fr.waitForSelector('#sheet:not(.hidden)');
+  assert.ok((await fr.textContent('#sheetBody')).includes('Hi Customer, see our new menu!'));
+  await fr.click('#sheetClose');
+  await fr.click('#toStep2');
+  await fr.waitForFunction(() => /Recipients: 120/.test(document.getElementById('audCount').textContent));
+  await fr.click('#toStep3');
+  await fr.click('#launchBtn');
+  await fr.waitForSelector('#step-done:not(.hidden)');
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'demo-sandboxed.png') });
+  await browser.close();
+  assert.deepStrictEqual(errors, [], 'demo console errors: ' + errors.join(' | '));
+  console.log('  ✓ demo mode inside a sandboxed frame (no config.js)');
+}
+
 (async () => {
   try {
+    await runDemoInSandbox();
     await run({ width: 390, height: 844 }, 'phone');
     await run({ width: 768, height: 1024 }, 'tablet');
     await run({ width: 1366, height: 860 }, 'desktop');
