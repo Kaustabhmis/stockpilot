@@ -198,7 +198,12 @@ function benchmarkHash() {
 function countUnmigratedPasswords() {
   var out = ['', '=== PLAINTEXT PASSWORDS REMAINING ===', ''];
   var total = 0, plain = 0;
-  var master = SpreadsheetApp.openById(SHARE.MASTER_DB_ID);
+  /* Resolved through the shared config rather than a constant in another file,
+     so this works whether auth.gs is bundled into code.gs or run on its own. */
+  var masterId = (typeof CFG === 'function' && CFG().masterId) ||
+                 (typeof SHARE !== 'undefined' && SHARE.MASTER_DB_ID) || '';
+  if (!masterId) { Logger.log('MASTER_DB_ID is not configured.'); return; }
+  var master = SpreadsheetApp.openById(masterId);
 
   var g = master.getSheetByName('Global_Users');
   if (g) {
@@ -208,7 +213,9 @@ function countUnmigratedPasswords() {
     out.push('Global_Users: ' + gp + ' of ' + (gd.length - 1) + ' still plaintext');
   }
 
-  tenantRows_().forEach(function (r) {
+  var tenants = (typeof allTenants_ === 'function') ? allTenants_()
+              : (typeof tenantRows_ === 'function') ? tenantRows_() : [];
+  tenants.forEach(function (r) {
     try {
       var sh = SpreadsheetApp.openById(r.sheetId).getSheetByName('Users');
       if (!sh) return;

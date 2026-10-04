@@ -1,0 +1,160 @@
+// ===========================================================================
+// ROUTER
+// ===========================================================================
+
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  // Razorpay/Meta webhook verification handshakes also arrive on GET.
+  if (p['hub.mode'] === 'subscribe') {
+    var vt = PropertiesService.getScriptProperties().getProperty('WA_VERIFY_TOKEN');
+    if (vt && p['hub.verify_token'] === vt) return ContentService.createTextOutput(p['hub.challenge']);
+  }
+  return ContentService.createTextOutput('Dome Box API is running.')
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+function doPost(e) {
+  var body;
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); }
+  catch (err) { return json_({ status: 'error', message: 'Malformed request.' }); }
+
+  // Razorpay posts its own shape, not ours.
+  if (body.event && body.payload) return handleRazorpayWebhook_(e, body);
+
+  try {
+    return json_(route_(body));
+  } catch (err) {
+    // Never leak a stack trace or an internal id to the browser.
+    var msg = String(err && err.message || err);
+    if (/openById|Spreadsheet|permission|Exception/i.test(msg) && !/signed in|expired|Admin account/i.test(msg)) {
+      logError_('route:' + body.action, msg);
+      msg = 'Something went wrong on our side. Please try again.';
+    }
+    return json_({ status: 'error', message: msg });
+  }
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping'];
+
+function route_(p) {
+  var action = String(p.action || '');
+
+  if (PUBLIC_ACTIONS.indexOf(action) > -1) {
+    switch (action) {
+      case 'ping':           return { status: 'success', time: new Date().toISOString() };
+      case 'register':       return registerCompany_(p.form);
+      case 'login':          return login_(p.username, p.password);
+      case 'forgotPassword': return forgotPassword_(p.email);
+      case 'resetPassword':  return resetPassword_(p.token, p.password);
+      case 'contactSales':   return contactSales_(p.form);
+    }
+  }
+
+  /* Identity comes from the signed token, never from the request body. This one
+     line is the difference between "knowing a sheetId" and "being authorised". */
+  var S = requireSession(p.token);
+  var ctx = tenantContext_(S);
+
+  switch (action) {
+    /* --- read ------------------------------------------------------------ */
+    case 'getDashboard':        return getDashboard_(ctx);
+    case 'getTasks':            return { status:'success', tasks: readTasks_(ctx) };
+    case 'getUsers':            return getUsers_(ctx);
+    case 'getAnalytics':        return getAnalytics_(ctx, p.period, p.offset, p.span, p.person);
+    case 'getAccountability':   return getAccountability_(ctx);
+    case 'getPerformanceReport':return getPerformanceReport_(ctx);
+    case 'getAppraisalForm':    return getAppraisalForm_(ctx, p.username);
+    case 'getCategories':       return { status:'success', categories: readCategories_(ctx) };
+
+    /* --- tasks ----------------------------------------------------------- */
+    case 'createTask':          return createTask_(ctx, p.form);
+    case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
+    case 'editTask':            return editTask_(ctx, p.form);
+    case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved);
+    case 'stopRecurringTask':   return stopRecurring_(ctx, p.taskId);
+    case 'delegateTask':        return delegateTask_(ctx, p.taskId, p.toUsername);
+    case 'addBlocker':          return addBlocker_(ctx, p.taskId, p.blockerId);
+    case 'toggleSubtask':       return toggleSubtask_(ctx, p.taskId, p.index, p.done);
+
+    /* --- team ------------------------------------------------------------ */
+    case 'addUser':             return addUser_(ctx, p.form);
+    case 'updateUser':          return updateUser_(ctx, p.form);
+    case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
+    case 'updateCategories':    return updateCategories_(ctx, p.categories);
+    case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
+    case 'getLeave':            return { status:'success', leave: readLeave_(ctx) };
+
+    /* --- appraisal ------------------------------------------------------- */
+    case 'submitAppraisal':     return submitAppraisal_(ctx, p.data);
+    case 'addKRA':              return addKRA_(ctx, p.data);
+
+    /* --- commercial & misc ----------------------------------------------- */
+    case 'initiateRazorpay':    return createRazorpayOrder_(ctx, p.planName, p.promoCode);
+    case 'paymentSuccess':      return handleVerifiedPayment_(ctx, p);
+    case 'contactSupport':      return contactSupport_(ctx, p.form);
+    case 'aiInsight':           return aiInsight_(ctx, p.question);
+    case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);
+
+    default: throw new Error('Unknown action: ' + action);
+  }
+}
+
+/**
+ * Loads the tenant once per request and carries the verified identity with it,
+ * so no handler has to re-derive who is calling or re-open the spreadsheet.
+ */
+function tenantContext_(session) {
+  var ss;
+  try { ss = SpreadsheetApp.openById(session.sheetId); }
+  catch (e) { throw new Error('Your workspace could not be opened. Contact support.'); }
+
+  var reg = registryRow_(session.sheetId);
+  var plan = planLimits(reg ? reg.plan : 'Free');
+  var expiry = reg && reg.validUntil ? new Date(reg.validUntil) : null;
+  var daysLeft = expiry && !isNaN(expiry)
+    ? Math.ceil((expiry - new Date()) / 86400000) : null;
+
+  var me = findUser_(ss, session.username);
+  if (!me) throw new Error('Your account is no longer in this workspace.');
+  if (me.active === false) throw new Error('This account has been deactivated.');
+
+  return {
+    ss: ss, sheetId: session.sheetId, me: me,
+    actor: { username: me.username, role: me.role, name: me.name },
+    company: reg ? reg.company : '', planName: normalizePlan(reg ? reg.plan : 'Free'),
+    plan: plan, daysLeft: daysLeft,
+    // A lapsed paid plan keeps working for a week, then drops to read-only
+    // rather than vanishing — nobody loses access to their own history.
+    serviceStopped: (daysLeft !== null && daysLeft <= -7 && normalizePlan(reg ? reg.plan : 'Free') !== 'Free'),
+  };
+}
+
+/** Routes that change the team or the company's settings. */
+function requireManager_(ctx) {
+  if (ctx.actor.role === 'Doer') throw new Error('That action needs a manager account.');
+  return ctx;
+}
+function requireAdmin_(ctx) {
+  if (ctx.actor.role !== 'Admin') throw new Error('That action needs an Admin account.');
+  return ctx;
+}
+function blockIfStopped_(ctx) {
+  if (ctx.serviceStopped) {
+    throw new Error('Your subscription lapsed more than a week ago, so the workspace is ' +
+      'read-only. Your data is safe — renew to start writing again.');
+  }
+}
+
+function logError_(where, message) {
+  try {
+    var ss = SpreadsheetApp.openById(CFG().masterId);
+    var sh = ss.getSheetByName('ErrorLog');
+    if (!sh) { sh = ss.insertSheet('ErrorLog'); sh.appendRow(['when','where','message']); sh.setFrozenRows(1); }
+    sh.appendRow([new Date(), where, String(message).slice(0, 500)]);
+  } catch (e) { Logger.log(where + ': ' + message); }
+}

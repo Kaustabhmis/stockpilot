@@ -1,0 +1,2006 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dome Box — Task &amp; Team Management</title>
+<meta name="description" content="Task and team management for Indian MSMEs: delegation scoring, KRA/KPI tracking and automated appraisals.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M 10 70 A 40 40 0 0 1 90 70' fill='rgba(59,130,246,0.2)' stroke='%233b82f6' stroke-width='4'/%3E%3Ccircle cx='50' cy='25' r='8' fill='%23f59e0b'/%3E%3Ccircle cx='30' cy='55' r='8' fill='%2310b981'/%3E%3Ccircle cx='70' cy='55' r='8' fill='%230ea5e9'/%3E%3Cpath d='M 50 33 L 50 55 M 30 55 L 70 55' stroke='%2394a3b8' stroke-width='4'/%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+<script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+<style>
+  :root{
+    /* Validated against a white surface: all-pairs CVD separation and contrast
+       pass. Status colours pass too, but every status is still paired with a
+       word or a letter so colour never carries the meaning alone. */
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#047857; --warn:#d97706; --bad:#b91c1c;
+    --r1:#9dc6f0; --r2:#4a8ede; --r3:#1f5fae; --r4:#0f3563;
+    --surface:#fff; --surface2:#f1f5f9; --line:#e5e7eb;
+    --ink:#111827; --ink2:#4b5563; --muted:#9ca3af;
+  }
+  *{box-sizing:border-box}
+  body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+       background:#f3f4f6;color:var(--ink);margin:0}
+  .hidden{display:none !important}
+  .material-icons{vertical-align:middle}
+
+  .fade{animation:fade .25s ease-out forwards;opacity:0;transform:translateY(6px)}
+  @keyframes fade{to{opacity:1;transform:none}}
+
+  .col{background:var(--surface2);border-radius:1rem;padding:.75rem;min-height:140px}
+  .col.over{outline:2px dashed #2563eb;outline-offset:-4px;background:#eff6ff}
+  .card{background:#fff;border-radius:.75rem;padding:.75rem;margin-bottom:.5rem;
+        border:1px solid var(--line);cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card:active{cursor:grabbing}
+  .card.drag{opacity:.4}
+  .card.p-High{border-left:4px solid var(--bad)}
+  .card.p-Medium{border-left:4px solid var(--warn)}
+  .card.p-Low{border-left:4px solid var(--s1)}
+
+  .chip{display:inline-flex;align-items:center;gap:.25rem;font-size:10px;font-weight:800;
+        text-transform:uppercase;letter-spacing:.06em;padding:.15rem .45rem;border-radius:.4rem}
+
+  .in{width:100%;border:1px solid var(--line);background:#f9fafb;border-radius:.75rem;
+      padding:.65rem .8rem;font-size:14px;outline:none;font-family:inherit}
+  .in:focus{border-color:#2563eb;background:#fff}
+  .lb{display:block;font-size:10px;font-weight:800;text-transform:uppercase;
+      letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem}
+  .btn{padding:.65rem 1.25rem;border-radius:.75rem;font-weight:800;font-size:14px;
+       border:none;cursor:pointer;font-family:inherit}
+  .btn-p{background:#2563eb;color:#fff;box-shadow:0 4px 12px rgba(37,99,235,.25)}
+  .btn-p:hover{background:#1d4ed8}
+  .btn-g{background:#fff;color:var(--ink2);border:2px solid var(--line)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  #scrim{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:80;
+         display:none;align-items:center;justify-content:center;padding:1rem}
+  #scrim.on{display:flex}
+  #modal{background:#fff;border-radius:1.5rem;width:100%;max-height:90vh;overflow-y:auto;
+         box-shadow:0 25px 50px -12px rgba(0,0,0,.35)}
+  #drawer{position:fixed;top:0;right:0;height:100%;width:100%;max-width:520px;background:#fff;
+          z-index:90;box-shadow:-20px 0 50px rgba(0,0,0,.2);overflow-y:auto;
+          transform:translateX(100%);transition:transform .2s ease-out}
+  #drawer.on{transform:translateX(0)}
+
+  #toasts{position:fixed;bottom:1.25rem;right:1.25rem;z-index:9999;display:flex;
+          flex-direction:column;gap:.5rem;pointer-events:none}
+  .toast{padding:.75rem 1rem;border-radius:.75rem;font-weight:700;font-size:13px;color:#fff;
+         box-shadow:0 10px 25px rgba(0,0,0,.2);max-width:360px}
+  .toast.ok{background:var(--good)} .toast.err{background:var(--bad)} .toast.info{background:#1f2937}
+
+  .gridline{stroke:var(--line);stroke-width:1}
+  text.axis{font-size:11px;fill:var(--muted);font-weight:600}
+  text.dlabel{font-size:11px;fill:var(--ink);font-weight:800}
+  #chartHeat{overflow-x:auto}
+  .empty{padding:28px 4px;color:var(--muted);font-size:13px;font-weight:600}
+
+  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .12s;background:#111827;
+       color:#fff;border-radius:10px;padding:10px 12px;font-size:12px;z-index:9999;
+       box-shadow:0 12px 28px rgba(0,0,0,.24);min-width:150px}
+  #tip .t{font-weight:800;margin-bottom:6px}
+  #tip .r{display:flex;justify-content:space-between;gap:18px;padding:2px 0;color:#d1d5db}
+  #tip .r b{color:#fff}
+
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;
+          color:var(--muted);font-weight:800;padding:10px 14px;border-bottom:1px solid var(--line);
+          white-space:nowrap}
+  .tbl td{padding:10px 14px;border-bottom:1px solid #f3f4f6;color:var(--ink2)}
+  .tbl tbody tr:hover{background:#f8fafc}
+
+  .seg button{padding:8px 16px;border-radius:10px;font-weight:800;font-size:13px;color:var(--ink2);
+              border:none;background:none;cursor:pointer;font-family:inherit}
+  .seg button.on{background:#2563eb;color:#fff}
+
+  @media(max-width:900px){ .card-12{grid-column:span 12 !important} }
+
+  /* Own responsive helpers rather than Tailwind's `hidden md:flex`. The .hidden
+     rule above carries !important so a view stays closed even if the Tailwind
+     CDN fails — but that same !important also beats `md:flex`, which would have
+     left half the nav permanently invisible. These hide without .hidden, so the
+     element's natural display survives. */
+  @media(max-width:639px){ .sm-up{display:none !important} }
+  @media(max-width:767px){ .md-up{display:none !important} }
+  @media(min-width:768px){ .md-down{display:none !important} }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- ============================ AUTH ============================ -->
+<div id="view-auth" class="min-h-screen flex items-center justify-center p-4"
+     style="background:radial-gradient(circle at 30% 20%,#1e293b 0%,#0b1120 100%)">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center gap-2 text-white">
+        <svg width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M 10 70 A 40 40 0 0 1 90 70" fill="rgba(59,130,246,.2)" stroke="#3b82f6" stroke-width="4"/>
+          <circle cx="50" cy="25" r="8" fill="#f59e0b"/><circle cx="30" cy="55" r="8" fill="#10b981"/>
+          <circle cx="70" cy="55" r="8" fill="#0ea5e9"/>
+          <path d="M 50 33 L 50 55 M 30 55 L 70 55" stroke="#94a3b8" stroke-width="4"/>
+        </svg>
+        <span class="font-black text-2xl tracking-tight">Dome Box</span>
+      </div>
+      <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Task &amp; Team Management</p>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-2xl p-7 fade">
+      <!-- sign in -->
+      <form id="formLogin" class="space-y-4">
+        <h1 class="text-xl font-black">Sign in</h1>
+        <div>
+          <label class="lb" for="liUser">Email or username</label>
+          <input id="liUser" class="in" autocomplete="username" required>
+        </div>
+        <div>
+          <label class="lb" for="liPass">Password</label>
+          <input id="liPass" type="password" class="in" autocomplete="current-password" required>
+        </div>
+        <button type="submit" id="btnLogin" class="btn btn-p w-full">Sign in</button>
+        <div class="text-center space-y-2 pt-2 border-t border-gray-100">
+          <button type="button" class="text-xs font-bold text-blue-600 hover:underline block w-full"
+                  onclick="showAuth('forgot')">Forgot password?</button>
+          <button type="button" class="text-sm font-black text-blue-600 hover:underline block w-full"
+                  onclick="showAuth('signup')">Create a company workspace</button>
+        </div>
+      </form>
+
+      <!-- sign up -->
+      <form id="formSignup" class="space-y-3 hidden">
+        <h1 class="text-xl font-black">Create your workspace</h1>
+        <p class="text-xs text-gray-500 font-semibold">Free for 5 people and 50 tasks a month. No card needed.</p>
+        <div><label class="lb" for="suCompany">Company name</label>
+          <input id="suCompany" class="in" autocomplete="organization" required></div>
+        <div><label class="lb" for="suName">Your name</label>
+          <input id="suName" class="in" autocomplete="name" required></div>
+        <div><label class="lb" for="suEmail">Work email</label>
+          <input id="suEmail" type="email" class="in" autocomplete="email" required></div>
+        <div><label class="lb" for="suPhone">Phone</label>
+          <input id="suPhone" type="tel" class="in" autocomplete="tel"></div>
+        <div><label class="lb" for="suPass">Password</label>
+          <input id="suPass" type="password" class="in" autocomplete="new-password" minlength="8" required>
+          <p class="text-[11px] text-gray-400 font-semibold mt-1">At least 8 characters.</p></div>
+        <button type="submit" id="btnSignup" class="btn btn-p w-full">Create workspace</button>
+        <button type="button" class="text-xs font-bold text-gray-500 hover:text-gray-800 block w-full pt-1"
+                onclick="showAuth('login')">Back to sign in</button>
+      </form>
+
+      <!-- forgot -->
+      <form id="formForgot" class="space-y-4 hidden">
+        <h1 class="text-xl font-black">Reset your password</h1>
+        <p class="text-xs text-gray-500 font-semibold">We will email you a link. It works once and expires in an hour.</p>
+        <div><label class="lb" for="fpEmail">Work email</label>
+          <input id="fpEmail" type="email" class="in" autocomplete="email" required></div>
+        <button type="submit" id="btnForgot" class="btn btn-p w-full">Send reset link</button>
+        <button type="button" class="text-xs font-bold text-gray-500 hover:text-gray-800 block w-full"
+                onclick="showAuth('login')">Back to sign in</button>
+      </form>
+
+      <!-- reset (reached from the emailed link) -->
+      <form id="formReset" class="space-y-4 hidden">
+        <h1 class="text-xl font-black">Set a new password</h1>
+        <div><label class="lb" for="rsPass">New password</label>
+          <input id="rsPass" type="password" class="in" autocomplete="new-password" minlength="8" required></div>
+        <div><label class="lb" for="rsPass2">Confirm</label>
+          <input id="rsPass2" type="password" class="in" autocomplete="new-password" minlength="8" required></div>
+        <button type="submit" id="btnReset" class="btn btn-p w-full">Save password</button>
+      </form>
+    </div>
+
+    <p class="text-center text-slate-500 text-xs mt-5">
+      <a href="/privacy" class="hover:text-slate-300">Privacy</a> ·
+      <a href="/terms" class="hover:text-slate-300">Terms</a> ·
+      <a href="/refund" class="hover:text-slate-300">Refunds</a> ·
+      <a href="/contact" class="hover:text-slate-300">Contact</a>
+    </p>
+  </div>
+</div>
+
+<!-- ============================ APP ============================ -->
+<div id="view-app" class="hidden min-h-screen">
+
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="material-icons text-blue-600">dashboard</span>
+        <span class="font-black text-lg tracking-tight whitespace-nowrap">Dome Box</span>
+        <span id="navCompany" class="sm-up text-xs font-bold text-gray-400 truncate ml-1"></span>
+      </div>
+
+      <div class="seg md-up flex gap-1 bg-gray-100 p-1 rounded-xl" id="navTabs">
+        <button data-tab="tasks" class="on">Tasks</button>
+        <button data-tab="team">Team</button>
+        <button data-tab="reports">Reports</button>
+      </div>
+
+      <div class="flex items-center gap-1 sm:gap-2">
+        <div class="relative">
+          <button id="btnBell" class="p-2 rounded-full hover:bg-gray-100 relative text-gray-600" aria-label="Notifications">
+            <span class="material-icons">notifications</span>
+            <span id="bellCount" class="hidden absolute top-1 right-1 h-4 min-w-[16px] px-1 bg-red-600
+                   rounded-full text-[10px] text-white flex items-center justify-center font-black border-2 border-white">0</span>
+          </button>
+          <div id="bellMenu" class="hidden absolute right-0 top-12 bg-white border border-gray-200 rounded-2xl
+               shadow-2xl w-80 max-h-96 overflow-y-auto z-50">
+            <div class="p-3 border-b bg-gray-50 font-black text-sm">Notifications</div>
+            <div id="bellList"></div>
+          </div>
+        </div>
+        <button id="btnAi" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 sm-up" title="AI insight">
+          <span class="material-icons">auto_awesome</span></button>
+        <button id="btnHelp" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 sm-up" title="Contact support">
+          <span class="material-icons">help_outline</span></button>
+        <div class="h-7 w-px bg-gray-200 mx-1"></div>
+        <div class="text-right sm-up leading-tight">
+          <div id="navName" class="text-sm font-black"></div>
+          <div id="navRole" class="text-[11px] font-bold text-blue-600"></div>
+        </div>
+        <button id="btnAccount" class="p-2 rounded-full hover:bg-gray-100 text-gray-500" title="Account">
+          <span class="material-icons">account_circle</span></button>
+      </div>
+    </div>
+
+    <div class="seg md-down flex gap-1 bg-gray-100 p-1 mx-4 mb-3 rounded-xl" id="navTabsMobile">
+      <button data-tab="tasks" class="on flex-1">Tasks</button>
+      <button data-tab="team" class="flex-1">Team</button>
+      <button data-tab="reports" class="flex-1">Reports</button>
+    </div>
+  </nav>
+
+  <div id="banner" class="hidden"></div>
+
+  <!-- ---------------------------- TASKS ---------------------------- -->
+  <section id="tab-tasks">
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 pt-6">
+      <div id="statTiles" class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5"></div>
+    </div>
+
+    <div class="bg-white border-y border-gray-100 sticky top-16 z-30">
+      <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center gap-2">
+        <input id="fSearch" class="in max-w-[200px]" placeholder="Search tasks…">
+        <select id="fAssignee" class="in max-w-[160px]"></select>
+        <select id="fStatus" class="in max-w-[150px]"></select>
+        <select id="fCategory" class="in max-w-[150px]"></select>
+        <label class="flex items-center gap-2 text-xs font-bold text-gray-600 px-1 whitespace-nowrap">
+          <input type="checkbox" id="fOverdue" class="w-4 h-4 accent-red-600"> Overdue
+        </label>
+        <button id="btnHistory" class="btn btn-g text-xs py-2 px-3">
+          <span class="material-icons text-sm">history</span> <span class="sm-up">Archive</span>
+        </button>
+        <span class="flex-1"></span>
+        <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="viewMode">
+          <button data-mode="board" class="on text-xs">Board</button>
+          <button data-mode="list" class="text-xs">List</button>
+        </div>
+        <button id="btnNewTask" class="btn btn-p flex items-center gap-1">
+          <span class="material-icons text-base">add</span><span class="sm-up">Assign</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-6">
+      <div id="board" class="grid gap-4" style="grid-template-columns:repeat(5,minmax(230px,1fr));overflow-x:auto"></div>
+      <div id="list" class="hidden bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
+      <div id="tasksEmpty" class="hidden text-center py-24 text-gray-400 font-bold"></div>
+    </div>
+  </section>
+
+  <!-- ---------------------------- TEAM ----------------------------- -->
+  <section id="tab-team" class="hidden">
+    <div class="max-w-[1400px] mx-auto px-4 lg:px-6 py-6">
+      <div class="flex flex-wrap items-center gap-3 mb-5">
+        <h2 class="text-2xl font-black">Team</h2>
+        <span class="flex-1"></span>
+        <button id="btnLeave" class="btn btn-g">Record leave</button>
+        <button id="btnCategories" class="btn btn-g sm-up">Job categories</button>
+        <button id="btnNewUser" class="btn btn-p flex items-center gap-1">
+          <span class="material-icons text-base">person_add</span> Add member</button>
+      </div>
+      <div id="teamStats" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5"></div>
+      <div id="teamTable" class="bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
+    </div>
+  </section>
+
+  <!-- --------------------------- REPORTS --------------------------- -->
+  <section id="tab-reports" class="hidden">
+    <div class="bg-white border-b border-gray-100">
+      <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center gap-2">
+        <span class="lb mb-0">Period</span>
+        <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="periodSeg">
+          <button data-p="week" class="text-xs">Weekly</button>
+          <button data-p="month" class="on text-xs">Monthly</button>
+          <button data-p="quarter" class="text-xs">Quarterly</button>
+          <button data-p="year" class="text-xs">Full year</button>
+        </div>
+        <select id="rOffset" class="in max-w-[180px]"></select>
+        <select id="rPerson" class="in max-w-[170px]"></select>
+        <span class="flex-1"></span>
+        <button id="btnAppraise" class="btn btn-g">Appraisal</button>
+        <button id="btnAccount2" class="btn btn-g">Rework report</button>
+        <button id="btnHistoryRpt" class="btn btn-g">Review history</button>
+      </div>
+    </div>
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-6">
+      <div id="reportsLocked" class="hidden"></div>
+      <div id="reportsBody">
+        <div id="rTiles" class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5"></div>
+        <div class="grid grid-cols-12 gap-5">
+          <div class="card-12 col-span-12 lg:col-span-8 bg-white rounded-3xl border border-gray-100 p-5">
+            <div class="flex justify-between items-start mb-3">
+              <div><h3 class="font-black">Performance trend</h3>
+                   <div id="rTrendSub" class="text-xs text-gray-400 font-semibold"></div></div>
+              <div id="rLegend" class="flex gap-3 text-xs font-bold text-gray-500"></div>
+            </div>
+            <div id="chartTrend"></div>
+          </div>
+          <div class="card-12 col-span-12 lg:col-span-4 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-3">Performance bands</h3>
+            <div id="chartBands"></div>
+          </div>
+          <div class="card-12 col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-3">Score by person</h3><div id="chartPeople"></div>
+          </div>
+          <div class="card-12 col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-3">Work delivered by KRA</h3><div id="chartKra"></div>
+          </div>
+          <div class="card-12 col-span-12 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-1">Delivery heatmap</h3>
+            <div class="text-xs text-gray-400 font-semibold mb-3">Tasks verified per person, per week — darker is more</div>
+            <div id="chartHeat"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="scrim"><div id="modal" class="max-w-lg"></div></div>
+<div id="drawer"></div>
+<div id="toasts"></div>
+<div id="tip"></div>
+
+<script>
+/* ===========================================================================
+   DOME BOX — FRONT END
+   Talks to the Apps Script web app. Put your /exec URL in API_URL below.
+   =========================================================================== */
+'use strict';
+
+var API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';
+
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (s) { return String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+
+var STATE = { token:null, user:null, company:'', plan:'Free', data:null,
+              tab:'tasks', mode:'board', archive:false, usage:null,
+              period:'month', offset:0, person:'', analytics:null };
+
+var FILTER = { q:'', assignee:'', status:'', category:'', overdue:false };
+
+/* ---------- API ----------------------------------------------------------
+   Apps Script does not answer CORS preflight, so the request has to stay
+   "simple": text/plain content type and no custom headers. The body is still
+   JSON; only the declared type differs. */
+function api(action, params) {
+  var body = Object.assign({ action: action }, params || {});
+  if (STATE.token) body.token = STATE.token;
+
+  return fetch(API_URL, {
+    method: 'POST', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  }).then(function (r) {
+    if (!r.ok) throw new Error('The server is not reachable right now.');
+    return r.text();
+  }).then(function (text) {
+    var j;
+    try { j = JSON.parse(text); }
+    catch (e) { throw new Error('The server sent something unexpected. Try again.'); }
+    if (j.status === 'error') {
+      /* An expired or forged token must drop the session, or the user sits on a
+         dead screen pressing buttons that will never work. */
+      if (/signed in|session|expired/i.test(j.message || '')) signOut(true);
+      throw new Error(j.message || 'Something went wrong.');
+    }
+    return j;
+  });
+}
+
+/* ---------- small UI helpers --------------------------------------------- */
+function toast(msg, kind) {
+  var el = document.createElement('div');
+  el.className = 'toast ' + (kind || 'info');
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(function () { el.remove(); }, kind === 'err' ? 5500 : 3200);
+}
+function openModal(html, width) {
+  $('modal').className = width || 'max-w-lg';
+  $('modal').innerHTML = html;
+  $('scrim').classList.add('on');
+}
+function closeModal() { $('scrim').classList.remove('on'); $('modal').innerHTML = ''; }
+function openDrawer(html) { $('drawer').innerHTML = html; $('drawer').classList.add('on'); }
+function closeDrawer() { $('drawer').classList.remove('on'); }
+function busy(btn, on, label) {
+  if (!btn) return;
+  if (on) { btn.dataset.label = btn.textContent; btn.disabled = true; btn.textContent = label || 'Working…'; }
+  else { btn.disabled = false; if (btn.dataset.label) btn.textContent = btn.dataset.label; }
+}
+
+var fmtDate = function (s) {
+  if (!s) return '—';
+  var d = new Date(s + 'T00:00:00');
+  return isNaN(d) ? s : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+};
+var initials = function (n) { return String(n || '?').trim().split(/\s+/).slice(0,2)
+  .map(function (w) { return w[0] || ''; }).join('').toUpperCase(); };
+function nameOf(u) {
+  var s = (STATE.data && STATE.data.staff) || [];
+  for (var i = 0; i < s.length; i++) if (s[i].username === u) return s[i].name;
+  return u || '—';
+}
+function daysLate(t) {
+  if (!t.due || ['Verified','Rejected','Cancelled','For Review'].indexOf(t.status) > -1) return 0;
+  var due = new Date(t.due + 'T00:00:00'); if (isNaN(due)) return 0;
+  var today = new Date(); today.setHours(0,0,0,0);
+  var n = Math.round((today - due) / 86400000);
+  return n > 0 ? n : 0;
+}
+function todayYmd() {
+  var d = new Date(), m = String(d.getMonth()+1), day = String(d.getDate());
+  return d.getFullYear() + '-' + (m.length<2?'0'+m:m) + '-' + (day.length<2?'0'+day:day);
+}
+function addDaysYmd(n) {
+  var d = new Date(); d.setDate(d.getDate() + n);
+  var m = String(d.getMonth()+1), day = String(d.getDate());
+  return d.getFullYear() + '-' + (m.length<2?'0'+m:m) + '-' + (day.length<2?'0'+day:day);
+}
+
+/* ---------- auth ---------------------------------------------------------- */
+function showAuth(which) {
+  ['Login','Signup','Forgot','Reset'].forEach(function (n) {
+    $('form' + n).classList.toggle('hidden', n.toLowerCase() !== which);
+  });
+}
+
+function saveSession(res) {
+  STATE.token = res.token; STATE.user = res.user;
+  STATE.company = res.company || ''; STATE.plan = res.plan || 'Free';
+  try { sessionStorage.setItem('dbx', JSON.stringify({
+    token: res.token, user: res.user, company: res.company, plan: res.plan })); } catch (e) {}
+}
+function restoreSession() {
+  try {
+    var raw = sessionStorage.getItem('dbx');
+    if (!raw) return false;
+    var s = JSON.parse(raw);
+    if (!s.token) return false;
+    STATE.token = s.token; STATE.user = s.user;
+    STATE.company = s.company || ''; STATE.plan = s.plan || 'Free';
+    return true;
+  } catch (e) { return false; }
+}
+function signOut(expired) {
+  STATE.token = null; STATE.user = null; STATE.data = null;
+  try { sessionStorage.removeItem('dbx'); } catch (e) {}
+  $('view-app').classList.add('hidden');
+  $('view-auth').classList.remove('hidden');
+  showAuth('login');
+  if (expired) toast('Your session ended. Please sign in again.', 'info');
+}
+
+function enterApp() {
+  $('view-auth').classList.add('hidden');
+  $('view-app').classList.remove('hidden');
+  $('navName').textContent = STATE.user.name;
+  $('navRole').textContent = STATE.user.role;
+  $('navCompany').textContent = STATE.company;
+  refresh();
+}
+
+function refresh() {
+  return api('getDashboard').then(function (d) {
+    STATE.data = d;
+    STATE.usage = d.usage;
+    if (d.serviceStopped) { renderStopped(d); return; }
+    renderBanner();
+    renderTiles();
+    renderBell();
+    syncFilters();
+    renderTab();
+  }).catch(function (e) { toast(e.message, 'err'); });
+}
+
+function renderStopped(d) {
+  $('banner').className = '';
+  $('banner').innerHTML = '<div class="bg-red-50 border-b border-red-200 px-4 py-4 text-center">' +
+    '<div class="font-black text-red-900">Your subscription lapsed</div>' +
+    '<div class="text-sm text-red-800 mt-1">' + esc(d.message) + '</div>' +
+    '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button></div>';
+  ['tab-tasks','tab-team','tab-reports'].forEach(function (id) { $(id).classList.add('hidden'); });
+}
+
+function renderBanner() {
+  var u = STATE.usage, b = $('banner');
+  var msgs = [];
+  if (u.daysLeft !== null && u.daysLeft <= 7 && u.daysLeft >= 0 && STATE.plan !== 'Free') {
+    msgs.push({ tone: 'warn', text: 'Your plan renews in ' + u.daysLeft + ' day(s).' });
+  }
+  if (u.daysLeft !== null && u.daysLeft < 0 && STATE.plan !== 'Free') {
+    msgs.push({ tone: 'bad', text: 'Payment is overdue. Access stops ' +
+      Math.max(0, 7 + u.daysLeft) + ' day(s) from now.' });
+  }
+  (u.warnings || []).forEach(function (w) {
+    msgs.push({ tone: w.atLimit ? 'bad' : 'warn', text: w.text });
+  });
+  if (!msgs.length) { b.className = 'hidden'; b.innerHTML = ''; return; }
+  var worst = msgs.some(function (m) { return m.tone === 'bad'; }) ? 'bad' : 'warn';
+  b.className = '';
+  b.innerHTML = '<div class="' + (worst === 'bad' ? 'bg-red-50 text-red-900 border-red-200'
+      : 'bg-amber-50 text-amber-900 border-amber-200') +
+    ' border-b px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 text-sm font-bold">' +
+    '<span class="text-[10px] uppercase tracking-widest font-black">' + esc(u.planName) + '</span>' +
+    msgs.map(function (m) { return '<span>' + esc(m.text) + '</span>'; }).join('') +
+    '<span class="flex-1"></span>' +
+    '<button class="btn btn-p text-xs py-2" onclick="openBilling()">Upgrade</button></div>';
+}
+
+function renderTiles() {
+  var s = STATE.data.stats, sc = s.scores;
+  var tile = function (k, v, sub, tone) {
+    return '<div class="bg-white rounded-2xl border border-gray-100 p-4">' +
+      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(k) + '</div>' +
+      '<div class="text-3xl font-black mt-1 ' + (tone || '') + '">' + v + '</div>' +
+      (sub ? '<div class="text-[11px] font-semibold text-gray-400 mt-0.5">' + esc(sub) + '</div>' : '') +
+      '</div>';
+  };
+  $('statTiles').innerHTML =
+    tile('Pending', s.pending) +
+    tile('In progress', s.progress) +
+    tile('For review', s.review) +
+    tile('Overdue', s.overdue, 'needs attention', s.overdue ? 'text-red-700' : '') +
+    tile('Delegation', sc.hasData ? sc.delegation : '—', sc.hasData ? 'this month' : 'no data yet',
+         sc.hasData ? (sc.delegation >= 85 ? 'text-emerald-700' : sc.delegation >= 60 ? 'text-amber-700' : 'text-red-700') : 'text-gray-300') +
+    '<div class="bg-white rounded-2xl border border-gray-100 p-4 cursor-pointer hover:border-blue-300" onclick="openScoreBreakdown()">' +
+      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">Final score</div>' +
+      '<div class="text-3xl font-black mt-1">' + (sc.final || '—') + '</div>' +
+      '<div class="text-[11px] font-black text-blue-600 mt-0.5">See why →</div></div>';
+}
+
+function openScoreBreakdown() {
+  var sc = STATE.data.stats.scores;
+  var rows = (sc.breakdown || []);
+  openModal('<div class="p-6 lg:p-7">' +
+    '<div class="flex justify-between items-start mb-1">' +
+      '<h2 class="text-2xl font-black">How your score is built</h2>' +
+      '<button onclick="closeModal()" class="text-gray-400 hover:text-gray-900">' +
+      '<span class="material-icons">close</span></button></div>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Every number here comes from your own task record. ' +
+      'Nothing is estimated.</p>' +
+    '<div class="grid grid-cols-3 gap-3 mb-5">' +
+      (sc.components || []).map(function (c) {
+        return '<div class="bg-gray-50 rounded-2xl p-3 text-center">' +
+          '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(c.label) + '</div>' +
+          '<div class="text-2xl font-black mt-1">' + (c.score == null ? '—' : c.score) + '</div>' +
+          '<div class="text-[10px] font-semibold text-gray-400">' + esc(c.basis) + '</div></div>';
+      }).join('') + '</div>' +
+    (rows.length ? '<table class="tbl"><thead><tr><th>Item</th><th>Reason</th><th>Impact</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td class="font-bold text-gray-800">' + esc(r.item) + '</td>' +
+          '<td>' + esc(r.reason) + '</td>' +
+          '<td class="font-black ' + (String(r.impact).charAt(0) === '-' ? 'text-red-700' : 'text-emerald-700') +
+          '">' + esc(r.impact) + '</td></tr>';
+      }).join('') + '</tbody></table>'
+      : '<p class="text-sm text-gray-400 font-semibold">Nothing has affected your score yet this month.</p>') +
+    '</div>', 'max-w-2xl');
+}
+
+/* ---------- notifications ------------------------------------------------ */
+function renderBell() {
+  var n = STATE.data.notifications || [];
+  var c = $('bellCount');
+  c.textContent = n.length;
+  c.classList.toggle('hidden', n.length === 0);
+  var icon = { overdue:['warning','bg-red-100 text-red-700'], approval:['how_to_reg','bg-amber-100 text-amber-800'],
+    review:['rate_review','bg-purple-100 text-purple-700'], today:['event','bg-blue-100 text-blue-700'],
+    team:['groups','bg-gray-100 text-gray-600'] };
+  $('bellList').innerHTML = n.length ? n.map(function (x) {
+    var i = icon[x.type] || ['info','bg-gray-100 text-gray-600'];
+    return '<button class="w-full text-left p-3 border-b hover:bg-gray-50 flex gap-3 items-start" ' +
+      'onclick="closeBell();openTask(\'' + esc(x.id) + '\')">' +
+      '<span class="h-8 w-8 rounded-full ' + i[1] + ' flex items-center justify-center shrink-0">' +
+      '<span class="material-icons text-sm">' + i[0] + '</span></span>' +
+      '<span class="min-w-0"><span class="block text-xs font-black text-gray-800 truncate">' + esc(x.title) + '</span>' +
+      '<span class="block text-[11px] text-gray-500">' + esc(x.msg) + '</span></span></button>';
+  }).join('') : '<div class="p-8 text-center text-gray-400 text-xs font-bold">Nothing needs you right now.</div>';
+}
+function closeBell() { $('bellMenu').classList.add('hidden'); }
+
+
+/* ---------- tasks: board, list, detail ----------------------------------- */
+
+var COLUMNS = [
+  { key:'inbox',  title:'Needs approval', statuses:['Awaiting Approval','Delegation Proposed'] },
+  { key:'todo',   title:'To do',          statuses:['Pending'] },
+  { key:'doing',  title:'In progress',    statuses:['In Progress'] },
+  { key:'review', title:'For review',     statuses:['For Review'] },
+  { key:'done',   title:'Verified',       statuses:['Verified'] },
+];
+var STATUS_LIST = ['Awaiting Approval','Delegation Proposed','Pending','In Progress',
+                   'For Review','Verified','Rejected','Cancelled'];
+
+var filtersReady = false;
+function syncFilters() {
+  var staff = STATE.data.staff || [];
+  var cats = STATE.data.categories || [];
+  if (!filtersReady) {
+    $('fStatus').innerHTML = '<option value="">Any status</option>' +
+      STATUS_LIST.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
+    filtersReady = true;
+  }
+  $('fAssignee').innerHTML = '<option value="">Everyone</option>' +
+    staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
+  $('fCategory').innerHTML = '<option value="">Any category</option>' +
+    cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  $('rPerson').innerHTML = '<option value="">Team only</option>' +
+    staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
+}
+
+function visibleTasks() {
+  return (STATE.data.tasks || []).filter(function (t) {
+    if (!!t.isArchived !== STATE.archive) return false;
+    if (FILTER.assignee && t.assignee !== FILTER.assignee) return false;
+    if (FILTER.status && t.status !== FILTER.status) return false;
+    if (FILTER.category && t.jobCategory !== FILTER.category) return false;
+    if (FILTER.overdue && !daysLate(t)) return false;
+    if (FILTER.q) {
+      var q = FILTER.q.toLowerCase();
+      if ((t.title + ' ' + t.desc + ' ' + t.kra + ' ' + t.jobCategory + ' ' + t.id)
+          .toLowerCase().indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function renderTab() {
+  ['tasks','team','reports'].forEach(function (t) {
+    $('tab-' + t).classList.toggle('hidden', t !== STATE.tab); });
+  document.querySelectorAll('#navTabs button,#navTabsMobile button').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.tab === STATE.tab); });
+  if (STATE.tab === 'tasks') renderTasks();
+  if (STATE.tab === 'team') loadTeam();
+  if (STATE.tab === 'reports') loadReports();
+}
+
+function renderTasks() {
+  var rows = visibleTasks();
+  $('tasksEmpty').classList.toggle('hidden', rows.length > 0);
+  $('tasksEmpty').textContent = STATE.archive
+    ? 'Nothing archived yet. Closed work moves here after a week.'
+    : (STATE.data.tasks || []).length ? 'No tasks match these filters.'
+      : 'No tasks yet. Assign the first one.';
+  $('board').classList.toggle('hidden', STATE.mode !== 'board' || !rows.length);
+  $('list').classList.toggle('hidden', STATE.mode !== 'list' || !rows.length);
+  if (!rows.length) return;
+  if (STATE.mode === 'board') renderBoard(rows); else renderList(rows);
+}
+
+function taskCard(t) {
+  var late = daysLate(t);
+  var done = (t.subtasks || []).filter(function (s) { return s.done; }).length;
+  return '<div class="card p-' + esc(t.priority) + '" draggable="true" data-id="' + esc(t.id) + '">' +
+    '<div class="flex justify-between items-start gap-2 mb-2">' +
+      '<span class="font-bold text-sm leading-snug">' + esc(t.title) + '</span>' +
+      '<span class="w-7 h-7 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black ' +
+        'flex items-center justify-center shrink-0" title="' + esc(t.toName) + '">' +
+        esc(initials(t.toName)) + '</span></div>' +
+    '<div class="flex flex-wrap items-center gap-1.5">' +
+      '<span class="chip ' + (late ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500') + '">' +
+        fmtDate(t.due) + (late ? ' · ' + late + 'd late' : '') + '</span>' +
+      ((t.blockedBy || []).length ? '<span class="chip bg-amber-50 text-amber-800">Blocked</span>' : '') +
+      ((t.subtasks || []).length ? '<span class="chip bg-gray-100 text-gray-500">' + done + '/' + t.subtasks.length + '</span>' : '') +
+      (t.reworkCount ? '<span class="chip bg-orange-50 text-orange-700">Rework ' + t.reworkCount + '</span>' : '') +
+      (t.frequency && t.frequency !== 'One Time' ? '<span class="chip bg-indigo-50 text-indigo-700">' + esc(t.frequency) + '</span>' : '') +
+      (t.jobCategory && t.jobCategory !== 'General' ? '<span class="chip bg-slate-100 text-slate-600">' + esc(t.jobCategory) + '</span>' : '') +
+    '</div></div>';
+}
+
+function renderBoard(rows) {
+  $('board').innerHTML = COLUMNS.map(function (c) {
+    var items = rows.filter(function (t) { return c.statuses.indexOf(t.status) > -1; });
+    return '<div><div class="flex items-center justify-between px-1 mb-2">' +
+      '<span class="text-[10px] font-black uppercase tracking-widest text-gray-500">' + esc(c.title) + '</span>' +
+      '<span class="text-[10px] font-black text-gray-400">' + items.length + '</span></div>' +
+      '<div class="col" data-col="' + c.key + '">' +
+      (items.map(taskCard).join('') ||
+        '<div class="text-[11px] text-gray-400 font-semibold px-1 py-3">Nothing here</div>') +
+      '</div></div>';
+  }).join('');
+  wireBoard();
+}
+
+function renderList(rows) {
+  $('list').innerHTML = '<table class="tbl"><thead><tr>' +
+    ['Task','Category','Owner','Status','Priority','Due'].map(function (h) {
+      return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    rows.map(function (t) {
+      var late = daysLate(t);
+      return '<tr class="cursor-pointer" data-id="' + esc(t.id) + '">' +
+        '<td class="font-bold text-gray-800">' + esc(t.title) +
+          '<span class="text-gray-300 font-semibold ml-1">' + esc(t.id) + '</span></td>' +
+        '<td class="whitespace-nowrap">' + esc(t.jobCategory || '—') + '</td>' +
+        '<td class="whitespace-nowrap">' + esc(t.toName) + '</td>' +
+        '<td class="whitespace-nowrap"><span class="chip bg-gray-100 text-gray-600">' + esc(t.status) + '</span></td>' +
+        '<td class="whitespace-nowrap"><span class="chip ' +
+          (t.priority === 'High' ? 'bg-red-50 text-red-700' : t.priority === 'Medium'
+            ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-700') + '">' + esc(t.priority) + '</span></td>' +
+        '<td class="whitespace-nowrap ' + (late ? 'text-red-700 font-black' : '') + '">' +
+          fmtDate(t.due) + (late ? ' · ' + late + 'd' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  $('list').querySelectorAll('tr[data-id]').forEach(function (r) {
+    r.addEventListener('click', function () { openTask(r.dataset.id); }); });
+}
+
+/* Dropping a card is just a status change; the server re-checks every rule, so
+   a refusal here is the engine's own reason, not a guess. */
+function wireBoard() {
+  var dragged = null;
+  $('board').querySelectorAll('.card').forEach(function (c) {
+    c.addEventListener('dragstart', function (e) { dragged = c.dataset.id; c.classList.add('drag');
+      e.dataTransfer.effectAllowed = 'move'; });
+    c.addEventListener('dragend', function () { c.classList.remove('drag'); dragged = null; });
+    c.addEventListener('click', function () { openTask(c.dataset.id); });
+  });
+  $('board').querySelectorAll('.col').forEach(function (col) {
+    col.addEventListener('dragover', function (e) { e.preventDefault(); col.classList.add('over'); });
+    col.addEventListener('dragleave', function () { col.classList.remove('over'); });
+    col.addEventListener('drop', function (e) {
+      e.preventDefault(); col.classList.remove('over');
+      if (!dragged) return;
+      var t = taskById(dragged); if (!t) return;
+      var target = COLUMNS.filter(function (c) { return c.key === col.dataset.col; })[0];
+      if (!target || target.statuses.indexOf(t.status) > -1) return;
+      var next = target.statuses[0];
+      if (next === 'Awaiting Approval' || next === 'Delegation Proposed') {
+        toast('Approval is not something you can drag a task into.', 'err'); return; }
+      if (next === 'In Progress' && t.status === 'For Review') { openStatus(t.id, 'In Progress'); return; }
+      doTransition(t.id, next);
+    });
+  });
+}
+
+function taskById(id) {
+  var list = STATE.data.tasks || [];
+  for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i];
+  return null;
+}
+
+function doTransition(id, status, note, newDue) {
+  return api('updateTask', { taskId: id, status: status, note: note, newDueDate: newDue })
+    .then(function (r) { toast(r.message, 'ok'); closeDrawer(); return refresh(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+/* ---------- detail drawer ------------------------------------------------ */
+function openTask(id) {
+  var t = taskById(id);
+  if (!t) { toast('That task is not in your current view.', 'err'); return; }
+  var me = STATE.user;
+  var late = daysLate(t);
+  var subs = t.subtasks || [];
+  var doneN = subs.filter(function (s) { return s.done; }).length;
+  var isMine = t.assignee === me.username;
+  var isRaiser = t.by === me.username;
+  var isApprover = t.approver === me.username;
+  var isAdmin = me.role === 'Admin';
+  var acts = [];
+
+  if (t.status === 'Awaiting Approval' || t.status === 'Delegation Proposed') {
+    if (isApprover || isAdmin) {
+      acts.push(['approve','Approve','btn-p']); acts.push(['reject','Reject','btn-g']);
+    }
+  } else if (t.status === 'Pending' && (isMine || isAdmin)) {
+    acts.push(['start','Start work','btn-p']);
+  } else if (t.status === 'In Progress' && (isMine || isAdmin)) {
+    acts.push(['submit','Submit for review','btn-p']);
+  } else if (t.status === 'For Review' && (isRaiser || isApprover || isAdmin) && !(isMine && !isAdmin && !isRaiser)) {
+    acts.push(['verify','Verify &amp; close','btn-p']); acts.push(['rework','Send back','btn-g']);
+  }
+
+  var blockReason = '';
+  if (t.status === 'Pending' && (t.blockedBy || []).length) {
+    var names = (t.blockedBy || []).map(function (bid) {
+      var b = taskById(bid); return b && b.status !== 'Verified' ? b.title : null;
+    }).filter(Boolean);
+    if (names.length) blockReason = 'Blocked by ' + names.join(', ');
+  }
+  if (subs.length && doneN < subs.length && t.status === 'In Progress') {
+    blockReason = 'Checklist is ' + doneN + '/' + subs.length;
+  }
+
+  openDrawer('<div class="p-6 lg:p-7">' +
+    '<div class="flex justify-between items-start gap-4 mb-5">' +
+      '<div><div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">' +
+        esc(t.id) + ' · ' + esc(t.status) + '</div>' +
+        '<h2 class="text-2xl font-black leading-tight">' + esc(t.title) + '</h2></div>' +
+      '<button onclick="closeDrawer()" class="text-gray-400 hover:text-gray-900">' +
+        '<span class="material-icons">close</span></button></div>' +
+
+    (late ? '<div class="mb-4 text-xs font-black rounded-xl px-4 py-3 bg-red-50 text-red-800">' +
+      'Overdue by ' + late + ' day(s)</div>' : '') +
+    (t.delegateTo ? '<div class="mb-4 text-xs font-bold rounded-xl px-4 py-3 bg-purple-50 text-purple-900">' +
+      'Hand-off to ' + esc(nameOf(t.delegateTo)) + ' awaiting ' + esc(nameOf(t.approver)) + '</div>' : '') +
+    (t.desc ? '<p class="text-sm text-gray-600 leading-relaxed mb-5">' + esc(t.desc) + '</p>' : '') +
+
+    '<div class="grid grid-cols-2 gap-4 mb-5 text-sm">' +
+      [['Owner', t.toName], ['Raised by', t.byName], ['Approver', nameOf(t.approver)],
+       ['Due', fmtDate(t.due)], ['Priority', t.priority], ['Category', t.jobCategory || '—'],
+       ['KRA', t.kra || '—'], ['Repeats', t.frequency], ['Rework loops', String(t.reworkCount || 0)]]
+      .map(function (p) { return '<div><div class="lb">' + esc(p[0]) + '</div>' +
+        '<div class="font-bold text-gray-800">' + esc(p[1]) + '</div></div>'; }).join('') + '</div>' +
+
+    (subs.length ? '<div class="mb-5"><div class="flex justify-between items-center mb-2">' +
+      '<span class="lb mb-0">Checklist</span><span class="text-xs font-black text-gray-500">' +
+      doneN + '/' + subs.length + '</span></div>' +
+      '<div class="h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden"><div class="h-full bg-blue-600" ' +
+      'style="width:' + Math.round(doneN / subs.length * 100) + '%"></div></div>' +
+      subs.map(function (s, i) {
+        return '<label class="flex items-center gap-2 py-1.5 text-sm ' +
+          (s.done ? 'text-gray-400 line-through' : 'text-gray-700') + '">' +
+          '<input type="checkbox" class="w-4 h-4 accent-blue-600 sub" data-i="' + i + '"' +
+          (s.done ? ' checked' : '') + (isMine || isAdmin ? '' : ' disabled') + '> ' + esc(s.text) + '</label>';
+      }).join('') + '</div>' : '') +
+
+    '<div class="flex flex-wrap gap-2 mb-2">' +
+      acts.map(function (a) {
+        var off = blockReason && (a[0] === 'submit' || a[0] === 'start');
+        return '<button class="btn ' + (off ? 'btn-g' : a[2]) + ' act" data-act="' + a[0] + '"' +
+          (off ? ' disabled' : '') + '>' + a[1] + '</button>';
+      }).join('') +
+      (['Verified','Rejected','Cancelled'].indexOf(t.status) < 0 && (isMine || isAdmin)
+        ? '<button class="btn btn-g act" data-act="delegate">Hand over…</button>' : '') +
+      (['Verified','Rejected','Cancelled'].indexOf(t.status) < 0 && (isRaiser || isAdmin)
+        ? '<button class="btn btn-g act" data-act="block">Add blocker…</button>' : '') +
+      (t.frequency !== 'One Time' && (isRaiser || isAdmin)
+        ? '<button class="btn btn-g act" data-act="stop">Stop repeating</button>' : '') +
+      (isAdmin || isRaiser ? '<button class="btn btn-g act" data-act="edit">Edit</button>' : '') +
+      (!acts.length ? '<span class="text-xs font-bold text-gray-400 py-2">No actions available to you here.</span>' : '') +
+    '</div>' +
+    (blockReason ? '<div class="text-[11px] font-bold text-amber-700 mb-4">' + esc(blockReason) + '</div>' : '<div class="mb-4"></div>') +
+
+    '<div class="lb">History</div><div class="space-y-3 mt-2">' +
+      (t.history || []).slice().reverse().map(function (h) {
+        return '<div class="flex gap-3 text-xs">' +
+          '<div class="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 shrink-0"></div><div>' +
+          '<span class="font-black text-gray-800">' + esc(h.status) + '</span>' +
+          '<span class="text-gray-400"> · ' + new Date(h.date).toLocaleDateString('en-IN',
+            { day:'2-digit', month:'short' }) + '</span>' +
+          (h.user ? '<span class="text-gray-400"> · ' + esc(h.user) + '</span>' : '') +
+          (h.note ? '<div class="text-gray-600 mt-0.5 bg-yellow-50 border border-yellow-100 rounded p-2">' +
+            esc(h.note) + '</div>' : '') +
+          (h.setDate ? '<div class="text-[10px] text-red-600 font-black mt-1">New deadline: ' +
+            esc(h.setDate) + '</div>' : '') + '</div></div>';
+      }).join('') + '</div></div>');
+
+  $('drawer').querySelectorAll('.act').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.disabled) return;
+      var a = b.dataset.act;
+      if (a === 'approve') return approve(t.id, true);
+      if (a === 'reject')  return approve(t.id, false);
+      if (a === 'start')   return doTransition(t.id, 'In Progress');
+      if (a === 'submit')  return openStatus(t.id, 'For Review');
+      if (a === 'verify')  return openStatus(t.id, 'Verified');
+      if (a === 'rework')  return openStatus(t.id, 'In Progress');
+      if (a === 'delegate')return openDelegate(t);
+      if (a === 'block')   return openBlocker(t);
+      if (a === 'stop')    return stopRecurring(t.id);
+      if (a === 'edit')    return openEdit(t);
+    });
+  });
+  $('drawer').querySelectorAll('.sub').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      api('toggleSubtask', { taskId: t.id, index: Number(cb.dataset.i), done: cb.checked })
+        .then(function () { return refresh(); })
+        .then(function () { openTask(t.id); })
+        .catch(function (e) { toast(e.message, 'err'); cb.checked = !cb.checked; });
+    });
+  });
+}
+
+function approve(id, yes) {
+  api('processTaskApproval', { taskId: id, isApproved: yes })
+    .then(function (r) { toast(r.message, 'ok'); closeDrawer(); return refresh(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+function stopRecurring(id) {
+  api('stopRecurringTask', { taskId: id })
+    .then(function (r) { toast(r.message, 'ok'); closeDrawer(); return refresh(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+/** Status change with a note, and a mandatory new deadline when sending back. */
+function openStatus(id, status) {
+  var rework = status === 'In Progress';
+  openModal('<form id="fStatus" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">' +
+      (rework ? 'Send back for rework' : status === 'Verified' ? 'Verify and close' : 'Submit for review') + '</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">' +
+      (rework ? 'Say what needs fixing, and give them a realistic new date.'
+              : 'Add a note if it helps whoever picks this up.') + '</p>' +
+    (rework ? '<div class="mb-4"><label class="lb" for="stDate">New deadline</label>' +
+      '<input id="stDate" type="date" class="in" required value="' + addDaysYmd(3) + '"></div>' : '') +
+    '<label class="lb" for="stNote">Note' + (rework ? '' : ' (optional)') + '</label>' +
+    '<textarea id="stNote" rows="3" class="in mb-5"' + (rework ? ' required' : '') + '></textarea>' +
+    '<div class="flex gap-3"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">' + (rework ? 'Send back' : 'Confirm') + '</button></div></form>');
+
+  $('fStatus').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var note = $('stNote').value.trim();
+    var due = rework ? $('stDate').value : null;
+    if (rework && !due) { toast('Set a new deadline.', 'err'); return; }
+    busy(e.target.querySelector('button[type=submit]'), true);
+    doTransition(id, status, note, due).then(closeModal);
+  });
+}
+
+function openDelegate(t) {
+  var others = (STATE.data.staff || []).filter(function (u) {
+    return u.username !== t.assignee && u.active !== false; });
+  if (!others.length) { toast('There is nobody else to hand it to.', 'err'); return; }
+  openModal('<form id="fDel" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Hand over "' + esc(t.title) + '"</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Unless you are an Admin, your manager approves the hand-off.</p>' +
+    '<label class="lb" for="delTo">New owner</label><select id="delTo" class="in mb-5">' +
+    others.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) +
+      ' · ' + esc(u.role) + '</option>'; }).join('') + '</select>' +
+    '<div class="flex gap-3"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">Propose</button></div></form>');
+  $('fDel').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('delegateTask', { taskId: t.id, toUsername: $('delTo').value })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); closeDrawer(); return refresh(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  });
+}
+
+function openBlocker(t) {
+  var cands = (STATE.data.tasks || []).filter(function (x) {
+    return x.id !== t.id && ['Verified','Rejected','Cancelled'].indexOf(x.status) < 0 &&
+           (t.blockedBy || []).indexOf(x.id) < 0; });
+  if (!cands.length) { toast('No other open task could block this.', 'err'); return; }
+  openModal('<form id="fBlk" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-5">What is blocking "' + esc(t.title) + '"?</h2>' +
+    '<select id="blkId" class="in mb-5">' + cands.map(function (x) {
+      return '<option value="' + esc(x.id) + '">' + esc(x.title) + ' · ' + esc(x.toName) + '</option>'; }).join('') +
+    '</select><div class="flex gap-3">' +
+    '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">Add blocker</button></div></form>');
+  $('fBlk').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('addBlocker', { taskId: t.id, blockerId: $('blkId').value })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
+      .then(function () { openTask(t.id); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  });
+}
+
+function openEdit(t) {
+  var cats = STATE.data.categories || [];
+  openModal('<form id="fEdit" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-5">Edit task</h2><div class="space-y-4">' +
+    '<div><label class="lb" for="edTitle">Title</label><input id="edTitle" class="in" required value="' + esc(t.title) + '"></div>' +
+    '<div><label class="lb" for="edDesc">Detail</label><textarea id="edDesc" rows="2" class="in">' + esc(t.desc) + '</textarea></div>' +
+    '<div class="grid grid-cols-2 gap-4">' +
+      '<div><label class="lb" for="edDue">Due date</label><input id="edDue" type="date" class="in" value="' + esc(t.due) + '"></div>' +
+      '<div><label class="lb" for="edPri">Priority</label><select id="edPri" class="in">' +
+        ['High','Medium','Low'].map(function (p) { return '<option' + (p === t.priority ? ' selected' : '') + '>' + p + '</option>'; }).join('') +
+      '</select></div></div>' +
+    '<div class="grid grid-cols-2 gap-4">' +
+      '<div><label class="lb" for="edCat">Category</label><select id="edCat" class="in">' +
+        cats.map(function (c) { return '<option' + (c === t.jobCategory ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div><label class="lb" for="edKra">KRA tag</label><input id="edKra" class="in" value="' + esc(t.kra) + '"></div></div>' +
+    (STATE.user.role === 'Admin' ? '<div><label class="lb" for="edStatus">Status</label><select id="edStatus" class="in">' +
+      STATUS_LIST.map(function (s) { return '<option' + (s === t.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') +
+      '</select></div>' : '') +
+    '</div><div class="flex gap-3 mt-6">' +
+    '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">Save</button></div></form>');
+  $('fEdit').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('editTask', { form: { taskId: t.id, title: $('edTitle').value, desc: $('edDesc').value,
+      dueDate: $('edDue').value, priority: $('edPri').value, jobCategory: $('edCat').value,
+      kra: $('edKra').value, status: $('edStatus') ? $('edStatus').value : undefined } })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); closeDrawer(); return refresh(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  });
+}
+
+/* ---------- assign ------------------------------------------------------- */
+function openAssign() {
+  var staff = (STATE.data.staff || []).filter(function (u) { return u.active !== false; });
+  if (!staff.length) { toast('Add a team member first.', 'err'); return; }
+  var cats = STATE.data.categories || [];
+  var u = STATE.usage;
+  var left = (u.maxTasks == null) ? null : Math.max(0, u.maxTasks - u.tasks);
+
+  openModal('<form id="fAssign" class="p-6 lg:p-7">' +
+    '<h2 class="text-2xl font-black mb-1">Assign a task</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Pick several people to give each of them their own copy.</p>' +
+    '<div class="space-y-4">' +
+      '<div><label class="lb" for="asTitle">Task</label><input id="asTitle" class="in" required placeholder="What needs doing?"></div>' +
+      '<div><label class="lb" for="asDesc">Detail</label><textarea id="asDesc" rows="2" class="in" placeholder="Context, what done looks like…"></textarea></div>' +
+      '<div><label class="lb">Assign to</label>' +
+        '<div class="border border-gray-200 rounded-xl max-h-40 overflow-y-auto bg-gray-50 p-1">' +
+        staff.map(function (s) {
+          return '<label class="flex items-center gap-2 px-2 py-1.5 hover:bg-white rounded-lg cursor-pointer">' +
+            '<input type="checkbox" class="asWho w-4 h-4 accent-blue-600" value="' + esc(s.username) + '">' +
+            '<span class="text-sm font-semibold">' + esc(s.name) + '</span>' +
+            '<span class="text-xs text-gray-400">' + esc(s.role) + '</span></label>';
+        }).join('') + '</div>' +
+        '<div id="asRoute" class="text-[11px] font-bold mt-2 text-blue-700"></div></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="asDue">Due date</label><input id="asDue" type="date" class="in" required value="' + addDaysYmd(7) + '"></div>' +
+        '<div><label class="lb" for="asPri">Priority</label><select id="asPri" class="in">' +
+          '<option>High</option><option selected>Medium</option><option>Low</option></select></div></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="asCat">Job category</label><select id="asCat" class="in">' +
+          cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
+        '<div><label class="lb" for="asFreq">Repeats</label><select id="asFreq" class="in">' +
+          ['One Time','Daily','Weekdays','Weekly','Fortnightly','Monthly','Quarterly','Half-Yearly','Yearly']
+            .map(function (f) { return '<option>' + f + '</option>'; }).join('') + '</select></div></div>' +
+      '<div><label class="lb" for="asKra">KRA tag</label><input id="asKra" class="in" placeholder="e.g. Vendor Quality"></div>' +
+      '<div><label class="lb">Checklist <span class="normal-case tracking-normal font-semibold">(one per line, optional)</span></label>' +
+        '<textarea id="asChk" rows="2" class="in" placeholder="Collect quotes&#10;Compare rates"></textarea></div>' +
+    '</div>' +
+    (left !== null ? '<div class="text-[11px] font-bold mt-3 ' + (left <= 5 ? 'text-amber-700' : 'text-gray-400') + '">' +
+      left + ' of ' + u.maxTasks + ' tasks left this month on ' + esc(u.planName) + '.</div>' : '') +
+    '<div class="flex gap-3 mt-6">' +
+    '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">Assign</button></div></form>');
+
+  var routeNote = function () {
+    var picked = Array.prototype.slice.call(document.querySelectorAll('.asWho:checked'));
+    if (!picked.length) { $('asRoute').textContent = ''; return; }
+    var needApproval = picked.filter(function (c) {
+      var s = staff.filter(function (x) { return x.username === c.value; })[0];
+      return s && s.manager && s.manager !== STATE.user.username && STATE.user.role !== 'Admin';
+    }).length;
+    $('asRoute').textContent = needApproval
+      ? needApproval + ' of these go to their manager for approval first.'
+      : 'These land straight in their To Do.';
+  };
+  document.querySelectorAll('.asWho').forEach(function (c) {
+    c.addEventListener('change', routeNote); });
+
+  $('fAssign').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var who = Array.prototype.slice.call(document.querySelectorAll('.asWho:checked'))
+      .map(function (c) { return c.value; });
+    if (!who.length) { toast('Pick at least one person.', 'err'); return; }
+    var btn = e.target.querySelector('button[type=submit]');
+    busy(btn, true, 'Assigning…');
+    api('createTask', { form: { title: $('asTitle').value, desc: $('asDesc').value,
+      assignTo: who.join(','), dueDate: $('asDue').value, priority: $('asPri').value,
+      jobCategory: $('asCat').value, frequency: $('asFreq').value, kra: $('asKra').value,
+      checklist: $('asChk').value } })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
+      .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
+  });
+}
+
+
+/* ---------- team ---------------------------------------------------------- */
+var TEAM = [];
+
+function loadTeam() {
+  api('getUsers').then(function (r) { TEAM = r.users; renderTeam(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+function renderTeam() {
+  var active = TEAM.filter(function (u) { return u.active !== false; });
+  var u = STATE.usage;
+  var tile = function (k, v, tone) {
+    return '<div class="bg-white rounded-2xl border border-gray-100 p-4">' +
+      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(k) + '</div>' +
+      '<div class="text-3xl font-black mt-1 ' + (tone || '') + '">' + v + '</div></div>';
+  };
+  $('teamStats').innerHTML =
+    tile('Members', active.length + (u.maxUsers ? ' <span class="text-base text-gray-400">/ ' + u.maxUsers + '</span>' : '')) +
+    tile('Open tasks', active.reduce(function (n, x) { return n + (x.openTasks || 0); }, 0)) +
+    tile('At WIP limit', active.filter(function (x) { return x.wip && x.wip.exceeded; }).length,
+         active.filter(function (x) { return x.wip && x.wip.exceeded; }).length ? 'text-amber-700' : '') +
+    tile('Scored last month', active.filter(function (x) { return x.lastMonthScore !== null; }).length);
+
+  $('teamTable').innerHTML = '<table class="tbl"><thead><tr>' +
+    ['Member','Role','Department','Reports to','Open','WIP','Last month',''].map(function (h) {
+      return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    TEAM.map(function (x) {
+      return '<tr class="' + (x.active === false ? 'opacity-45' : '') + '">' +
+        '<td><div class="font-bold text-gray-800">' + esc(x.name) + '</div>' +
+          '<div class="text-xs text-gray-400">' + esc(x.email) + '</div></td>' +
+        '<td><span class="chip ' + (x.role === 'Admin' ? 'bg-purple-50 text-purple-700'
+          : x.role === 'HOD' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600') + '">' +
+          esc(x.role) + '</span></td>' +
+        '<td class="whitespace-nowrap">' + esc(x.dept || '—') + '</td>' +
+        '<td class="whitespace-nowrap">' + esc(x.manager ? nameOf(x.manager) : '—') + '</td>' +
+        '<td class="font-bold">' + (x.openTasks || 0) + '</td>' +
+        '<td class="font-bold whitespace-nowrap ' + (x.wip && x.wip.exceeded ? 'text-red-700' : '') + '">' +
+          (x.wip ? x.wip.count + '/' + (x.wip.limit || '∞') : '—') + '</td>' +
+        '<td class="font-black whitespace-nowrap">' + (x.lastMonthScore !== null
+          ? x.lastMonthScore + ' · ' + x.lastMonthBand
+          : '<span class="text-gray-300">no data</span>') + '</td>' +
+        '<td class="text-right whitespace-nowrap">' +
+          '<button class="text-blue-600 font-black text-xs hover:underline edit" data-u="' + esc(x.username) + '">Edit</button>' +
+        '</td></tr>';
+    }).join('') + '</tbody></table>';
+
+  $('teamTable').querySelectorAll('.edit').forEach(function (b) {
+    b.addEventListener('click', function () {
+      openUser(TEAM.filter(function (x) { return x.username === b.dataset.u; })[0]); });
+  });
+}
+
+function openUser(u) {
+  var editing = !!u;
+  u = u || { name:'', username:'', email:'', role:'Doer', jobProfile:'', dept:'', phone:'',
+             manager:'', wipLimit:'', kras:[], active:true };
+  var others = TEAM.filter(function (x) { return x.username !== u.username && x.active !== false; });
+
+  openModal('<form id="fUser" class="p-6 lg:p-7">' +
+    '<h2 class="text-2xl font-black mb-1">' + (editing ? 'Edit member' : 'Add member') + '</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Role decides what they may do. ' +
+      '"Reports to" decides who approves their work.</p>' +
+    '<div class="space-y-4">' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="uName">Full name</label><input id="uName" class="in" required value="' + esc(u.name) + '"></div>' +
+        '<div><label class="lb" for="uUser">Username</label><input id="uUser" class="in" required value="' + esc(u.username) + '"' +
+          (editing ? ' readonly' : '') + '></div></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="uMail">Work email</label><input id="uMail" type="email" class="in" required value="' + esc(u.email) + '"></div>' +
+        '<div><label class="lb" for="uPhone">Phone</label><input id="uPhone" class="in" value="' + esc(u.phone) + '"></div></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="uRole">Role</label><select id="uRole" class="in">' +
+          ['Doer','HOD','Admin'].map(function (r) {
+            return '<option' + (r === u.role ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></div>' +
+        '<div><label class="lb" for="uDept">Department</label><input id="uDept" class="in" value="' + esc(u.dept) + '"></div></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="uProfile">Job profile</label><input id="uProfile" class="in" value="' + esc(u.jobProfile) + '"' +
+          ' placeholder="matches the KRA set"></div>' +
+        '<div><label class="lb" for="uMgr">Reports to</label><select id="uMgr" class="in">' +
+          '<option value="">Nobody</option>' + others.map(function (m) {
+            return '<option value="' + esc(m.username) + '"' + (m.username === u.manager ? ' selected' : '') +
+              '>' + esc(m.name) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="uWip">WIP limit</label><input id="uWip" type="number" min="0" class="in" ' +
+          'placeholder="default 5" value="' + (u.wipLimit == null ? '' : esc(u.wipLimit)) + '"></div>' +
+        '<div><label class="lb" for="uPass">' + (editing ? 'New password (optional)' : 'Password') + '</label>' +
+          '<input id="uPass" type="password" class="in" autocomplete="new-password" minlength="8"' +
+          (editing ? '' : ' required') + '></div></div>' +
+      '<div><div class="flex justify-between items-center mb-2">' +
+        '<span class="lb mb-0">KRA blueprint</span>' +
+        '<button type="button" id="uAddKra" class="text-blue-600 font-black text-xs">+ Add KRA</button></div>' +
+        '<div id="uKras" class="space-y-2"></div>' +
+        '<div id="uKraMsg" class="text-xs font-bold mt-2"></div></div>' +
+      (editing ? '<label class="flex items-center gap-2 text-sm font-bold text-gray-600 pt-1">' +
+        '<input type="checkbox" id="uActive" class="w-4 h-4 accent-blue-600"' +
+        (u.active !== false ? ' checked' : '') + '> Active</label>' : '') +
+    '</div><div class="flex gap-3 mt-6">' +
+    '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">' + (editing ? 'Save' : 'Add member') + '</button></div></form>',
+    'max-w-2xl');
+
+  var kras = (u.kras || []).slice();
+  function drawKras() {
+    $('uKras').innerHTML = kras.map(function (k, i) {
+      return '<div class="flex gap-2">' +
+        '<input class="in kItem" data-i="' + i + '" placeholder="Key result area" value="' + esc(k.item || k.name || '') + '">' +
+        '<input class="in kW" data-i="' + i + '" type="number" min="0" max="100" style="max-width:88px" ' +
+          'placeholder="%" value="' + esc(k.weight || 0) + '">' +
+        '<button type="button" class="kDel px-3 text-gray-400 hover:text-red-600" data-i="' + i + '">' +
+          '<span class="material-icons text-base">delete</span></button></div>';
+    }).join('');
+    checkKras();
+    $('uKras').querySelectorAll('.kItem').forEach(function (el) {
+      el.addEventListener('input', function () { kras[+el.dataset.i].item = el.value; }); });
+    $('uKras').querySelectorAll('.kW').forEach(function (el) {
+      el.addEventListener('input', function () { kras[+el.dataset.i].weight = Number(el.value || 0); checkKras(); }); });
+    $('uKras').querySelectorAll('.kDel').forEach(function (el) {
+      el.addEventListener('click', function () { kras.splice(+el.dataset.i, 1); drawKras(); }); });
+  }
+  function checkKras() {
+    var m = $('uKraMsg');
+    var rows = kras.filter(function (k) { return String(k.item || '').trim(); });
+    if (!rows.length) { m.textContent = ''; return true; }
+    var total = rows.reduce(function (s, k) { return s + (Number(k.weight) || 0); }, 0);
+    var okNow = total <= 100;
+    m.textContent = okNow ? (total < 100 ? 'Weights total ' + total + '% — ' + (100 - total) + '% unallocated.'
+                                         : 'Weights total 100%.')
+                          : 'KRA weights total ' + total + '%. They cannot exceed 100%.';
+    m.className = 'text-xs font-bold mt-2 ' + (okNow ? (total < 100 ? 'text-amber-700' : 'text-emerald-700') : 'text-red-700');
+    return okNow;
+  }
+  drawKras();
+  $('uAddKra').addEventListener('click', function () { kras.push({ item:'', weight:0 }); drawKras(); });
+
+  $('fUser').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!checkKras()) { toast('Fix the KRA weights first.', 'err'); return; }
+    var rows = kras.filter(function (k) { return String(k.item || '').trim(); });
+    var form = { name:$('uName').value, username:$('uUser').value, email:$('uMail').value,
+      phone:$('uPhone').value, role:$('uRole').value, dept:$('uDept').value,
+      jobProfile:$('uProfile').value, manager:$('uMgr').value,
+      wipLimit: $('uWip').value === '' ? '' : Number($('uWip').value),
+      kras: rows };
+    if ($('uPass').value) form.password = $('uPass').value;
+    var btn = e.target.querySelector('button[type=submit]');
+    busy(btn, true, 'Saving…');
+
+    if (!editing) {
+      api('addUser', { form: form })
+        .then(function (r) { toast(r.message, 'ok'); closeModal(); loadTeam(); return refresh(); })
+        .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
+      return;
+    }
+    form.originalUsername = u.username;
+    if ($('uActive') && !$('uActive').checked) form.active = false;
+    else if ($('uActive')) form.active = true;
+
+    api('updateUser', { form: form }).then(function (r) {
+      if (r.status === 'needs_reassign') { busy(btn, false); closeModal(); askReassign(u, r, form); return; }
+      toast(r.message, 'ok'); closeModal(); loadTeam(); return refresh();
+    }).catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
+  });
+}
+
+/** Deactivating someone with open work would hide it from every board, so the
+ *  work has to go somewhere first. */
+function askReassign(u, r, form) {
+  var others = TEAM.filter(function (x) { return x.username !== u.username && x.active !== false; });
+  openModal('<form id="fRe" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">' + esc(u.name) + ' still has ' + r.count + ' open task(s)</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Deactivating them would hide this work from every ' +
+      'board. It is still owed — hand it to someone first.</p>' +
+    '<div class="bg-gray-50 rounded-2xl p-4 mb-5 max-h-40 overflow-y-auto">' +
+      r.tasks.map(function (t) { return '<div class="text-sm font-bold text-gray-700 py-1">' + esc(t.title) +
+        ' <span class="text-xs text-gray-400 font-semibold">· due ' + fmtDate(t.due) + '</span></div>'; }).join('') +
+    '</div>' +
+    (others.length ? '<label class="lb" for="reTo">Move all of it to</label>' +
+      '<select id="reTo" class="in mb-5">' + others.map(function (o) {
+        return '<option value="' + esc(o.username) + '">' + esc(o.name) + '</option>'; }).join('') + '</select>'
+      : '<div class="text-sm font-bold text-red-700 mb-5">There is nobody else active to take it.</div>') +
+    '<div class="flex gap-3"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    (others.length ? '<button type="submit" class="btn btn-p flex-1">Reassign &amp; deactivate</button>' : '') +
+    '</div></form>');
+  if (!others.length) return;
+  $('fRe').addEventListener('submit', function (e) {
+    e.preventDefault();
+    form.reassignTo = $('reTo').value;
+    api('updateUser', { form: form })
+      .then(function (res) { toast(res.message, 'ok'); closeModal(); loadTeam(); return refresh(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  });
+}
+
+function openLeave() {
+  var staff = (STATE.data.staff || []).filter(function (u) { return u.active !== false; });
+  openModal('<form id="fLv" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Record leave</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Days on approved leave are not counted as lateness, ' +
+      'so time off does not damage someone\'s score.</p>' +
+    '<div class="space-y-4">' +
+      '<div><label class="lb" for="lvWho">Person</label><select id="lvWho" class="in">' +
+        staff.map(function (s) { return '<option value="' + esc(s.username) + '">' + esc(s.name) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="lvFrom">From</label><input id="lvFrom" type="date" class="in" required value="' + todayYmd() + '"></div>' +
+        '<div><label class="lb" for="lvTo">To</label><input id="lvTo" type="date" class="in" required value="' + todayYmd() + '"></div></div>' +
+      '<div><label class="lb" for="lvWhy">Reason</label><input id="lvWhy" class="in" placeholder="Annual leave"></div>' +
+    '</div><div class="flex gap-3 mt-6">' +
+    '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">Record</button></div></form>');
+  $('fLv').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('setLeave', { username:$('lvWho').value, from:$('lvFrom').value,
+      to:$('lvTo').value, reason:$('lvWhy').value })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  });
+}
+
+function openCategories() {
+  var cats = (STATE.data.categories || []).slice();
+  openModal('<div class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Job categories</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">These appear when assigning a task.</p>' +
+    '<div id="catList" class="space-y-2 max-h-72 overflow-y-auto mb-3"></div>' +
+    '<button type="button" id="catAdd" class="text-blue-600 font-black text-xs mb-5">+ Add category</button>' +
+    '<div class="flex gap-3"><button class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-p flex-1" id="catSave">Save</button></div></div>');
+  function draw() {
+    $('catList').innerHTML = cats.map(function (c, i) {
+      return '<div class="flex gap-2"><input class="in cIn" data-i="' + i + '" value="' + esc(c) + '">' +
+        '<button type="button" class="cDel px-3 text-gray-400 hover:text-red-600" data-i="' + i + '">' +
+        '<span class="material-icons text-base">delete</span></button></div>';
+    }).join('');
+    $('catList').querySelectorAll('.cIn').forEach(function (el) {
+      el.addEventListener('input', function () { cats[+el.dataset.i] = el.value; }); });
+    $('catList').querySelectorAll('.cDel').forEach(function (el) {
+      el.addEventListener('click', function () { cats.splice(+el.dataset.i, 1); draw(); }); });
+  }
+  draw();
+  $('catAdd').addEventListener('click', function () { cats.push(''); draw(); });
+  $('catSave').addEventListener('click', function () {
+    api('updateCategories', { categories: cats.filter(function (c) { return String(c).trim(); }) })
+      .then(function () { toast('Categories saved.', 'ok'); closeModal(); return refresh(); })
+      .catch(function (e) { toast(e.message, 'err'); });
+  });
+}
+
+
+/* ---------- chart toolkit (inline SVG, no library) ------------------------ */
+var C = function (n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); };
+var svgEl = function (n, a) { var e = document.createElementNS('http://www.w3.org/2000/svg', n);
+  for (var k in a) e.setAttribute(k, a[k]); return e; };
+
+function showTip(html, e) {
+  var tip = $('tip');
+  tip.innerHTML = html; tip.style.opacity = 1;
+  var pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  var x = e.clientX + pad, y = e.clientY - h - pad;
+  if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+  if (y < 8) y = e.clientY + pad;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function hideTip() { $('tip').style.opacity = 0; }
+
+/** Null values break the line rather than pretending a quiet period scored zero. */
+function lineChart(host, series, opts) {
+  opts = opts || {};
+  var W = host.clientWidth || 720, H = opts.height || 230;
+  var m = { t:14, r:16, b:26, l:34 }, iw = W-m.l-m.r, ih = H-m.t-m.b;
+  var n = series[0].points.length, yMax = 100;
+  var x = function (i) { return m.l + (n===1 ? iw/2 : i*(iw/(n-1))); };
+  var y = function (v) { return m.t + ih - (v/yMax)*ih; };
+  host.innerHTML = '';
+  var svg = svgEl('svg', { width:'100%', height:H, viewBox:'0 0 '+W+' '+H, role:'img' });
+
+  [0,25,50,75,100].forEach(function (v) {
+    svg.appendChild(svgEl('line',{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),class:'gridline'}));
+    var t = svgEl('text',{x:m.l-7,y:y(v)+3.5,class:'axis','text-anchor':'end'});
+    t.textContent = v; svg.appendChild(t);
+  });
+  var step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw/40))));
+  series[0].points.forEach(function (p, i) {
+    if (i % step) return;
+    var t = svgEl('text',{x:x(i),y:H-8,class:'axis','text-anchor':'middle'});
+    t.textContent = p.label; svg.appendChild(t);
+  });
+
+  series.forEach(function (s) {
+    var run = [];
+    var flush = function () {
+      if (run.length > 1) svg.appendChild(svgEl('path',{ d:'M'+run.map(function(p){return x(p.i)+','+y(p.v);}).join('L'),
+        fill:'none', stroke:s.color, 'stroke-width':2, 'stroke-linejoin':'round','stroke-linecap':'round' }));
+      else if (run.length === 1) svg.appendChild(svgEl('circle',{cx:x(run[0].i),cy:y(run[0].v),r:3,fill:s.color}));
+      run = [];
+    };
+    s.points.forEach(function (p, i) { if (p.value == null) { flush(); return; } run.push({i:i, v:p.value}); });
+    flush();
+    s.points.forEach(function (p, i) { if (p.value == null) return;
+      svg.appendChild(svgEl('circle',{cx:x(i),cy:y(p.value),r:3.5,fill:s.color,stroke:'#fff','stroke-width':2})); });
+    for (var i = s.points.length-1; i >= 0; i--) {
+      if (s.points[i].value == null) continue;
+      var wide = s.name.length*6.4 + 10, flip = x(i)+wide > W-2;
+      var lab = svgEl('text',{ x: flip ? x(i)-8 : x(i)+8, y:y(s.points[i].value)+3.5,
+        class:'dlabel', fill:s.color, 'text-anchor': flip ? 'end' : 'start' });
+      lab.textContent = s.name; svg.appendChild(lab); break;
+    }
+  });
+
+  var cross = svgEl('line',{y1:m.t,y2:m.t+ih,stroke:C('--muted'),'stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
+  svg.appendChild(cross);
+  var hit = svgEl('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});
+  svg.appendChild(hit);
+  hit.addEventListener('mousemove', function (e) {
+    var r = svg.getBoundingClientRect(), px = (e.clientX-r.left)*(W/r.width);
+    var i = Math.round((px-m.l)/(iw/Math.max(n-1,1)));
+    i = Math.max(0, Math.min(n-1, i));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('opacity', 1);
+    showTip('<div class="t">'+esc(series[0].points[i].label)+'</div>' +
+      series.map(function (s) { return '<div class="r"><span><i style="display:inline-block;width:8px;' +
+        'height:8px;border-radius:2px;background:'+s.color+';margin-right:6px"></i>'+esc(s.name)+'</span>' +
+        '<b>'+(s.points[i].value==null?'no data':s.points[i].value)+'</b></div>'; }).join(''), e);
+  });
+  hit.addEventListener('mouseleave', function () { cross.setAttribute('opacity',0); hideTip(); });
+  host.appendChild(svg);
+}
+
+function barsH(host, rows, opts) {
+  opts = opts || {};
+  var W = host.clientWidth || 480, rowH = 28, H = Math.max(rows.length*rowH+10, 40);
+  var labelW = opts.labelW || 118;
+  var longest = rows.reduce(function (m, r) {
+    var t = r.value == null ? 'no data' : String(r.display == null ? r.value : r.display);
+    return Math.max(m, t.length); }, 3);
+  var pad = Math.max(46, longest*6.6 + 14), iw = W-labelW-pad;
+  var max = opts.max || Math.max.apply(null, [1].concat(rows.map(function (r) { return r.value||0; })));
+  host.innerHTML = '';
+  if (!rows.length) { host.innerHTML = '<div class="empty">Nothing in this period.</div>'; return; }
+  var svg = svgEl('svg',{width:'100%',height:H,viewBox:'0 0 '+W+' '+H,role:'img'});
+  rows.forEach(function (r, i) {
+    var y = i*rowH+6, bh = 15;
+    var lt = svgEl('text',{x:0,y:y+bh-3,class:'axis',fill:C('--ink2')});
+    lt.textContent = r.label; svg.appendChild(lt);
+    svg.appendChild(svgEl('rect',{x:labelW,y:y,width:iw,height:bh,rx:4,fill:C('--surface2')}));
+    var w = r.value == null ? 0 : Math.max(2, (r.value/max)*iw);
+    if (r.value != null) {
+      var bar = svgEl('rect',{x:labelW,y:y,width:w,height:bh,rx:4,fill:r.color||C('--s1')});
+      bar.addEventListener('mousemove', function (e) {
+        showTip('<div class="t">'+esc(r.label)+'</div><div class="r"><span>'+esc(opts.metric||'Value')+
+          '</span><b>'+(r.display==null?r.value:r.display)+'</b></div>', e); });
+      bar.addEventListener('mouseleave', hideTip);
+      svg.appendChild(bar);
+    }
+    var vt = svgEl('text',{x:labelW+w+7,y:y+bh-3,class:'dlabel'});
+    vt.textContent = r.value == null ? 'no data' : (r.display == null ? r.value : r.display);
+    if (r.value == null) vt.setAttribute('fill', C('--muted'));
+    svg.appendChild(vt);
+  });
+  host.appendChild(svg);
+}
+
+function heatmap(host, rowLabels, colLabels, values) {
+  var W = host.clientWidth || 1000, gap = 3;
+  var gut = Math.min(130, Math.max(52, Math.round(W*0.3)));
+  var cell = Math.max(11, Math.min(26, (W-gut-10)/colLabels.length - 3));
+  /* If the cells cannot fit even at their minimum, widen the canvas and let the
+     container scroll — clipping would drop whole weeks with nothing to show it. */
+  var needed = gut + colLabels.length*(cell+gap) + 10, CW = Math.max(W, needed);
+  var H = rowLabels.length*(cell+gap)+30;
+  var max = Math.max.apply(null, [1].concat([].concat.apply([], values)));
+  var ramp = [C('--r1'),C('--r2'),C('--r3'),C('--r4')];
+  host.innerHTML = '';
+  var svg = svgEl('svg',{width: CW>W?CW:'100%', height:H, viewBox:'0 0 '+CW+' '+H, role:'img'});
+  rowLabels.forEach(function (rl, r) {
+    var t = svgEl('text',{x:0,y:r*(cell+gap)+cell-2,class:'axis',fill:C('--ink2')});
+    t.textContent = rl; svg.appendChild(t);
+    values[r].forEach(function (v, c) {
+      var x = gut+c*(cell+gap), y = r*(cell+gap);
+      // Zero stays as surface, so "nothing happened" does not read as a value.
+      var fill = v === 0 ? C('--surface2') : ramp[Math.min(ramp.length-1, Math.floor((v/max)*ramp.length))];
+      var rect = svgEl('rect',{x:x,y:y,width:cell,height:cell,rx:3,fill:fill});
+      rect.addEventListener('mousemove', function (e) {
+        showTip('<div class="t">'+esc(rl)+'</div><div class="r"><span>'+esc(colLabels[c])+
+          '</span><b>'+v+' verified</b></div>', e); });
+      rect.addEventListener('mouseleave', hideTip);
+      svg.appendChild(rect);
+    });
+  });
+  var cstep = Math.max(1, Math.ceil(34/(cell+gap)));
+  colLabels.forEach(function (cl, c) {
+    if (c % cstep) return;
+    var t = svgEl('text',{x:gut+c*(cell+gap)+cell/2,y:H-8,class:'axis','text-anchor':'middle'});
+    t.textContent = cl; svg.appendChild(t);
+  });
+  host.appendChild(svg);
+}
+
+/* ---------- reports ------------------------------------------------------ */
+function loadReports() {
+  if (!STATE.usage.allowReports) {
+    $('reportsBody').classList.add('hidden');
+    $('reportsLocked').classList.remove('hidden');
+    $('reportsLocked').innerHTML = '<div class="bg-white rounded-3xl border border-gray-100 p-12 text-center">' +
+      '<div class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-5">' +
+      '<span class="material-icons text-2xl">lock</span></div>' +
+      '<h3 class="text-2xl font-black mb-2">Reports are a Pro feature</h3>' +
+      '<p class="text-sm text-gray-500 font-semibold mb-6 max-w-md mx-auto">Trends, per-person scoring, ' +
+        'KRA breakdowns and the delivery heatmap are included from the Pro plan up.</p>' +
+      '<button class="btn btn-p" onclick="openBilling()">See plans</button></div>';
+    return;
+  }
+  $('reportsLocked').classList.add('hidden');
+  $('reportsBody').classList.remove('hidden');
+  renderOffsets();
+  api('getAnalytics', { period: STATE.period, offset: STATE.offset, span: 12, person: STATE.person })
+    .then(function (a) { STATE.analytics = a; renderReports(a); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+function renderOffsets() {
+  var n = { week:12, month:12, quarter:8, year:3 }[STATE.period] || 12;
+  var labels = [];
+  for (var i = 0; i < n; i++) labels.push(i);
+  $('rOffset').innerHTML = labels.map(function (i) {
+    return '<option value="' + i + '"' + (i === STATE.offset ? ' selected' : '') + '>' +
+      (i === 0 ? 'This ' + STATE.period : i === 1 ? 'Last ' + STATE.period : i + ' ' + STATE.period + 's ago') +
+      '</option>'; }).join('');
+}
+
+function renderReports(a) {
+  var s = a.summary;
+  var tile = function (k, v, sub, tone) {
+    return '<div class="bg-white rounded-2xl border border-gray-100 p-4">' +
+      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(k) + '</div>' +
+      '<div class="text-3xl font-black mt-1 ' + (tone||'') + '">' + v + '</div>' +
+      '<div class="text-[11px] font-semibold text-gray-400 mt-0.5">' + esc(sub||'') + '</div></div>';
+  };
+  $('rTiles').innerHTML =
+    tile('Team score', s.teamScore == null ? '—' : s.teamScore, a.range.label) +
+    tile('Delivered', s.delivered, 'tasks verified') +
+    tile('On-time', s.onTimeRate == null ? '—' : s.onTimeRate + '%', 'of closed work') +
+    tile('Rework loops', s.reworkLoops, 'quality signal') +
+    tile('Overdue now', s.overdueNow, 'open past deadline', s.overdueNow ? 'text-red-700' : '');
+
+  $('rTrendSub').textContent = 'Delegation score across 12 ' + STATE.period + 's ending ' + a.range.short;
+  var series = [{ name:'Team', color:C('--s1'),
+    points: a.trend.map(function (p) { return { label:p.label, value:p.teamScore }; }) }];
+  if (a.personTrend) {
+    var who = (STATE.data.staff||[]).filter(function (u) { return u.username === STATE.person; })[0];
+    series.push({ name: who ? who.name.split(' ')[0] : 'Person', color:C('--s2'),
+      points: a.personTrend.map(function (p) { return { label:p.label, value:p.score }; }) });
+  }
+  $('rLegend').innerHTML = series.length > 1 ? series.map(function (x) {
+    return '<span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' +
+      x.color + ';margin-right:6px"></i>' + esc(x.name) + '</span>'; }).join('') : '';
+  lineChart($('chartTrend'), series, { height: 236 });
+
+  // Band letters ride with the colour: the status palette is not safe on its own.
+  var total = Math.max(1, a.bands.A + a.bands.B + a.bands.C + a.bands.none);
+  $('chartBands').innerHTML = [['A','A · Top performer',C('--good'),a.bands.A],
+    ['B','B · Solid',C('--warn'),a.bands.B], ['C','C · Needs action',C('--bad'),a.bands.C],
+    ['—','No data yet',C('--muted'),a.bands.none]].map(function (b) {
+    return '<div class="flex items-center gap-3 py-2">' +
+      '<span class="w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-xs" ' +
+      'style="background:'+b[2]+'">'+b[0]+'</span>' +
+      '<span class="flex-1"><span class="text-sm font-bold text-gray-700">'+esc(b[1])+'</span>' +
+      '<span class="block h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">' +
+      '<span style="display:block;height:100%;width:'+(b[3]/total*100)+'%;background:'+b[2]+'"></span></span></span>' +
+      '<span class="font-black text-sm">'+b[3]+'</span></div>';
+  }).join('');
+
+  var ppl = a.people.slice().sort(function (x, y) { return (y.score==null?-1:y.score)-(x.score==null?-1:x.score); });
+  barsH($('chartPeople'), ppl.map(function (p) {
+    return { label: String(p.name||p.username).split(' ')[0], value: p.score,
+      display: p.score == null ? null : p.score + ' · ' + p.band,
+      color: p.score == null ? C('--muted') : p.score >= 85 ? C('--good')
+             : p.score >= 60 ? C('--warn') : C('--bad') };
+  }), { max:100, metric:'Score' });
+
+  barsH($('chartKra'), a.kra.slice(0,8).map(function (k) {
+    return { label:k.kra, value:k.count }; }), { metric:'Tasks', labelW:150 });
+
+  heatmap($('chartHeat'), a.heatmap.rows.map(function (r) { return String(r.name).split(' ')[0]; }),
+    a.heatmap.weeks, a.heatmap.rows.map(function (r) { return r.values; }));
+}
+
+function openAccountability() {
+  openModal('<div class="p-6 lg:p-7"><h2 class="text-xl font-black mb-5">Rework report</h2>' +
+    '<div id="accBody" class="text-sm text-gray-400 font-semibold">Loading…</div>' +
+    '<div class="mt-6"><button class="btn btn-g w-full" onclick="closeModal()">Close</button></div></div>', 'max-w-2xl');
+  api('getAccountability').then(function (r) {
+    $('accBody').innerHTML = r.report.length ? '<table class="tbl"><thead><tr>' +
+      '<th>Person</th><th>Tasks</th><th>Reworks</th><th>Late</th><th>Rework %</th></tr></thead><tbody>' +
+      r.report.map(function (d) {
+        return '<tr><td class="font-bold text-gray-800">'+esc(d.name)+'</td><td>'+d.total+'</td>' +
+          '<td class="text-red-700 font-bold">'+d.reworkCount+'</td><td>'+d.lateCount+'</td>' +
+          '<td class="font-black '+(d.pct>10?'text-red-700':'text-emerald-700')+'">'+d.pct+'%</td></tr>';
+      }).join('') + '</tbody></table>' : '<p>Nothing to report yet.</p>';
+  }).catch(function (e) { $('accBody').textContent = e.message; });
+}
+
+function openReviewHistory() {
+  openModal('<div class="p-6 lg:p-7"><h2 class="text-xl font-black mb-5">Review history</h2>' +
+    '<div id="rhBody" class="text-sm text-gray-400 font-semibold">Loading…</div>' +
+    '<div class="mt-6"><button class="btn btn-g w-full" onclick="closeModal()">Close</button></div></div>', 'max-w-2xl');
+  api('getPerformanceReport').then(function (r) {
+    $('rhBody').innerHTML = r.report.length ? '<table class="tbl"><thead><tr>' +
+      '<th>Month</th><th>Person</th><th>Performance</th><th>Delegation</th><th>Final</th></tr></thead><tbody>' +
+      r.report.map(function (d) {
+        return '<tr><td class="whitespace-nowrap">'+esc(d.month)+'</td>' +
+          '<td class="font-bold text-gray-800">'+esc(d.name)+'</td><td>'+d.performance+'</td>' +
+          '<td>'+d.delegation+'</td><td class="font-black">'+d.score+' · '+esc(d.band)+'</td></tr>';
+      }).join('') + '</tbody></table>' : '<p>No appraisals recorded yet.</p>';
+  }).catch(function (e) { $('rhBody').textContent = e.message; });
+}
+
+
+/* ---------- appraisal ---------------------------------------------------- */
+function openAppraisal() {
+  var staff = (STATE.data.staff || []).filter(function (u) { return u.active !== false; });
+  openModal('<div class="p-6 lg:p-7">' +
+    '<div class="flex justify-between items-start mb-1"><h2 class="text-2xl font-black">Appraisal</h2>' +
+    '<button onclick="closeModal()" class="text-gray-400 hover:text-gray-900">' +
+    '<span class="material-icons">close</span></button></div>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">The delegation half is measured from the task ' +
+      'record. The rest is your judgement.</p>' +
+    '<label class="lb" for="apWho">Person</label>' +
+    '<select id="apWho" class="in mb-5"><option value="">Select…</option>' +
+      staff.map(function (s) { return '<option value="'+esc(s.username)+'">'+esc(s.name)+
+        ' · '+esc(s.jobProfile||s.role)+'</option>'; }).join('') + '</select>' +
+    '<div id="apBody"></div></div>', 'max-w-3xl');
+  $('apWho').addEventListener('change', function () {
+    if (!this.value) { $('apBody').innerHTML = ''; return; }
+    loadAppraisal(this.value);
+  });
+}
+
+function loadAppraisal(username) {
+  $('apBody').innerHTML = '<p class="text-sm text-gray-400 font-semibold">Loading…</p>';
+  api('getAppraisalForm', { username: username }).then(function (f) {
+    $('apBody').innerHTML =
+      '<div class="bg-gray-50 rounded-2xl p-4 mb-5 flex items-center gap-5">' +
+        '<div><div class="lb mb-0">Delegation score</div>' +
+        '<div class="text-3xl font-black">' + (f.hasData ? f.delegationScore : '—') + '</div></div>' +
+        '<div class="text-xs text-gray-500 font-semibold flex-1">' +
+          (f.hasData ? 'Measured from their task record — on-time delivery, first-pass quality and queue health.'
+                     : 'No closed work to measure yet, so this half carries no score.') +
+          ' <button type="button" class="text-blue-600 font-black" onclick="showDelBreakdown()">See why</button></div>' +
+      '</div>' +
+      '<h3 class="font-black text-sm mb-2">KRA ratings</h3>' +
+      (f.kras.length ? '<div class="space-y-2 mb-5">' + f.kras.map(function (k, i) {
+        return '<div class="border border-gray-100 rounded-xl p-3">' +
+          '<div class="flex justify-between items-center gap-3">' +
+            '<span class="font-bold text-sm">' + esc(k.item || k.name) + '</span>' +
+            '<span class="text-xs font-black text-blue-600 whitespace-nowrap">Weight ' + esc(k.weight) + '</span></div>' +
+          (k.desc ? '<div class="text-xs text-gray-500 mt-1">' + esc(k.desc) + '</div>' : '') +
+          '<select class="in mt-2 kraR" data-w="' + esc(k.weight) + '">' +
+            '<option value="0">Not rated</option>' +
+            [1,2,3,4,5].map(function (n) { return '<option value="'+n+'">'+n+' — '+
+              ['Poor','Below average','Average','Good','Excellent'][n-1]+'</option>'; }).join('') +
+          '</select></div>';
+      }).join('') + '</div>'
+      : '<p class="text-sm bg-amber-50 text-amber-900 rounded-xl p-3 mb-5 font-semibold">' +
+        'No KRAs set for this job profile yet. Add them on the Team tab, under the person.</p>') +
+      '<h3 class="font-black text-sm mb-2">Behaviour</h3>' +
+      '<div class="space-y-2 mb-5">' + f.behaviors.map(function (b) {
+        return '<div class="border border-gray-100 rounded-xl p-3">' +
+          '<div class="flex justify-between items-center gap-3">' +
+            '<span class="font-bold text-sm">' + esc(b.section) + '</span>' +
+            '<span class="text-xs font-black text-purple-600 whitespace-nowrap">Weight ' + b.weight + '</span></div>' +
+          '<div class="text-xs text-gray-500 mt-1">' + esc(b.question) + '</div>' +
+          '<select class="in mt-2 behR" data-w="' + b.weight + '">' +
+            '<option value="0">Not rated</option>' +
+            [1,2,3,4,5].map(function (n) { return '<option value="'+n+'">'+n+'</option>'; }).join('') +
+          '</select></div>';
+      }).join('') + '</div>' +
+      '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex justify-between items-center mb-5">' +
+        '<div><div class="font-black text-yellow-900 text-sm">Brownie points</div>' +
+        '<div class="text-xs text-yellow-700">For exceptional work the measures above miss. Capped at 5.</div></div>' +
+        '<input id="apBrownie" type="number" min="0" max="5" value="0" class="in" style="max-width:80px;text-align:center"></div>' +
+      '<div id="apPreview" class="text-sm font-bold text-gray-500 mb-4"></div>' +
+      '<div class="flex gap-3">' +
+        '<button class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-p flex-1" id="apSubmit">Submit review</button></div>';
+
+    window.__apDel = f.delegationScore;
+    window.__apBreak = f.delegationBreakdown || [];
+    var preview = function () {
+      var kra = Array.prototype.slice.call(document.querySelectorAll('.kraR'));
+      var beh = Array.prototype.slice.call(document.querySelectorAll('.behR'));
+      var rated = kra.filter(function (s) { return Number(s.value) > 0; }).length;
+      $('apPreview').textContent = rated + ' of ' + kra.length + ' KRAs rated, ' +
+        beh.filter(function (s) { return Number(s.value) > 0; }).length + ' of ' + beh.length + ' behaviours.';
+    };
+    document.querySelectorAll('.kraR,.behR').forEach(function (s) { s.addEventListener('change', preview); });
+    preview();
+
+    $('apSubmit').addEventListener('click', function () {
+      var kras = Array.prototype.slice.call(document.querySelectorAll('.kraR')).map(function (s) {
+        return { rating: Number(s.value), weight: Number(s.dataset.w) || 1 }; });
+      var behs = Array.prototype.slice.call(document.querySelectorAll('.behR')).map(function (s) {
+        return { rating: Number(s.value), weight: Number(s.dataset.w) || 1 }; });
+      if (!kras.some(function (k) { return k.rating > 0; }) && !behs.some(function (b) { return b.rating > 0; })) {
+        toast('Rate at least one item before submitting.', 'err'); return;
+      }
+      busy($('apSubmit'), true, 'Saving…');
+      api('submitAppraisal', { data: { employee: username, delegationScore: f.delegationScore,
+        kras: kras, behaviors: behs, brownie: Number($('apBrownie').value) || 0 } })
+        .then(function (r) { toast(r.message, 'ok'); closeModal(); })
+        .catch(function (e) { busy($('apSubmit'), false); toast(e.message, 'err'); });
+    });
+  }).catch(function (e) { $('apBody').innerHTML =
+    '<p class="text-sm font-bold text-red-700">' + esc(e.message) + '</p>'; });
+}
+
+function showDelBreakdown() {
+  var rows = window.__apBreak || [];
+  openModal('<div class="p-6 lg:p-7"><div class="flex justify-between items-start mb-4">' +
+    '<h2 class="text-xl font-black">How the delegation score was built</h2>' +
+    '<button onclick="closeModal()" class="text-gray-400"><span class="material-icons">close</span></button></div>' +
+    (rows.length ? '<table class="tbl"><thead><tr><th>Item</th><th>Reason</th><th>Impact</th></tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr><td class="font-bold text-gray-800">'+esc(r.item)+'</td>' +
+        '<td>'+esc(r.reason)+'</td><td class="font-black '+
+        (String(r.impact).charAt(0)==='-'?'text-red-700':'text-emerald-700')+'">'+esc(r.impact)+'</td></tr>'; }).join('') +
+      '</tbody></table>' : '<p class="text-sm text-gray-400 font-semibold">Nothing has affected it yet.</p>') +
+    '</div>', 'max-w-2xl');
+}
+
+/* ---------- billing, AI, support, account -------------------------------- */
+function openBilling() {
+  var u = STATE.usage;
+  var plans = [
+    { key:'Free',    name:'Free Tier', price:'₹0',       per:'',     bullets:['5 users','50 tasks a month','Task tracking'] },
+    { key:'Monthly', name:'Standard',  price:'₹2,499',   per:'/mo',  bullets:['20 users','500 tasks a month','Delegation scoring','Email alerts'] },
+    { key:'Yearly',  name:'Pro',       price:'₹19,999',  per:'/yr',  bullets:['300 users','Unlimited tasks','Full reports','Custom KRA forms','WhatsApp alerts'] },
+  ];
+  openModal('<div class="p-6 lg:p-7">' +
+    '<div class="flex justify-between items-start mb-1"><h2 class="text-2xl font-black">Plans</h2>' +
+    '<button onclick="closeModal()" class="text-gray-400"><span class="material-icons">close</span></button></div>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">You are on <strong>' + esc(u.planName) + '</strong>' +
+      (u.daysLeft !== null ? ', ' + (u.daysLeft >= 0 ? u.daysLeft + ' day(s) left' : 'expired') : '') + '.</p>' +
+    '<div class="grid md:grid-cols-3 gap-4">' + plans.map(function (p) {
+      var current = p.key === STATE.plan;
+      return '<div class="border-2 rounded-2xl p-5 flex flex-col ' +
+        (current ? 'border-blue-500 bg-blue-50' : 'border-gray-100') + '">' +
+        '<div class="font-black text-lg">' + esc(p.name) + '</div>' +
+        '<div class="text-2xl font-black mt-1">' + p.price + '<span class="text-sm font-bold text-gray-400">' + p.per + '</span></div>' +
+        '<ul class="text-xs font-semibold text-gray-600 mt-3 space-y-1.5 flex-1">' +
+          p.bullets.map(function (b) { return '<li>· ' + esc(b) + '</li>'; }).join('') + '</ul>' +
+        (current ? '<div class="text-xs font-black text-blue-700 text-center mt-4 py-2">Current plan</div>'
+          : p.key === 'Free' ? ''
+          : '<button class="btn btn-p w-full mt-4 buy" data-plan="' + p.key + '">Upgrade</button>') +
+        '</div>';
+    }).join('') + '</div>' +
+    '<div class="mt-5 flex gap-2 items-end">' +
+      '<div class="flex-1"><label class="lb" for="promo">Promo code</label>' +
+      '<input id="promo" class="in" placeholder="Optional"></div></div>' +
+    '<p class="text-xs text-gray-400 font-semibold mt-4">Enterprise: unlimited users and tasks, ' +
+      'custom integrations. <button class="text-blue-600 font-black" onclick="openSupport(\'Enterprise enquiry\')">Talk to us</button></p>' +
+    '</div>', 'max-w-3xl');
+
+  document.querySelectorAll('.buy').forEach(function (b) {
+    b.addEventListener('click', function () { startCheckout(b.dataset.plan, $('promo').value); });
+  });
+}
+
+function startCheckout(planName, promo) {
+  if (typeof Razorpay === 'undefined') { toast('The payment library has not loaded. Refresh and try again.', 'err'); return; }
+  toast('Starting payment…', 'info');
+  api('initiateRazorpay', { planName: planName, promoCode: promo })
+    .then(function (r) {
+      var o = r.orderData;
+      var rz = new Razorpay({
+        key: o.key, order_id: o.order_id, amount: o.amount, currency: o.currency,
+        name: o.name, description: o.description, prefill: o.prefill, theme: { color: '#2563eb' },
+        /* The response object carries the signature. The old build used an empty
+           parameter list here and threw it away, which is why nothing could be
+           verified afterwards. */
+        handler: function (response) {
+          api('paymentSuccess', {
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature
+          }).then(function (res) {
+            toast(res.message, 'ok'); closeModal();
+            STATE.plan = res.plan; return refresh();
+          }).catch(function (e) { toast(e.message, 'err'); });
+        },
+        modal: { ondismiss: function () { toast('Payment cancelled.', 'info'); } }
+      });
+      rz.open();
+    })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+function openAi() {
+  openModal('<div class="p-6 lg:p-7">' +
+    '<div class="flex justify-between items-start mb-1">' +
+    '<h2 class="text-2xl font-black flex items-center gap-2">' +
+    '<span class="material-icons text-blue-600">auto_awesome</span> Executive insight</h2>' +
+    '<button onclick="closeModal()" class="text-gray-400"><span class="material-icons">close</span></button></div>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-4">Ask about last month\'s delivery. Only summary ' +
+      'figures are sent — never your staff records.</p>' +
+    '<div class="flex flex-wrap gap-2 mb-3">' +
+      ['What should I focus on this month?','Where is the biggest delay risk?',
+       'Who needs support?','Is quality improving?'].map(function (q) {
+        return '<button class="btn btn-g text-xs py-2 qq">' + esc(q) + '</button>'; }).join('') + '</div>' +
+    '<textarea id="aiQ" rows="2" class="in mb-3" placeholder="Ask anything about your team\'s delivery…"></textarea>' +
+    '<button class="btn btn-p w-full" id="aiGo">Ask</button>' +
+    '<div id="aiOut" class="mt-5"></div></div>', 'max-w-2xl');
+  document.querySelectorAll('.qq').forEach(function (b) {
+    b.addEventListener('click', function () { $('aiQ').value = b.textContent; $('aiGo').click(); }); });
+  $('aiGo').addEventListener('click', function () {
+    var q = $('aiQ').value.trim();
+    if (!q) { toast('Type a question first.', 'err'); return; }
+    busy($('aiGo'), true, 'Thinking…');
+    $('aiOut').innerHTML = '';
+    api('aiInsight', { question: q })
+      .then(function (r) {
+        busy($('aiGo'), false);
+        $('aiOut').innerHTML = '<div class="bg-blue-50 border border-blue-100 rounded-2xl p-5">' +
+          '<div class="text-sm text-gray-800 leading-relaxed whitespace-pre-line">' + esc(r.answer) + '</div>' +
+          '<div class="text-[11px] font-bold text-blue-700 mt-3">Based on ' + esc(r.basedOn) + '</div></div>';
+      })
+      .catch(function (e) { busy($('aiGo'), false);
+        $('aiOut').innerHTML = '<p class="text-sm font-bold text-red-700">' + esc(e.message) + '</p>'; });
+  });
+}
+
+function openSupport(subject) {
+  openModal('<form id="fSup" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Contact us</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">We reply within one working day.</p>' +
+    '<div><label class="lb" for="supSub">Subject</label>' +
+    '<input id="supSub" class="in mb-4" required value="' + esc(subject || '') + '"></div>' +
+    '<div><label class="lb" for="supMsg">Message</label>' +
+    '<textarea id="supMsg" rows="5" class="in mb-5" required></textarea></div>' +
+    '<div class="flex gap-3"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button type="submit" class="btn btn-p flex-1">Send</button></div></form>');
+  $('fSup').addEventListener('submit', function (e) {
+    e.preventDefault();
+    busy(e.target.querySelector('button[type=submit]'), true, 'Sending…');
+    api('contactSupport', { form: { subject:$('supSub').value, message:$('supMsg').value } })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  });
+}
+
+function openAccount() {
+  openModal('<div class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">' + esc(STATE.user.name) + '</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">' + esc(STATE.user.email) +
+      ' · ' + esc(STATE.user.role) + ' · ' + esc(STATE.company) + '</p>' +
+    '<form id="fPw" class="space-y-4 mb-5">' +
+      '<div><label class="lb" for="pwOld">Current password</label>' +
+      '<input id="pwOld" type="password" class="in" autocomplete="current-password" required></div>' +
+      '<div><label class="lb" for="pwNew">New password</label>' +
+      '<input id="pwNew" type="password" class="in" autocomplete="new-password" minlength="8" required></div>' +
+      '<button type="submit" class="btn btn-p w-full">Change password</button></form>' +
+    '<div class="flex gap-3 border-t border-gray-100 pt-5">' +
+      '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' +
+      '<button class="btn btn-g flex-1" onclick="signOut()">Sign out</button></div></div>');
+  $('fPw').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('changePassword', { currentPassword:$('pwOld').value, newPassword:$('pwNew').value })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  });
+}
+
+
+/* ---------- wiring ------------------------------------------------------- */
+$('formLogin').addEventListener('submit', function (e) {
+  e.preventDefault();
+  busy($('btnLogin'), true, 'Signing in…');
+  api('login', { username: $('liUser').value.trim(), password: $('liPass').value })
+    .then(function (r) { saveSession(r); enterApp(); })
+    .catch(function (err) { busy($('btnLogin'), false); toast(err.message, 'err'); });
+});
+
+$('formSignup').addEventListener('submit', function (e) {
+  e.preventDefault();
+  busy($('btnSignup'), true, 'Creating…');
+  api('register', { form: { companyName:$('suCompany').value, name:$('suName').value,
+    email:$('suEmail').value, phone:$('suPhone').value, password:$('suPass').value } })
+    .then(function (r) { saveSession(r); toast('Workspace created. Add your team next.', 'ok'); enterApp(); })
+    .catch(function (err) { busy($('btnSignup'), false); toast(err.message, 'err'); });
+});
+
+$('formForgot').addEventListener('submit', function (e) {
+  e.preventDefault();
+  busy($('btnForgot'), true, 'Sending…');
+  api('forgotPassword', { email: $('fpEmail').value.trim() })
+    .then(function (r) { busy($('btnForgot'), false); toast(r.message, 'ok'); showAuth('login'); })
+    .catch(function (err) { busy($('btnForgot'), false); toast(err.message, 'err'); });
+});
+
+$('formReset').addEventListener('submit', function (e) {
+  e.preventDefault();
+  if ($('rsPass').value !== $('rsPass2').value) { toast('The two passwords do not match.', 'err'); return; }
+  busy($('btnReset'), true, 'Saving…');
+  var params = new URLSearchParams(location.search);
+  api('resetPassword', { token: params.get('reset_token'), password: $('rsPass').value })
+    .then(function (r) {
+      toast(r.message, 'ok');
+      history.replaceState({}, '', location.pathname);
+      showAuth('login');
+    })
+    .catch(function (err) { busy($('btnReset'), false); toast(err.message, 'err'); });
+});
+
+document.querySelectorAll('#navTabs button,#navTabsMobile button').forEach(function (b) {
+  b.addEventListener('click', function () { STATE.tab = b.dataset.tab; renderTab(); });
+});
+document.querySelectorAll('#viewMode button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    STATE.mode = b.dataset.mode;
+    document.querySelectorAll('#viewMode button').forEach(function (x) {
+      x.classList.toggle('on', x === b); });
+    renderTasks();
+  });
+});
+document.querySelectorAll('#periodSeg button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    STATE.period = b.dataset.p; STATE.offset = 0;
+    document.querySelectorAll('#periodSeg button').forEach(function (x) {
+      x.classList.toggle('on', x === b); });
+    loadReports();
+  });
+});
+$('rOffset').addEventListener('change', function () { STATE.offset = Number(this.value); loadReports(); });
+$('rPerson').addEventListener('change', function () { STATE.person = this.value; loadReports(); });
+
+$('fSearch').addEventListener('input', function () { FILTER.q = this.value; renderTasks(); });
+$('fAssignee').addEventListener('change', function () { FILTER.assignee = this.value; renderTasks(); });
+$('fStatus').addEventListener('change', function () { FILTER.status = this.value; renderTasks(); });
+$('fCategory').addEventListener('change', function () { FILTER.category = this.value; renderTasks(); });
+$('fOverdue').addEventListener('change', function () { FILTER.overdue = this.checked; renderTasks(); });
+
+$('btnHistory').addEventListener('click', function () {
+  STATE.archive = !STATE.archive;
+  this.classList.toggle('btn-p', STATE.archive);
+  this.classList.toggle('btn-g', !STATE.archive);
+  renderTasks();
+});
+$('btnNewTask').addEventListener('click', openAssign);
+$('btnNewUser').addEventListener('click', function () { openUser(null); });
+$('btnLeave').addEventListener('click', openLeave);
+$('btnCategories').addEventListener('click', openCategories);
+$('btnAppraise').addEventListener('click', openAppraisal);
+$('btnAccount2').addEventListener('click', openAccountability);
+$('btnHistoryRpt').addEventListener('click', openReviewHistory);
+$('btnAi').addEventListener('click', openAi);
+$('btnHelp').addEventListener('click', function () { openSupport(''); });
+$('btnAccount').addEventListener('click', openAccount);
+$('btnBell').addEventListener('click', function (e) {
+  e.stopPropagation(); $('bellMenu').classList.toggle('hidden'); });
+
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('#bellMenu') && !e.target.closest('#btnBell')) closeBell();
+});
+$('scrim').addEventListener('click', function (e) { if (e.target.id === 'scrim') closeModal(); });
+addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal(); closeDrawer(); closeBell(); } });
+
+var rsz;
+addEventListener('resize', function () {
+  clearTimeout(rsz);
+  rsz = setTimeout(function () {
+    if (STATE.tab === 'reports' && STATE.analytics) renderReports(STATE.analytics);
+    else if (STATE.tab === 'tasks' && STATE.data) renderTasks();
+  }, 200);
+});
+
+/* Re-check quietly while the tab is in front. 30 seconds, paused when hidden:
+   Apps Script allows about 90 minutes of execution a day, and a 5-second poll
+   per user burns through that before lunch. */
+setInterval(function () {
+  if (document.hidden || !STATE.token || !STATE.data) return;
+  api('getDashboard').then(function (d) {
+    if (d.serviceStopped) { STATE.data = d; renderStopped(d); return; }
+    var changed = JSON.stringify(d.tasks) !== JSON.stringify(STATE.data.tasks);
+    STATE.data = d; STATE.usage = d.usage;
+    renderBanner(); renderTiles(); renderBell();
+    if (changed && STATE.tab === 'tasks') renderTasks();
+  }).catch(function () { /* a failed background poll must not shout at the user */ });
+}, 30000);
+
+/* ---------- boot --------------------------------------------------------- */
+(function boot() {
+  var params = new URLSearchParams(location.search);
+  if (params.get('reset_token')) { showAuth('reset'); return; }
+  if (API_URL.indexOf('PASTE_YOUR') === 0) {
+    toast('Set API_URL at the top of this file to your Apps Script /exec URL.', 'err');
+    return;
+  }
+  if (restoreSession()) {
+    enterApp();
+  } else {
+    showAuth('login');
+  }
+})();
+
+</script>
+</body>
+</html>
