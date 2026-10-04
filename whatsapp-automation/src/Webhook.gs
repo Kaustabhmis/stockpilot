@@ -19,27 +19,27 @@
  * (?key=WEBHOOK_SECRET) which is set via "Configure Webhook" and checked on every call.
  */
 
-/**
- * GET: serves the client dashboard. ?health=1 returns a JSON health check (no secrets).
- */
+/** GET: JSON health check (no secrets). The client app is hosted separately (client-app/). */
 function doGet(e) {
-  const p = (e && e.parameter) || {};
-  if (p.health !== undefined || p.format === 'json') {
-    let configured = false;
-    try { configured = validateConfig_(getConfig_(true)).ok; } catch (err) { configured = false; }
-    return jsonOut_({
-      status: 'ok',
-      service: 'whatsapp-campaign-automation',
-      version: SYSTEM_VERSION,
-      configured: configured,
-      time: new Date().toISOString(),
-    });
-  }
-  return serveClientApp_();
+  let configured = false;
+  try { configured = validateConfig_(getConfig_(true)).ok; } catch (err) { configured = false; }
+  return jsonOut_({
+    status: 'ok',
+    service: 'whatsapp-campaign-automation',
+    version: SYSTEM_VERSION,
+    configured: configured,
+    time: new Date().toISOString(),
+  });
 }
 
-/** Maytapi webhook receiver. Always returns 200 + JSON so Maytapi does not retry-storm. */
+/**
+ * POST router:
+ *   ?route=api  → client app JSON API (ClientApi.gs), authenticated by client sessions
+ *   otherwise   → Maytapi webhook, authenticated by ?key=WEBHOOK_SECRET
+ * Always returns 200 + JSON so Maytapi does not retry-storm.
+ */
 function doPost(e) {
+  if (e && e.parameter && e.parameter.route === 'api') return handleClientApi_(e);
   const cfg = getConfig_(true);
   try {
     if (cfg.webhookSecret) {

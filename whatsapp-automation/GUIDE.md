@@ -4,7 +4,8 @@ A generic, **multi-tenant** WhatsApp marketing platform built on Google Sheets (
 Google Drive and the Maytapi WhatsApp API. No external server, no npm, no Node.js at runtime.
 
 Clients can work in two ways:
-- **Client dashboard** (recommended): a mobile-responsive web app served by the same Apps Script deployment. Each client signs in
+- **Client app** (recommended): a standalone, white-label HTML website (`client-app/`) that you host on **your own domain**.
+  Clients never see Apps Script or Google. It talks to the Apps Script backend as a JSON API. Each client signs in
   with their email and an access code. They upload an image and text, the system builds the ad, they see a protected
   WhatsApp-style preview, upload customers from Excel/CSV, pick lists and a time, and launch. See **Part 15**.
 - **Google Form**: the original submission form, still supported.
@@ -62,8 +63,8 @@ runScheduler()  [every N min, LockService] ─► processMessageQueue() ─► s
 CUSTOMER reply / button / receipt ─► Maytapi webhook ─► doPost(e) ─► RESPONSES + ack status + auto-reply + opt-out + lead
 ```
 
-**Client dashboard path:** `doGet()` → `ClientApp.html` → `google.script.run` → `api*` functions (`ClientApi.gs`, session-checked)
-→ the same `createCampaignFromInput_()` → queue → Maytapi pipeline as the form.
+**Client app path:** `client-app/index.html` (your domain) → `fetch POST <exec URL>?route=api` → `doPost` → whitelisted `api*_` actions
+(`ClientApi.gs`, session-checked) → the same `createCampaignFromInput_()` → queue → Maytapi pipeline as the form.
 
 **Design principles**
 - **Generic**: every business value comes from the form. Code holds only structure and rules.
@@ -161,8 +162,9 @@ Two equivalent layouts are provided:
 | `Security.gs` | `requireAdmin_()` guard, access codes (salted SHA-256), client logins, sessions, `createClientLogin()`, `resetClientAccessCode()` |
 | `Public.gs` | Admin-only public wrappers with the spec names (`getConfig()`, `startCampaign()`, `sendMaytapiText()`…) |
 | `Tenants.gs` | Per-tenant sending number, plan, monthly quota, expiry and entitlement checks |
-| `ClientApi.gs` | Dashboard server API: login, bootstrap, Excel/CSV contact import, campaign create/cancel, preview image |
-| `ClientApp.html` | The client dashboard (single page, mobile-first, no build step) |
+| `ClientApi.gs` | JSON API for the client app (`doPost ?route=api`): login, bootstrap, Excel/CSV contact import, campaign create/cancel, preview image |
+
+The **client app** lives outside the Apps Script project, in `whatsapp-automation/client-app/` (`index.html` + `config.js`). It's a static website. See Part 15.
 | `Constants.gs` | Sheet names, headers, statuses, form question titles, variables |
 | `Config.gs` | `getConfig()`, `validateConfig()`, `setMaytapiCredentials()`, `redactSecrets_()` |
 | `Utils.gs` | Sheet I/O, locked appends, ID generator, `normalizePhoneNumber()`, `renderTemplate()`, date parsing, `logEvent_()` |
@@ -180,14 +182,12 @@ Two equivalent layouts are provided:
 \* return a "not verified" error by design (see the verification table).
 
 **B. Single file**: `whatsapp-automation/dist/Code.gs`, generated from `src/` by `node tools/build-single-file.js`.
-Paste it into one Apps Script file and use `src/appsscript.json` as the manifest. The dashboard HTML is embedded in it
-(`CLIENT_APP_HTML_`), so no separate HTML file is needed. The test suite fails if the bundle is out of date.
+Paste it into one Apps Script file and use `src/appsscript.json` as the manifest. The test suite fails if the bundle is out of date.
 
 **Installing the code**
 1. Create a Google Sheet → *Extensions → Apps Script*.
 2. *Project Settings* → tick **Show "appsscript.json" manifest file in editor** → replace its contents with `src/appsscript.json`.
-3. Create one script file per `.gs` file in `src/` with the same name and paste the contents, then *+ → HTML* named `ClientApp`
-   with the contents of `src/ClientApp.html`. Or paste `dist/Code.gs` alone into `Code.gs`.
+3. Create one script file per `.gs` file in `src/` with the same name and paste the contents, or paste `dist/Code.gs` alone into `Code.gs`.
    With clasp: `clasp create --type sheets --rootDir src` then `clasp push`.
 4. Save, reload the spreadsheet, and the **WhatsApp Automation** menu appears.
 
@@ -262,14 +262,14 @@ Triggers run as the installing account. Install them from the account that owns 
 1. Apps Script editor → **Deploy → New deployment** → gear icon → **Web app**.
 2. **Description**: `WhatsApp webhook v1`.
 3. **Execute as: Me** (the script needs your Sheets, Drive and Mail access).
-4. **Who has access: Anyone**. Maytapi's servers call the URL without a Google login, and your clients open the dashboard
-   without one, so "Anyone with Google account" or "Only myself" would block both. The webhook is protected by its secret `?key=`,
-   the dashboard by client access codes, and every admin function by `requireAdmin_()`.
+4. **Who has access: Anyone**. Maytapi's servers and your client app call the URL without a Google login, so "Anyone with Google account"
+   or "Only myself" would block both. The webhook is protected by its secret `?key=`, the client API by client access codes and sessions,
+   and every admin function by `requireAdmin_()`.
 5. **Deploy** → authorise → copy the **Web app URL** ending in `/exec`.
 6. Paste that URL (without `?key=`) into `SETTINGS → WEBHOOK_URL`. If it's left blank, `getWebhookUrl()` falls back to
    `ScriptApp.getService().getUrl()`, which may return the `/dev` URL when run from the editor. Maytapi can't use `/dev`.
-7. Check: open `<exec URL>?health=1`. It returns `{"status":"ok","service":"whatsapp-campaign-automation","configured":true,…}`.
-   Open `<exec URL>` itself to see the client dashboard sign-in page. That plain URL is the one you give clients.
+7. Check: open `<exec URL>` in a browser. It returns `{"status":"ok","service":"whatsapp-campaign-automation","configured":true,…}`.
+   Apps Script serves no pages. Clients use your hosted client app (Part 15).
 
 **Updating code later**: *Deploy → Manage deployments → edit (pencil) → Version: New version → Deploy*. This keeps the same
 `/exec` URL, so the Maytapi webhook doesn't need changing. "New deployment" would create a new URL.
@@ -302,9 +302,10 @@ Apps Script always answers HTTP 200. Rejections (bad key, bad JSON) are reported
 
 ## PART 10: Testing procedure
 
-**Browser (optional)**: `NODE_PATH=<dir with playwright-core + xlsx>/node_modules node whatsapp-automation/tests/ui-smoke.js` drives the real dashboard
-in headless Chromium at phone, tablet and desktop sizes: sign-in, CSV and XLSX upload, ad builder, protected preview, scheduling, launch,
-preview and cancel. It fails on any console error or horizontal scrolling.
+**Browser (optional)**: `NODE_PATH=<dir with playwright-core + xlsx>/node_modules node whatsapp-automation/tests/ui-smoke.js` serves the real
+client app from a separate origin, answers its API calls, and drives it in headless Chromium at phone, tablet and desktop sizes: branding,
+sign-in, CSV and XLSX upload, ad builder, protected preview, scheduling, launch, preview and cancel. It fails on any console error,
+horizontal scrolling, or a request that would need a CORS preflight.
 
 **Offline (no network)**: `node whatsapp-automation/tests/run-tests.js` runs 45 end-to-end checks, including the admin guard, client logins,
 the dashboard API, cross-tenant isolation, per-tenant numbers, quotas, expiry and tenant-scoped webhooks, with mocked Apps Script services
@@ -393,10 +394,15 @@ or a restaurant ("View Menu" QUICK_REPLY with value `menu` plus a TEMPLATES row 
 
 ## PART 13: Security considerations
 
-- **Admin guard**: a page served by HtmlService can call any public server function through `google.script.run`, and the Web App
-  runs as you. So every implementation is private (ends in `_`), and every public admin function starts with `requireAdmin_()`.
-  That check passes only when the person running the code is the account it runs as (sheet menu or editor). Anonymous dashboard
-  visitors are refused. `getConfig()` masks the token even for admins. `onFormSubmit` only accepts genuine trigger events.
+- **Client API surface**: Apps Script serves no HTML pages, so `google.script.run` isn't available to anyone. The only browser entry point is
+  `doPost ?route=api`, which dispatches to a whitelist of eight `api*_` actions. Anything else returns "Unknown action". As defence in depth,
+  every implementation is private (ends in `_`), and every public admin function starts with `requireAdmin_()` (it passes only when the
+  person running the code is the account it runs as: sheet menu or editor). `getConfig()` masks the token even for admins, and
+  `onFormSubmit` only accepts genuine trigger events.
+- **Hosting the client app**: serve it over HTTPS only. It refuses to run inside another site's frame (frame-buster), sends no cookies
+  (`credentials: omit`), sets `no-referrer`, and stores the session token only in `sessionStorage`. The Apps Script URL is in `config.js`, so
+  technical users who open the page source or network tools can see it. That's harmless, because everything behind it requires a session. If you want
+  even that hidden, put a reverse proxy (e.g. a Cloudflare Worker on `api.yourbrand.com`) in front and set `apiUrl` to it.
 - **Client logins**: access codes are random (~50 bits), stored only as salted SHA-256 hashes, and compared in constant time.
   Five failed attempts lock that email for 15 minutes. Sessions are random 256-bit tokens in CacheService with a 6-hour sliding
   expiry, and they end immediately when the code is reset or the tenant is suspended. Business name and email always come from
@@ -437,22 +443,46 @@ or a restaurant ("View Menu" QUICK_REPLY with value `menu` plus a TEMPLATES row 
 - [ ] The test campaign to your own contact shows SENT → DELIVERED → READ in MESSAGE_QUEUE
 - [ ] STOP tested: Opt In = NO and the contact is excluded from new queues
 - [ ] An invalid submission produces a clear "Requires Attention" email
-- [ ] Spreadsheet shared only with administrators, and clients receive only the dashboard URL (and/or the form link)
+- [ ] Client app hosted over HTTPS on your domain, `config.js` → `apiUrl` set, and `SETTINGS → CLIENT_APP_URL` filled
+- [ ] Spreadsheet shared only with administrators, and clients receive only the client app URL (and/or the form link)
 - [ ] For each tenant: **Create Client Login** done, Plan / Monthly Quota / Valid Until set, and Maytapi Phone ID set if they have their own number
 - [ ] **Test Maytapi Connection** lists every tenant's dedicated phone as found
-- [ ] As a test tenant, sign in to the dashboard on a phone: upload a CSV, build an ad, preview it, schedule it to your own number
+- [ ] As a test tenant, sign in to the client app on a phone: upload a CSV, build an ad, preview it, schedule it to your own number
 - [ ] Code changes are deployed as **New version** of the same deployment
 - [ ] Plan for growth: archive old MESSAGE_QUEUE, RESPONSES and LOGS rows periodically (Sheets suits a few thousand messages per day)
 
 ---
 
-## PART 15: Client dashboard
+## PART 15: Client app (standalone HTML, your domain)
 
-**URL**: the Web App `/exec` URL (menu **Show Client Dashboard URL**). It works on phones, tablets and desktops.
+The client app is a static website in `whatsapp-automation/client-app/`:
+
+| File | Purpose |
+|---|---|
+| `index.html` | The whole app (login, home, ad builder, customers, campaigns). Mobile-first, no build step, no framework. |
+| `config.js` | Per-installation settings: `apiUrl`, `brandName`, `logoUrl`, `primaryColor`, `supportText`. |
+| `logo.png` (optional) | Your logo. Reference it as `logoUrl: 'logo.png'`. |
+
+**Set it up**
+1. Deploy the Apps Script Web App (Part 8) and copy the `/exec` URL (menu **Show Client App URLs** shows it ready-made).
+2. Edit `config.js`: set `apiUrl` to that `/exec` URL (`?route=api` is added automatically), plus your brand name, colour, logo and support text.
+3. Upload `index.html` and `config.js` (and your logo) to any static HTTPS host on your domain, for example:
+   - **Netlify / Vercel / Cloudflare Pages**: drag-and-drop the `client-app` folder, then add your custom domain (e.g. `app.yourbrand.com`).
+   - **Firebase Hosting / GitHub Pages**: publish the folder as the site root.
+   - **cPanel / any web hosting**: upload both files into a folder such as `public_html/app/`.
+4. Put the hosted address in **SETTINGS → CLIENT_APP_URL**, so **Create Client Login** shows it.
+5. Open it, and sign in with a test client's email and access code.
+
+**How it talks to Apps Script**: `POST <exec URL>?route=api` with a `text/plain` JSON body `{action, args}`. That's a CORS "simple request",
+so browsers don't send a preflight (Apps Script can't answer one). Apps Script's JSON responses are readable from any origin.
+Each code change in Apps Script needs a **New version** of the same deployment (Part 8) so the URL in `config.js` stays valid.
+
+**Selling to several resellers or brands**: copy the `client-app` folder per brand with its own `config.js`. All copies can point at
+the same backend, or at separate backends (separate sheet + Apps Script) if a reseller needs fully separate data.
 
 **Onboarding a client**: menu **Create Client Login** → business name, login email, store phone, website. You get an
-**access code** (`XXXXX-XXXXX`) shown once. Send it to the client privately. **Reset Client Access Code** issues a new one and signs out
-their open sessions.
+**access code** (`XXXXX-XXXXX`) shown once. Send the client app URL and the code privately. **Reset Client Access Code** issues a new code
+and signs out their open sessions.
 
 **What the client can do**
 1. **Home**: opted-in customers, active and scheduled campaigns, delivery and read rates, replies, and their plan and usage.
@@ -476,8 +506,7 @@ their open sessions.
 **Where things are stored**: creatives go to Drive under `WhatsApp Campaign Creatives/<Client ID>/` (private). Contacts, campaigns and
 the queue go into the same sheets as before, always tagged with the tenant's Client ID.
 
-**Branding note**: Google may show a small notice above Apps Script web apps (for example "This application was created by a
-Google Apps Script user"). It's added by Google and can't be removed from the script, so tell clients to expect it.
+Because the app is hosted on your domain, clients never see an Apps Script page, URL or Google banner.
 
 ---
 

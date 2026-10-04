@@ -1,11 +1,17 @@
 /**
  * ClientApi.gs
- * Server side of the client dashboard (ClientApp.html), served by the Web App's doGet().
+ * JSON API for the standalone client app (whatsapp-automation/client-app/), which you host on
+ * your own domain. Apps Script serves no pages: the browser calls
  *
- * Every api* function:
+ *   POST <Web App /exec URL>?route=api      body: {"action": "apiLogin", "args": [...]}
+ *
+ * with Content-Type text/plain (a CORS "simple request", so no preflight is needed; Apps Script
+ * cannot answer OPTIONS). Apps Script's JSON responses are readable cross-origin.
+ *
+ * Every action except login:
  *   - takes the session token first and resolves it with requireSession_() (Security.gs),
  *   - only reads/writes rows whose Client ID equals the session's client,
- *   - returns plain JSON (no Date objects) as { ok: true, ... } or { ok: false, error, code }.
+ *   - returns plain JSON as { ok: true, ... } or { ok: false, error, code }.
  * Business values (name, email) always come from the CLIENTS row, never from the browser,
  * so a client cannot create campaigns for another business.
  */
@@ -13,15 +19,37 @@
 const MAX_UPLOAD_ROWS = 5000;
 const CREATIVES_FOLDER_NAME = 'WhatsApp Campaign Creatives';
 
-/** Serves the dashboard page. */
-function serveClientApp_() {
-  const html = typeof CLIENT_APP_HTML_ !== 'undefined'
-    ? CLIENT_APP_HTML_                                            // single-file build (dist/Code.gs)
-    : HtmlService.createHtmlOutputFromFile('ClientApp').getContent(); // multi-file project
-  return HtmlService.createHtmlOutput(html)
-    .setTitle(getConfig_().systemName)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT); // no embedding by other sites
+/** Allowed API actions (anything else is rejected). */
+function clientApiActions_() {
+  return {
+    apiLogin: apiLogin_,
+    apiLogout: apiLogout_,
+    apiBootstrap: apiBootstrap_,
+    apiCountAudience: apiCountAudience_,
+    apiUploadContacts: apiUploadContacts_,
+    apiCreateCampaign: apiCreateCampaign_,
+    apiCancelCampaign: apiCancelCampaign_,
+    apiGetCampaignImage: apiGetCampaignImage_,
+  };
+}
+
+/** doPost(?route=api) entry point. */
+function handleClientApi_(e) {
+  let body;
+  try {
+    body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+  } catch (err) {
+    return jsonOut_({ ok: false, error: 'Bad request.' });
+  }
+  const fn = clientApiActions_()[String(body.action || '')];
+  if (!fn) return jsonOut_({ ok: false, error: 'Unknown action.' });
+  const args = Array.isArray(body.args) ? body.args.slice(0, 4) : [];
+  try {
+    return jsonOut_(fn.apply(null, args));
+  } catch (err) {
+    logEvent_(LOG_LEVEL.ERROR, 'API_DISPATCH', { error: err.message, details: err.stack });
+    return jsonOut_({ ok: false, error: 'Something went wrong. Please try again.' });
+  }
 }
 
 /** Wraps an API handler: session check, error shaping, logging. */
@@ -39,7 +67,7 @@ function apiCall_(token, action, handler) {
 
 /* ============================== AUTH ============================== */
 
-function apiLogin(email, accessCode) {
+function apiLogin_(email, accessCode) {
   try {
     const s = loginClient_(email, accessCode);
     return Object.assign({ ok: true, token: s.token }, buildBootstrap_(s.clientId));
@@ -48,14 +76,14 @@ function apiLogin(email, accessCode) {
   }
 }
 
-function apiLogout(token) {
+function apiLogout_(token) {
   logoutClient_(token);
   return { ok: true };
 }
 
 /* ============================== DATA ============================== */
 
-function apiBootstrap(token) {
+function apiBootstrap_(token) {
   return apiCall_(token, 'BOOTSTRAP', s => buildBootstrap_(s.clientId));
 }
 
@@ -172,7 +200,7 @@ function sanitizeListName_(name) {
   return String(name || '').replace(/[^A-Za-z0-9 _.\-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
 }
 
-function apiCountAudience(token, selection) {
+function apiCountAudience_(token, selection) {
   return apiCall_(token, 'COUNT_AUDIENCE', s => {
     const audience = audienceFromSelection_(selection);
     return { count: audience ? countAudience_(s.clientId, audience) : 0 };
@@ -188,7 +216,7 @@ function apiCountAudience(token, selection) {
  * - Existing numbers are updated (name/email/company/tags) but an opted-out customer is
  *   NEVER re-subscribed by an upload. A file value of NO opts the customer out.
  */
-function apiUploadContacts(token, payload) {
+function apiUploadContacts_(token, payload) {
   return apiCall_(token, 'UPLOAD_CONTACTS', s => {
     payload = payload || {};
     if (payload.consent !== true) throw new Error('Please confirm that these customers agreed to receive WhatsApp messages from your business.');
@@ -273,7 +301,7 @@ function apiUploadContacts(token, payload) {
  * p = { campaignName, message, imageDataUrl, website, storePhone, ctaType, ctaText, ctaValue,
  *       audience: { all } | { lists: [] }, sendMode: 'NOW' | 'SCHEDULE', date: 'yyyy-MM-dd', time: 'HH:mm' }
  */
-function apiCreateCampaign(token, p) {
+function apiCreateCampaign_(token, p) {
   return apiCall_(token, 'CREATE_CAMPAIGN', s => {
     p = p || {};
     const audience = audienceFromSelection_(p.audience);
@@ -352,7 +380,7 @@ function clientCampaignRow_(clientId, campaignId) {
   return c.row;
 }
 
-function apiCancelCampaign(token, campaignId) {
+function apiCancelCampaign_(token, campaignId) {
   return apiCall_(token, 'CANCEL_CAMPAIGN', s => {
     const row = clientCampaignRow_(s.clientId, campaignId);
     const allowed = [CAMPAIGN_STATUS.READY, CAMPAIGN_STATUS.SCHEDULED, CAMPAIGN_STATUS.ACTIVE, CAMPAIGN_STATUS.PAUSED];
@@ -366,7 +394,7 @@ function apiCancelCampaign(token, campaignId) {
  * Returns a campaign's image for the protected (canvas + watermark) preview only.
  * The Drive file itself is never shared or linked.
  */
-function apiGetCampaignImage(token, campaignId) {
+function apiGetCampaignImage_(token, campaignId) {
   return apiCall_(token, 'CAMPAIGN_IMAGE', s => {
     const row = clientCampaignRow_(s.clientId, campaignId);
     const fileId = String(row['Image File ID'] || '').trim();

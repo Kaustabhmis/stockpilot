@@ -2,14 +2,13 @@
  * Security.gs
  * Admin guard, client logins (email + access code) and dashboard sessions.
  *
- * WHY AN ADMIN GUARD IS NEEDED
- * The client dashboard is served by this script's Web App (HtmlService). Any page served
- * that way can call ANY public (non "_") server function through google.script.run, and
- * the Web App executes as the owner. So every admin action is either private ("_") or
- * starts with requireAdmin_(), which only passes when the person running the code is
- * also the account it runs as (Sheet menu / script editor). Anonymous dashboard visitors
- * have an empty active user and are rejected. Dashboard calls go through api* functions
- * (ClientApi.gs), which require a valid client session instead.
+ * ADMIN GUARD (defence in depth)
+ * The Web App executes as the owner and is open to "Anyone" (needed for the webhook and the
+ * client app API). It serves no HtmlService pages, so google.script.run is not reachable, but
+ * every admin action is still either private ("_") or starts with requireAdmin_(), which only
+ * passes when the person running the code is also the account it runs as (Sheet menu /
+ * script editor). Client app calls go through the whitelisted api*_ actions (ClientApi.gs),
+ * which require a valid client session instead.
  */
 
 const SESSION_TTL_SECONDS = 6 * 60 * 60;   // CacheService maximum
@@ -89,7 +88,7 @@ function createClientLogin() {
     const code = issueAccessCode_(clientId);
     ui.alert('Client login ready',
       'Client: ' + businessName + ' (' + clientId + ')\nLogin email: ' + email + '\nAccess code: ' + code +
-      '\nDashboard: ' + (dashboardUrl_() || '(deploy the Web App first)') +
+      '\nClient app: ' + (dashboardUrl_() || '(set SETTINGS → CLIENT_APP_URL)') +
       '\n\nShare the access code privately. It is stored only as a hash and cannot be shown again.', ui.ButtonSet.OK);
   } catch (err) {
     if (err.message === 'CANCELLED') return;
@@ -111,17 +110,28 @@ function resetClientAccessCode() {
   }
 }
 
-/** Menu: shows the client dashboard URL. */
+/** Menu: shows the client app URL and the API URL to put in client-app/config.js. */
 function showDashboardUrl() {
   requireAdmin_();
-  SpreadsheetApp.getUi().alert('Client dashboard URL', dashboardUrl_() || 'Deploy the Web App first (Deploy → New deployment → Web app).', SpreadsheetApp.getUi().ButtonSet.OK);
+  const api = apiUrl_();
+  SpreadsheetApp.getUi().alert('Client app',
+    'Client app URL (give this to clients):\n' + (getConfig_(true).clientAppUrl || '(set SETTINGS → CLIENT_APP_URL after hosting client-app/)') +
+    '\n\nAPI URL (paste into client-app/config.js → apiUrl):\n' + (api || '(deploy the Web App first: Deploy → New deployment → Web app)'),
+    SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
+/** The hosted client app (SETTINGS → CLIENT_APP_URL). */
 function dashboardUrl_() {
+  return getConfig_(true).clientAppUrl;
+}
+
+/** The Web App API endpoint for client-app/config.js. */
+function apiUrl_() {
   const cfg = getConfig_(true);
   let base = cfg.webhookUrl;
   if (!base) { try { base = ScriptApp.getService().getUrl(); } catch (err) { base = ''; } }
-  return String(base || '').replace(/\?.*$/, '');
+  base = String(base || '').replace(/\?.*$/, '');
+  return base ? base + '?route=api' : '';
 }
 
 /* ============================== SESSIONS ============================== */

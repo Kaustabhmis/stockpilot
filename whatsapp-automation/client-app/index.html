@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#128c4a">
 <title>Campaign Studio</title>
 <style>
   :root {
@@ -193,7 +195,7 @@
       <label class="field"><span>Access code</span><input class="input" type="password" id="loginCode" autocomplete="current-password" placeholder="XXXXX-XXXXX" required></label>
       <button class="btn primary block" type="submit" id="loginBtn">Sign in</button>
     </form>
-    <p class="hint" style="margin-top:14px">Your access code is provided by your service provider.</p>
+    <p class="hint" style="margin-top:14px" id="loginSupport">Your access code is provided by your service provider.</p>
   </div>
 </section>
 
@@ -405,9 +407,31 @@
 <div id="toast" class="hidden"></div>
 <div id="busy" class="hidden"><div class="spinner"></div></div>
 
+<script src="config.js"></script>
 <script>
 (function () {
   'use strict';
+
+  // Never run inside someone else's frame (clickjacking protection).
+  if (window.top !== window.self) { try { window.top.location = window.self.location; } catch (e) { document.body.innerHTML = ''; return; } }
+
+  /* =================================================================
+   * Configuration (config.js) — white-label branding + API endpoint
+   * ================================================================= */
+  var CFG = window.APP_CONFIG || {};
+  var API_URL = String(CFG.apiUrl || '').trim();
+  if (/PASTE_YOUR/i.test(API_URL)) API_URL = '';
+  if (API_URL && !/[?&]route=api\b/.test(API_URL)) API_URL += (API_URL.indexOf('?') >= 0 ? '&' : '?') + 'route=api';
+  var BRAND = CFG.brandName || 'Campaign Studio';
+  (function applyBrand() {
+    document.title = BRAND;
+    if (CFG.primaryColor && /^#[0-9a-f]{6}$/i.test(CFG.primaryColor)) {
+      var r = document.documentElement.style, c = CFG.primaryColor;
+      var n = parseInt(c.slice(1), 16), dark = '#' + [16, 8, 0].map(function (sh) { return ('0' + Math.round(((n >> sh) & 255) * 0.78).toString(16)).slice(-2); }).join('');
+      r.setProperty('--brand', c); r.setProperty('--brand-dark', dark);
+      r.setProperty('--brand-soft', 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',0.12)');
+    }
+  })();
 
   /* =================================================================
    * State & helpers
@@ -432,16 +456,25 @@
   function store(k, v) { try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { /* storage blocked */ } }
   function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
 
-  /** google.script.run as a Promise. Expired sessions return to the login screen. */
+  /**
+   * Calls the Apps Script JSON API. Content-Type text/plain keeps it a CORS "simple request"
+   * (no preflight), which Apps Script requires. Expired sessions return to the login screen.
+   */
   function api(fn) {
     var args = Array.prototype.slice.call(arguments, 1);
-    return new Promise(function (resolve, reject) {
-      google.script.run
-        .withSuccessHandler(function (r) {
-          if (r && r.ok === false && r.code === 'AUTH' && fn !== 'apiLogin') { signOut(r.error); return reject(new Error(r.error)); }
-          resolve(r);
-        })
-        .withFailureHandler(function (e) { reject(e instanceof Error ? e : new Error(String(e && e.message || e))); })[fn].apply(null, args);
+    if (!API_URL) return Promise.reject(new Error('This app is not configured yet (config.js → apiUrl).'));
+    return fetch(API_URL, {
+      method: 'POST', redirect: 'follow', credentials: 'omit', cache: 'no-store',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: fn, args: args }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error('Server error (' + res.status + '). Please try again.');
+      return res.json();
+    }, function () {
+      throw new Error('Cannot reach the server. Check your internet connection and try again.');
+    }).then(function (r) {
+      if (r && r.ok === false && r.code === 'AUTH' && fn !== 'apiLogin') { signOut(r.error); throw new Error(r.error); }
+      return r;
     });
   }
 
@@ -485,7 +518,7 @@
     $('loginError').textContent = msg || ''; show('loginError', !!msg);
   }
   function signOut(msg) {
-    if (S.token) { try { google.script.run.apiLogout(S.token); } catch (e) { /* ignore */ } }
+    if (S.token) api('apiLogout', S.token).catch(function () { /* ignore */ });
     S.token = null; store('cs_token', null); showLogin(msg);
   }
   $('loginForm').addEventListener('submit', function (e) {
@@ -529,7 +562,7 @@
     $('hdrName').textContent = p.businessName;
     $('hdrAvatar').textContent = (p.businessName || '?').trim().charAt(0).toUpperCase();
     $('hdrPlan').textContent = (sub.plan ? sub.plan + ' plan' : '') + (sub.validUntil ? ' · valid until ' + sub.validUntil : '');
-    document.title = p.businessName + ' · ' + S.boot.settings.systemName;
+    document.title = p.businessName + ' · ' + BRAND;
   }
 
   /* =================================================================
@@ -1065,6 +1098,15 @@
   /* =================================================================
    * Boot
    * ================================================================= */
+  $('loginTitle').textContent = BRAND;
+  if (CFG.logoUrl) $('loginLogo').innerHTML = '<img src="' + esc(CFG.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:14px">';
+  else $('loginLogo').textContent = BRAND.charAt(0).toUpperCase();
+  if (CFG.supportText) $('loginSupport').textContent = CFG.supportText;
+  if (!API_URL) {
+    showLogin('This app is not configured yet. Set apiUrl in config.js.');
+    $('loginBtn').disabled = true;
+    return;
+  }
   var saved = load('cs_token');
   if (saved) {
     S.token = saved; busy(true);

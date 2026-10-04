@@ -12,7 +12,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Create Client Login', 'createClientLogin')
     .addItem('Reset Client Access Code', 'resetClientAccessCode')
-    .addItem('Show Client Dashboard URL', 'showDashboardUrl')
+    .addItem('Show Client App URLs', 'showDashboardUrl')
     .addSeparator()
     .addItem('Test Maytapi Connection', 'testMaytapiConnection')
     .addSeparator()

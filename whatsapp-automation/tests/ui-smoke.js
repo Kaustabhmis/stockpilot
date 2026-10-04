@@ -1,8 +1,9 @@
 /**
- * Browser smoke test for the client dashboard (src/ClientApp.html).
+ * Browser smoke test for the standalone client app (client-app/index.html).
  *
- * Loads the real page in headless Chromium with google.script.run replaced by an in-page
- * mock, then drives login → customer upload (CSV + XLSX) → ad builder with image → protected
+ * Serves the real page + a config.js from a separate origin (like your own domain) in headless
+ * Chromium, answers its fetch() calls with a mock of the Apps Script JSON API (and checks they
+ * are CORS-simple: text/plain POST, no preflight), then drives login → customer upload (CSV + XLSX) → ad builder with image → protected
  * preview → schedule → launch → campaign preview/cancel, on a phone and a desktop viewport.
  *
  * Optional dev test (needs playwright-core and xlsx; not part of the Apps Script project):
@@ -16,18 +17,23 @@ const { chromium } = require('playwright-core');
 const XLSX = require('xlsx');
 
 const SHOTS = process.argv[2] || null;
-const HTML = fs.readFileSync(path.join(__dirname, '..', 'src', 'ClientApp.html'), 'utf8');
+const HTML = fs.readFileSync(path.join(__dirname, '..', 'client-app', 'index.html'), 'utf8');
 const XLSX_JS = fs.readFileSync(require.resolve('xlsx/dist/xlsx.full.min.js'), 'utf8');
 
-const MOCK = `
-<script>
-(function () {
-  var boot = {
+const API = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
+const CONFIG_JS = `window.APP_CONFIG = { apiUrl: '${API}', brandName: 'BrandX Campaigns', primaryColor: '#5b3cc4', supportText: 'Help: support@brandx.example' };`;
+// 1x1 white JPEG returned as a campaign image.
+const PREVIEW_JPEG = 'data:image/jpeg;base64,' +
+  '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
+
+/** Server-side mock of the Apps Script JSON API (doPost ?route=api). */
+function makeApi() {
+  const boot = {
     ok: true,
     profile: { clientId: 'CLI-2026-0001', businessName: 'Sunrise Bakery', email: 'owner@sunrise.example', phone: '+919800000000', website: 'https://sunrise.example' },
     settings: { timezone: 'Asia/Kolkata', today: '2026-10-04', nowTime: '10:00', ctaTextMaxLength: 20, maxImageMb: 5, maxUploadRows: 5000,
       imageCtaStyle: 'IMAGE_THEN_BUTTONS', defaultContactName: 'Customer', defaultCountryCode: '91',
-      variables: ['Name','Phone','Email','Company','ClientName','CampaignName','StorePhone','Website'], systemName: 'WhatsApp Campaign Automation' },
+      variables: ['Name', 'Phone', 'Email', 'Company', 'ClientName', 'CampaignName', 'StorePhone', 'Website'], systemName: 'WhatsApp Campaign Automation' },
     stats: { contacts: 3, optedIn: 2, optedOut: 1 },
     lists: [{ name: 'VIP', count: 2 }],
     subscription: { plan: 'Pro', validUntil: '2026-12-31', quota: 1000, used: 120, remaining: 880, canSend: true, reason: '', dedicatedNumber: true },
@@ -36,44 +42,31 @@ const MOCK = `
       ctaType: 'URL', ctaText: 'Order Now', ctaValue: 'https://sunrise.example/order', website: 'https://sunrise.example', storePhone: '+919800000000',
       stats: { recipients: 2, sent: 0, delivered: 0, read: 0, failed: 0, pending: 2 }, replies: 0 }],
   };
-  window.__calls = [];
-  var api = {
-    apiLogin: function (email, code) { return code === 'ABCDE-FGHJK' ? Object.assign({ token: 'a'.repeat(64) }, boot) : { ok: false, code: 'AUTH', error: 'Email or access code is incorrect.' }; },
-    apiLogout: function () { return { ok: true }; },
-    apiBootstrap: function () { return boot; },
-    apiCountAudience: function (t, sel) { return { ok: true, count: sel.all ? boot.stats.optedIn : (sel.lists || []).length * 2 }; },
-    apiUploadContacts: function (t, p) {
-      window.__lastUpload = p;
+  const state = { lastUpload: null, lastPayload: null, calls: [] };
+  const handlers = {
+    apiLogin: (email, code) => (code === 'ABCDE-FGHJK' ? Object.assign({ token: 'a'.repeat(64) }, boot) : { ok: false, code: 'AUTH', error: 'Email or access code is incorrect.' }),
+    apiLogout: () => ({ ok: true }),
+    apiBootstrap: () => boot,
+    apiCountAudience: (t, sel) => ({ ok: true, count: sel.all ? boot.stats.optedIn : (sel.lists || []).length * 2 }),
+    apiUploadContacts: (t, p) => {
+      state.lastUpload = p;
       boot.lists.push({ name: p.listName, count: p.rows.length });
       boot.stats.contacts += p.rows.length; boot.stats.optedIn += p.rows.length;
       return { ok: true, list: p.listName, added: p.rows.length, updated: 0, invalid: 0, invalidRows: [], duplicatesInFile: 0, keptOptedOut: 0, bootstrap: boot };
     },
-    apiCreateCampaign: function (t, p) {
-      window.__lastPayload = p;
+    apiCreateCampaign: (t, p) => {
+      state.lastPayload = p;
       boot.campaigns.unshift({ id: 'CMP-2026-0002', name: p.campaignName, status: p.sendMode === 'SCHEDULE' ? 'SCHEDULED' : 'ACTIVE', sendMode: p.sendMode,
         scheduleDate: p.date, scheduleTime: p.time, timezone: 'Asia/Kolkata', createdAt: '2026-10-04 10:05', audience: '', hasImage: !!p.imageDataUrl,
         message: p.message, ctaType: p.ctaType === 'NONE' ? '' : p.ctaType, ctaText: p.ctaText, ctaValue: p.ctaValue, website: p.website, storePhone: p.storePhone,
         stats: { recipients: 2, sent: 0, delivered: 0, read: 0, failed: 0, pending: 2 }, replies: 0 });
       return { ok: true, created: true, campaignId: 'CMP-2026-0002', status: p.sendMode === 'SCHEDULE' ? 'SCHEDULED' : 'ACTIVE', errors: [], warnings: [], campaigns: boot.campaigns };
     },
-    apiCancelCampaign: function (t, id) { boot.campaigns.forEach(function (c) { if (c.id === id) c.status = 'CANCELLED'; }); return { ok: true, message: 'cancelled', campaigns: boot.campaigns }; },
-    apiGetCampaignImage: function () {
-      var c = document.createElement('canvas'); c.width = 400; c.height = 300; var x = c.getContext('2d');
-      x.fillStyle = '#f4a261'; x.fillRect(0, 0, 400, 300); x.fillStyle = '#264653'; x.font = 'bold 40px sans-serif'; x.fillText('Fresh bakes', 60, 160);
-      return { ok: true, image: c.toDataURL('image/jpeg', 0.8) };
-    },
+    apiCancelCampaign: (t, id) => { boot.campaigns.forEach(c => { if (c.id === id) c.status = 'CANCELLED'; }); return { ok: true, message: 'cancelled', campaigns: boot.campaigns }; },
+    apiGetCampaignImage: () => ({ ok: true, image: PREVIEW_JPEG }),
   };
-  function runner(success, failure) {
-    return new Proxy({}, { get: function (_, k) {
-      if (k === 'withSuccessHandler') return function (fn) { return runner(fn, failure); };
-      if (k === 'withFailureHandler') return function (fn) { return runner(success, fn); };
-      return function () { var args = arguments; window.__calls.push(k);
-        setTimeout(function () { try { var r = api[k].apply(null, args); success && success(r); } catch (e) { failure && failure(e); } }, 20); };
-    } });
-  }
-  window.google = { script: { run: runner(null, null) } };
-})();
-</script>`;
+  return { state, handlers };
+}
 
 async function run(viewport, label) {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -82,9 +75,25 @@ async function run(viewport, label) {
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('dialog', d => d.accept());
+  const { state, handlers } = makeApi();
+  const preflights = [];
   await page.route('https://cdnjs.cloudflare.com/**', r => r.fulfill({ contentType: 'application/javascript', body: XLSX_JS }));
-  await page.route('http://app.test/**', r => r.fulfill({ contentType: 'text/html', body: HTML.replace('<script>', MOCK + '\n<script>') }));
-  await page.goto('http://app.test/');
+  await page.route('https://app.brandx.test/config.js', r => r.fulfill({ contentType: 'application/javascript', body: CONFIG_JS }));
+  await page.route('https://app.brandx.test/', r => r.fulfill({ contentType: 'text/html', body: HTML }));
+  await page.route(API + '**', async r => {
+    const req = r.request();
+    if (req.method() === 'OPTIONS') { preflights.push(req.url()); return r.fulfill({ status: 405 }); }
+    assert.ok(req.url().endsWith('?route=api'), 'API URL must carry route=api: ' + req.url());
+    assert.ok(/^text\/plain/.test(req.headers()['content-type']), 'API calls must be CORS-simple (text/plain)');
+    const body = JSON.parse(req.postData());
+    state.calls.push(body.action);
+    const out = handlers[body.action] ? handlers[body.action].apply(null, body.args) : { ok: false, error: 'Unknown action.' };
+    await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(out) });
+  });
+  await page.goto('https://app.brandx.test/');
+  assert.strictEqual(await page.textContent('#loginTitle'), 'BrandX Campaigns');
+  assert.strictEqual(await page.textContent('#loginSupport'), 'Help: support@brandx.example');
+  assert.ok(!(await page.content()).includes('google.script'), 'no Apps Script client code in the page');
   const shot = async name => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, label + '-' + name + '.png'), fullPage: false }); };
   const noHorizontalScroll = async () => {
     const o = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -119,7 +128,7 @@ async function run(viewport, label) {
   await shot('3-upload-mapping');
   await page.click('#importBtn');
   await page.waitForSelector('#uploadResult .alert.ok');
-  const up = await page.evaluate(() => window.__lastUpload);
+  const up = state.lastUpload;
   assert.strictEqual(up.rows.length, 2); assert.strictEqual(up.rows[0].phone, '9876543210'); assert.strictEqual(up.rows[0].tags, 'Kolkata');
   assert.strictEqual(up.listName, 'diwali-list');
 
@@ -131,7 +140,7 @@ async function run(viewport, label) {
   await page.check('#consent');
   await page.click('#importBtn');
   await page.waitForSelector('#uploadResult .alert.ok');
-  const up2 = await page.evaluate(() => window.__lastUpload);
+  const up2 = state.lastUpload;
   assert.strictEqual(up2.rows[0].phone, '919812300000');
   await shot('4-customers');
 
@@ -189,7 +198,7 @@ async function run(viewport, label) {
   await shot('7-review');
   await page.click('#launchBtn');
   await page.waitForSelector('#step-done:not(.hidden)');
-  const p = await page.evaluate(() => window.__lastPayload);
+  const p = state.lastPayload;
   assert.ok(p.imageDataUrl.startsWith('data:image/jpeg;base64,'));
   assert.strictEqual(p.ctaType, 'URL'); assert.strictEqual(p.sendMode, 'SCHEDULE');
   assert.strictEqual(JSON.stringify(p.audience), JSON.stringify({ lists: ['VIP'] }));
@@ -209,6 +218,7 @@ async function run(viewport, label) {
   await shot('10-campaigns');
 
   await browser.close();
+  assert.deepStrictEqual(preflights, [], 'API calls must not trigger CORS preflight');
   assert.deepStrictEqual(errors, [], label + ' console errors: ' + errors.join(' | '));
   console.log('  ✓ ' + label + ' (' + viewport.width + 'x' + viewport.height + ')');
 }

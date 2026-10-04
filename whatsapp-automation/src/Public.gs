@@ -2,9 +2,9 @@
  * Public.gs
  * Admin-only public entry points with the names used in the specification.
  *
- * The real implementations end in "_" (private), so google.script.run calls from the
- * client dashboard cannot reach them. These wrappers let the administrator run them from
- * the script editor or menu, and refuse anyone else (see requireAdmin_ in Security.gs).
+ * The real implementations end in "_" (private). These wrappers let the administrator run
+ * them from the script editor or menu, and refuse anyone else (see requireAdmin_ in
+ * Security.gs). The client app can only reach the whitelisted api*_ actions (ClientApi.gs).
  * Internal code always calls the "_" versions.
  */
 

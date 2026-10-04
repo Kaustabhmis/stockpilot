@@ -457,7 +457,7 @@ test('dashboard renders', () => {
   assert.ok(d.some(r => r[0] === 'Messages Read' && r[1] >= 1));
 });
 test('doGet health exposes no secrets', () => {
-  const t = G.doGet({ parameter: { health: '1' } }).text;
+  const t = G.doGet({ parameter: {} }).text;
   assert.ok(JSON.parse(t).status === 'ok' && !t.includes('secret'));
 });
 
@@ -547,24 +547,24 @@ test('login: wrong code rejected, lockout after 5 failures, correct code returns
   codeA = G.issueAccessCode_(clientA);
   G.issueAccessCode_(clientB);
   assert.ok(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/.test(codeA));
-  const bad = G.apiLogin('a@tenant-a.example', 'WRONG-CODE1');
+  const bad = G.apiLogin_('a@tenant-a.example', 'WRONG-CODE1');
   assert.strictEqual(bad.ok, false); assert.strictEqual(bad.code, 'AUTH');
-  const r = G.apiLogin('A@Tenant-A.example', codeA.toLowerCase());
+  const r = G.apiLogin_('A@Tenant-A.example', codeA.toLowerCase());
   assert.ok(r.ok, JSON.stringify(r));
   tokenA = r.token;
   assert.strictEqual(r.profile.clientId, clientA);
   assert.ok(!JSON.stringify(r).includes('Access Code Hash'));
   assert.ok(!JSON.stringify(table('CLIENTS')).includes(codeA), 'plain code never stored');
-  for (let i = 0; i < 5; i++) G.apiLogin('b@tenant-b.example', 'NOPE0-NOPE0');
-  assert.ok(/Too many attempts/.test(G.apiLogin('b@tenant-b.example', 'NOPE0-NOPE0').error));
+  for (let i = 0; i < 5; i++) G.apiLogin_('b@tenant-b.example', 'NOPE0-NOPE0');
+  assert.ok(/Too many attempts/.test(G.apiLogin_('b@tenant-b.example', 'NOPE0-NOPE0').error));
 });
 test('api calls without a valid session are rejected', () => {
-  assert.strictEqual(G.apiBootstrap('deadbeef').code, 'AUTH');
-  assert.strictEqual(G.apiUploadContacts('', {}).code, 'AUTH');
+  assert.strictEqual(G.apiBootstrap_('deadbeef').code, 'AUTH');
+  assert.strictEqual(G.apiUploadContacts_('', {}).code, 'AUTH');
 });
 test('upload: consent required, phones normalised, dedupe, invalid rows reported, opted-out kept', () => {
-  assert.ok(/confirm/.test(G.apiUploadContacts(tokenA, { listName: 'VIP', consent: false, rows: [{ phone: '9876500001' }] }).error));
-  const r = G.apiUploadContacts(tokenA, { listName: 'Diwali 2026!', consent: true, rows: [
+  assert.ok(/confirm/.test(G.apiUploadContacts_(tokenA, { listName: 'VIP', consent: false, rows: [{ phone: '9876500001' }] }).error));
+  const r = G.apiUploadContacts_(tokenA, { listName: 'Diwali 2026!', consent: true, rows: [
     { name: 'Rahul', phone: '9876500001', tags: 'VIP' },
     { name: 'Rahul dup', phone: '+91 98765 00001' },
     { name: 'Meera', phone: '9876500002', optIn: 'no' },
@@ -580,7 +580,7 @@ test('upload: consent required, phones normalised, dedupe, invalid rows reported
   assert.strictEqual(mine.find(c => c.Name === 'Meera')['Opt In'], 'NO');
   assert.ok(/consent confirmed/.test(mine[0].Source));
   // Re-upload must not re-subscribe Meera.
-  const r2 = G.apiUploadContacts(tokenA, { listName: 'Again', consent: true, rows: [{ name: 'Meera', phone: '9876500002' }] });
+  const r2 = G.apiUploadContacts_(tokenA, { listName: 'Again', consent: true, rows: [{ name: 'Meera', phone: '9876500002' }] });
   assert.strictEqual(r2.keptOptedOut, 1);
   assert.strictEqual(table('CONTACTS').find(c => c.Name === 'Meera')['Opt In'], 'NO');
   assert.strictEqual(r2.bootstrap.stats.optedIn, 1);
@@ -588,9 +588,9 @@ test('upload: consent required, phones normalised, dedupe, invalid rows reported
 test('create campaign from dashboard: image saved privately, audience by list, only own contacts queued', () => {
   // Tenant B has a contact with the same list name — must never be targeted by tenant A.
   G.appendObjects_('CONTACTS', [{ 'Contact ID': 'CON-BX', 'Client ID': clientB, Name: 'B cust', Phone: '9876500009', Tags: 'Diwali 2026', 'Opt In': 'YES', Status: 'Active' }]);
-  assert.strictEqual(G.apiCountAudience(tokenA, { lists: ['Diwali 2026'] }).count, 1);
+  assert.strictEqual(G.apiCountAudience_(tokenA, { lists: ['Diwali 2026'] }).count, 1);
   const jpg = 'data:image/jpeg;base64,' + Buffer.from('fakejpegbytes').toString('base64');
-  const r = G.apiCreateCampaign(tokenA, {
+  const r = G.apiCreateCampaign_(tokenA, {
     campaignName: 'Dashboard Launch', message: 'Hi {{Name}}, welcome to {{ClientName}}', imageDataUrl: jpg,
     ctaType: 'URL', ctaText: 'Shop Now', ctaValue: '', audience: { lists: ['Diwali 2026'] }, sendMode: 'NOW',
   });
@@ -610,7 +610,7 @@ test('create campaign from dashboard: image saved privately, audience by list, o
 test('validation errors are returned inline (no email) and the uploaded image is trashed', () => {
   mails.length = 0;
   const jpg = 'data:image/jpeg;base64,' + Buffer.from('x').toString('base64');
-  const r = G.apiCreateCampaign(tokenA, { campaignName: '', message: 'Hi', imageDataUrl: jpg, ctaType: 'NONE', audience: { all: true }, sendMode: 'SCHEDULE', date: '2020-01-01', time: '10:00' });
+  const r = G.apiCreateCampaign_(tokenA, { campaignName: '', message: 'Hi', imageDataUrl: jpg, ctaType: 'NONE', audience: { all: true }, sendMode: 'SCHEDULE', date: '2020-01-01', time: '10:00' });
   assert.ok(r.ok && !r.created);
   assert.ok(r.errors.some(e => /Campaign Name/.test(e)) && r.errors.some(e => /past/.test(e)));
   assert.strictEqual(mails.length, 0);
@@ -619,24 +619,37 @@ test('validation errors are returned inline (no email) and the uploaded image is
 });
 test('tenant B cannot see, cancel or preview tenant A campaigns', () => {
   const codeB = G.issueAccessCode_(clientB);
-  const tB = G.apiLogin('b@tenant-b.example', codeB);
+  const tB = G.apiLogin_('b@tenant-b.example', codeB);
   // B was locked out by earlier failures — clear the lock for this test.
   Object.keys(cacheStore).filter(k => k.startsWith('loginfail_')).forEach(k => delete cacheStore[k]);
-  const loginB = tB.ok ? tB : G.apiLogin('b@tenant-b.example', codeB);
+  const loginB = tB.ok ? tB : G.apiLogin_('b@tenant-b.example', codeB);
   assert.ok(loginB.ok, JSON.stringify(loginB));
   const aCamp = table('CAMPAIGNS').find(c => c['Client ID'] === clientA)['Campaign ID'];
   assert.ok(!loginB.campaigns.some(c => c.id === aCamp));
-  assert.strictEqual(G.apiCancelCampaign(loginB.token, aCamp).error, 'Campaign not found.');
-  assert.strictEqual(G.apiGetCampaignImage(loginB.token, aCamp).error, 'Campaign not found.');
-  assert.ok(G.apiGetCampaignImage(tokenA, aCamp).ok);
+  assert.strictEqual(G.apiCancelCampaign_(loginB.token, aCamp).error, 'Campaign not found.');
+  assert.strictEqual(G.apiGetCampaignImage_(loginB.token, aCamp).error, 'Campaign not found.');
+  assert.ok(G.apiGetCampaignImage_(tokenA, aCamp).ok);
 });
 test('resetting the access code ends existing sessions', () => {
   G.issueAccessCode_(clientA);
-  assert.strictEqual(G.apiBootstrap(tokenA).code, 'AUTH');
+  assert.strictEqual(G.apiBootstrap_(tokenA).code, 'AUTH');
 });
-test('doGet serves the dashboard; ?health=1 returns JSON', () => {
-  assert.ok(/Campaign Studio/.test(G.doGet({ parameter: {} }).html));
-  assert.strictEqual(JSON.parse(G.doGet({ parameter: { health: '1' } }).text).status, 'ok');
+test('client app JSON API over doPost(?route=api); webhook path unaffected; doGet = health JSON', () => {
+  const call = body => JSON.parse(G.doPost({ parameter: { route: 'api' }, postData: { contents: typeof body === 'string' ? body : JSON.stringify(body) } }).text);
+  const code = G.issueAccessCode_(clientA);
+  const login = call({ action: 'apiLogin', args: ['a@tenant-a.example', code] });
+  assert.ok(login.ok && /^[a-f0-9]{64}$/.test(login.token), JSON.stringify(login));
+  const boot = call({ action: 'apiBootstrap', args: [login.token] });
+  assert.ok(boot.ok && boot.profile.clientId === clientA);
+  assert.strictEqual(call({ action: 'apiBootstrap', args: ['bad'] }).code, 'AUTH');
+  assert.strictEqual(call({ action: 'getConfig', args: [] }).error, 'Unknown action.');
+  assert.strictEqual(call({ action: 'issueAccessCode_', args: [clientA] }).error, 'Unknown action.');
+  assert.strictEqual(call('not json').error, 'Bad request.');
+  assert.ok(!JSON.stringify(boot).includes('super-secret-token'));
+  // Webhook still requires its key; the api route does not accept webhook events.
+  assert.strictEqual(JSON.parse(G.doPost({ parameter: {}, postData: { contents: '{"type":"ack"}' } }).text).error, 'unauthorized');
+  const h = JSON.parse(G.doGet({ parameter: {} }).text);
+  assert.strictEqual(h.status, 'ok');
 });
 
 console.log('Multi-tenant');
@@ -649,8 +662,8 @@ test('tenant with a dedicated number sends from it; others use the platform numb
   G.updateFields_(ct, camp._row, { Status: 'COMPLETED' });
   // New campaign for tenant A
   const codeA2 = G.issueAccessCode_(clientA);
-  const t = G.apiLogin('a@tenant-a.example', codeA2).token;
-  const r = G.apiCreateCampaign(t, { campaignName: 'Own number', message: 'Hello {{Name}}', ctaType: 'NONE', audience: { all: true }, sendMode: 'NOW' });
+  const t = G.apiLogin_('a@tenant-a.example', codeA2).token;
+  const r = G.apiCreateCampaign_(t, { campaignName: 'Own number', message: 'Hello {{Name}}', ctaType: 'NONE', audience: { all: true }, sendMode: 'NOW' });
   assert.ok(r.created, JSON.stringify(r));
   fetchLog.length = 0;
   G.processMessageQueue();
@@ -663,23 +676,23 @@ test('monthly quota reached pauses the campaign without failing messages', () =>
   setClient(clientA, { 'Monthly Quota': 1 });
   G.appendObjects_('CONTACTS', [{ 'Contact ID': 'CON-A9', 'Client ID': clientA, Name: 'Zed', Phone: '9876500003', 'Opt In': 'YES', Status: 'Active' }]);
   const codeA3 = G.issueAccessCode_(clientA);
-  const t = G.apiLogin('a@tenant-a.example', codeA3).token;
-  const r = G.apiCreateCampaign(t, { campaignName: 'Over quota', message: 'Hi', ctaType: 'NONE', audience: { all: true }, sendMode: 'NOW' });
+  const t = G.apiLogin_('a@tenant-a.example', codeA3).token;
+  const r = G.apiCreateCampaign_(t, { campaignName: 'Over quota', message: 'Hi', ctaType: 'NONE', audience: { all: true }, sendMode: 'NOW' });
   assert.ok(r.created && r.warnings.some(w => /messages remain/.test(w)), JSON.stringify(r));
   G.processMessageQueue();
   assert.strictEqual(table('CAMPAIGNS').find(c => c['Campaign ID'] === r.campaignId).Status, 'PAUSED');
   assert.ok(table('MESSAGE_QUEUE').filter(x => x['Campaign ID'] === r.campaignId).every(x => x.Status === 'PENDING'));
-  assert.strictEqual(G.apiBootstrap(t).subscription.canSend, false);
+  assert.strictEqual(G.apiBootstrap_(t).subscription.canSend, false);
 });
 test('expired or suspended tenants cannot create campaigns or sign in', () => {
   setClient(clientA, { 'Monthly Quota': '', 'Valid Until': '2020-01-31' });
   const codeA4 = G.issueAccessCode_(clientA);
-  const t = G.apiLogin('a@tenant-a.example', codeA4).token;
-  const r = G.apiCreateCampaign(t, { campaignName: 'Expired', message: 'Hi', ctaType: 'NONE', audience: { all: true }, sendMode: 'NOW' });
+  const t = G.apiLogin_('a@tenant-a.example', codeA4).token;
+  const r = G.apiCreateCampaign_(t, { campaignName: 'Expired', message: 'Hi', ctaType: 'NONE', audience: { all: true }, sendMode: 'NOW' });
   assert.ok(!r.created && /expired/.test(r.errors[0]), JSON.stringify(r));
   setClient(clientA, { 'Valid Until': '', Status: 'Suspended' });
-  assert.strictEqual(G.apiBootstrap(t).code, 'AUTH');
-  assert.strictEqual(G.apiLogin('a@tenant-a.example', codeA4).ok, false);
+  assert.strictEqual(G.apiBootstrap_(t).code, 'AUTH');
+  assert.strictEqual(G.apiLogin_('a@tenant-a.example', codeA4).ok, false);
   setClient(clientA, { Status: 'Active' });
 });
 test('webhook on a dedicated number: opt-out and templates scoped to that tenant', () => {
