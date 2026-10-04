@@ -10,7 +10,11 @@
 function onFormSubmit(e) {
   let input = null;
   try {
-    if (!e) throw new Error('onFormSubmit must be run by its trigger (no event object). Use "Install Triggers".');
+    // Only genuine trigger events carry live Range / FormResponse objects. Plain objects (for
+    // example sent from a browser via google.script.run) are rejected.
+    const realRange = e && e.range && typeof e.range.getSheet === 'function';
+    const realResponse = e && e.response && typeof e.response.getItemResponses === 'function';
+    if (!realRange && !realResponse) throw new Error('onFormSubmit must be run by its form-submit trigger. Use "Install Triggers".');
     input = readFormInput_(e);
     return createCampaignFromInput_(input, 'FORM');
   } catch (err) {
@@ -24,11 +28,14 @@ function onFormSubmit(e) {
 }
 
 /**
- * Validates and stores one campaign. Shared by onFormSubmit and reprocessFormResponse.
+ * Validates and stores one campaign. Shared by the Google Form, reprocessing and the client dashboard.
+ * opts.silent           — don't email validation problems (the dashboard shows them inline)
+ * opts.expectedClientId — the record must belong to this client (dashboard sessions)
  * @return { ok, campaignId, status, errors, warnings }
  */
-function createCampaignFromInput_(input, source) {
-  const cfg = getConfig(true);
+function createCampaignFromInput_(input, source, opts) {
+  opts = opts || {};
+  const cfg = getConfig_(true);
   const v = validateCampaignInput_(input);
   const d = v.data;
 
@@ -37,16 +44,30 @@ function createCampaignFromInput_(input, source) {
       result: 'REJECTED', error: v.errors.join(' | '),
       details: { business: d.businessName, campaign: d.campaignName, email: d.email ? d.email.replace(/^(.).*(@.*)$/, '$1***$2') : '' },
     });
-    if (isValidEmail_(d.email)) sendAttentionEmail_(input, v.errors);
-    notifyAdminOfSubmission_(d, null, 'REJECTED', v.errors, v.warnings);
+    if (!opts.silent) {
+      if (isValidEmail_(d.email)) sendAttentionEmail_(input, v.errors);
+      notifyAdminOfSubmission_(d, null, 'REJECTED', v.errors, v.warnings);
+    }
     return { ok: false, errors: v.errors, warnings: v.warnings };
   }
 
   const clientId = findOrCreateClient_(d);
+  if (opts.expectedClientId && clientId !== opts.expectedClientId) {
+    throw new Error('Client mismatch while creating campaign (expected ' + opts.expectedClientId + ', got ' + clientId + ').');
+  }
   if (isDuplicateCampaign_(clientId, d)) {
     const errors = ['A campaign named "' + d.campaignName + '" with the same schedule has already been submitted.'];
     logEvent_(LOG_LEVEL.WARNING, 'DUPLICATE_CAMPAIGN', { clientId: clientId, result: 'REJECTED', error: errors[0] });
-    sendAttentionEmail_(input, errors);
+    if (!opts.silent) sendAttentionEmail_(input, errors);
+    return { ok: false, errors: errors, warnings: v.warnings };
+  }
+
+  // Tenant subscription: suspended or expired accounts cannot create campaigns.
+  const ent = tenantEntitlementById_(clientId);
+  if (!ent.ok && !/quota/i.test(ent.reason)) {
+    const errors = ['Your account cannot launch campaigns right now: ' + ent.reason + ' Please contact your service provider.'];
+    logEvent_(LOG_LEVEL.WARNING, 'TENANT_BLOCKED', { clientId: clientId, result: 'REJECTED', error: ent.reason });
+    if (!opts.silent) sendAttentionEmail_(input, errors);
     return { ok: false, errors: errors, warnings: v.warnings };
   }
 
@@ -54,6 +75,9 @@ function createCampaignFromInput_(input, source) {
   const now = new Date();
   const audienceSize = countAudience_(clientId, d.audience);
   const warnings = v.warnings.slice();
+  if (ent.remaining !== null && audienceSize > ent.remaining) {
+    warnings.push('This campaign targets ' + audienceSize + ' customers but only ' + ent.remaining + ' messages remain in this month\'s plan. Sending pauses when the quota is reached.');
+  }
   if (!audienceSize) warnings.push('No opted-in active contacts currently match audience "' + d.audience + '". Contacts must be added before the send time.');
 
   appendObject_(SHEETS.CAMPAIGNS, {
@@ -92,7 +116,7 @@ function createCampaignFromInput_(input, source) {
     setCampaignStatus_(campaignId, status, 'Awaiting admin approval (REQUIRE_ADMIN_APPROVAL=YES).');
   } else {
     setCampaignStatus_(campaignId, CAMPAIGN_STATUS.READY, 'Send Now requested.');
-    const res = startCampaign(campaignId); // builds the queue; the scheduler trigger sends it
+    const res = startCampaign_(campaignId); // builds the queue; the scheduler trigger sends it
     status = res.ok ? CAMPAIGN_STATUS.ACTIVE : CAMPAIGN_STATUS.ERROR;
     if (!res.ok) warnings.push(res.message);
   }
@@ -106,7 +130,6 @@ function createCampaignFromInput_(input, source) {
 /**
  * Builds a normalised input object from any of the three event shapes:
  *  - spreadsheet trigger with e.range (typed cell values — preferred)
- *  - spreadsheet trigger with e.namedValues only
  *  - form trigger with e.response (FormResponse)
  */
 function readFormInput_(e) {
@@ -116,11 +139,6 @@ function readFormInput_(e) {
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const values = sheet.getRange(e.range.getRow(), 1, 1, headers.length).getValues()[0];
     headers.forEach((h, i) => { answers[String(h).trim().toLowerCase()] = values[i]; });
-  } else if (e.namedValues) {
-    Object.keys(e.namedValues).forEach(k => {
-      const v = e.namedValues[k];
-      answers[String(k).trim().toLowerCase()] = Array.isArray(v) ? v.join(', ') : v;
-    });
   } else if (e.response && e.response.getItemResponses) {
     e.response.getItemResponses().forEach(ir => {
       const v = ir.getResponse();
@@ -160,6 +178,7 @@ function readFormInput_(e) {
 
 /** Admin tool: re-run campaign creation for a FORM_RESPONSES row (e.g. after fixing contacts). */
 function reprocessFormResponse() {
+  requireAdmin_();
   const ui = SpreadsheetApp.getUi();
   const r = ui.prompt('Reprocess Form Response', 'Row number in ' + SHEETS.FORM_RESPONSES + ':', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
@@ -177,7 +196,8 @@ function reprocessFormResponse() {
  * (allow: Images, max 1 file, 10 MB). The script then reads it automatically.
  */
 function createCampaignForm() {
-  const cfg = getConfig(true);
+  requireAdmin_();
+  const cfg = getConfig_(true);
   const ss = ss_();
   const form = FormApp.create('WhatsApp Campaign Request');
   form.setDescription('Submit your WhatsApp marketing campaign. You will receive a confirmation email once it has been validated.')

@@ -12,8 +12,8 @@ const STUCK_PROCESSING_MS = 15 * 60 * 1000;   // PROCESSING rows older than this
  * Duplicates (same campaign + phone) are never queued twice.
  * @return { added, skipped, duplicates }
  */
-function buildCampaignQueue(campaignId) {
-  const cfg = getConfig();
+function buildCampaignQueue_(campaignId) {
+  const cfg = getConfig_();
   const c = getCampaign_(campaignId);
   if (!c.row) throw new Error('Campaign ' + campaignId + ' not found.');
   const campaign = c.row;
@@ -97,7 +97,7 @@ function updateQueueStatusWhere_(campaignId, fromStatuses, toStatus, error) {
  * Sends up to BATCH_SIZE due messages. Safe to call from a trigger every minute:
  * a script lock prevents overlapping executions.
  */
-function processMessageQueue() {
+function processMessageQueue_() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) {
     console.log('processMessageQueue: another execution holds the lock; skipping.');
@@ -112,8 +112,8 @@ function processMessageQueue() {
 
 function processMessageQueueLocked_() {
   const started = Date.now();
-  const cfg = getConfig(true);
-  const v = validateConfig(cfg);
+  const cfg = getConfig_(true);
+  const v = validateConfig_(cfg);
   if (!v.ok) {
     logEvent_(LOG_LEVEL.ERROR, 'QUEUE_CONFIG_INVALID', { error: v.errors.join(' ') });
     return { sent: 0, error: 'config' };
@@ -138,13 +138,21 @@ function processMessageQueueLocked_() {
     }
   });
 
+  // ---- Multi-tenant limits -------------------------------------------------
+  // DAILY_SEND_LIMIT protects each WhatsApp number (per sending phone ID per day).
+  // Monthly Quota / Valid Until / Status are per tenant (CLIENTS row).
+  const clients = clientsById_();
   const today = todayKey_();
-  const sentToday = queue.rows.filter(q => dateKey_(toDate_(q['Sent At'])) === today).length;
-  let dailyRemaining = cfg.dailySendLimit - sentToday;
-  if (dailyRemaining <= 0) {
-    console.log('Daily send limit reached (' + cfg.dailySendLimit + ').');
-    return { sent: 0, dailyLimitReached: true };
-  }
+  const sentTodayByPhone = {};
+  queue.rows.forEach(q => {
+    if (dateKey_(toDate_(q['Sent At'])) !== today) return;
+    const pid = String(q['Sender Phone ID'] || cfg.phoneId);
+    sentTodayByPhone[pid] = (sentTodayByPhone[pid] || 0) + 1;
+  });
+  const usedThisMonth = monthlySentByClient_(queue.rows);
+  const entitlement = {};
+  const blockedCampaigns = {};
+  const blockedPhones = {};
 
   const now = Date.now();
   const due = queue.rows.filter(q => {
@@ -156,18 +164,41 @@ function processMessageQueueLocked_() {
     return !at || at.getTime() <= now;
   }).sort((a, b) => (toDate_(a['Scheduled At']) || 0) - (toDate_(b['Scheduled At']) || 0));
 
-  const batch = due.slice(0, Math.min(cfg.batchSize, dailyRemaining));
   const mediaCache = {};
-  let sent = 0, failed = 0, retried = 0;
+  let sent = 0, failed = 0, retried = 0, attempted = 0, dailyLimitHit = false;
 
-  for (let i = 0; i < batch.length; i++) {
+  for (let i = 0; i < due.length && attempted < cfg.batchSize; i++) {
     if (Date.now() - started > MAX_EXECUTION_MS) {
       logEvent_(LOG_LEVEL.WARNING, 'QUEUE_TIME_BUDGET', { details: 'Stopping early to avoid the Apps Script timeout; next run continues.' });
       break;
     }
-    const q = batch[i];
-    const campaign = campaigns[q['Campaign ID']];
-    const ctx = { campaignId: q['Campaign ID'], clientId: q['Client ID'], contactId: q['Contact ID'], phone: q['Phone'] };
+    const q = due[i];
+    const clientId = String(q['Client ID']);
+    const campaignId = String(q['Campaign ID']);
+    if (blockedCampaigns[campaignId]) continue;
+    const ctx = { campaignId: campaignId, clientId: clientId, contactId: q['Contact ID'], phone: q['Phone'] };
+
+    // Tenant entitlement: suspended / expired / out of quota => pause the campaign (items are kept).
+    const client = clients[clientId];
+    if (!entitlement[clientId]) entitlement[clientId] = tenantEntitlement_(client, usedThisMonth[clientId] || 0);
+    const ent = entitlement[clientId];
+    if (!ent.ok || (ent.remaining !== null && ent.remaining <= 0)) {
+      blockedCampaigns[campaignId] = true;
+      setCampaignStatus_(campaignId, CAMPAIGN_STATUS.PAUSED, 'Sending paused: ' + (ent.reason || 'Monthly message quota reached.') + ' Resume after renewal.');
+      logEvent_(LOG_LEVEL.WARNING, 'TENANT_LIMIT', Object.assign({ result: 'PAUSED', error: ent.reason || 'quota reached' }, ctx));
+      continue;
+    }
+
+    // Per-number daily protection.
+    const clientCfg = cfgForClient_(client, cfg);
+    const phoneId = String(clientCfg.phoneId);
+    if (blockedPhones[phoneId]) continue;
+    if ((sentTodayByPhone[phoneId] || 0) >= cfg.dailySendLimit) {
+      blockedPhones[phoneId] = true;
+      dailyLimitHit = true;
+      console.log('Daily send limit reached for phone ' + phoneId);
+      continue;
+    }
 
     // Opt-out always wins, even after queueing.
     const contact = contacts[q['Contact ID']];
@@ -181,10 +212,13 @@ function processMessageQueueLocked_() {
       continue;
     }
 
+    if (attempted > 0) randomDelay_(cfg);
+    attempted++;
     q['Status'] = QUEUE_STATUS.PROCESSING;
     q['Started At'] = new Date();
     q['Last Attempt'] = new Date();
     q['Attempts'] = Number(q['Attempts'] || 0) + 1;
+    q['Sender Phone ID'] = phoneId;
     writeRowObject_(queue, q);
     SpreadsheetApp.flush();
 
@@ -196,7 +230,7 @@ function processMessageQueueLocked_() {
         imageFileId: q['Image File ID'],
         imageUrl: q['Image URL'],
         cta: q['CTA Type'] ? { type: q['CTA Type'], text: q['CTA Text'], value: q['CTA Value'] } : null,
-      }, cfg, mediaCache);
+      }, clientCfg, mediaCache);
     } catch (err) {
       r = Object.assign(failResult_(0, 'Unexpected error: ' + err.message, { retryable: true }), { messageIds: [] });
     }
@@ -209,7 +243,9 @@ function processMessageQueueLocked_() {
       writeRowObject_(queue, q);
       updateFields_(contactsTable, contact._row, { 'Last Sent': new Date(), 'Last Message ID': r.messageId, 'Updated At': new Date() });
       sent++;
-      dailyRemaining--;
+      sentTodayByPhone[phoneId] = (sentTodayByPhone[phoneId] || 0) + 1;
+      ent.used++;
+      if (ent.remaining !== null) ent.remaining--;
       logEvent_(LOG_LEVEL.SUCCESS, 'MESSAGE_SENT', Object.assign({ messageId: r.messageId, httpStatus: r.httpStatus, result: 'SENT' }, ctx));
     } else {
       const attempts = Number(q['Attempts']);
@@ -232,29 +268,33 @@ function processMessageQueueLocked_() {
       writeRowObject_(queue, q);
       logEvent_(q['Status'] === QUEUE_STATUS.FAILED ? LOG_LEVEL.ERROR : LOG_LEVEL.WARNING, 'MESSAGE_FAILED', Object.assign({
         httpStatus: r.httpStatus, result: q['Status'], error: r.error,
-        details: { attempts: attempts, retryable: !!r.retryable, rateLimited: !!r.rateLimited, partial: !!r.partial },
+        details: { attempts: attempts, retryable: !!r.retryable, rateLimited: !!r.rateLimited, partial: !!r.partial, senderPhoneId: phoneId },
       }, ctx));
 
-      if (r.stopBatch) {
-        logEvent_(LOG_LEVEL.ERROR, 'QUEUE_BATCH_STOPPED', Object.assign({ error: r.error, details: r.authError ? 'Authentication problem — check Maytapi credentials.' : 'Rate limit or sending-phone problem — will resume on next run.' }, ctx));
-        if (r.authError) notifyAdmin_('Maytapi authentication error', 'Queue processing stopped: ' + r.error);
+      if (r.authError) {
+        // The API token is shared by every tenant: stop everything.
+        logEvent_(LOG_LEVEL.ERROR, 'QUEUE_BATCH_STOPPED', Object.assign({ error: r.error, details: 'Authentication problem — check Maytapi credentials.' }, ctx));
+        notifyAdmin_('Maytapi authentication error', 'Queue processing stopped: ' + r.error);
         break;
       }
+      if (r.stopBatch) {
+        // Rate limit or a disconnected phone affects only this sending number.
+        blockedPhones[phoneId] = true;
+        logEvent_(LOG_LEVEL.ERROR, 'QUEUE_BATCH_STOPPED', Object.assign({ error: r.error, details: 'Rate limit or sending-phone problem on phone ' + phoneId + ' — other numbers continue; this one resumes next run.' }, ctx));
+      }
     }
-
-    if (i < batch.length - 1) randomDelay_(cfg);
   }
 
   completeFinishedCampaigns_();
-  if (batch.length) console.log('Queue run: sent=' + sent + ' failed=' + failed + ' retry=' + retried);
-  return { sent: sent, failed: failed, retried: retried };
+  if (attempted) console.log('Queue run: sent=' + sent + ' failed=' + failed + ' retry=' + retried);
+  return { sent: sent, failed: failed, retried: retried, dailyLimitReached: dailyLimitHit && !attempted };
 }
 
 /**
  * Resets FAILED messages to PENDING (attempts cleared) for one campaign or all ('*').
  * Re-activates COMPLETED campaigns that get messages back.
  */
-function retryFailedMessages(campaignId) {
+function retryFailedMessages_(campaignId) {
   const interactive = campaignId === undefined;
   if (interactive) {
     const ui = SpreadsheetApp.getUi();
@@ -298,7 +338,7 @@ function runScheduler() {
   if (!lock.tryLock(5000)) return;
   try {
     try {
-      const n = activateScheduledCampaigns();
+      const n = activateScheduledCampaigns_();
       if (n) logEvent_(LOG_LEVEL.INFO, 'SCHEDULER', { result: n + ' campaign(s) activated' });
     } catch (err) {
       logEvent_(LOG_LEVEL.ERROR, 'SCHEDULER_ACTIVATE', { error: err.message });

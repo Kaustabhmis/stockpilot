@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Campaign Studio</title>
+<style>
+  :root {
+    --bg: #f4f6f5; --surface: #ffffff; --surface-2: #f8faf9; --text: #17201b; --muted: #5d6b63;
+    --line: #e1e7e3; --brand: #128c4a; --brand-dark: #0b6b38; --brand-soft: #e6f4ec;
+    --danger: #c0392b; --danger-soft: #fdecea; --warn: #9a6400; --warn-soft: #fff4dc;
+    --info-soft: #e8f0fe; --radius: 14px; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 6px 20px rgba(0,0,0,.06);
+    --wa-bg: #efe7dd; --wa-bubble: #ffffff; --wa-header: #075e54; --wa-link: #027eb5;
+    --nav-h: 64px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  h1, h2, h3 { margin: 0; line-height: 1.25; }
+  h1 { font-size: 22px; } h2 { font-size: 18px; } h3 { font-size: 15px; }
+  .muted { color: var(--muted); } .small { font-size: 13px; } .hidden { display: none !important; }
+  a { color: var(--brand-dark); }
+
+  /* ---------- Buttons & inputs ---------- */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
+    padding: 10px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+    cursor: pointer; font-weight: 600; transition: background .15s, border-color .15s; }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .btn.primary:hover { background: var(--brand-dark); }
+  .btn.danger { color: var(--danger); border-color: #f0c4be; }
+  .btn.block { width: 100%; }
+  .btn.sm { min-height: 36px; padding: 6px 12px; font-size: 14px; }
+  label.field { display: block; margin-bottom: 14px; }
+  label.field > span { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .input, select.input, textarea.input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--surface); outline: none; }
+  .input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+  textarea.input { min-height: 140px; resize: vertical; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; } .row > * { flex: 1 1 160px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { flex: 1 1 auto; min-height: 40px; border: 1px solid var(--line); background: var(--surface);
+    border-radius: 999px; padding: 6px 14px; cursor: pointer; font-weight: 600; font-size: 14px; }
+  .seg button.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-dark); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { border: 1px dashed #b9c8bf; background: var(--surface-2); border-radius: 999px; padding: 4px 10px;
+    font-size: 12.5px; cursor: pointer; }
+  .check { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--surface); cursor: pointer; margin-bottom: 8px; }
+  .check input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--brand); flex: none; }
+
+  /* ---------- Cards, alerts ---------- */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 18px; margin-bottom: 16px; }
+  .card h2 { margin-bottom: 12px; }
+  .alert { padding: 12px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 14px; }
+  .alert.error { background: var(--danger-soft); color: #8a2318; }
+  .alert.warn { background: var(--warn-soft); color: #6b4600; }
+  .alert.ok { background: var(--brand-soft); color: var(--brand-dark); }
+  .alert.info { background: var(--info-soft); color: #1d3f8f; }
+  .alert ul { margin: 6px 0 0 18px; padding: 0; }
+  .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+  .kpi .v { font-size: 24px; font-weight: 700; } .kpi .l { font-size: 13px; color: var(--muted); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+  .pill.ACTIVE, .pill.COMPLETED { background: var(--brand-soft); color: var(--brand-dark); }
+  .pill.SCHEDULED, .pill.READY, .pill.VALIDATING { background: var(--info-soft); color: #1d3f8f; }
+  .pill.PAUSED { background: var(--warn-soft); color: var(--warn); }
+  .pill.CANCELLED, .pill.ERROR { background: var(--danger-soft); color: var(--danger); }
+  .bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+  .bar > i { display: block; height: 100%; background: var(--brand); }
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .tbl th, .tbl td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .tbl th { background: var(--surface-2); font-weight: 700; }
+  .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 10px; }
+
+  /* ---------- Login ---------- */
+  #login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  #login .card { width: 100%; max-width: 400px; padding: 26px; }
+  .logo { width: 48px; height: 48px; border-radius: 14px; background: var(--brand); color: #fff; display: grid; place-items: center;
+    font-weight: 800; font-size: 22px; margin-bottom: 14px; }
+
+  /* ---------- App shell ---------- */
+  header.top { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
+  header.top .who { flex: 1; min-width: 0; }
+  header.top .who b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center;
+    font-weight: 800; flex: none; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px 16px calc(var(--nav-h) + 24px + env(safe-area-inset-bottom)); }
+  nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(4, 1fr); height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom); }
+  nav.tabs button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; font-size: 11.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  nav.tabs button svg { width: 22px; height: 22px; }
+  nav.tabs button.on { color: var(--brand); }
+  .view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+
+  /* ---------- Create campaign ---------- */
+  .steps { display: flex; gap: 6px; margin-bottom: 14px; }
+  .steps button { flex: 1; border: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px;
+    font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .steps button.on { border-color: var(--brand); color: var(--brand-dark); background: var(--brand-soft); }
+  .steps button.done { color: var(--brand-dark); }
+  .create-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .preview-col { display: none; }
+  .drop { border: 2px dashed #bccbc2; border-radius: var(--radius); padding: 22px 14px; text-align: center; background: var(--surface-2);
+    cursor: pointer; position: relative; }
+  .drop.drag { border-color: var(--brand); background: var(--brand-soft); }
+  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .thumb-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .thumb-row canvas { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; background: #ddd; }
+  details.more { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; background: var(--surface-2); }
+  details.more summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  details.more[open] summary { margin-bottom: 10px; }
+  .fab-preview { position: fixed; right: 16px; bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom)); z-index: 25;
+    border-radius: 999px; box-shadow: 0 6px 18px rgba(18,140,74,.35); }
+  .sheet { position: fixed; inset: 0; z-index: 50; background: rgba(10,20,15,.55); display: flex; align-items: flex-end; justify-content: center; }
+  .sheet .panel { background: var(--bg); width: 100%; max-width: 480px; max-height: 92vh; overflow: auto; border-radius: 18px 18px 0 0;
+    padding: 14px 14px calc(18px + env(safe-area-inset-bottom)); }
+  .sheet .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .summary dl { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; margin: 0; font-size: 14px; }
+  .summary dt { color: var(--muted); } .summary dd { margin: 0; word-break: break-word; }
+  .list-check { max-height: 260px; overflow: auto; }
+
+  /* ---------- WhatsApp preview (protected) ---------- */
+  .protected { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; position: relative; }
+  .protected canvas, .protected img { pointer-events: none; -webkit-user-drag: none; }
+  .protected .shield { position: absolute; inset: 0; z-index: 5; background: transparent; }
+  .phone { width: 100%; max-width: 360px; margin: 0 auto; border-radius: 28px; background: #111; padding: 10px; box-shadow: var(--shadow); }
+  .screen { border-radius: 20px; overflow: hidden; background: var(--wa-bg);
+    background-image: radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size: 14px 14px; }
+  .wa-head { background: var(--wa-header); color: #fff; display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  .wa-head .avatar { width: 32px; height: 32px; background: #cfd8dc; color: #37474f; font-size: 14px; }
+  .wa-head b { display: block; font-size: 14px; } .wa-head span { font-size: 11.5px; opacity: .8; }
+  .chat { padding: 12px 10px 16px; min-height: 380px; display: flex; flex-direction: column; gap: 6px; }
+  .bubble { align-self: flex-start; max-width: 88%; background: var(--wa-bubble); border-radius: 0 10px 10px 10px; padding: 4px;
+    box-shadow: 0 1px .5px rgba(0,0,0,.13); position: relative; }
+  .bubble + .bubble { border-radius: 10px; }
+  .bubble canvas { display: block; width: 100%; border-radius: 7px; }
+  .bubble .txt { padding: 4px 6px 2px; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; color: #111b21; }
+  .bubble .time { text-align: right; font-size: 10.5px; color: #667781; padding: 0 6px 2px; }
+  .bubble .cta { border-top: 1px solid #e9edef; margin-top: 4px; padding: 9px 6px 5px; text-align: center; color: var(--wa-link);
+    font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .bubble .cta svg { width: 16px; height: 16px; }
+  .wm-note { text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  body.privacy .protected .screen { filter: blur(22px); }
+  body.privacy .protected::after { content: "Preview hidden while this window is not in focus — tap to continue"; position: absolute; inset: 40% 10% auto;
+    z-index: 6; background: rgba(0,0,0,.75); color: #fff; padding: 12px; border-radius: 10px; text-align: center; font-size: 13px; }
+
+  /* ---------- Toast / loading ---------- */
+  #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + 20px + env(safe-area-inset-bottom));
+    background: #1d2a23; color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 60; font-size: 14px; max-width: 90vw; box-shadow: var(--shadow); }
+  #busy { position: fixed; inset: 0; background: rgba(255,255,255,.6); z-index: 70; display: grid; place-items: center; }
+  .spinner { width: 42px; height: 42px; border-radius: 50%; border: 4px solid var(--brand-soft); border-top-color: var(--brand); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Larger screens ---------- */
+  @media (min-width: 640px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+  @media (min-width: 960px) {
+    :root { --nav-h: 0px; }
+    nav.tabs { position: sticky; top: 59px; height: auto; grid-template-columns: none; display: flex; justify-content: center; gap: 4px;
+      border-top: 0; border-bottom: 1px solid var(--line); padding: 6px; z-index: 19; }
+    nav.tabs button { flex-direction: row; font-size: 14px; padding: 8px 16px; border-radius: 10px; gap: 8px; }
+    nav.tabs button.on { background: var(--brand-soft); }
+    nav.tabs button svg { width: 18px; height: 18px; }
+    main { padding-bottom: 32px; }
+    .create-grid { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
+    .preview-col { display: block; position: sticky; top: 120px; }
+    .fab-preview { display: none; }
+    #toast { bottom: 24px; }
+  }
+  @media print { .protected, .preview-col, .sheet { display: none !important; } body::before { content: "Printing is disabled for campaign previews."; } }
+</style>
+</head>
+<body>
+
+<!-- ======================= LOGIN ======================= -->
+<section id="login" class="hidden">
+  <div class="card">
+    <div class="logo" id="loginLogo">W</div>
+    <h1 id="loginTitle">Campaign Studio</h1>
+    <p class="muted small" style="margin:6px 0 18px">Create WhatsApp ads, upload your customers and launch campaigns.</p>
+    <div id="loginError" class="alert error hidden"></div>
+    <form id="loginForm" autocomplete="on">
+      <label class="field"><span>Email</span><input class="input" type="email" id="loginEmail" autocomplete="username" required></label>
+      <label class="field"><span>Access code</span><input class="input" type="password" id="loginCode" autocomplete="current-password" placeholder="XXXXX-XXXXX" required></label>
+      <button class="btn primary block" type="submit" id="loginBtn">Sign in</button>
+    </form>
+    <p class="hint" style="margin-top:14px">Your access code is provided by your service provider.</p>
+  </div>
+</section>
+
+<!-- ======================= APP ======================= -->
+<section id="app" class="hidden">
+  <header class="top">
+    <div class="avatar" id="hdrAvatar">?</div>
+    <div class="who"><b id="hdrName">—</b><span class="muted small" id="hdrPlan"></span></div>
+    <button class="btn sm" id="logoutBtn" type="button">Sign out</button>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="overview" class="on" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</button>
+    <button data-view="create" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg>Create</button>
+    <button data-view="customers" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.6.9 2.7 2.6 3 5.2"/></svg>Customers</button>
+    <button data-view="campaigns" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Campaigns</button>
+  </nav>
+
+  <main>
+    <!-- ---------- OVERVIEW ---------- -->
+    <div id="view-overview" class="view">
+      <div class="view-head"><h1>Welcome back</h1><button class="btn primary" data-go="create" type="button">+ New campaign</button></div>
+      <div id="subAlert"></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="card">
+        <h2>Plan &amp; usage</h2>
+        <div id="planBox"></div>
+      </div>
+      <div class="card">
+        <div class="view-head" style="margin-bottom:8px"><h2>Recent campaigns</h2><button class="btn sm" data-go="campaigns" type="button">View all</button></div>
+        <div id="recentList"></div>
+      </div>
+    </div>
+
+    <!-- ---------- CREATE ---------- -->
+    <div id="view-create" class="view hidden">
+      <div class="view-head"><h1>Create campaign</h1></div>
+      <div class="steps" id="steps">
+        <button data-step="1" class="on" type="button">1. Ad</button>
+        <button data-step="2" type="button">2. Audience &amp; time</button>
+        <button data-step="3" type="button">3. Review</button>
+      </div>
+      <div class="create-grid">
+        <div>
+          <!-- Step 1 -->
+          <div id="step-1" class="card">
+            <label class="field"><span>Campaign name</span><input class="input" id="cName" maxlength="80" placeholder="e.g. Festive Offer"></label>
+
+            <div class="field">
+              <span style="display:block;font-weight:600;font-size:14px;margin-bottom:6px">Ad image</span>
+              <div class="drop" id="drop">
+                <input type="file" id="imgInput" accept="image/jpeg,image/png,image/webp">
+                <div><b>Tap to upload</b> or drag an image here</div>
+                <div class="hint">JPG, PNG or WEBP. It will be optimised for WhatsApp automatically.</div>
+              </div>
+              <div class="thumb-row hidden" id="thumbRow">
+                <canvas id="thumb" width="144" height="144"></canvas>
+                <div style="flex:1"><div class="small" id="imgInfo"></div><button class="btn sm" id="imgRemove" type="button" style="margin-top:6px">Remove image</button></div>
+              </div>
+            </div>
+
+            <details class="more" id="overlayBox">
+              <summary>Add text on the image (optional)</summary>
+              <label class="field"><span>Headline</span><input class="input" id="ovHead" maxlength="60" placeholder="e.g. Festive Sale – Up to 30% Off"></label>
+              <label class="field"><span>Sub-text</span><input class="input" id="ovSub" maxlength="90" placeholder="e.g. This weekend only"></label>
+              <div class="row">
+                <label class="field"><span>Position</span>
+                  <select class="input" id="ovPos"><option value="bottom">Bottom</option><option value="top">Top</option></select></label>
+                <label class="field"><span>Band colour</span><input class="input" type="color" id="ovColor" value="#0b6b38" style="padding:4px;height:44px"></label>
+              </div>
+            </details>
+
+            <label class="field"><span>Message</span>
+              <textarea class="input" id="cMsg" maxlength="1024" placeholder="Hi {{Name}}, …"></textarea>
+              <div class="chips" id="varChips"></div>
+              <div class="hint"><span id="msgCount">0</span>/1024 · *bold* _italic_ ~strike~ work in WhatsApp</div>
+            </label>
+
+            <div class="field">
+              <span style="display:block;font-weight:600;font-size:14px;margin-bottom:6px">Button</span>
+              <div class="seg" id="ctaSeg" style="margin-bottom:14px">
+                <button data-cta="NONE" type="button">None</button>
+                <button data-cta="URL" class="on" type="button">Website</button>
+                <button data-cta="PHONE" type="button">Call</button>
+                <button data-cta="QUICK_REPLY" type="button">Quick reply</button>
+              </div>
+            </div>
+            <div id="ctaFields">
+              <div class="row">
+                <label class="field"><span>Button text</span><input class="input" id="ctaText" placeholder="Explore Now"><div class="hint" id="ctaTextHint"></div></label>
+                <label class="field"><span id="ctaValueLabel">Link</span><input class="input" id="ctaValue"><div class="hint" id="ctaValueHint"></div></label>
+              </div>
+            </div>
+            <details class="more">
+              <summary>Business details used in the message</summary>
+              <div class="row">
+                <label class="field"><span>Website</span><input class="input" id="cWebsite" placeholder="https://"></label>
+                <label class="field"><span>Store phone</span><input class="input" id="cStorePhone" inputmode="tel"></label>
+              </div>
+              <label class="field"><span>Preview customer name</span><input class="input" id="cPreviewName" maxlength="40"></label>
+            </details>
+            <div id="step1Err"></div>
+            <button class="btn primary block" id="toStep2" type="button">Next: audience &amp; time</button>
+          </div>
+
+          <!-- Step 2 -->
+          <div id="step-2" class="card hidden">
+            <h2>Who should receive it?</h2>
+            <label class="check"><input type="radio" name="aud" value="all" checked><div><b>All my opted-in customers</b><div class="small muted" id="allCount"></div></div></label>
+            <label class="check"><input type="radio" name="aud" value="lists"><div><b>Selected customer lists</b><div class="small muted">Choose one or more uploaded lists</div></div></label>
+            <div id="listPicker" class="list-check hidden" style="margin:4px 0 10px 12px"></div>
+            <div class="alert info" id="audCount">Recipients: …</div>
+
+            <h2 style="margin-top:18px">When?</h2>
+            <div class="seg" id="whenSeg" style="margin-bottom:12px">
+              <button data-when="NOW" class="on" type="button">Send now</button>
+              <button data-when="SCHEDULE" type="button">Schedule</button>
+            </div>
+            <div class="row hidden" id="schedFields">
+              <label class="field"><span>Date</span><input class="input" type="date" id="sDate"></label>
+              <label class="field"><span>Time</span><input class="input" type="time" id="sTime"></label>
+            </div>
+            <div class="hint" id="tzHint"></div>
+            <div id="step2Err" style="margin-top:12px"></div>
+            <div class="row" style="margin-top:12px">
+              <button class="btn" data-step-go="1" type="button">Back</button>
+              <button class="btn primary" id="toStep3" type="button">Next: review</button>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div id="step-3" class="card hidden">
+            <h2>Review &amp; launch</h2>
+            <div class="summary" id="summary"></div>
+            <div style="margin:16px 0" id="reviewPreviewWrap"><div id="reviewPreview"></div></div>
+            <div id="launchErr"></div>
+            <div class="row">
+              <button class="btn" data-step-go="2" type="button">Back</button>
+              <button class="btn primary" id="launchBtn" type="button">Launch campaign</button>
+            </div>
+          </div>
+
+          <!-- Done -->
+          <div id="step-done" class="card hidden">
+            <div class="alert ok" id="doneMsg"></div>
+            <div id="doneWarn"></div>
+            <div class="row">
+              <button class="btn" data-go="campaigns" type="button">View campaigns</button>
+              <button class="btn primary" id="newAgain" type="button">Create another</button>
+            </div>
+          </div>
+        </div>
+
+        <aside class="preview-col"><div id="livePreview"></div></aside>
+      </div>
+      <button class="btn primary fab-preview" id="fabPreview" type="button">👁 Preview</button>
+    </div>
+
+    <!-- ---------- CUSTOMERS ---------- -->
+    <div id="view-customers" class="view hidden">
+      <div class="view-head"><h1>Customers</h1></div>
+      <div class="kpis" id="custKpis"></div>
+      <div class="card">
+        <h2>Upload customers</h2>
+        <p class="muted small" style="margin-top:-6px">Excel (.xlsx, .xls) or CSV. Required column: phone number. Optional: name, email, company, tags, opt-in.
+          <a href="#" id="sampleCsv">Download a sample file</a></p>
+        <div class="drop" id="custDrop">
+          <input type="file" id="custInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          <div><b>Tap to choose a file</b> or drag it here</div>
+          <div class="hint">Up to <span id="maxRows">5000</span> customers per upload</div>
+        </div>
+        <div id="parseBox" class="hidden" style="margin-top:14px">
+          <div class="alert info" id="parseInfo"></div>
+          <h3 style="margin-bottom:8px">Match your columns</h3>
+          <div class="row" id="mapFields"></div>
+          <h3 style="margin:6px 0 8px">Preview</h3>
+          <div class="scroll-x"><table class="tbl" id="parsePreview"></table></div>
+          <label class="field" style="margin-top:14px"><span>List name</span>
+            <input class="input" id="listName" maxlength="40" placeholder="e.g. Diwali 2026 customers">
+            <div class="hint">Customers are tagged with this name so you can target them later.</div></label>
+          <label class="check"><input type="checkbox" id="consent"><div class="small"><b>I confirm these customers agreed to receive WhatsApp messages from my business.</b>
+            Customers who previously replied STOP will stay unsubscribed.</div></label>
+          <div id="uploadErr"></div>
+          <button class="btn primary block" id="importBtn" type="button">Import customers</button>
+        </div>
+        <div id="uploadResult"></div>
+      </div>
+      <div class="card">
+        <h2>Your lists</h2>
+        <div id="listsTable"></div>
+      </div>
+    </div>
+
+    <!-- ---------- CAMPAIGNS ---------- -->
+    <div id="view-campaigns" class="view hidden">
+      <div class="view-head"><h1>Campaigns</h1><button class="btn sm" id="refreshBtn" type="button">↻ Refresh</button></div>
+      <div id="campaignList"></div>
+    </div>
+  </main>
+</section>
+
+<!-- Preview sheet (mobile + campaign previews) -->
+<div class="sheet hidden" id="sheet">
+  <div class="panel">
+    <div class="panel-head"><h2 id="sheetTitle">Preview</h2><button class="btn sm" id="sheetClose" type="button">Close</button></div>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+<div id="toast" class="hidden"></div>
+<div id="busy" class="hidden"><div class="spinner"></div></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =================================================================
+   * State & helpers
+   * ================================================================= */
+  var S = {
+    token: null, boot: null, view: 'overview', step: 1,
+    image: null,          // { original: HTMLImageElement|ImageBitmap, final: dataURL, finalImg: Image, bytes }
+    cta: 'URL', when: 'NOW', aud: 'all', lists: [], audCount: null,
+    upload: null,         // { header: [], rows: [[]], map: {} }
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var qsa = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function show(el, on) { (typeof el === 'string' ? $(el) : el).classList.toggle('hidden', !on); }
+  function toast(msg) { var t = $('toast'); t.textContent = msg; show(t, true); clearTimeout(toast._t); toast._t = setTimeout(function () { show(t, false); }, 3200); }
+  function busy(on) { show('busy', on); }
+  function alertBox(kind, title, items) {
+    if (!title && (!items || !items.length)) return '';
+    return '<div class="alert ' + kind + '">' + (title ? esc(title) : '') +
+      (items && items.length ? '<ul>' + items.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
+  }
+  function store(k, v) { try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { /* storage blocked */ } }
+  function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+
+  /** google.script.run as a Promise. Expired sessions return to the login screen. */
+  function api(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(function (r) {
+          if (r && r.ok === false && r.code === 'AUTH' && fn !== 'apiLogin') { signOut(r.error); return reject(new Error(r.error)); }
+          resolve(r);
+        })
+        .withFailureHandler(function (e) { reject(e instanceof Error ? e : new Error(String(e && e.message || e))); })[fn].apply(null, args);
+    });
+  }
+
+  function digits(s) { return String(s || '').replace(/\D/g, ''); }
+  function normPhone(p) {
+    var raw = String(p || '').trim(); if (!raw) return '';
+    var plus = raw.charAt(0) === '+'; var d = digits(raw);
+    if (!plus) { if (d.indexOf('00') === 0) d = d.slice(2); else { d = d.replace(/^0+/, ''); if (d.length <= 10) d = (S.boot ? S.boot.settings.defaultCountryCode : '') + d; } }
+    return d.length >= 8 && d.length <= 15 ? d : '';
+  }
+  function normUrl(u) {
+    u = String(u || '').trim(); if (!u) return '';
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = 'https://' + u;
+    return /^https?:\/\/[^\s/?#]+\.[^\s/?#]+([/?#][^\s]*)?$/i.test(u) ? u : '';
+  }
+
+  /** Mirrors the server's renderTemplate(): case/space-insensitive, unknown variables removed. */
+  function renderVars(text, previewName) {
+    var p = S.boot.profile;
+    var sp = normPhone($('cStorePhone').value);
+    var vars = {
+      name: previewName || S.boot.settings.defaultContactName, phone: '', email: '', company: '',
+      clientname: p.businessName, campaignname: $('cName').value.trim(),
+      storephone: sp ? '+' + sp : $('cStorePhone').value.trim(), website: normUrl($('cWebsite').value) || $('cWebsite').value.trim(),
+    };
+    return String(text || '').replace(/\{\{\s*([A-Za-z_][\w ]*?)\s*\}\}/g, function (m, k) {
+      k = k.replace(/[\s_]/g, '').toLowerCase();
+      return Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : '';
+    });
+  }
+  /** WhatsApp-style formatting for the preview (after escaping). */
+  function waFormat(t) {
+    return esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/_([^_\n]+)_/g, '<i>$1</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>');
+  }
+
+  /* =================================================================
+   * Auth
+   * ================================================================= */
+  function showLogin(msg) {
+    show('app', false); show('login', true);
+    $('loginError').textContent = msg || ''; show('loginError', !!msg);
+  }
+  function signOut(msg) {
+    if (S.token) { try { google.script.run.apiLogout(S.token); } catch (e) { /* ignore */ } }
+    S.token = null; store('cs_token', null); showLogin(msg);
+  }
+  $('loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'Signing in…'; show('loginError', false);
+    api('apiLogin', $('loginEmail').value, $('loginCode').value).then(function (r) {
+      btn.disabled = false; btn.textContent = 'Sign in';
+      if (!r || !r.ok) { $('loginError').textContent = (r && r.error) || 'Sign-in failed.'; show('loginError', true); return; }
+      S.token = r.token; store('cs_token', r.token); $('loginCode').value = '';
+      startApp(r);
+    }).catch(function (err) { btn.disabled = false; btn.textContent = 'Sign in'; $('loginError').textContent = err.message; show('loginError', true); });
+  });
+  $('logoutBtn').addEventListener('click', function () { signOut(); });
+
+  function startApp(boot) {
+    S.boot = boot;
+    show('login', false); show('app', true);
+    renderShell(); resetCreate(); go(S.view || 'overview');
+  }
+
+  /* =================================================================
+   * Navigation
+   * ================================================================= */
+  function go(view) {
+    S.view = view;
+    qsa('.view').forEach(function (v) { show(v, v.id === 'view-' + view); });
+    qsa('#tabs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-view') === view); });
+    if (view === 'overview') renderOverview();
+    if (view === 'customers') renderCustomers();
+    if (view === 'campaigns') renderCampaigns();
+    if (view === 'create') { renderPreviewTargets(); refreshAudienceCount(); }
+    window.scrollTo(0, 0);
+  }
+  qsa('#tabs button').forEach(function (b) { b.addEventListener('click', function () { go(b.getAttribute('data-view')); }); });
+  document.addEventListener('click', function (e) {
+    var g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); go(g.getAttribute('data-go')); }
+  });
+
+  function renderShell() {
+    var p = S.boot.profile, sub = S.boot.subscription || {};
+    $('hdrName').textContent = p.businessName;
+    $('hdrAvatar').textContent = (p.businessName || '?').trim().charAt(0).toUpperCase();
+    $('hdrPlan').textContent = (sub.plan ? sub.plan + ' plan' : '') + (sub.validUntil ? ' · valid until ' + sub.validUntil : '');
+    document.title = p.businessName + ' · ' + S.boot.settings.systemName;
+  }
+
+  /* =================================================================
+   * Overview
+   * ================================================================= */
+  function sumStats(key) { return S.boot.campaigns.reduce(function (n, c) { return n + (c.stats[key] || 0); }, 0); }
+  function renderOverview() {
+    var b = S.boot, sub = b.subscription || {};
+    var active = b.campaigns.filter(function (c) { return c.status === 'ACTIVE'; }).length;
+    var sched = b.campaigns.filter(function (c) { return c.status === 'SCHEDULED'; }).length;
+    var sent = sumStats('sent'), delivered = sumStats('delivered'), read = sumStats('read');
+    var replies = b.campaigns.reduce(function (n, c) { return n + c.replies; }, 0);
+    $('kpis').innerHTML = [
+      ['Opted-in customers', b.stats.optedIn], ['Active / scheduled', active + ' / ' + sched],
+      ['Messages sent', sent], ['Delivered', sent ? Math.round(delivered / sent * 100) + '%' : '—'],
+      ['Read', sent ? Math.round(read / sent * 100) + '%' : '—'], ['Replies', replies],
+      ['Campaigns', b.campaigns.length], ['Opted out', b.stats.optedOut],
+    ].map(function (k) { return '<div class="kpi"><div class="v">' + esc(k[1]) + '</div><div class="l">' + esc(k[0]) + '</div></div>'; }).join('');
+    $('subAlert').innerHTML = sub.canSend === false ? alertBox('warn', 'Sending is paused: ' + sub.reason + ' Please contact your service provider.') : '';
+    var pct = sub.quota ? Math.min(100, Math.round(sub.used / sub.quota * 100)) : 0;
+    $('planBox').innerHTML =
+      '<div class="summary"><dl>' +
+      '<dt>Plan</dt><dd>' + esc(sub.plan || 'Standard') + '</dd>' +
+      '<dt>Valid until</dt><dd>' + esc(sub.validUntil || 'No expiry') + '</dd>' +
+      '<dt>This month</dt><dd>' + esc(sub.used || 0) + (sub.quota !== null && sub.quota !== undefined ? ' of ' + esc(sub.quota) + ' messages' : ' messages (unlimited plan)') + '</dd>' +
+      '<dt>Sending number</dt><dd>' + (sub.dedicatedNumber ? 'Your dedicated WhatsApp number' : 'Shared platform number') + '</dd>' +
+      '</dl></div>' + (sub.quota ? '<div class="bar" style="margin-top:12px"><i style="width:' + pct + '%"></i></div>' : '');
+    $('recentList').innerHTML = b.campaigns.length ? b.campaigns.slice(0, 4).map(campaignRow).join('') : '<p class="muted">No campaigns yet. Create your first one!</p>';
+  }
+  function campaignRow(c) {
+    var when = c.sendMode === 'SCHEDULE' ? c.scheduleDate + ' ' + c.scheduleTime : 'Sent on submit · ' + c.createdAt;
+    return '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)">' +
+      '<div style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.name) + '</b><span class="small muted">' + esc(when) + '</span></div>' +
+      '<div style="text-align:right;flex:none"><span class="pill ' + esc(c.status) + '">' + esc(c.status) + '</span><div class="small muted">' + c.stats.sent + '/' + c.stats.recipients + ' sent</div></div></div>';
+  }
+
+  /* =================================================================
+   * Create: image processing (resize, optimise, optional text band)
+   * ================================================================= */
+  function loadImageFromFile(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file); var img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('This file could not be read as an image.')); };
+      img.src = url;
+    });
+  }
+  function wrapLines(ctx, text, maxW) {
+    var words = String(text).split(/\s+/), lines = [], line = '';
+    words.forEach(function (w) { var t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; });
+    if (line) lines.push(line); return lines.slice(0, 3);
+  }
+  function hexToRgba(hex, a) { var n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
+  function dataUrlBytes(d) { return Math.round((d.length - d.indexOf(',') - 1) * 3 / 4); }
+
+  /** Draws the final creative and returns a JPEG data URL under the size limit. */
+  function buildCreative() {
+    if (!S.image) return Promise.resolve(null);
+    var src = S.image.original, maxSide = 1600;
+    var scale = Math.min(1, maxSide / Math.max(src.naturalWidth || src.width, src.naturalHeight || src.height));
+    var w = Math.round((src.naturalWidth || src.width) * scale), h = Math.round((src.naturalHeight || src.height) * scale);
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(src, 0, 0, w, h);
+
+    var head = $('ovHead').value.trim(), sub = $('ovSub').value.trim();
+    if (head || sub) {
+      var pad = Math.round(w * 0.05), hs = Math.max(18, Math.round(w * 0.062)), ss = Math.max(13, Math.round(w * 0.038));
+      ctx.font = '800 ' + hs + 'px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+      var hl = head ? wrapLines(ctx, head, w - pad * 2) : [];
+      ctx.font = '500 ' + ss + 'px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+      var sl = sub ? wrapLines(ctx, sub, w - pad * 2) : [];
+      var bandH = pad * 1.6 + hl.length * hs * 1.15 + sl.length * ss * 1.3;
+      var top = $('ovPos').value === 'top';
+      var y0 = top ? 0 : h - bandH, color = $('ovColor').value || '#0b6b38';
+      var g = ctx.createLinearGradient(0, top ? 0 : y0, 0, top ? bandH : h);
+      g.addColorStop(top ? 0 : 1, hexToRgba(color, 0.95)); g.addColorStop(top ? 1 : 0, hexToRgba(color, 0.72));
+      ctx.fillStyle = g; ctx.fillRect(0, y0, w, bandH);
+      ctx.fillStyle = '#fff'; ctx.textBaseline = 'top';
+      var y = y0 + pad * 0.8;
+      ctx.font = '800 ' + hs + 'px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+      hl.forEach(function (l) { ctx.fillText(l, pad, y); y += hs * 1.15; });
+      ctx.font = '500 ' + ss + 'px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+      sl.forEach(function (l) { ctx.fillText(l, pad, y + ss * 0.15); y += ss * 1.3; });
+    }
+    // Optimise: JPEG, shrinking quality then size until under the limit (~90% of max for safety).
+    var limit = (S.boot.settings.maxImageMb || 5) * 1024 * 1024 * 0.9, q = 0.88, data = c.toDataURL('image/jpeg', q);
+    while (dataUrlBytes(data) > limit && q > 0.5) { q -= 0.08; data = c.toDataURL('image/jpeg', q); }
+    if (dataUrlBytes(data) > limit) { var c2 = document.createElement('canvas'); c2.width = Math.round(w * 0.7); c2.height = Math.round(h * 0.7);
+      c2.getContext('2d').drawImage(c, 0, 0, c2.width, c2.height); data = c2.toDataURL('image/jpeg', 0.8); }
+    return new Promise(function (resolve) {
+      var img = new Image(); img.onload = function () { S.image.final = data; S.image.finalImg = img; S.image.bytes = dataUrlBytes(data); resolve(data); }; img.src = data;
+    });
+  }
+  var rebuildTimer = null;
+  function scheduleRebuild() { clearTimeout(rebuildTimer); rebuildTimer = setTimeout(function () { buildCreative().then(afterCreative); }, 250); }
+  function afterCreative() {
+    if (S.image && S.image.finalImg) {
+      var t = $('thumb'), ctx = t.getContext('2d'), im = S.image.finalImg, s = Math.max(t.width / im.width, t.height / im.height);
+      ctx.clearRect(0, 0, t.width, t.height);
+      ctx.drawImage(im, (t.width - im.width * s) / 2, (t.height - im.height * s) / 2, im.width * s, im.height * s);
+      $('imgInfo').textContent = im.width + '×' + im.height + ' · ' + (S.image.bytes / 1024 / 1024).toFixed(2) + ' MB optimised JPG';
+    }
+    renderPreviewTargets();
+  }
+  function handleImageFile(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { toast('Please choose an image file.'); return; }
+    busy(true);
+    loadImageFromFile(file).then(function (img) { S.image = { original: img }; show('thumbRow', true); return buildCreative(); })
+      .then(function () { busy(false); afterCreative(); })
+      .catch(function (err) { busy(false); toast(err.message); });
+  }
+  $('imgInput').addEventListener('change', function (e) { handleImageFile(e.target.files[0]); e.target.value = ''; });
+  bindDrop('drop', handleImageFile);
+  $('imgRemove').addEventListener('click', function () { S.image = null; show('thumbRow', false); renderPreviewTargets(); });
+  ['ovHead', 'ovSub', 'ovPos', 'ovColor'].forEach(function (id) { $(id).addEventListener('input', scheduleRebuild); });
+
+  function bindDrop(id, cb) {
+    var d = $(id);
+    ['dragenter', 'dragover'].forEach(function (ev) { d.addEventListener(ev, function (e) { e.preventDefault(); d.classList.add('drag'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { d.addEventListener(ev, function (e) { e.preventDefault(); d.classList.remove('drag'); }); });
+    d.addEventListener('drop', function (e) { if (e.dataTransfer.files && e.dataTransfer.files[0]) cb(e.dataTransfer.files[0]); });
+  }
+
+  /* =================================================================
+   * Create: message, CTA, fields
+   * ================================================================= */
+  function resetCreate() {
+    var p = S.boot.profile, st = S.boot.settings;
+    S.step = 1; S.image = null; S.cta = 'URL'; S.when = 'NOW'; S.aud = 'all'; S.lists = [];
+    ['cName', 'cMsg', 'ctaText', 'ctaValue', 'ovHead', 'ovSub', 'sDate', 'sTime'].forEach(function (id) { $(id).value = ''; });
+    $('cWebsite').value = p.website || ''; $('cStorePhone').value = p.phone || ''; $('cPreviewName').value = st.defaultContactName || 'Customer';
+    $('cMsg').value = 'Hi {{Name}},\n\n';
+    $('ctaText').maxLength = st.ctaTextMaxLength; show('thumbRow', false);
+    $('varChips').innerHTML = st.variables.map(function (v) { return '<button type="button" class="chip" data-var="' + esc(v) + '">{{' + esc(v) + '}}</button>'; }).join('');
+    $('tzHint').textContent = 'Time zone: ' + st.timezone;
+    $('sDate').min = st.today;
+    qsa('input[name=aud]').forEach(function (r) { r.checked = r.value === 'all'; });
+    setSeg('ctaSeg', 'data-cta', 'URL'); setSeg('whenSeg', 'data-when', 'NOW'); updateCtaFields(); show('schedFields', false);
+    ['step1Err', 'step2Err', 'launchErr'].forEach(function (id) { $(id).innerHTML = ''; });
+    setStep(1); updateMsgCount();
+  }
+  function setSeg(id, attr, val) { qsa('#' + id + ' button').forEach(function (b) { b.classList.toggle('on', b.getAttribute(attr) === val); }); }
+  $('varChips').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-var]'); if (!b) return;
+    var ta = $('cMsg'), ins = '{{' + b.getAttribute('data-var') + '}}', s = ta.selectionStart || ta.value.length;
+    ta.value = ta.value.slice(0, s) + ins + ta.value.slice(ta.selectionEnd || s); ta.focus(); ta.selectionStart = ta.selectionEnd = s + ins.length;
+    updateMsgCount(); renderPreviewTargets();
+  });
+  function updateMsgCount() { $('msgCount').textContent = $('cMsg').value.length; }
+  ['cMsg', 'cName', 'ctaText', 'ctaValue', 'cWebsite', 'cStorePhone', 'cPreviewName'].forEach(function (id) {
+    $(id).addEventListener('input', function () { updateMsgCount(); renderPreviewTargets(); });
+  });
+  $('ctaSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-cta]'); if (!b) return;
+    S.cta = b.getAttribute('data-cta'); setSeg('ctaSeg', 'data-cta', S.cta); $('ctaValue').value = ''; updateCtaFields(); renderPreviewTargets();
+  });
+  function updateCtaFields() {
+    var t = S.cta; show('ctaFields', t !== 'NONE');
+    var max = S.boot.settings.ctaTextMaxLength;
+    $('ctaTextHint').textContent = 'Max ' + max + ' characters';
+    var ph = { URL: ['Explore Now', 'Link', 'https://… (blank = your website)'], PHONE: ['Call Store', 'Phone number', 'Blank = your store phone'], QUICK_REPLY: ['View Offers', 'Reply keyword', 'e.g. offers — your auto-reply for this word is sent back'] }[t];
+    if (ph) { $('ctaText').placeholder = ph[0]; $('ctaValueLabel').textContent = ph[1]; $('ctaValueHint').textContent = ph[2]; $('ctaValue').placeholder = t === 'URL' ? 'https://' : ''; }
+  }
+  function ctaResolved() {
+    var t = S.cta; if (t === 'NONE') return null;
+    var text = $('ctaText').value.trim() || $('ctaText').placeholder, v = $('ctaValue').value.trim();
+    if (t === 'URL') v = normUrl(v || $('cWebsite').value);
+    if (t === 'PHONE') { v = normPhone(v || $('cStorePhone').value); v = v ? '+' + v : ''; }
+    if (t === 'QUICK_REPLY') v = v || text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    return { type: t, text: text, value: v };
+  }
+
+  function validateStep1() {
+    var errs = [], max = S.boot.settings.ctaTextMaxLength, cta = ctaResolved();
+    if (!$('cName').value.trim()) errs.push('Enter a campaign name.');
+    if (!$('cMsg').value.trim() || $('cMsg').value.trim() === 'Hi {{Name}},') errs.push('Write your message.');
+    if ($('cWebsite').value.trim() && !normUrl($('cWebsite').value)) errs.push('Website is not a valid web address.');
+    if ($('cStorePhone').value.trim() && !normPhone($('cStorePhone').value)) errs.push('Store phone number is not valid.');
+    if (cta) {
+      if (!$('ctaText').value.trim()) errs.push('Enter the button text.');
+      else if ($('ctaText').value.trim().length > max) errs.push('Button text must be at most ' + max + ' characters.');
+      if (cta.type === 'URL' && !cta.value) errs.push('Enter a valid link for the button (or a website).');
+      if (cta.type === 'PHONE' && !cta.value) errs.push('Enter a valid phone number for the button (or a store phone).');
+    }
+    $('step1Err').innerHTML = alertBox('error', errs.length ? 'Please fix:' : '', errs);
+    return !errs.length;
+  }
+
+  /* =================================================================
+   * Create: steps, audience, schedule, launch
+   * ================================================================= */
+  function setStep(n) {
+    S.step = n;
+    ['1', '2', '3'].forEach(function (k) { show('step-' + k, String(n) === k); });
+    show('step-done', n === 'done');
+    show('steps', n !== 'done');
+    qsa('#steps button').forEach(function (b) { var k = +b.getAttribute('data-step'); b.classList.toggle('on', k === n); b.classList.toggle('done', n !== 'done' && k < n); });
+    if (n === 3) renderSummary();
+    renderPreviewTargets(); window.scrollTo(0, 0);
+  }
+  $('steps').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-step]'); if (!b) return; var n = +b.getAttribute('data-step');
+    if (n > 1 && !validateStep1()) return setStep(1);
+    if (n > 2 && !validateStep2()) return setStep(2);
+    setStep(n);
+  });
+  document.addEventListener('click', function (e) { var b = e.target.closest('[data-step-go]'); if (b) setStep(+b.getAttribute('data-step-go')); });
+  $('toStep2').addEventListener('click', function () { if (validateStep1()) setStep(2); });
+  $('toStep3').addEventListener('click', function () { if (validateStep2()) setStep(3); });
+  $('newAgain').addEventListener('click', function () { resetCreate(); renderPreviewTargets(); });
+
+  function renderListPicker() {
+    var lists = S.boot.lists;
+    $('allCount').textContent = S.boot.stats.optedIn + ' customers';
+    $('listPicker').innerHTML = lists.length ? lists.map(function (l) {
+      return '<label class="check"><input type="checkbox" value="' + esc(l.name) + '"' + (S.lists.indexOf(l.name) >= 0 ? ' checked' : '') + '><div><b>' + esc(l.name) + '</b><div class="small muted">' + l.count + ' opted-in</div></div></label>';
+    }).join('') : '<p class="muted small">No lists yet — upload customers first.</p>';
+  }
+  qsa('input[name=aud]').forEach(function (r) { r.addEventListener('change', function () { S.aud = r.value; show('listPicker', S.aud === 'lists'); refreshAudienceCount(); }); });
+  $('listPicker').addEventListener('change', function () {
+    S.lists = qsa('#listPicker input:checked').map(function (i) { return i.value; }); refreshAudienceCount();
+  });
+  function audienceSel() { return S.aud === 'all' ? { all: true } : { lists: S.lists.slice() }; }
+  var countSeq = 0;
+  function refreshAudienceCount() {
+    if (!S.boot) return; renderListPicker(); show('listPicker', S.aud === 'lists');
+    if (S.aud === 'lists' && !S.lists.length) { S.audCount = 0; $('audCount').textContent = 'Select at least one list.'; return; }
+    var seq = ++countSeq; $('audCount').textContent = 'Counting recipients…';
+    api('apiCountAudience', S.token, audienceSel()).then(function (r) {
+      if (seq !== countSeq || !r.ok) return; S.audCount = r.count;
+      var sub = S.boot.subscription || {}, extra = sub.remaining !== null && sub.remaining !== undefined && r.count > sub.remaining ? ' · only ' + sub.remaining + ' messages left this month' : '';
+      $('audCount').textContent = 'Recipients: ' + r.count + ' opted-in customer' + (r.count === 1 ? '' : 's') + extra;
+    }).catch(function () { /* handled */ });
+  }
+  $('whenSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-when]'); if (!b) return; S.when = b.getAttribute('data-when'); setSeg('whenSeg', 'data-when', S.when);
+    show('schedFields', S.when === 'SCHEDULE');
+    if (S.when === 'SCHEDULE' && !$('sDate').value) { $('sDate').value = S.boot.settings.today; }
+  });
+  function validateStep2() {
+    var errs = [];
+    if (S.aud === 'lists' && !S.lists.length) errs.push('Select at least one customer list.');
+    if (S.audCount === 0) errs.push('No opted-in customers match this selection. Upload customers first.');
+    if (S.when === 'SCHEDULE') {
+      if (!$('sDate').value) errs.push('Choose a date.');
+      if (!$('sTime').value) errs.push('Choose a time.');
+      if ($('sDate').value && $('sDate').value < S.boot.settings.today) errs.push('The date is in the past.');
+    }
+    if (S.boot.subscription && S.boot.subscription.canSend === false && !/quota/i.test(S.boot.subscription.reason)) errs.push(S.boot.subscription.reason + ' Please contact your service provider.');
+    $('step2Err').innerHTML = alertBox('error', errs.length ? 'Please fix:' : '', errs);
+    return !errs.length;
+  }
+  function renderSummary() {
+    var cta = ctaResolved();
+    var when = S.when === 'NOW' ? 'Immediately after launch' : $('sDate').value + ' at ' + $('sTime').value + ' (' + S.boot.settings.timezone + ')';
+    var aud = S.aud === 'all' ? 'All opted-in customers' : S.lists.join(', ');
+    $('summary').innerHTML = '<dl>' +
+      '<dt>Campaign</dt><dd>' + esc($('cName').value) + '</dd>' +
+      '<dt>Recipients</dt><dd>' + esc(aud) + (S.audCount !== null ? ' (' + S.audCount + ')' : '') + '</dd>' +
+      '<dt>When</dt><dd>' + esc(when) + '</dd>' +
+      '<dt>Image</dt><dd>' + (S.image ? 'Yes' : 'No (text only)') + '</dd>' +
+      '<dt>Button</dt><dd>' + (cta ? esc(cta.text) + ' → ' + esc(cta.value) : 'None') + '</dd>' +
+      '</dl>';
+  }
+  $('launchBtn').addEventListener('click', function () {
+    if (!validateStep1()) return setStep(1);
+    if (!validateStep2()) return setStep(2);
+    var cta = ctaResolved(), btn = $('launchBtn');
+    var payload = {
+      campaignName: $('cName').value.trim(), message: $('cMsg').value,
+      imageDataUrl: S.image ? S.image.final : '', website: $('cWebsite').value.trim(), storePhone: $('cStorePhone').value.trim(),
+      ctaType: cta ? cta.type : 'NONE', ctaText: cta ? $('ctaText').value.trim() : '',
+      ctaValue: cta ? ($('ctaValue').value.trim() || (cta.type === 'QUICK_REPLY' ? cta.value : '')) : '',
+      audience: audienceSel(), sendMode: S.when, date: $('sDate').value, time: $('sTime').value,
+    };
+    btn.disabled = true; busy(true); $('launchErr').innerHTML = '';
+    api('apiCreateCampaign', S.token, payload).then(function (r) {
+      btn.disabled = false; busy(false);
+      if (!r.ok) { $('launchErr').innerHTML = alertBox('error', r.error); return; }
+      if (!r.created) { $('launchErr').innerHTML = alertBox('error', 'The campaign could not be launched:', r.errors); return; }
+      if (r.campaigns) S.boot.campaigns = r.campaigns;
+      $('doneMsg').innerHTML = '<b>Campaign ' + esc(r.campaignId) + ' is ' + esc(r.status) + '.</b><br>' +
+        (r.status === 'SCHEDULED' ? 'It will be sent at the scheduled time.' : r.status === 'ACTIVE' ? 'Messages are being sent in small batches.' : r.status === 'READY' ? 'It will be sent after final approval.' : 'Check the campaign for details.');
+      $('doneWarn').innerHTML = alertBox('warn', r.warnings && r.warnings.length ? 'Please note:' : '', r.warnings || []);
+      setStep('done');
+    }).catch(function (err) { btn.disabled = false; busy(false); $('launchErr').innerHTML = alertBox('error', err.message); });
+  });
+
+  /* =================================================================
+   * Protected WhatsApp preview
+   * Deterrents: canvas rendering (no image URL/element to save), tiled watermark baked into
+   * the preview pixels, no selection / context menu / drag / long-press, blur when the window
+   * loses focus, print disabled. NOTE: no website can block OS screenshots or a phone camera;
+   * the watermark makes any captured preview identifiable and unusable as a final creative.
+   * ================================================================= */
+  function drawPreviewImage(canvas, img, label) {
+    var w = 560, h = Math.round(w * img.height / img.width);
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.rotate(-Math.PI / 6);
+    ctx.font = '700 22px -apple-system, Segoe UI, Roboto, Arial, sans-serif'; ctx.textAlign = 'center';
+    var step = 150, span = Math.max(w, h) * 1.5;
+    for (var y = -span; y < span; y += step / 1.6) {
+      for (var x = -span; x < span; x += step * 2.2) {
+        ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillText(label, x, y);
+        ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillText(label, x + 1.5, y + 1.5);
+      }
+    }
+    ctx.restore();
+  }
+  var ICONS = {
+    URL: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg>',
+    PHONE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2"/></svg>',
+    QUICK_REPLY: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-2"/></svg>',
+  };
+  function ctaLine(cta) {
+    if (cta.type === 'URL') return '👉 ' + cta.text + ': ' + cta.value;
+    if (cta.type === 'PHONE') return '📞 ' + cta.text + ': ' + cta.value;
+    return '💬 ' + cta.text + ' — reply "' + cta.value + '"';
+  }
+  /** data = { business, text, img (Image|null), cta|null } */
+  function buildPreview(target, data) {
+    var label = 'PREVIEW · ' + data.business;
+    var time = new Date().toTimeString().slice(0, 5);
+    var captionStyle = S.boot.settings.imageCtaStyle === 'CAPTION_LINK';
+    var html = '<div class="protected"><div class="phone"><div class="screen">' +
+      '<div class="wa-head"><div class="avatar">' + esc((data.business || '?').charAt(0).toUpperCase()) + '</div><div><b>' + esc(data.business) + '</b><span>WhatsApp</span></div></div>' +
+      '<div class="chat">';
+    var textHtml = waFormat(data.text || '');
+    var ctaHtml = data.cta ? '<div class="cta">' + (ICONS[data.cta.type] || '') + esc(data.cta.text) + '</div>' : '';
+    if (data.img && captionStyle) {
+      var cap = data.text + (data.cta ? '\n\n' + ctaLine(data.cta) : '');
+      html += '<div class="bubble"><canvas data-img="1"></canvas>' + (cap.trim() ? '<div class="txt">' + waFormat(cap) + '</div>' : '') + '<div class="time">' + time + '</div></div>';
+    } else {
+      if (data.img) html += '<div class="bubble"><canvas data-img="1"></canvas>' + (data.cta || data.text ? '' : '<div class="time">' + time + '</div>') + '</div>';
+      if (data.text || data.cta) html += '<div class="bubble">' + (data.text ? '<div class="txt">' + textHtml + '</div>' : '') + '<div class="time">' + time + '</div>' + ctaHtml + '</div>';
+    }
+    if (!data.img && !data.text && !data.cta) html += '<p class="muted small" style="text-align:center;margin-top:40%">Your ad preview appears here</p>';
+    html += '</div></div></div><div class="shield"></div></div><div class="wm-note">Watermarked preview · download disabled</div>';
+    target.innerHTML = html;
+    var cv = target.querySelector('canvas[data-img]');
+    if (cv && data.img) drawPreviewImage(cv, data.img, label);
+  }
+  function currentPreviewData() {
+    return { business: S.boot.profile.businessName, text: renderVars($('cMsg').value, $('cPreviewName').value.trim()),
+      img: S.image && S.image.finalImg, cta: ctaResolved() };
+  }
+  function renderPreviewTargets() {
+    if (!S.boot || S.view !== 'create') return;
+    var d = currentPreviewData();
+    buildPreview($('livePreview'), d);
+    if (S.step === 3) buildPreview($('reviewPreview'), d);
+    if (!$('sheet').classList.contains('hidden') && $('sheet').getAttribute('data-mode') === 'live') buildPreview($('sheetBody'), d);
+  }
+  function openSheet(title, mode) { $('sheetTitle').textContent = title; $('sheet').setAttribute('data-mode', mode); show('sheet', true); }
+  $('fabPreview').addEventListener('click', function () { openSheet('Preview', 'live'); buildPreview($('sheetBody'), currentPreviewData()); });
+  $('sheetClose').addEventListener('click', function () { show('sheet', false); $('sheetBody').innerHTML = ''; });
+  $('sheet').addEventListener('click', function (e) { if (e.target === $('sheet')) { show('sheet', false); $('sheetBody').innerHTML = ''; } });
+
+  // Global deterrents
+  function inProtected(e) { return e.target && e.target.closest && e.target.closest('.protected'); }
+  ['contextmenu', 'dragstart', 'selectstart', 'copy', 'cut'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { if (inProtected(e) || ev === 'contextmenu' && e.target.tagName === 'CANVAS') e.preventDefault(); });
+  });
+  function privacy(on) { document.body.classList.toggle('privacy', !!on); }
+  document.addEventListener('keydown', function (e) {
+    var k = (e.key || '').toLowerCase();
+    if (k === 'printscreen') { privacy(true); try { navigator.clipboard.writeText(''); } catch (err) { /* ignore */ } setTimeout(function () { privacy(false); }, 1500); }
+    if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'p')) { e.preventDefault(); toast('Saving and printing are disabled.'); }
+    if (e.metaKey && e.shiftKey) privacy(true); // macOS screenshot shortcuts start with Cmd+Shift
+  });
+  document.addEventListener('keyup', function (e) { if (!e.metaKey && document.hasFocus()) privacy(false); });
+  window.addEventListener('blur', function () { privacy(true); });
+  window.addEventListener('focus', function () { privacy(false); });
+  document.addEventListener('visibilitychange', function () { privacy(document.hidden); });
+  document.addEventListener('pointerdown', function () { if (document.hasFocus()) privacy(false); });
+
+  /* =================================================================
+   * Customers: Excel / CSV upload
+   * ================================================================= */
+  var FIELDS = [
+    { key: 'phone', label: 'Phone *', re: /phone|mobile|whats ?app|cell|number|contact/i },
+    { key: 'name', label: 'Name', re: /^name$|full ?name|customer|first ?name|client/i },
+    { key: 'email', label: 'Email', re: /e-?mail/i },
+    { key: 'company', label: 'Company', re: /company|business|organi[sz]ation|firm/i },
+    { key: 'tags', label: 'Tags / group', re: /tag|group|segment|category|city|label/i },
+    { key: 'optIn', label: 'Opt-in', re: /opt|consent|subscri/i },
+  ];
+  function renderCustomers() {
+    var b = S.boot;
+    $('maxRows').textContent = b.settings.maxUploadRows;
+    $('custKpis').innerHTML = [['Total customers', b.stats.contacts], ['Opted-in', b.stats.optedIn], ['Opted-out', b.stats.optedOut], ['Lists', b.lists.length]]
+      .map(function (k) { return '<div class="kpi"><div class="v">' + esc(k[1]) + '</div><div class="l">' + esc(k[0]) + '</div></div>'; }).join('');
+    $('listsTable').innerHTML = b.lists.length
+      ? '<div class="scroll-x"><table class="tbl"><tr><th>List / tag</th><th>Opted-in customers</th></tr>' + b.lists.map(function (l) { return '<tr><td>' + esc(l.name) + '</td><td>' + l.count + '</td></tr>'; }).join('') + '</table></div>'
+      : '<p class="muted">No lists yet. Upload your first customer file above.</p>';
+  }
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      if (window.XLSX) return resolve();
+      var s = document.createElement('script'); s.src = src; s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('Could not load the spreadsheet reader. Check your connection.')); }; document.head.appendChild(s);
+    });
+  }
+  var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  function cellStr(v) { if (v == null) return ''; if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(v); return String(v).trim(); }
+  function handleCustomerFile(file) {
+    if (!file) return;
+    if (!/\.(csv|xlsx|xls)$/i.test(file.name)) { toast('Please choose a .csv, .xlsx or .xls file.'); return; }
+    busy(true); $('uploadResult').innerHTML = '';
+    loadScript(XLSX_SRC).then(function () { return file.arrayBuffer(); }).then(function (buf) {
+      var wb = window.XLSX.read(buf, { type: 'array', raw: false, cellDates: false });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' })
+        .map(function (r) { return r.map(cellStr); })
+        .filter(function (r) { return r.some(function (c) { return c !== ''; }); });
+      busy(false);
+      if (rows.length < 2) { toast('The file needs a header row and at least one customer.'); return; }
+      var header = rows[0].map(function (h, i) { return h || ('Column ' + (i + 1)); });
+      var data = rows.slice(1);
+      var map = {};
+      FIELDS.forEach(function (f) { var idx = header.findIndex(function (h, i) { return f.re.test(h) && Object.keys(map).every(function (k) { return map[k] !== i; }); }); map[f.key] = idx; });
+      if (map.phone < 0) map.phone = header.findIndex(function (h, i) { return data.slice(0, 20).some(function (r) { return digits(r[i]).length >= 10; }); });
+      S.upload = { header: header, rows: data, map: map, fileName: file.name };
+      if (!$('listName').value) $('listName').value = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9 _.\-]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+      renderUploadPreview();
+    }).catch(function (err) { busy(false); toast(err.message); });
+  }
+  function renderUploadPreview() {
+    var u = S.upload, max = S.boot.settings.maxUploadRows;
+    $('mapFields').innerHTML = FIELDS.map(function (f) {
+      return '<label class="field"><span>' + esc(f.label) + '</span><select class="input" data-map="' + f.key + '"><option value="-1">— not in file —</option>' +
+        u.header.map(function (h, i) { return '<option value="' + i + '"' + (u.map[f.key] === i ? ' selected' : '') + '>' + esc(h) + '</option>'; }).join('') + '</select></label>';
+    }).join('');
+    var valid = u.map.phone >= 0 ? u.rows.filter(function (r) { return normPhone(r[u.map.phone]); }).length : 0;
+    $('parseInfo').innerHTML = '<b>' + esc(u.fileName) + '</b>: ' + u.rows.length + ' rows · ' + valid + ' with a valid phone number' +
+      (u.rows.length > max ? '<br><b>Only the first ' + max + ' rows can be imported at once.</b>' : '');
+    var cols = FIELDS.filter(function (f) { return u.map[f.key] >= 0; });
+    $('parsePreview').innerHTML = '<tr>' + cols.map(function (f) { return '<th>' + esc(f.label.replace(' *', '')) + '</th>'; }).join('') + '</tr>' +
+      u.rows.slice(0, 8).map(function (r) { return '<tr>' + cols.map(function (f) { return '<td>' + esc(r[u.map[f.key]]) + '</td>'; }).join('') + '</tr>'; }).join('');
+    show('parseBox', true);
+  }
+  $('mapFields').addEventListener('change', function (e) { var s = e.target.closest('[data-map]'); if (!s) return; S.upload.map[s.getAttribute('data-map')] = +s.value; renderUploadPreview(); });
+  $('consent').addEventListener('change', function () { $('uploadErr').innerHTML = ''; });
+  $('custInput').addEventListener('change', function (e) { handleCustomerFile(e.target.files[0]); e.target.value = ''; });
+  bindDrop('custDrop', handleCustomerFile);
+  $('importBtn').addEventListener('click', function () {
+    var u = S.upload, errs = [];
+    if (!u) return;
+    if (u.map.phone < 0) errs.push('Choose which column contains the phone number.');
+    if (!$('listName').value.trim()) errs.push('Enter a list name.');
+    if (!$('consent').checked) errs.push('Please confirm your customers agreed to receive WhatsApp messages.');
+    $('uploadErr').innerHTML = alertBox('error', errs.length ? 'Please fix:' : '', errs);
+    if (errs.length) return;
+    var get = function (r, k) { return u.map[k] >= 0 ? r[u.map[k]] : ''; };
+    var rows = u.rows.slice(0, S.boot.settings.maxUploadRows).map(function (r) {
+      return { phone: get(r, 'phone'), name: get(r, 'name'), email: get(r, 'email'), company: get(r, 'company'), tags: get(r, 'tags'), optIn: get(r, 'optIn') };
+    });
+    busy(true);
+    api('apiUploadContacts', S.token, { listName: $('listName').value.trim(), consent: true, rows: rows }).then(function (r) {
+      busy(false);
+      if (!r.ok) { $('uploadErr').innerHTML = alertBox('error', r.error); return; }
+      S.boot = r.bootstrap; S.upload = null; show('parseBox', false); $('consent').checked = false; $('listName').value = '';
+      var notes = [];
+      if (r.invalid) notes.push(r.invalid + ' row(s) skipped: invalid phone number' + (r.invalidRows.length ? ' (rows ' + r.invalidRows.join(', ') + (r.invalid > r.invalidRows.length ? ', …' : '') + ')' : ''));
+      if (r.duplicatesInFile) notes.push(r.duplicatesInFile + ' duplicate number(s) in the file were merged');
+      if (r.keptOptedOut) notes.push(r.keptOptedOut + ' customer(s) previously unsubscribed and stay unsubscribed');
+      $('uploadResult').innerHTML = alertBox('ok', 'Imported into "' + r.list + '": ' + r.added + ' new, ' + r.updated + ' updated.') + alertBox('warn', '', notes);
+      renderCustomers(); toast('Customers imported');
+    }).catch(function (err) { busy(false); $('uploadErr').innerHTML = alertBox('error', err.message); });
+  });
+  $('sampleCsv').addEventListener('click', function (e) {
+    e.preventDefault();
+    var csv = 'Name,Phone,Email,Company,Tags,Opt In\nAsha Sharma,9876543210,asha@example.com,,VIP,YES\nRavi Kumar,+919812345678,,,"Kolkata, Regular",YES\n';
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'customers-sample.csv';
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  });
+
+  /* =================================================================
+   * Campaigns list
+   * ================================================================= */
+  function renderCampaigns() {
+    var list = S.boot.campaigns;
+    if (!list.length) { $('campaignList').innerHTML = '<div class="card"><p class="muted">No campaigns yet.</p><button class="btn primary" data-go="create" type="button">Create your first campaign</button></div>'; return; }
+    $('campaignList').innerHTML = list.map(function (c) {
+      var s = c.stats, pct = s.recipients ? Math.round(s.sent / s.recipients * 100) : 0;
+      var when = c.sendMode === 'SCHEDULE' ? 'Scheduled ' + c.scheduleDate + ' ' + c.scheduleTime + ' (' + c.timezone + ')' : 'Send now · created ' + c.createdAt;
+      var canCancel = ['READY', 'SCHEDULED', 'ACTIVE', 'PAUSED'].indexOf(c.status) >= 0;
+      return '<div class="card">' +
+        '<div class="view-head" style="margin-bottom:6px"><div style="min-width:0"><h2 style="overflow:hidden;text-overflow:ellipsis">' + esc(c.name) + '</h2><span class="small muted">' + esc(c.id) + ' · ' + esc(when) + '</span></div><span class="pill ' + esc(c.status) + '">' + esc(c.status) + '</span></div>' +
+        '<div class="bar" style="margin:10px 0 8px"><i style="width:' + pct + '%"></i></div>' +
+        '<div class="small muted" style="margin-bottom:12px">' + s.sent + ' of ' + s.recipients + ' sent · ' + s.delivered + ' delivered · ' + s.read + ' read · ' + s.failed + ' failed · ' + c.replies + ' replies</div>' +
+        '<div class="row"><button class="btn sm" data-preview="' + esc(c.id) + '" type="button">Preview</button>' +
+        (canCancel ? '<button class="btn sm danger" data-cancel="' + esc(c.id) + '" type="button">Cancel</button>' : '') + '</div></div>';
+    }).join('');
+  }
+  $('campaignList').addEventListener('click', function (e) {
+    var p = e.target.closest('[data-preview]'), x = e.target.closest('[data-cancel]');
+    if (p) previewCampaign(p.getAttribute('data-preview'));
+    if (x && confirm('Cancel this campaign? Messages not yet sent will not be sent.')) {
+      busy(true);
+      api('apiCancelCampaign', S.token, x.getAttribute('data-cancel')).then(function (r) {
+        busy(false); if (!r.ok) return toast(r.error); S.boot.campaigns = r.campaigns; renderCampaigns(); toast('Campaign cancelled');
+      }).catch(function (err) { busy(false); toast(err.message); });
+    }
+  });
+  function previewCampaign(id) {
+    var c = S.boot.campaigns.find(function (x) { return x.id === id; }); if (!c) return;
+    var cta = c.ctaType ? { type: c.ctaType, text: c.ctaText, value: c.ctaType === 'URL' ? (c.ctaValue.indexOf('{{') >= 0 ? c.website : c.ctaValue) : c.ctaType === 'PHONE' ? (c.ctaValue.indexOf('{{') >= 0 ? c.storePhone : '+' + digits(c.ctaValue)) : c.ctaValue } : null;
+    var text = c.message.replace(/\{\{\s*([A-Za-z_][\w ]*?)\s*\}\}/g, function (m, k) {
+      k = k.replace(/[\s_]/g, '').toLowerCase();
+      return { name: S.boot.settings.defaultContactName, clientname: S.boot.profile.businessName, campaignname: c.name, storephone: c.storePhone, website: c.website }[k] || '';
+    });
+    openSheet(c.name, 'campaign');
+    var data = { business: S.boot.profile.businessName, text: text, img: null, cta: cta };
+    buildPreview($('sheetBody'), data);
+    if (!c.hasImage) return;
+    api('apiGetCampaignImage', S.token, id).then(function (r) {
+      if (!r.ok || !r.image) return;
+      var img = new Image(); img.onload = function () { data.img = img; buildPreview($('sheetBody'), data); r.image = null; }; img.src = r.image;
+    }).catch(function () { /* ignore */ });
+  }
+  $('refreshBtn').addEventListener('click', function () {
+    busy(true);
+    api('apiBootstrap', S.token).then(function (r) { busy(false); if (r.ok) { S.boot = r; renderShell(); renderCampaigns(); toast('Updated'); } })
+      .catch(function (err) { busy(false); toast(err.message); });
+  });
+
+  /* =================================================================
+   * Boot
+   * ================================================================= */
+  var saved = load('cs_token');
+  if (saved) {
+    S.token = saved; busy(true);
+    api('apiBootstrap', saved).then(function (r) { busy(false); if (r.ok) startApp(r); else showLogin(); })
+      .catch(function () { busy(false); showLogin(); });
+  } else {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
  * Media.gs
  * Campaign image handling, isolated behind two functions:
  *
- *   processCampaignImage(fileRef)  -> validates the Form upload, returns { fileId, ... }
+ *   processCampaignImage_(fileRef)  -> validates the Form upload, returns { fileId, ... }
  *   resolveMedia_(spec, cfg, cache) -> returns the value Maytapi's media "message" field receives
  *
  * MEDIA MODES (SETTINGS → MEDIA_MODE)
@@ -26,8 +26,8 @@
  *                array of IDs (FormResponse.getResponse() for file-upload items).
  * @return { ok, fileId, fileName, mimeType, sizeBytes, error }
  */
-function processCampaignImage(fileRef) {
-  const cfg = getConfig();
+function processCampaignImage_(fileRef) {
+  const cfg = getConfig_();
   const fileId = extractDriveFileId_(fileRef);
   if (!fileId) return { ok: false, error: 'No campaign image was uploaded or the file reference could not be read.' };
 
@@ -75,7 +75,7 @@ function extractDriveFileId_(ref) {
  * `cache` (optional object) memoises base64 per file within one execution.
  */
 function resolveMedia_(spec, cfg, cache) {
-  cfg = cfg || getConfig();
+  cfg = cfg || getConfig_();
   cache = cache || {};
   const fileId = String(spec.imageFileId || '').trim();
   const explicitUrl = String(spec.imageUrl || '').trim();

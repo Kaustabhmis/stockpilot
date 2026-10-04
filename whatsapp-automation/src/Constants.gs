@@ -23,10 +23,11 @@ const SHEETS = {
 
 const HEADERS = {
   SETTINGS: ['Key', 'Value', 'Description'],
-  CLIENTS: ['Client ID', 'Business Name', 'Client Email', 'Business Phone', 'Website', 'Status', 'Created At', 'Updated At'],
+  CLIENTS: ['Client ID', 'Business Name', 'Client Email', 'Business Phone', 'Website', 'Status', 'Created At', 'Updated At', 'Access Code Hash', 'Last Login',
+    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until'],
   CONTACTS: [
     'Contact ID', 'Client ID', 'Name', 'Phone', 'Email', 'Company', 'Tags', 'Audience', 'Opt In', 'Status',
-    'Last Sent', 'Last Message ID', 'Last Response', 'Created At', 'Updated At',
+    'Last Sent', 'Last Message ID', 'Last Response', 'Created At', 'Updated At', 'Source',
   ],
   CAMPAIGNS: [
     'Campaign ID', 'Client ID', 'Client Name', 'Campaign Name', 'Status', 'Message', 'Image File ID', 'Image URL',
@@ -36,7 +37,7 @@ const HEADERS = {
   MESSAGE_QUEUE: [
     'Queue ID', 'Campaign ID', 'Client ID', 'Contact ID', 'Phone', 'Name', 'Rendered Message', 'Image File ID',
     'Image URL', 'CTA Type', 'CTA Text', 'CTA Value', 'Status', 'Attempts', 'Scheduled At', 'Started At',
-    'Sent At', 'Message ID', 'Error', 'Last Attempt', 'Created At',
+    'Sent At', 'Message ID', 'Error', 'Last Attempt', 'Created At', 'Sender Phone ID',
   ],
   LOGS: [
     'Timestamp', 'Level', 'Action', 'Client ID', 'Campaign ID', 'Contact ID', 'Phone', 'Message ID',
@@ -48,7 +49,7 @@ const HEADERS = {
   ],
   TEMPLATES: [
     'Template ID', 'Template Name', 'Trigger', 'Reply Type', 'Reply Text', 'Image URL', 'Button Text',
-    'Button Type', 'Button Value', 'Active',
+    'Button Type', 'Button Value', 'Active', 'Client ID',
   ],
 };
 

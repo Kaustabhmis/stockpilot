@@ -27,7 +27,7 @@ function validateMessageSpec_(spec, cfg) {
 
 /** Validates an already-rendered CTA. */
 function validateCta_(cta, cfg) {
-  cfg = cfg || getConfig();
+  cfg = cfg || getConfig_();
   const type = String(cta.type || '').toUpperCase();
   if (CTA_TYPES.indexOf(type) < 0) return 'CTA type must be URL, PHONE or QUICK_REPLY.';
   if (!String(cta.text || '').trim()) return 'CTA button text is empty.';
@@ -59,7 +59,7 @@ function withCtaText_(text, cta) {
  *   fallbackUsed  true if buttons were replaced by a text CTA
  */
 function sendCampaignMessage_(spec, cfg, mediaCache) {
-  cfg = cfg || getConfig();
+  cfg = cfg || getConfig_();
   const invalid = validateMessageSpec_(spec, cfg);
   if (invalid) return Object.assign(failResult_(0, invalid), { messageIds: [] });
 
@@ -79,32 +79,32 @@ function sendCampaignMessage_(spec, cfg, mediaCache) {
 
   // 1) No CTA: one message.
   if (!cta) {
-    const r = media ? sendMaytapiMedia(to, media.media, captionSafe_(text), media.filename, cfg) : sendMaytapiText(to, text, cfg);
+    const r = media ? sendMaytapiMedia_(to, media.media, captionSafe_(text), media.filename, cfg) : sendMaytapiText_(to, text, cfg);
     return finalize_(r, [r]);
   }
 
   // 2) CTA as text inside the caption/body (single bubble, always supported).
   if (cfg.imageCtaStyle === 'CAPTION_LINK') {
     const body = withCtaText_(text, cta);
-    const r = media ? sendMaytapiMedia(to, media.media, captionSafe_(body), media.filename, cfg) : sendMaytapiText(to, body, cfg);
+    const r = media ? sendMaytapiMedia_(to, media.media, captionSafe_(body), media.filename, cfg) : sendMaytapiText_(to, body, cfg);
     return finalize_(r, [r]);
   }
 
   // 3) IMAGE_THEN_BUTTONS: image first (no caption), then the message with an interactive button.
   const results = [];
   if (media) {
-    const r1 = sendMaytapiMedia(to, media.media, '', media.filename, cfg);
+    const r1 = sendMaytapiMedia_(to, media.media, '', media.filename, cfg);
     results.push(r1);
     if (!r1.success) return finalize_(r1, results);
   }
-  const r2 = sendMaytapiButtons(to, text, [cta], cfg);
+  const r2 = sendMaytapiButtons_(to, text, [cta], cfg);
   results.push(r2);
   if (r2.success) return finalize_(r2, results);
 
   // Button payload rejected (non-transient) => text fallback so the customer still gets the CTA.
   if (cfg.ctaFallbackToText && !r2.retryable && !r2.authError) {
     logEvent_(LOG_LEVEL.WARNING, 'BUTTON_FALLBACK', { phone: to, httpStatus: r2.httpStatus, error: r2.error, details: 'Buttons rejected; sending CTA as text.' });
-    const r3 = sendMaytapiText(to, withCtaText_(text, cta), cfg);
+    const r3 = sendMaytapiText_(to, withCtaText_(text, cta), cfg);
     results.push(r3);
     const out = finalize_(r3, results);
     out.fallbackUsed = true;

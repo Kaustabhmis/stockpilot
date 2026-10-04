@@ -5,7 +5,8 @@
  *   node whatsapp-automation/tools/build-single-file.js
  *
  * File order does not matter in Apps Script (all files share one global scope), but
- * Constants/Config/Utils go first for readability.
+ * Constants/Config/Utils go first for readability. src/ClientApp.html (the client
+ * dashboard) is embedded as the CLIENT_APP_HTML_ string so no separate HTML file is needed.
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,8 +26,11 @@ function build() {
     ' */',
     '',
   ].join('\n');
+  const html = fs.readFileSync(path.join(srcDir, 'ClientApp.html'), 'utf8');
   return header + files.map(f => '/* ' + '='.repeat(30) + ' ' + f + ' ' + '='.repeat(30) + ' */\n\n' +
-    fs.readFileSync(path.join(srcDir, f), 'utf8').trimEnd() + '\n').join('\n');
+    fs.readFileSync(path.join(srcDir, f), 'utf8').trimEnd() + '\n').join('\n') +
+    '\n/* ' + '='.repeat(30) + ' ClientApp.html (embedded) ' + '='.repeat(30) + ' */\n\n' +
+    'const CLIENT_APP_HTML_ = ' + JSON.stringify(html) + ';\n';
 }
 
 module.exports = { build };

@@ -38,8 +38,8 @@ const MAYTAPI_BASE_URL = 'https://api.maytapi.com/api';
 /**
  * Low-level request. `path` is relative to /api/{product_id}, e.g. '/123/sendMessage'.
  */
-function maytapiRequest(method, path, payload, cfg) {
-  cfg = cfg || getConfig();
+function maytapiRequest_(method, path, payload, cfg) {
+  cfg = cfg || getConfig_();
   if (!cfg.productId || !cfg.apiToken) {
     return failResult_(0, 'Maytapi credentials are not configured (Script Properties).', { authError: true, stopBatch: true });
   }
@@ -119,9 +119,9 @@ function phonePath_(cfg, endpoint) {
 
 /* ============================== MESSAGE TYPES ============================== */
 
-function sendMaytapiText(toNumber, text, cfg) {
-  cfg = cfg || getConfig();
-  return maytapiRequest('post', phonePath_(cfg, 'sendMessage'), {
+function sendMaytapiText_(toNumber, text, cfg) {
+  cfg = cfg || getConfig_();
+  return maytapiRequest_('post', phonePath_(cfg, 'sendMessage'), {
     to_number: toNumber,
     type: 'text',
     message: String(text || ''),
@@ -132,21 +132,21 @@ function sendMaytapiText(toNumber, text, cfg) {
  * @param media  https URL or data URI (data:<mime>;base64,...) — see Media.gs
  * @param caption optional caption text
  */
-function sendMaytapiMedia(toNumber, media, caption, filename, cfg) {
-  cfg = cfg || getConfig();
+function sendMaytapiMedia_(toNumber, media, caption, filename, cfg) {
+  cfg = cfg || getConfig_();
   const payload = { to_number: toNumber, type: 'media', message: media };
   if (caption) payload.text = String(caption);
   if (filename) payload.filename = filename;
-  return maytapiRequest('post', phonePath_(cfg, 'sendMessage'), payload, cfg);
+  return maytapiRequest_('post', phonePath_(cfg, 'sendMessage'), payload, cfg);
 }
 
 /**
  * Sends an interactive button message.
  * @param buttons [{ type: 'URL'|'PHONE'|'QUICK_REPLY', text, value }]
  */
-function sendMaytapiButtons(toNumber, body, buttons, cfg) {
-  cfg = cfg || getConfig();
-  return maytapiRequest('post', phonePath_(cfg, 'sendMessage'), buildButtonsPayload_(toNumber, body, buttons), cfg);
+function sendMaytapiButtons_(toNumber, body, buttons, cfg) {
+  cfg = cfg || getConfig_();
+  return maytapiRequest_('post', phonePath_(cfg, 'sendMessage'), buildButtonsPayload_(toNumber, body, buttons), cfg);
 }
 
 /**
@@ -172,28 +172,28 @@ function buildButtonsPayload_(toNumber, body, buttons) {
 }
 
 /** Not implemented on purpose — see file header. */
-function sendMaytapiList() {
+function sendMaytapiList_() {
   return failResult_(0, 'List messages are not enabled: payload not verified against the current Maytapi documentation.');
 }
 
 /** Not implemented on purpose — see file header. */
-function sendMaytapiCarousel() {
+function sendMaytapiCarousel_() {
   return failResult_(0, 'Carousel messages are not enabled: payload not verified against the current Maytapi documentation.');
 }
 
 /* ============================== ACCOUNT / CONNECTION ============================== */
 
-function maytapiListPhones(cfg) {
-  return maytapiRequest('get', '/listPhones', null, cfg);
+function maytapiListPhones_(cfg) {
+  return maytapiRequest_('get', '/listPhones', null, cfg);
 }
 
-function maytapiPhoneStatus(cfg) {
-  cfg = cfg || getConfig();
-  return maytapiRequest('get', phonePath_(cfg, 'status'), null, cfg);
+function maytapiPhoneStatus_(cfg) {
+  cfg = cfg || getConfig_();
+  return maytapiRequest_('get', phonePath_(cfg, 'status'), null, cfg);
 }
 
-function maytapiSetWebhook(webhookUrl, cfg) {
-  return maytapiRequest('post', '/setWebhook', { webhook: webhookUrl }, cfg);
+function maytapiSetWebhook_(webhookUrl, cfg) {
+  return maytapiRequest_('post', '/setWebhook', { webhook: webhookUrl }, cfg);
 }
 
 /**
@@ -201,12 +201,13 @@ function maytapiSetWebhook(webhookUrl, cfg) {
  * and the phone's connection status. Prints nothing secret.
  */
 function testMaytapiConnection() {
-  const cfg = getConfig(true);
-  const v = validateConfig(cfg);
+  requireAdmin_();
+  const cfg = getConfig_(true);
+  const v = validateConfig_(cfg);
   const lines = [formatValidation_(v)];
   let ok = v.ok;
   if (v.ok) {
-    const phones = maytapiListPhones(cfg);
+    const phones = maytapiListPhones_(cfg);
     if (!phones.success) {
       ok = false;
       lines.push('listPhones failed (HTTP ' + phones.httpStatus + '): ' + phones.error);
@@ -216,8 +217,18 @@ function testMaytapiConnection() {
       lines.push('Product reachable. Phones on product: ' + (Array.isArray(list) ? list.length : 'unknown') + '.');
       if (Array.isArray(list) && !match) { ok = false; lines.push('MAYTAPI_PHONE_ID was NOT found on this product.'); }
       if (match) lines.push('Sending phone: ' + maskPhone_(match.number || '') + ' (status: ' + (match.status || 'n/a') + ')');
+      // Tenant dedicated numbers must also exist on this product.
+      if (Array.isArray(list)) {
+        readTable_(SHEETS.CLIENTS).rows.forEach(c => {
+          const pid = String(c['Maytapi Phone ID'] || '').trim();
+          if (!pid) return;
+          const p = list.find(x => String(x.id) === pid);
+          if (!p) { ok = false; lines.push('Tenant ' + c['Client ID'] + ': Maytapi Phone ID ' + pid + ' NOT found on this product.'); }
+          else lines.push('Tenant ' + c['Client ID'] + ': phone ' + maskPhone_(p.number || '') + ' (status: ' + (p.status || 'n/a') + ')');
+        });
+      }
     }
-    const st = maytapiPhoneStatus(cfg);
+    const st = maytapiPhoneStatus_(cfg);
     if (st.success) {
       const s = st.response && (st.response.status || st.response.data || st.response);
       lines.push('Phone status: ' + truncate_(safeJson_(s), 300));

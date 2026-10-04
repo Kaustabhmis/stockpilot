@@ -19,22 +19,28 @@
  * (?key=WEBHOOK_SECRET) which is set via "Configure Webhook" and checked on every call.
  */
 
-/** Health/status endpoint. Exposes no secrets or data. */
+/**
+ * GET: serves the client dashboard. ?health=1 returns a JSON health check (no secrets).
+ */
 function doGet(e) {
-  let configured = false;
-  try { configured = validateConfig(getConfig(true)).ok; } catch (err) { configured = false; }
-  return jsonOut_({
-    status: 'ok',
-    service: 'whatsapp-campaign-automation',
-    version: SYSTEM_VERSION,
-    configured: configured,
-    time: new Date().toISOString(),
-  });
+  const p = (e && e.parameter) || {};
+  if (p.health !== undefined || p.format === 'json') {
+    let configured = false;
+    try { configured = validateConfig_(getConfig_(true)).ok; } catch (err) { configured = false; }
+    return jsonOut_({
+      status: 'ok',
+      service: 'whatsapp-campaign-automation',
+      version: SYSTEM_VERSION,
+      configured: configured,
+      time: new Date().toISOString(),
+    });
+  }
+  return serveClientApp_();
 }
 
 /** Maytapi webhook receiver. Always returns 200 + JSON so Maytapi does not retry-storm. */
 function doPost(e) {
-  const cfg = getConfig(true);
+  const cfg = getConfig_(true);
   try {
     if (cfg.webhookSecret) {
       const key = e && e.parameter ? String(e.parameter.key || '') : '';
@@ -49,9 +55,9 @@ function doPost(e) {
       logEvent_(LOG_LEVEL.WARNING, 'WEBHOOK_BAD_JSON', { error: err.message, details: truncate_(raw, 500) });
       return jsonOut_({ ok: false, error: 'invalid json' });
     }
-    // Ignore events for other Maytapi phones on the same product.
-    const phoneId = payload.phone_id || payload.phoneId;
-    if (phoneId && cfg.phoneId && String(phoneId) !== String(cfg.phoneId)) return jsonOut_({ ok: true, ignored: 'other phone' });
+    // Accept events for the platform number and every tenant's dedicated number; ignore others.
+    const phoneId = String(payload.phone_id || payload.phoneId || '');
+    if (phoneId && knownPhoneIds_(cfg).indexOf(phoneId) < 0) return jsonOut_({ ok: true, ignored: 'unknown phone' });
 
     const type = String(payload.type || '').toLowerCase();
     if (type === 'message') handleIncomingMessage_(payload, raw, cfg);
@@ -87,7 +93,14 @@ function handleIncomingMessage_(payload, raw, cfg) {
   const phone = normalizePhoneNumber((payload.user && payload.user.phone) || conversation.split('@')[0]);
   const name = (payload.user && payload.user.name) || payload.conversation_name || '';
   const text = String(m.text || m.caption || m.body || '').trim();
-  const ctx = resolveContactContext_(phone);
+
+  // Tenant scope: a message to a tenant's dedicated number belongs to that tenant only.
+  // On the shared platform number, the tenant is inferred from the last campaign received.
+  const phoneId = String(payload.phone_id || payload.phoneId || cfg.phoneId || '');
+  const dedicated = tenantsForPhoneId_(phoneId, cfg).map(c => String(c['Client ID']));
+  const scope = dedicated.length ? dedicated : null;
+  const replyCfg = Object.assign({}, cfg, { phoneId: phoneId || cfg.phoneId }); // reply from the receiving number
+  const ctx = resolveContactContext_(phone, scope);
 
   const base = {
     clientId: ctx.clientId, campaignId: ctx.campaignId, phone: phone, name: name,
@@ -104,8 +117,8 @@ function handleIncomingMessage_(payload, raw, cfg) {
   // 1) Opt-out keywords override everything.
   const upper = text.toUpperCase().replace(/[^\w ]/g, '').trim();
   if (upper && cfg.optOutKeywords.indexOf(upper) >= 0) {
-    const n = optOutPhone_(phone, 'Keyword "' + upper + '"');
-    if (cfg.optOutReply) sendMaytapiText(phone, cfg.optOutReply, cfg);
+    const n = optOutPhone_(phone, 'Keyword "' + upper + '"', scope);
+    if (cfg.optOutReply) sendMaytapiText_(phone, cfg.optOutReply, replyCfg);
     recordResponse_(Object.assign(base, { status: 'OPTED_OUT', processed: 'YES: opt-out (' + n + ' contact record(s))' }));
     return;
   }
@@ -114,9 +127,9 @@ function handleIncomingMessage_(payload, raw, cfg) {
   let processed = 'NO: no matching template';
   if (cfg.autoReplyEnabled) {
     const candidates = replyCandidates_(m, text, ctx.campaign);
-    const tpl = findReplyTemplate_(candidates);
+    const tpl = findReplyTemplate_(candidates, ctx.clientId);
     if (tpl) {
-      const r = sendTemplateReply_(tpl, phone, ctx, cfg);
+      const r = sendTemplateReply_(tpl, phone, ctx, replyCfg);
       processed = r.success ? 'YES: replied with ' + tpl['Template ID'] : 'ERROR: ' + r.error;
       logEvent_(r.success ? LOG_LEVEL.SUCCESS : LOG_LEVEL.ERROR, 'AUTO_REPLY', {
         clientId: ctx.clientId, campaignId: ctx.campaignId, contactId: ctx.contact && ctx.contact['Contact ID'],
@@ -150,13 +163,17 @@ function replyCandidates_(m, text, campaign) {
   return out;
 }
 
-/** Finds the most recent campaign this phone received, plus the matching contact. */
-function resolveContactContext_(phone) {
-  const ctx = { clientId: '', campaignId: '', campaign: null, contact: null, contactsTable: null };
+/**
+ * Finds the most recent campaign this phone received, plus the matching contact.
+ * `scope` (array of Client IDs) limits the search to those tenants; null = all tenants.
+ */
+function resolveContactContext_(phone, scope) {
+  const ctx = { clientId: scope && scope.length === 1 ? scope[0] : '', campaignId: '', campaign: null, contact: null, contactsTable: null };
   if (!phone) return ctx;
+  const inScope = id => !scope || scope.indexOf(String(id)) >= 0;
   let latest = null;
   readTable_(SHEETS.MESSAGE_QUEUE).rows.forEach(q => {
-    if (normalizePhoneNumber(q['Phone']) !== phone) return;
+    if (normalizePhoneNumber(q['Phone']) !== phone || !inScope(q['Client ID'])) return;
     const t = toDate_(q['Sent At']) || toDate_(q['Created At']);
     if (t && (!latest || t > latest.t)) latest = { t: t, q: q };
   });
@@ -166,7 +183,7 @@ function resolveContactContext_(phone) {
     ctx.campaign = getCampaign_(ctx.campaignId).row;
   }
   ctx.contactsTable = readTable_(SHEETS.CONTACTS);
-  const matches = ctx.contactsTable.rows.filter(c => normalizePhoneNumber(c['Phone']) === phone);
+  const matches = ctx.contactsTable.rows.filter(c => normalizePhoneNumber(c['Phone']) === phone && inScope(c['Client ID']));
   ctx.contact = matches.find(c => String(c['Client ID']) === ctx.clientId) || matches[0] || null;
   if (ctx.contact && !ctx.clientId) ctx.clientId = String(ctx.contact['Client ID'] || '');
   return ctx;
@@ -189,37 +206,48 @@ function touchContactResponse_(ctx, phone, name, text, cfg) {
 }
 
 /**
- * Opt-out: Opt In = NO on EVERY contact record with this phone (the sending number is
- * shared across clients) and unsent queue items are skipped. Returns records changed.
+ * Opt-out: Opt In = NO and unsent queue items skipped for this phone.
+ * scope = null (shared platform number): every tenant's record — the customer cannot tell
+ *         which business a shared number represents, so we stop all marketing to them.
+ * scope = [clientId] (tenant's dedicated number): only that tenant's records.
+ * Returns the number of contact records changed.
  */
-function optOutPhone_(phone, reason) {
+function optOutPhone_(phone, reason, scope) {
+  const inScope = id => !scope || scope.indexOf(String(id)) >= 0;
   const contacts = readTable_(SHEETS.CONTACTS);
   let n = 0;
   contacts.rows.forEach(c => {
-    if (normalizePhoneNumber(c['Phone']) === phone) {
+    if (normalizePhoneNumber(c['Phone']) === phone && inScope(c['Client ID'])) {
       updateFields_(contacts, c._row, { 'Opt In': 'NO', 'Updated At': new Date() });
       n++;
     }
   });
   const queue = readTable_(SHEETS.MESSAGE_QUEUE);
   queue.rows.forEach(q => {
-    if (normalizePhoneNumber(q['Phone']) === phone && [QUEUE_STATUS.PENDING, QUEUE_STATUS.QUEUED].indexOf(String(q['Status'])) >= 0) {
+    if (normalizePhoneNumber(q['Phone']) === phone && inScope(q['Client ID']) && [QUEUE_STATUS.PENDING, QUEUE_STATUS.QUEUED].indexOf(String(q['Status'])) >= 0) {
       updateFields_(queue, q._row, { 'Status': QUEUE_STATUS.SKIPPED, 'Error': 'Recipient opted out' });
     }
   });
-  logEvent_(LOG_LEVEL.WARNING, 'OPT_OUT', { phone: phone, result: n + ' record(s)', details: reason });
+  logEvent_(LOG_LEVEL.WARNING, 'OPT_OUT', { clientId: scope ? scope.join(',') : '', phone: phone, result: n + ' record(s)', details: reason + (scope ? '' : ' (shared number: all tenants)') });
   return n;
 }
 
 /* ============================== AUTO-REPLY ENGINE ============================== */
 
-/** First active template whose comma-separated Trigger list contains a candidate (case-insensitive). */
-function findReplyTemplate_(candidates) {
+/**
+ * First active template whose comma-separated Trigger list contains a candidate (case-insensitive).
+ * Templates with this tenant's Client ID win over shared templates (blank Client ID).
+ * Other tenants' templates are never used.
+ */
+function findReplyTemplate_(candidates, clientId) {
   if (!candidates.length) return null;
-  const templates = readTable_(SHEETS.TEMPLATES).rows.filter(t => isYes_(t['Active']));
-  return templates.find(t => String(t['Trigger'] || '').split(',')
+  const matches = t => String(t['Trigger'] || '').split(',')
     .map(s => s.trim().toLowerCase()).filter(Boolean)
-    .some(trigger => candidates.indexOf(trigger) >= 0)) || null;
+    .some(trigger => candidates.indexOf(trigger) >= 0);
+  const templates = readTable_(SHEETS.TEMPLATES).rows.filter(t => isYes_(t['Active']));
+  const own = clientId ? templates.filter(t => String(t['Client ID'] || '').trim() === String(clientId)) : [];
+  const shared = templates.filter(t => !String(t['Client ID'] || '').trim());
+  return own.find(matches) || shared.find(matches) || null;
 }
 
 function sendTemplateReply_(tpl, phone, ctx, cfg) {
@@ -324,8 +352,8 @@ function recordResponse_(r) {
  * Returns the webhook URL including the secret key. Uses SETTINGS → WEBHOOK_URL if set,
  * otherwise ScriptApp.getService().getUrl() (the deployed Web App URL).
  */
-function getWebhookUrl() {
-  const cfg = getConfig(true);
+function getWebhookUrl_() {
+  const cfg = getConfig_(true);
   let base = cfg.webhookUrl;
   if (!base) { try { base = ScriptApp.getService().getUrl(); } catch (err) { base = ''; } }
   if (!base) return '';
@@ -335,16 +363,17 @@ function getWebhookUrl() {
 
 /** Menu: creates a webhook secret if needed and registers the URL with Maytapi (setWebhook). */
 function configureWebhook() {
+  requireAdmin_();
   ensureWebhookSecret_();
-  const cfg = getConfig(true);
-  const v = validateConfig(cfg);
+  const cfg = getConfig_(true);
+  const v = validateConfig_(cfg);
   const ui = SpreadsheetApp.getUi();
   if (!v.ok) return ui.alert('Fix configuration first:\n' + v.errors.join('\n'));
-  const url = getWebhookUrl();
+  const url = getWebhookUrl_();
   if (!url) return ui.alert('No Web App URL found. Deploy → New deployment → Web app (Execute as: Me, Access: Anyone), then paste the /exec URL into SETTINGS → WEBHOOK_URL.');
   if (/\/dev(\?|$)/.test(url)) return ui.alert('The URL is a /dev test URL, which Maytapi cannot call. Paste the deployed /exec URL into SETTINGS → WEBHOOK_URL.');
 
-  const r = maytapiSetWebhook(url, cfg);
+  const r = maytapiSetWebhook_(url, cfg);
   if (r.success) {
     const settings = readTable_(SHEETS.SETTINGS);
     const row = findRow_(settings, 'Key', 'WEBHOOK_URL');

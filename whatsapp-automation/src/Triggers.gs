@@ -10,7 +10,8 @@
 const MANAGED_TRIGGER_HANDLERS = ['onFormSubmit', 'runScheduler', 'refreshDashboard', 'processMessageQueue', 'activateScheduledCampaigns'];
 
 function installTriggers() {
-  const cfg = getConfig(true);
+  requireAdmin_();
+  const cfg = getConfig_(true);
   const existing = ScriptApp.getProjectTriggers();
   const has = fn => existing.some(t => t.getHandlerFunction() === fn);
   const created = [];
@@ -34,6 +35,7 @@ function installTriggers() {
 }
 
 function removeTriggers() {
+  requireAdmin_();
   let n = 0;
   ScriptApp.getProjectTriggers().forEach(t => {
     if (MANAGED_TRIGGER_HANDLERS.indexOf(t.getHandlerFunction()) >= 0) { ScriptApp.deleteTrigger(t); n++; }
@@ -43,6 +45,7 @@ function removeTriggers() {
 }
 
 function listTriggers() {
+  requireAdmin_();
   const text = describeTriggers_();
   try { SpreadsheetApp.getUi().alert('Project triggers', text, SpreadsheetApp.getUi().ButtonSet.OK); } catch (err) { console.log(text); }
   return text;

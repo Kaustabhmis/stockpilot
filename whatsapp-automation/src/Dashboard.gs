@@ -57,7 +57,7 @@ function refreshDashboard() {
 
   sheet.clear();
   sheet.getRange(1, 1).setValue('WhatsApp Campaign Dashboard').setFontSize(16).setFontWeight('bold');
-  sheet.getRange(2, 1).setValue('Updated ' + nowInTz_('yyyy-MM-dd HH:mm') + ' (' + getConfig().timezone + ')').setFontColor('#666666');
+  sheet.getRange(2, 1).setValue('Updated ' + nowInTz_('yyyy-MM-dd HH:mm') + ' (' + getConfig_().timezone + ')').setFontColor('#666666');
 
   sheet.getRange(4, 1, 1, 2).setValues([['Metric', 'Value']]).setFontWeight('bold').setBackground('#1f7a4d').setFontColor('#ffffff');
   sheet.getRange(5, 1, kpis.length, 2).setValues(kpis);
@@ -66,11 +66,34 @@ function refreshDashboard() {
   const head = ['Campaign', 'Client', 'Audience', 'Queued', 'Sent', 'Delivered', 'Read', 'Failed', 'Replies', 'Status'];
   sheet.getRange(top, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#1f7a4d').setFontColor('#ffffff');
   if (table.length) sheet.getRange(top + 1, 1, table.length, head.length).setValues(table);
-  sheet.autoResizeColumns(1, head.length);
+
+  // Tenants (clients you sell the service to): plan, sending number and usage.
+  const used = monthlySentByClient_(queue);
+  const tz = getConfig_().timezone;
+  const tenantRows = clients.map(c => {
+    const id = String(c['Client ID']);
+    const ent = tenantEntitlement_(c, used[id] || 0);
+    const lastLogin = toDate_(c['Last Login']);
+    return [
+      id + ' – ' + c['Business Name'], ent.plan || '—', String(c['Status'] || ''),
+      String(c['Maytapi Phone ID'] || '').trim() ? 'Dedicated (' + c['Maytapi Phone ID'] + ')' : 'Shared',
+      ent.used, ent.quota === null ? 'Unlimited' : ent.quota, ent.remaining === null ? '—' : ent.remaining,
+      ent.validUntil || '—', contacts.filter(x => isContactEligible_(x, id)).length,
+      lastLogin ? Utilities.formatDate(lastLogin, tz, 'yyyy-MM-dd HH:mm') : '—',
+      ent.ok ? 'OK' : ent.reason,
+    ];
+  });
+  const tTop = top + table.length + 3;
+  const tHead = ['Tenant', 'Plan', 'Status', 'Sending Number', 'Sent This Month', 'Monthly Quota', 'Remaining', 'Valid Until', 'Opted-In Contacts', 'Last Login', 'Can Send'];
+  sheet.getRange(tTop - 1, 1).setValue('Tenants').setFontWeight('bold');
+  sheet.getRange(tTop, 1, 1, tHead.length).setValues([tHead]).setFontWeight('bold').setBackground('#1f7a4d').setFontColor('#ffffff');
+  if (tenantRows.length) sheet.getRange(tTop + 1, 1, tenantRows.length, tHead.length).setValues(tenantRows);
+  sheet.autoResizeColumns(1, 11);
   sheet.setFrozenRows(0);
 }
 
 function viewDashboard() {
+  requireAdmin_();
   refreshDashboard();
   ss_().setActiveSheet(getSheet_(SHEETS.DASHBOARD));
 }

@@ -105,7 +105,7 @@ function nextIds_(prefix, width, count, sheetName, idHeader) {
   const lock = LockService.getDocumentLock() || LockService.getUserLock();
   lock.waitLock(30000);
   try {
-    const year = Utilities.formatDate(new Date(), getConfig().timezone, 'yyyy');
+    const year = Utilities.formatDate(new Date(), getConfig_().timezone, 'yyyy');
     const key = 'SEQ_' + prefix + '_' + year;
     const props = PropertiesService.getScriptProperties();
     let current = Number(props.getProperty(key));
@@ -163,7 +163,7 @@ function normalizePhoneNumber(phone, countryCode) {
   let digits = raw.replace(/\D/g, '');
   if (!digits) return '';
 
-  const cc = String(countryCode || getConfig().defaultCountryCode || '').replace(/\D/g, '');
+  const cc = String(countryCode || getConfig_().defaultCountryCode || '').replace(/\D/g, '');
 
   if (hasPlus) {
     // Explicit international format: trust it.
@@ -197,7 +197,7 @@ function renderTemplate(template, contact, campaign) {
   if (template === null || template === undefined) return '';
   contact = contact || {};
   campaign = campaign || {};
-  const cfg = getConfig();
+  const cfg = getConfig_();
   const vars = {
     name: firstNonEmpty_(contact.Name, contact.name, cfg.defaultContactName),
     phone: firstNonEmpty_(contact.Phone, contact.phone),
@@ -251,7 +251,7 @@ function isYes_(v) {
 /* ============================== DATES ============================== */
 
 function nowInTz_(fmt) {
-  return Utilities.formatDate(new Date(), getConfig().timezone, fmt || 'yyyy-MM-dd HH:mm:ss');
+  return Utilities.formatDate(new Date(), getConfig_().timezone, fmt || 'yyyy-MM-dd HH:mm:ss');
 }
 
 function todayKey_() {
@@ -260,7 +260,7 @@ function todayKey_() {
 
 function dateKey_(d) {
   if (!(d instanceof Date) || isNaN(d)) return '';
-  return Utilities.formatDate(d, getConfig().timezone, 'yyyy-MM-dd');
+  return Utilities.formatDate(d, getConfig_().timezone, 'yyyy-MM-dd');
 }
 
 /**

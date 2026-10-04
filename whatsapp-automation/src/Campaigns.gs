@@ -10,7 +10,7 @@
  * @return { errors[], warnings[], data } — data holds normalised values.
  */
 function validateCampaignInput_(input) {
-  const cfg = getConfig();
+  const cfg = getConfig_();
   const errors = [];
   const warnings = [];
   const data = {};
@@ -51,7 +51,7 @@ function validateCampaignInput_(input) {
   data.imageFileId = '';
   data.imageName = '';
   if (input.imageRef && String(input.imageRef).trim()) {
-    const img = processCampaignImage(input.imageRef);
+    const img = processCampaignImage_(input.imageRef);
     if (!img.ok) errors.push(img.error);
     else { data.imageFileId = img.fileId; data.imageName = img.fileName; }
   } else {
@@ -229,7 +229,7 @@ function isDuplicateCampaign_(clientId, data) {
 
 /** Scheduled send time of a campaign row, or null. */
 function campaignScheduledAt_(row) {
-  return buildDateTime_(cellDateStr_(row['Schedule Date']), cellTimeStr_(row['Schedule Time']), String(row['Timezone'] || getConfig().timezone));
+  return buildDateTime_(cellDateStr_(row['Schedule Date']), cellTimeStr_(row['Schedule Time']), String(row['Timezone'] || getConfig_().timezone));
 }
 
 /** Schedule cells are stored as plain text, but tolerate Sheets auto-converting them. */
@@ -244,14 +244,14 @@ function cellTimeStr_(v) {
 /* ============================== LIFECYCLE ============================== */
 
 /** Builds the queue (if needed) and activates the campaign. */
-function startCampaign(campaignId) {
+function startCampaign_(campaignId) {
   const c = getCampaign_(campaignId);
   if (!c.row) throw new Error('Campaign ' + campaignId + ' not found.');
   const status = String(c.row['Status']);
   if ([CAMPAIGN_STATUS.COMPLETED, CAMPAIGN_STATUS.CANCELLED, CAMPAIGN_STATUS.ACTIVE].indexOf(status) >= 0) {
     return { ok: false, message: 'Campaign is ' + status + ' and cannot be started.' };
   }
-  const built = buildCampaignQueue(campaignId);
+  const built = buildCampaignQueue_(campaignId);
   const pending = countQueue_(campaignId, [QUEUE_STATUS.PENDING, QUEUE_STATUS.QUEUED]);
   if (!pending) {
     setCampaignStatus_(campaignId, CAMPAIGN_STATUS.ERROR, 'No eligible (opted-in, active) contacts matched audience ' + c.row['Target Audience']);
@@ -261,7 +261,7 @@ function startCampaign(campaignId) {
   return { ok: true, message: 'Campaign ACTIVE with ' + pending + ' queued message(s).' };
 }
 
-function pauseCampaign(campaignId) {
+function pauseCampaign_(campaignId) {
   const c = getCampaign_(campaignId);
   if (!c.row) throw new Error('Campaign ' + campaignId + ' not found.');
   if ([CAMPAIGN_STATUS.ACTIVE, CAMPAIGN_STATUS.SCHEDULED, CAMPAIGN_STATUS.READY].indexOf(String(c.row['Status'])) < 0) {
@@ -271,7 +271,7 @@ function pauseCampaign(campaignId) {
   return { ok: true, message: 'Campaign paused. Queued messages are kept.' };
 }
 
-function resumeCampaign(campaignId) {
+function resumeCampaign_(campaignId) {
   const c = getCampaign_(campaignId);
   if (!c.row) throw new Error('Campaign ' + campaignId + ' not found.');
   if (String(c.row['Status']) !== CAMPAIGN_STATUS.PAUSED) return { ok: false, message: 'Campaign is not paused.' };
@@ -283,13 +283,13 @@ function resumeCampaign(campaignId) {
   }
   if (!pending) {
     setCampaignStatus_(campaignId, CAMPAIGN_STATUS.READY, 'Resumed.');
-    return startCampaign(campaignId);
+    return startCampaign_(campaignId);
   }
   setCampaignStatus_(campaignId, CAMPAIGN_STATUS.ACTIVE, 'Resumed with ' + pending + ' pending message(s).');
   return { ok: true, message: 'Campaign resumed (' + pending + ' pending).' };
 }
 
-function cancelCampaign(campaignId) {
+function cancelCampaign_(campaignId) {
   const c = getCampaign_(campaignId);
   if (!c.row) throw new Error('Campaign ' + campaignId + ' not found.');
   if ([CAMPAIGN_STATUS.COMPLETED, CAMPAIGN_STATUS.CANCELLED].indexOf(String(c.row['Status'])) >= 0) {
@@ -305,7 +305,7 @@ function cancelCampaign(campaignId) {
  * SCHEDULED -> (build queue) -> ACTIVE. Runs under the scheduler lock, and the status
  * change prevents a second activation.
  */
-function activateScheduledCampaigns() {
+function activateScheduledCampaigns_() {
   const table = readTable_(SHEETS.CAMPAIGNS);
   const now = Date.now();
   let activated = 0;
@@ -319,7 +319,7 @@ function activateScheduledCampaigns() {
     if (when.getTime() > now) return;
     try {
       setCampaignStatus_(id, CAMPAIGN_STATUS.VALIDATING, 'Schedule reached; building queue.');
-      const res = startCampaign(id);
+      const res = startCampaign_(id);
       if (res.ok) activated++;
     } catch (err) {
       setCampaignStatus_(id, CAMPAIGN_STATUS.ERROR, 'Activation failed: ' + err.message);
@@ -349,6 +349,7 @@ function completeFinishedCampaigns_() {
  * Never touches the queue or the campaign audience. Personalised as "TEST CUSTOMER".
  */
 function sendTestMessage(campaignId, testPhone) {
+  requireAdmin_();
   const interactive = !campaignId;
   const ui = interactive ? SpreadsheetApp.getUi() : null;
   if (interactive) {
@@ -360,8 +361,8 @@ function sendTestMessage(campaignId, testPhone) {
   }
   const report = msg => { if (ui) ui.alert(msg); else console.log(msg); return msg; };
 
-  const cfg = getConfig(true);
-  const v = validateConfig(cfg);
+  const cfg = getConfig_(true);
+  const v = validateConfig_(cfg);
   if (!v.ok) return report('Cannot send test — configuration errors:\n' + v.errors.join('\n'));
 
   const c = getCampaign_(campaignId);
@@ -378,7 +379,8 @@ function sendTestMessage(campaignId, testPhone) {
     if (!m.ok) return report('Media invalid: ' + m.error);
   }
 
-  const r = sendCampaignMessage_(spec, cfg, {});
+  // Send from the same number the tenant's campaign would use.
+  const r = sendCampaignMessage_(spec, cfgForClient_(clientsById_()[String(c.row['Client ID'])], cfg), {});
   logEvent_(r.success ? LOG_LEVEL.SUCCESS : LOG_LEVEL.ERROR, 'TEST_MESSAGE', {
     campaignId: campaignId, clientId: c.row['Client ID'], phone: phone, messageId: r.messageId,
     httpStatus: r.httpStatus, result: r.success ? (r.fallbackUsed ? 'SENT (text CTA fallback)' : 'SENT') : 'FAILED', error: r.error,

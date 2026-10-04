@@ -1,7 +1,16 @@
 # WhatsApp Campaign Automation: Implementation Guide
 
-A generic, multi-client WhatsApp marketing platform built on Google Forms, Google Sheets, Apps Script (V8),
+A generic, **multi-tenant** WhatsApp marketing platform built on Google Sheets (the database), Apps Script (V8),
 Google Drive and the Maytapi WhatsApp API. No external server, no npm, no Node.js at runtime.
+
+Clients can work in two ways:
+- **Client dashboard** (recommended): a mobile-responsive web app served by the same Apps Script deployment. Each client signs in
+  with their email and an access code. They upload an image and text, the system builds the ad, they see a protected
+  WhatsApp-style preview, upload customers from Excel/CSV, pick lists and a time, and launch. See **Part 15**.
+- **Google Form**: the original submission form, still supported.
+
+You sell the service to many businesses (tenants) from one deployment. Each tenant has its own login, customers, campaigns,
+plan limits and, optionally, its own WhatsApp number. See **Part 16**.
 
 > **No business is hard-coded.** Brand, message, image, website, store phone, CTA, schedule and audience are all read
 > from the Google Form, the Google Sheet or Script Properties. The reference creative shown during design
@@ -52,6 +61,9 @@ CLIENT ─► Google Form ─► FORM_RESPONSES ─► onFormSubmit(e)  [install
 runScheduler()  [every N min, LockService] ─► processMessageQueue() ─► sendCampaignMessage_() ─► Maytapi ─► WhatsApp ─► CUSTOMER
 CUSTOMER reply / button / receipt ─► Maytapi webhook ─► doPost(e) ─► RESPONSES + ack status + auto-reply + opt-out + lead
 ```
+
+**Client dashboard path:** `doGet()` → `ClientApp.html` → `google.script.run` → `api*` functions (`ClientApi.gs`, session-checked)
+→ the same `createCampaignFromInput_()` → queue → Maytapi pipeline as the form.
 
 **Design principles**
 - **Generic**: every business value comes from the form. Code holds only structure and rules.
@@ -108,13 +120,13 @@ plain text so Sheets doesn't convert them to numbers or dates.
 |---|---|
 | **SETTINGS** | Key, Value, Description |
 | **FORM_RESPONSES** | Created by the form link (columns = question titles) |
-| **CLIENTS** | Client ID, Business Name, Client Email, Business Phone, Website, Status, Created At, Updated At |
-| **CONTACTS** | Contact ID, Client ID, Name, Phone, Email, Company, Tags, Audience, Opt In, Status, Last Sent, Last Message ID, Last Response, Created At, Updated At |
+| **CLIENTS** (tenants) | Client ID, Business Name, Client Email, Business Phone, Website, Status (Active / Suspended / Inactive), Created At, Updated At, Access Code Hash, Last Login, Plan, Maytapi Phone ID, Monthly Quota, Valid Until |
+| **CONTACTS** | Contact ID, Client ID, Name, Phone, Email, Company, Tags, Audience, Opt In, Status, Last Sent, Last Message ID, Last Response, Created At, Updated At, Source |
 | **CAMPAIGNS** | Campaign ID, Client ID, Client Name, Campaign Name, Status, Message, Image File ID, Image URL, Website URL, Store Phone, CTA Text, CTA Type, CTA Value, Target Audience, Send Mode, Schedule Date, Schedule Time, Timezone, Created At, Updated At, Submitted By, Notes |
-| **MESSAGE_QUEUE** | Queue ID, Campaign ID, Client ID, Contact ID, Phone, Name, Rendered Message, Image File ID, Image URL, CTA Type, CTA Text, CTA Value, Status, Attempts, Scheduled At, Started At, Sent At, Message ID, Error, Last Attempt, Created At |
+| **MESSAGE_QUEUE** | Queue ID, Campaign ID, Client ID, Contact ID, Phone, Name, Rendered Message, Image File ID, Image URL, CTA Type, CTA Text, CTA Value, Status, Attempts, Scheduled At, Started At, Sent At, Message ID, Error, Last Attempt, Created At, Sender Phone ID |
 | **LOGS** | Timestamp, Level, Action, Client ID, Campaign ID, Contact ID, Phone (masked), Message ID, HTTP Status, Result, Error, Details |
 | **RESPONSES** | Timestamp, Client ID, Campaign ID, Phone, Name, Message ID, Message Type, Message Text, Event Type, Status, Raw Payload, Processed |
-| **TEMPLATES** | Template ID, Template Name, Trigger, Reply Type, Reply Text, Image URL, Button Text, Button Type, Button Value, Active |
+| **TEMPLATES** | Template ID, Template Name, Trigger, Reply Type, Reply Text, Image URL, Button Text, Button Type, Button Value, Active, Client ID (blank = shared by all tenants) |
 | **DASHBOARD** | Generated: KPIs + per-campaign table |
 
 **Statuses**
@@ -146,6 +158,11 @@ Two equivalent layouts are provided:
 |---|---|
 | `appsscript.json` | Manifest: V8, OAuth scopes, web app (execute as owner, anyone access) |
 | `Code.gs` | `onOpen()` menu, `setupSystem()`, menu action wrappers |
+| `Security.gs` | `requireAdmin_()` guard, access codes (salted SHA-256), client logins, sessions, `createClientLogin()`, `resetClientAccessCode()` |
+| `Public.gs` | Admin-only public wrappers with the spec names (`getConfig()`, `startCampaign()`, `sendMaytapiText()`…) |
+| `Tenants.gs` | Per-tenant sending number, plan, monthly quota, expiry and entitlement checks |
+| `ClientApi.gs` | Dashboard server API: login, bootstrap, Excel/CSV contact import, campaign create/cancel, preview image |
+| `ClientApp.html` | The client dashboard (single page, mobile-first, no build step) |
 | `Constants.gs` | Sheet names, headers, statuses, form question titles, variables |
 | `Config.gs` | `getConfig()`, `validateConfig()`, `setMaytapiCredentials()`, `redactSecrets_()` |
 | `Utils.gs` | Sheet I/O, locked appends, ID generator, `normalizePhoneNumber()`, `renderTemplate()`, date parsing, `logEvent_()` |
@@ -163,12 +180,14 @@ Two equivalent layouts are provided:
 \* return a "not verified" error by design (see the verification table).
 
 **B. Single file**: `whatsapp-automation/dist/Code.gs`, generated from `src/` by `node tools/build-single-file.js`.
-Paste it into one Apps Script file and use `src/appsscript.json` as the manifest. The test suite fails if the bundle is out of date.
+Paste it into one Apps Script file and use `src/appsscript.json` as the manifest. The dashboard HTML is embedded in it
+(`CLIENT_APP_HTML_`), so no separate HTML file is needed. The test suite fails if the bundle is out of date.
 
 **Installing the code**
 1. Create a Google Sheet → *Extensions → Apps Script*.
 2. *Project Settings* → tick **Show "appsscript.json" manifest file in editor** → replace its contents with `src/appsscript.json`.
-3. Create one script file per `.gs` file in `src/` with the same name and paste the contents (or paste `dist/Code.gs` into `Code.gs`).
+3. Create one script file per `.gs` file in `src/` with the same name and paste the contents, then *+ → HTML* named `ClientApp`
+   with the contents of `src/ClientApp.html`. Or paste `dist/Code.gs` alone into `Code.gs`.
    With clasp: `clasp create --type sheets --rootDir src` then `clasp push`.
 4. Save, reload the spreadsheet, and the **WhatsApp Automation** menu appears.
 
@@ -243,12 +262,14 @@ Triggers run as the installing account. Install them from the account that owns 
 1. Apps Script editor → **Deploy → New deployment** → gear icon → **Web app**.
 2. **Description**: `WhatsApp webhook v1`.
 3. **Execute as: Me** (the script needs your Sheets, Drive and Mail access).
-4. **Who has access: Anyone**. Maytapi's servers call the URL without a Google login, so "Anyone with Google account" or
-   "Only myself" would block webhook delivery. The secret `?key=` stops unauthorised use.
+4. **Who has access: Anyone**. Maytapi's servers call the URL without a Google login, and your clients open the dashboard
+   without one, so "Anyone with Google account" or "Only myself" would block both. The webhook is protected by its secret `?key=`,
+   the dashboard by client access codes, and every admin function by `requireAdmin_()`.
 5. **Deploy** → authorise → copy the **Web app URL** ending in `/exec`.
 6. Paste that URL (without `?key=`) into `SETTINGS → WEBHOOK_URL`. If it's left blank, `getWebhookUrl()` falls back to
    `ScriptApp.getService().getUrl()`, which may return the `/dev` URL when run from the editor. Maytapi can't use `/dev`.
-7. Check: open `<exec URL>` in a browser. `doGet()` returns `{"status":"ok","service":"whatsapp-campaign-automation","configured":true,…}`.
+7. Check: open `<exec URL>?health=1`. It returns `{"status":"ok","service":"whatsapp-campaign-automation","configured":true,…}`.
+   Open `<exec URL>` itself to see the client dashboard sign-in page. That plain URL is the one you give clients.
 
 **Updating code later**: *Deploy → Manage deployments → edit (pencil) → Version: New version → Deploy*. This keeps the same
 `/exec` URL, so the Maytapi webhook doesn't need changing. "New deployment" would create a new URL.
@@ -281,7 +302,12 @@ Apps Script always answers HTTP 200. Rejections (bad key, bad JSON) are reported
 
 ## PART 10: Testing procedure
 
-**Offline (no network)**: `node whatsapp-automation/tests/run-tests.js` runs 30 end-to-end checks with mocked Apps Script services
+**Browser (optional)**: `NODE_PATH=<dir with playwright-core + xlsx>/node_modules node whatsapp-automation/tests/ui-smoke.js` drives the real dashboard
+in headless Chromium at phone, tablet and desktop sizes: sign-in, CSV and XLSX upload, ad builder, protected preview, scheduling, launch,
+preview and cancel. It fails on any console error or horizontal scrolling.
+
+**Offline (no network)**: `node whatsapp-automation/tests/run-tests.js` runs 45 end-to-end checks, including the admin guard, client logins,
+the dashboard API, cross-tenant isolation, per-tenant numbers, quotas, expiry and tenant-scoped webhooks, with mocked Apps Script services
 (phone normalisation, setup idempotency, validation emails, client isolation, dedupe, payloads, fallback, retries and auth stop,
 acks, auto-reply, redelivery, opt-out, leads, scheduling, lifecycle, dashboard, the Part 11 example, and that the bundle is current).
 
@@ -367,6 +393,18 @@ or a restaurant ("View Menu" QUICK_REPLY with value `menu` plus a TEMPLATES row 
 
 ## PART 13: Security considerations
 
+- **Admin guard**: a page served by HtmlService can call any public server function through `google.script.run`, and the Web App
+  runs as you. So every implementation is private (ends in `_`), and every public admin function starts with `requireAdmin_()`.
+  That check passes only when the person running the code is the account it runs as (sheet menu or editor). Anonymous dashboard
+  visitors are refused. `getConfig()` masks the token even for admins. `onFormSubmit` only accepts genuine trigger events.
+- **Client logins**: access codes are random (~50 bits), stored only as salted SHA-256 hashes, and compared in constant time.
+  Five failed attempts lock that email for 15 minutes. Sessions are random 256-bit tokens in CacheService with a 6-hour sliding
+  expiry, and they end immediately when the code is reset or the tenant is suspended. Business name and email always come from
+  the CLIENTS row, never from the browser.
+- **Preview protection**: the preview is drawn on a canvas, with no image URL or element to save, and a tiled
+  `PREVIEW · <business>` watermark is baked into its pixels. Selection, right-click, drag, long-press, Ctrl/Cmd+S and printing are blocked,
+  and the preview blurs when the window loses focus or PrintScreen/Cmd+Shift is pressed. **No website can block operating-system screenshots or
+  a phone camera.** The watermark is what makes a captured preview identifiable and unusable as the final creative.
 - **Credentials** live only in Script Properties. They're never written to sheets, LOGS, RESPONSES, emails or `doGet` output, and
   `redactSecrets_()` scrubs logged text and raw payloads. The token is only sent as the `x-maytapi-key` header over HTTPS.
 - **Webhook**: Maytapi doesn't sign webhooks, and Apps Script can't read request headers, so authentication is the
@@ -399,6 +437,80 @@ or a restaurant ("View Menu" QUICK_REPLY with value `menu` plus a TEMPLATES row 
 - [ ] The test campaign to your own contact shows SENT → DELIVERED → READ in MESSAGE_QUEUE
 - [ ] STOP tested: Opt In = NO and the contact is excluded from new queues
 - [ ] An invalid submission produces a clear "Requires Attention" email
-- [ ] Spreadsheet shared only with administrators, and clients receive only the form link
+- [ ] Spreadsheet shared only with administrators, and clients receive only the dashboard URL (and/or the form link)
+- [ ] For each tenant: **Create Client Login** done, Plan / Monthly Quota / Valid Until set, and Maytapi Phone ID set if they have their own number
+- [ ] **Test Maytapi Connection** lists every tenant's dedicated phone as found
+- [ ] As a test tenant, sign in to the dashboard on a phone: upload a CSV, build an ad, preview it, schedule it to your own number
 - [ ] Code changes are deployed as **New version** of the same deployment
 - [ ] Plan for growth: archive old MESSAGE_QUEUE, RESPONSES and LOGS rows periodically (Sheets suits a few thousand messages per day)
+
+---
+
+## PART 15: Client dashboard
+
+**URL**: the Web App `/exec` URL (menu **Show Client Dashboard URL**). It works on phones, tablets and desktops.
+
+**Onboarding a client**: menu **Create Client Login** → business name, login email, store phone, website. You get an
+**access code** (`XXXXX-XXXXX`) shown once. Send it to the client privately. **Reset Client Access Code** issues a new one and signs out
+their open sessions.
+
+**What the client can do**
+1. **Home**: opted-in customers, active and scheduled campaigns, delivery and read rates, replies, and their plan and usage.
+2. **Create** (3 steps):
+   - *Ad*: campaign name, upload an image (JPG, PNG or WEBP). The browser optimises it into a WhatsApp-ready JPG (≤ 1600 px, under
+     `MAX_IMAGE_MB`). They can optionally add a **headline / sub-text band** drawn onto the image, in a chosen colour and position. Then
+     they write the message, with variable chips (`{{Name}}`…) and WhatsApp formatting (`*bold*`), and choose a button: Website, Call,
+     Quick reply or none.
+   - *Audience & time*: all opted-in customers or chosen lists, with a live recipient count. Send now or a date and time
+     (interpreted in `TIMEZONE`).
+   - *Review*: a summary plus the **protected preview**, then **Launch**. Validation errors appear inline. Nothing is emailed for errors,
+     and a confirmation email is sent on success.
+   - The live preview shows exactly what the customer will get. With `IMAGE_THEN_BUTTONS` that's the image, then the text with the button.
+     With `CAPTION_LINK` it's one bubble.
+3. **Customers**: upload **.xlsx, .xls or .csv** (up to 5,000 rows per file). Columns are auto-detected (phone, name, email, company,
+   tags, opt-in) and can be re-mapped, with a preview of the first rows. They give the file a **list name** (it becomes a tag to target later) and
+   must tick a **consent confirmation**. New numbers are added with Opt In = YES (or NO if the file says so). Existing numbers are
+   updated, and anyone who replied STOP **stays unsubscribed**. Each row records its source and the consent confirmation. A sample CSV is downloadable.
+4. **Campaigns**: status, progress (sent, delivered, read, failed, replies), protected preview, and cancel (unsent messages are cancelled).
+
+**Where things are stored**: creatives go to Drive under `WhatsApp Campaign Creatives/<Client ID>/` (private). Contacts, campaigns and
+the queue go into the same sheets as before, always tagged with the tenant's Client ID.
+
+**Branding note**: Google may show a small notice above Apps Script web apps (for example "This application was created by a
+Google Apps Script user"). It's added by Google and can't be removed from the script, so tell clients to expect it.
+
+---
+
+## PART 16: Multi-tenant: selling the service to many businesses
+
+One spreadsheet and one Apps Script deployment serve every tenant. Each row in **CLIENTS** is a tenant.
+
+| Column | Effect |
+|---|---|
+| `Status` | `Active` = normal. `Suspended` = can't sign in, can't create campaigns, and their queued messages pause. |
+| `Plan` | Free text shown in the client's dashboard (e.g. Starter, Pro). |
+| `Maytapi Phone ID` | The tenant's **own WhatsApp number**: add the number as another phone in your Maytapi product (scan its QR), then paste its phone ID here. Blank = your shared platform number. |
+| `Monthly Quota` | Maximum campaign messages per calendar month. Blank = unlimited. When reached, the tenant's active campaigns are **paused** (nothing fails). Resume them after an upgrade or when the next month starts. |
+| `Valid Until` | Subscription end date (`yyyy-MM-dd`). After it, the client can still sign in and view results, but can't launch, and sending pauses. |
+
+**Isolation**
+- Data: every contact, campaign and queue row has a Client ID. Queues only include contacts of the campaign's tenant. Dashboard
+  sessions only read or change their own tenant's rows (covered by tests).
+- Sending: each tenant's messages go out through their `Maytapi Phone ID` (or the shared number). `DAILY_SEND_LIMIT` protects
+  **each** WhatsApp number separately. A disconnected or rate-limited number pauses only that number's sends, while others continue.
+- Replies: events arriving on a tenant's dedicated number belong to that tenant only. Their STOP opts the customer out of **that tenant**,
+  and auto-replies use that tenant's TEMPLATES rows first (blank Client ID rows are shared defaults). They're sent from the number
+  the customer wrote to. On the shared number, STOP opts the customer out of every tenant, because they can't tell the businesses apart.
+- Admin view: the **DASHBOARD** sheet has a **Tenants** table (plan, sending number, sent this month, quota, remaining, valid until,
+  opted-in contacts, last login, can-send status).
+
+**Typical commercial setup**
+1. One Maytapi account (product) owned by you. Its API token stays in Script Properties.
+2. Low tiers share your platform number. Higher tiers get a dedicated number (their own SIM/WhatsApp, linked to your product).
+3. Per tenant: **Create Client Login** → set Plan, Monthly Quota and Valid Until (and Maytapi Phone ID if dedicated) → send them
+   the dashboard URL and access code.
+4. Renewals: update `Valid Until` or `Monthly Quota`, then **Resume Campaign** for anything that was paused.
+
+**Limits of this architecture**: Google Sheets comfortably handles a few thousand messages per day in total across all tenants.
+Apps Script quotas (UrlFetch calls/day, trigger runtime) are per Google account, not per tenant. When you outgrow this, the
+`api*` and `*_` layers are the seams for moving storage to a database without changing the dashboard.

@@ -5,7 +5,7 @@
  */
 
 function sendConfirmationEmail_(campaign, status, warnings) {
-  const cfg = getConfig();
+  const cfg = getConfig_();
   const to = String(campaign['Submitted By'] || '').trim();
   if (!isValidEmail_(to)) return;
   const scheduled = String(campaign['Send Mode']) === SEND_MODES.SCHEDULE
@@ -37,7 +37,7 @@ function sendConfirmationEmail_(campaign, status, warnings) {
 }
 
 function sendAttentionEmail_(input, problems) {
-  const cfg = getConfig();
+  const cfg = getConfig_();
   const to = String(input.email || '').trim();
   if (!isValidEmail_(to)) return;
   const lines = [
@@ -52,7 +52,7 @@ function sendAttentionEmail_(input, problems) {
 }
 
 function notifyAdminOfSubmission_(d, campaignId, status, errors, warnings) {
-  const cfg = getConfig();
+  const cfg = getConfig_();
   if (!cfg.notifyAdmin || !cfg.adminEmail) return;
   const lines = [
     'Client: ' + d.businessName + ' <' + d.email + '>',
@@ -73,7 +73,7 @@ function notifyAdminOfSubmission_(d, campaignId, status, errors, warnings) {
 }
 
 function notifyAdmin_(subject, body) {
-  const cfg = getConfig();
+  const cfg = getConfig_();
   if (!cfg.adminEmail) return;
   safeSendEmail_(cfg.adminEmail, '[WhatsApp Automation] ' + subject, redactSecrets_(body) + '\n\nSpreadsheet: ' + ss_().getUrl());
 }
@@ -84,7 +84,7 @@ function safeSendEmail_(to, subject, body) {
       logEvent_(LOG_LEVEL.WARNING, 'EMAIL_QUOTA', { error: 'Mail quota exhausted; email to ' + to.replace(/^(.).*(@.*)$/, '$1***$2') + ' not sent.' });
       return false;
     }
-    MailApp.sendEmail({ to: to, subject: subject, body: body, name: getConfig().systemName });
+    MailApp.sendEmail({ to: to, subject: subject, body: body, name: getConfig_().systemName });
     return true;
   } catch (err) {
     logEvent_(LOG_LEVEL.ERROR, 'EMAIL_FAILED', { error: err.message, details: subject });

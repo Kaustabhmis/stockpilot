@@ -9,6 +9,11 @@ function onOpen() {
     .addItem('Setup System', 'setupSystem')
     .addItem('Set Maytapi Credentials', 'setMaytapiCredentials')
     .addItem('Create Campaign Form', 'createCampaignForm')
+    .addSeparator()
+    .addItem('Create Client Login', 'createClientLogin')
+    .addItem('Reset Client Access Code', 'resetClientAccessCode')
+    .addItem('Show Client Dashboard URL', 'showDashboardUrl')
+    .addSeparator()
     .addItem('Test Maytapi Connection', 'testMaytapiConnection')
     .addSeparator()
     .addItem('Send Test Message', 'menuSendTestMessage')
@@ -34,6 +39,7 @@ function onOpen() {
  * Never deletes or overwrites existing data; missing columns are appended at the end.
  */
 function setupSystem() {
+  requireAdmin_();
   const ss = ss_();
   const report = [];
 
@@ -74,9 +80,9 @@ function setupSystem() {
 
   // Text formats so Sheets doesn't turn phones into numbers or schedules into dates.
   setTextColumns_(SHEETS.CONTACTS, ['Phone', 'Contact ID', 'Client ID']);
-  setTextColumns_(SHEETS.CLIENTS, ['Business Phone']);
+  setTextColumns_(SHEETS.CLIENTS, ['Business Phone', 'Maytapi Phone ID', 'Valid Until', 'Access Code Hash']);
   setTextColumns_(SHEETS.CAMPAIGNS, ['Store Phone', 'Schedule Date', 'Schedule Time', 'CTA Value']);
-  setTextColumns_(SHEETS.MESSAGE_QUEUE, ['Phone', 'CTA Value', 'Message ID']);
+  setTextColumns_(SHEETS.MESSAGE_QUEUE, ['Phone', 'CTA Value', 'Message ID', 'Sender Phone ID']);
   setTextColumns_(SHEETS.RESPONSES, ['Phone', 'Message ID']);
   setTextColumns_(SHEETS.SETTINGS, ['Value']);
 
@@ -105,7 +111,7 @@ function setupSystem() {
   addValidations_();
   refreshDashboard();
 
-  const v = validateConfig(getConfig(true));
+  const v = validateConfig_(getConfig_(true));
   logEvent_(LOG_LEVEL.SUCCESS, 'SETUP_SYSTEM', { result: 'OK', details: report.join('; ') });
   const msg = (report.length ? report.join('\n') : 'All sheets already present.') + '\n\n' + formatValidation_(v) +
     '\n\nNext: Set Maytapi Credentials → Create Campaign Form → Deploy Web App → Configure Webhook → Install Triggers.';
@@ -134,7 +140,7 @@ function addValidations_() {
   };
   apply(SHEETS.CONTACTS, 'Opt In', list(['YES', 'NO']));
   apply(SHEETS.CONTACTS, 'Status', list(['Active', 'Inactive']));
-  apply(SHEETS.CLIENTS, 'Status', list(['Active', 'Inactive']));
+  apply(SHEETS.CLIENTS, 'Status', list(['Active', 'Suspended', 'Inactive']));
   apply(SHEETS.CAMPAIGNS, 'Status', list(Object.keys(CAMPAIGN_STATUS)));
   apply(SHEETS.CAMPAIGNS, 'CTA Type', list(CTA_TYPES.concat([''])));
   apply(SHEETS.TEMPLATES, 'Reply Type', list(['TEXT', 'IMAGE', 'BUTTONS']));
@@ -148,25 +154,26 @@ function menuSendTestMessage() { sendTestMessage(); }
 
 function menuBuildCampaignQueue() {
   runCampaignAction_('Build Campaign Queue', id => {
-    const r = buildCampaignQueue(id);
+    const r = buildCampaignQueue_(id);
     return r.added + ' message(s) queued. Duplicates skipped: ' + r.duplicates + '. Invalid phones: ' + r.skipped + '.\n(Queue is sent only while the campaign is ACTIVE — use Start Campaign.)';
   });
 }
 
-function menuStartCampaign() { runCampaignAction_('Start Campaign', id => startCampaign(id).message); }
-function menuPauseCampaign() { runCampaignAction_('Pause Campaign', id => pauseCampaign(id).message); }
-function menuResumeCampaign() { runCampaignAction_('Resume Campaign', id => resumeCampaign(id).message); }
+function menuStartCampaign() { runCampaignAction_('Start Campaign', id => startCampaign_(id).message); }
+function menuPauseCampaign() { runCampaignAction_('Pause Campaign', id => pauseCampaign_(id).message); }
+function menuResumeCampaign() { runCampaignAction_('Resume Campaign', id => resumeCampaign_(id).message); }
 
 function menuCancelCampaign() {
   const ui = SpreadsheetApp.getUi();
   runCampaignAction_('Cancel Campaign', id => {
     if (ui.alert('Cancel ' + id + '?', 'Unsent messages will be cancelled. This cannot be undone.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return 'Not cancelled.';
-    return cancelCampaign(id).message;
+    return cancelCampaign_(id).message;
   });
 }
 
 function menuProcessQueueNow() {
-  const r = processMessageQueue();
+  requireAdmin_();
+  const r = processMessageQueue_();
   refreshDashboard();
   SpreadsheetApp.getUi().alert(r.skippedRun ? 'Another queue run is in progress — try again shortly.'
     : r.dailyLimitReached ? 'Daily send limit reached.'
@@ -175,6 +182,7 @@ function menuProcessQueueNow() {
 }
 
 function runCampaignAction_(title, fn) {
+  requireAdmin_();
   const ui = SpreadsheetApp.getUi();
   const id = promptCampaignId_(title);
   if (!id) return;

@@ -47,7 +47,7 @@ let CONFIG_CACHE_ = null;
  * Returns the merged configuration. Secrets are included only for the API layer;
  * never log or display the returned object.
  */
-function getConfig(forceReload) {
+function getConfig_(forceReload) {
   if (CONFIG_CACHE_ && !forceReload) return CONFIG_CACHE_;
   const props = PropertiesService.getScriptProperties().getProperties();
   const settings = readSettings_();
@@ -126,8 +126,8 @@ function readSettings_() {
 /**
  * Validates configuration. Returns { ok, errors[], warnings[] } — never includes secret values.
  */
-function validateConfig(cfg) {
-  cfg = cfg || getConfig(true);
+function validateConfig_(cfg) {
+  cfg = cfg || getConfig_(true);
   const errors = [];
   const warnings = [];
   if (!cfg.productId) errors.push('Script Property MAYTAPI_PRODUCT_ID is missing.');
@@ -147,6 +147,7 @@ function validateConfig(cfg) {
 
 /** Menu helper: store Maytapi credentials in Script Properties via prompts (never in the sheet). */
 function setMaytapiCredentials() {
+  requireAdmin_();
   const ui = SpreadsheetApp.getUi();
   const props = PropertiesService.getScriptProperties();
   const ask = (key, label, secret) => {
@@ -168,7 +169,7 @@ function setMaytapiCredentials() {
     throw err;
   }
   CONFIG_CACHE_ = null;
-  const v = validateConfig(getConfig(true));
+  const v = validateConfig_(getConfig_(true));
   ui.alert('Credentials saved to Script Properties.\n\n' + formatValidation_(v));
 }
 
