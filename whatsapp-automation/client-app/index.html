@@ -251,10 +251,11 @@
             <div class="field">
               <span style="display:block;font-weight:600;font-size:14px;margin-bottom:6px">Ad image</span>
               <div class="drop" id="drop">
-                <input type="file" id="imgInput" accept="image/jpeg,image/png,image/webp">
+                <input type="file" id="imgInput" accept="image/*">
                 <div><b>Tap to upload</b> or drag an image here</div>
-                <div class="hint">JPG, PNG or WEBP. It will be optimised for WhatsApp automatically.</div>
+                <div class="hint">JPG, PNG or WEBP (iPhone photos are converted automatically). It will be optimised for WhatsApp.</div>
               </div>
+              <div id="imgStatus" class="small" style="margin-top:8px" role="status" aria-live="polite"></div>
               <div class="thumb-row hidden" id="thumbRow">
                 <canvas id="thumb" width="144" height="144"></canvas>
                 <div style="flex:1"><div class="small" id="imgInfo"></div><button class="btn sm" id="imgRemove" type="button" style="margin-top:6px">Remove image</button></div>
@@ -679,21 +680,35 @@
       var t = $('thumb'), ctx = t.getContext('2d'), im = S.image.finalImg, s = Math.max(t.width / im.width, t.height / im.height);
       ctx.clearRect(0, 0, t.width, t.height);
       ctx.drawImage(im, (t.width - im.width * s) / 2, (t.height - im.height * s) / 2, im.width * s, im.height * s);
-      $('imgInfo').textContent = im.width + '×' + im.height + ' · ' + (S.image.bytes / 1024 / 1024).toFixed(2) + ' MB optimised JPG';
+      var b = S.image.bytes, size = b >= 1048576 ? (b / 1048576).toFixed(2) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+      $('imgInfo').textContent = im.width + '×' + im.height + ' · ' + size + ' optimised JPG';
     }
     renderPreviewTargets();
   }
+  function imgStatus(kind, msg) {
+    var el = $('imgStatus');
+    el.innerHTML = msg ? '<div class="alert ' + kind + '" style="margin:0">' + esc(msg) + '</div>' : '';
+  }
+  var IMAGE_EXT = /\.(jpe?g|jfif|png|webp|gif|bmp|avif|heic|heif)$/i;
   function handleImageFile(file) {
-    if (!file) return;
-    if (!/^image\//.test(file.type)) { toast('Please choose an image file.'); return; }
-    busy(true);
+    if (!file) { imgStatus('warn', 'No file was selected.'); return; }
+    // Some phones/file managers report an empty type — fall back to the file extension.
+    var looksLikeImage = /^image\//.test(file.type) || (!file.type && IMAGE_EXT.test(file.name)) || IMAGE_EXT.test(file.name);
+    if (!looksLikeImage) { imgStatus('error', '"' + file.name + '" is not an image. Please choose a JPG or PNG photo.'); return; }
+    var isHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+    imgStatus('info', 'Processing "' + file.name + '"…'); busy(true);
     loadImageFromFile(file).then(function (img) { S.image = { original: img }; show('thumbRow', true); return buildCreative(); })
-      .then(function () { busy(false); afterCreative(); })
-      .catch(function (err) { busy(false); toast(err.message); });
+      .then(function () { busy(false); afterCreative(); imgStatus('ok', 'Image ready: "' + file.name + '"'); })
+      .catch(function () {
+        busy(false);
+        imgStatus('error', isHeic
+          ? 'This browser cannot read HEIC (iPhone) photos. Please convert it to JPG first, or upload from Safari on the iPhone (it converts automatically).'
+          : 'This image could not be read. Please try a JPG or PNG file.');
+      });
   }
   $('imgInput').addEventListener('change', function (e) { handleImageFile(e.target.files[0]); e.target.value = ''; });
   bindDrop('drop', handleImageFile);
-  $('imgRemove').addEventListener('click', function () { S.image = null; show('thumbRow', false); renderPreviewTargets(); });
+  $('imgRemove').addEventListener('click', function () { S.image = null; show('thumbRow', false); imgStatus('', ''); renderPreviewTargets(); });
   ['ovHead', 'ovSub', 'ovPos', 'ovColor'].forEach(function (id) { $(id).addEventListener('input', scheduleRebuild); });
 
   function bindDrop(id, cb) {
@@ -712,7 +727,7 @@
     ['cName', 'cMsg', 'ctaText', 'ctaValue', 'ovHead', 'ovSub', 'sDate', 'sTime'].forEach(function (id) { $(id).value = ''; });
     $('cWebsite').value = p.website || ''; $('cStorePhone').value = p.phone || ''; $('cPreviewName').value = st.defaultContactName || 'Customer';
     $('cMsg').value = 'Hi {{Name}},\n\n';
-    $('ctaText').maxLength = st.ctaTextMaxLength; show('thumbRow', false);
+    $('ctaText').maxLength = st.ctaTextMaxLength; show('thumbRow', false); imgStatus('', '');
     $('varChips').innerHTML = st.variables.map(function (v) { return '<button type="button" class="chip" data-var="' + esc(v) + '">{{' + esc(v) + '}}</button>'; }).join('');
     $('tzHint').textContent = 'Time zone: ' + st.timezone;
     $('sDate').min = st.today;

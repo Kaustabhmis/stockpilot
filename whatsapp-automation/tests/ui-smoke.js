@@ -154,7 +154,7 @@ async function run(viewport, label) {
   await page.fill('#cName', 'Festive Offer');
   await page.setInputFiles('#imgInput', { name: 'creative.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await page.waitForSelector('#thumbRow:not(.hidden)');
-  await page.waitForFunction(() => /optimised JPG/.test(document.getElementById('imgInfo').textContent));
+  await page.waitForFunction(() => /Image ready/.test(document.getElementById('imgStatus').textContent));
   await page.click('#overlayBox summary');
   await page.fill('#ovHead', 'Festive Sale – 30% Off');
   await page.fill('#ovSub', 'This weekend only');
@@ -240,12 +240,25 @@ async function runDemoInSandbox() {
   assert.ok(!(await fr.$eval('#demoBar', el => el.classList.contains('hidden'))), 'demo banner visible');
   assert.strictEqual(await fr.textContent('#hdrName'), 'Demo Business');
   await fr.click('#tabs button[data-view=create]');
+  // Image upload inside the sandbox: user picks via the file chooser; also a file with no MIME type, and a non-image.
+  const jpg = await fr.evaluate(() => { const c = document.createElement('canvas'); c.width = 640; c.height = 480; const x = c.getContext('2d'); x.fillStyle = '#e76f51'; x.fillRect(0, 0, 640, 480); return c.toDataURL('image/jpeg').split(',')[1]; });
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), fr.click('#drop')]);
+  await chooser.setFiles({ name: 'shop.jpg', mimeType: '', buffer: Buffer.from(jpg, 'base64') });
+  await fr.waitForFunction(() => /Image ready/.test(document.getElementById('imgStatus').textContent));
+  assert.ok(/640×480 · \d+ KB optimised JPG/.test(await fr.textContent('#imgInfo')), await fr.textContent('#imgInfo'));
+  await fr.setInputFiles('#imgInput', { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+  assert.ok((await fr.textContent('#imgStatus')).includes('is not an image'));
+  await fr.setInputFiles('#imgInput', { name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: Buffer.from('not really heic') });
+  await fr.waitForFunction(() => /HEIC/.test(document.getElementById('imgStatus').textContent));
+  await fr.setInputFiles('#imgInput', { name: 'shop.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(jpg, 'base64') });
+  await fr.waitForFunction(() => /Image ready/.test(document.getElementById('imgStatus').textContent));
   await fr.fill('#cName', 'Demo launch');
   await fr.fill('#cMsg', 'Hi {{Name}}, see our new menu!');
   await fr.fill('#ctaText', 'View Menu');
   await fr.click('#fabPreview');
   await fr.waitForSelector('#sheet:not(.hidden)');
   assert.ok((await fr.textContent('#sheetBody')).includes('Hi Customer, see our new menu!'));
+  assert.ok(await fr.$('#sheetBody canvas'), 'uploaded image appears in the preview');
   await fr.click('#sheetClose');
   await fr.click('#toStep2');
   await fr.waitForFunction(() => /Recipients: 120/.test(document.getElementById('audCount').textContent));
