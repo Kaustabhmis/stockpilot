@@ -1,6 +1,6 @@
 /**
- * Setup.gs
- * setupSystem(), the spreadsheet menu and menu action wrappers.
+ * Code.gs
+ * Entry points: setupSystem(), the onOpen() menu and menu action wrappers.
  */
 
 /** Simple trigger: adds the "WhatsApp Automation" menu. */

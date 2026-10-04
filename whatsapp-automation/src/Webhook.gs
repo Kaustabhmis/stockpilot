@@ -80,6 +80,10 @@ function handleIncomingMessage_(payload, raw, cfg) {
   const conversation = String(payload.conversation || (payload.user && payload.user.id) || '');
   if (/@g\.us$/.test(conversation)) return; // group chats are out of scope
 
+  // Webhook senders may redeliver the same event (Apps Script answers POSTs with a 302
+  // redirect, which some senders treat as a failure). Process each message ID once.
+  if (m.id && isDuplicateEvent_('msg:' + m.id)) return;
+
   const phone = normalizePhoneNumber((payload.user && payload.user.phone) || conversation.split('@')[0]);
   const name = (payload.user && payload.user.name) || payload.conversation_name || '';
   const text = String(m.text || m.caption || m.body || '').trim();
@@ -121,6 +125,17 @@ function handleIncomingMessage_(payload, raw, cfg) {
     }
   }
   recordResponse_(Object.assign(base, { status: 'RECEIVED', processed: processed }));
+}
+
+/** True if this event key was already seen in the last 6 hours (script cache). */
+function isDuplicateEvent_(key) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const k = 'wh_' + Utilities.base64EncodeWebSafe(String(key)).slice(0, 200);
+    if (cache.get(k)) return true;
+    cache.put(k, '1', 21600);
+  } catch (err) { /* cache unavailable: fall through and process */ }
+  return false;
 }
 
 /** Text, button payloads and (for QUICK_REPLY campaigns) the campaign's CTA value. */

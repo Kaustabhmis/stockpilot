@@ -90,6 +90,7 @@ function formatDate(d, tz, fmt) {
     .replace('HH', hour).replace('mm', parts.minute).replace('ss', parts.second).replace('Z', z);
 }
 
+const cacheStore = {};
 const lock = { waitLock: () => {}, tryLock: () => true, releaseLock: () => {} };
 
 const context = {
@@ -97,11 +98,13 @@ const context = {
   Utilities: {
     formatDate, sleep: () => {}, getUuid: () => require('crypto').randomUUID(),
     base64Encode: b => Buffer.from(b).toString('base64'),
+    base64EncodeWebSafe: b => Buffer.from(String(b)).toString('base64url'),
   },
   PropertiesService: { getScriptProperties: () => ({
     getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); },
     getProperties: () => Object.assign({}, props),
   }) },
+  CacheService: { getScriptCache: () => ({ get: k => cacheStore[k] || null, put: (k, v) => { cacheStore[k] = v; } }) },
   LockService: { getScriptLock: () => lock, getDocumentLock: () => lock, getUserLock: () => lock },
   SpreadsheetApp: {
     getActiveSpreadsheet: () => spreadsheet, flush: () => {},
@@ -358,6 +361,13 @@ test('keyword auto-reply uses TEMPLATES and client info', () => {
   assert.ok(fetchLog[0].payload.message.includes('Acme Store'));
   assert.ok(table('RESPONSES').some(r => r['Event Type'] === 'message' && /^YES: replied/.test(r.Processed)));
 });
+test('redelivered webhook message is processed once', () => {
+  fetchLog.length = 0;
+  const body = JSON.stringify({ type: 'message', phone_id: 12345, message: { type: 'text', text: 'Offer', fromMe: false, id: 'in1' },
+    user: { id: '919876543210@c.us', phone: '919876543210' }, conversation: '919876543210@c.us' });
+  G.doPost({ parameter: { key: 'hooksecret' }, postData: { contents: body } });
+  assert.strictEqual(fetchLog.length, 0);
+});
 test('STOP opts out every record for the phone and future queues skip it', () => {
   G.doPost({ parameter: { key: 'hooksecret' }, postData: { contents: JSON.stringify({
     type: 'message', phone_id: 12345, message: { type: 'text', text: 'stop', fromMe: false, id: 'in2' },
@@ -414,6 +424,74 @@ test('dashboard renders', () => {
 test('doGet health exposes no secrets', () => {
   const t = G.doGet({}).text;
   assert.ok(JSON.parse(t).status === 'ok' && !t.includes('secret'));
+});
+
+console.log('Spec §39 example + §40 multi-client');
+test('ABC Jewellery scheduled example reaches only its own customers, personalised, with image + URL button', () => {
+  // Two new clients, each with their own contacts. Client B must never receive Client A's campaign.
+  const abcEmail = 'owner@abc-jewellery.example';
+  const xyzEmail = 'sales@xyz-realty.example';
+  const target = new Date(Math.max(Date.parse('2026-10-10T13:30:00Z'), Date.now() + 2 * 86400000));
+  const example = {
+    'Client / Business Name': 'ABC Jewellery',
+    'Campaign Name': 'Festival Gold Offer',
+    'Campaign Message': 'Hi {{Name}},\n\nDiscover our latest jewellery collection ✨\n\nEnjoy special offers for a limited time.\n\nStore:\n{{StorePhone}}',
+    'Campaign Image': 'https://drive.google.com/open?id=IMG_FILE_ID_1234567890ABCDEFG',
+    'Website / Landing Page URL': 'https://example.com',
+    'Store / Business Phone Number': '9830012345',
+    'CTA Button Text': 'Explore Collection',
+    'CTA Button Type': 'URL',
+    'CTA Button Value': 'https://example.com/collection',
+    'Target Audience': 'ALL_OPTED_IN',
+    'Send Mode': 'Schedule',
+    'Campaign Date': formatDate(target, 'Asia/Kolkata', 'yyyy-MM-dd'),
+    'Campaign Time': '19:00',
+    'Client Email': abcEmail,
+  };
+  // Register Client B first via its own (rejected) submission so it has a Client ID.
+  submit(Object.assign({}, baseAnswers, { 'Client / Business Name': 'XYZ Realty', 'Client Email': xyzEmail, 'Campaign Name': 'Open House' }));
+  const r = submit(example);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.strictEqual(r.status, 'SCHEDULED');
+  const clients = table('CLIENTS');
+  const abc = clients.find(c => c['Client Email'] === abcEmail)['Client ID'];
+  const xyz = clients.find(c => c['Client Email'] === xyzEmail)['Client ID'];
+  assert.notStrictEqual(abc, xyz);
+  G.appendObjects_('CONTACTS', [
+    { 'Contact ID': 'CON-A1', 'Client ID': abc, Name: 'Rahul', Phone: '9830000001', 'Opt In': 'YES', Status: 'Active' },
+    { 'Contact ID': 'CON-B1', 'Client ID': xyz, Name: 'Priya', Phone: '9830000002', 'Opt In': 'YES', Status: 'Active' },
+  ]);
+  // Make it due, activate, send.
+  const ct = G.readTable_('CAMPAIGNS');
+  const row = ct.rows.find(c => c['Campaign ID'] === r.campaignId);
+  const past = new Date(Date.now() - 60000);
+  G.updateFields_(ct, row._row, { 'Schedule Date': formatDate(past, 'Asia/Kolkata', 'yyyy-MM-dd'), 'Schedule Time': formatDate(past, 'Asia/Kolkata', 'HH:mm') });
+  // Drain any other campaigns' items so this batch only contains the example.
+  G.updateQueueStatusWhere_('*', ['PENDING', 'QUEUED'], 'CANCELLED', 'test isolation');
+  G.activateScheduledCampaigns();
+  const q = table('MESSAGE_QUEUE').filter(x => x['Campaign ID'] === r.campaignId);
+  assert.strictEqual(JSON.stringify(q.map(x => x.Name)), JSON.stringify(['Rahul']));
+  fetchLog.length = 0;
+  G.processMessageQueue();
+  const toRahul = fetchLog.filter(f => f.payload.to_number === '919830000001');
+  assert.ok(!fetchLog.some(f => f.payload.to_number === '919830000002'), 'Client B customer must not receive Client A campaign');
+  assert.strictEqual(toRahul[0].payload.type, 'media');
+  assert.ok(toRahul[0].payload.message.startsWith('data:image/jpeg;base64,'));
+  assert.strictEqual(toRahul[1].payload.type, 'buttons');
+  assert.ok(toRahul[1].payload.message.startsWith('Hi Rahul,\n\nDiscover our latest jewellery collection ✨'));
+  assert.ok(toRahul[1].payload.message.includes('+919830012345'));
+  assert.strictEqual(JSON.stringify(toRahul[1].payload.buttons), JSON.stringify([{ text: 'Explore Collection', url: 'https://example.com/collection' }]));
+  assert.ok(/^CMP-\d{4}-\d{4}$/.test(r.campaignId));
+});
+
+console.log('Single-file build');
+test('dist/Code.gs is up to date and valid JavaScript', () => {
+  const { build } = require('../tools/build-single-file.js');
+  const built = build();
+  const distPath = path.join(__dirname, '..', 'dist', 'Code.gs');
+  assert.ok(fs.existsSync(distPath), 'run tools/build-single-file.js');
+  assert.strictEqual(fs.readFileSync(distPath, 'utf8'), built, 'dist/Code.gs is stale — run tools/build-single-file.js');
+  new vm.Script(built);
 });
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));
