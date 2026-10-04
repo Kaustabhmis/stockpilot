@@ -9,26 +9,36 @@
  * =============================================================================
  */
 
+/* Keyed by the values your Directory sheet already stores — Free, Monthly,
+   Yearly, Enterprise. The display name is separate, so the sheet keeps its
+   existing vocabulary while the UI shows "Standard" and "Pro".
+
+   This matters more than it looks: normalizePlan falls back to the LEAST
+   generous tier on an unknown name, so keying these by anything else would
+   silently downgrade every paying customer the moment they were read back. */
 var PLANS = {
-  'Free Tier':  { users: 5,   tasksPerMonth: 50,   analytics: false, whatsapp: false, email: false, kraForms: false },
-  'Standard':   { users: 20,  tasksPerMonth: 500,  analytics: false, whatsapp: false, email: true,  kraForms: false },
-  'Pro Yearly': { users: 300, tasksPerMonth: null, analytics: true,  whatsapp: true,  email: true,  kraForms: true },
-  'Enterprise': { users: null, tasksPerMonth: null, analytics: true, whatsapp: true,  email: true,  kraForms: true },
+  'Free':       { name:'Free Tier',  price:0,     users:5,    tasksPerMonth:50,   analytics:false, whatsapp:false, email:false, kraForms:false },
+  'Monthly':    { name:'Standard',   price:2499,  users:20,   tasksPerMonth:500,  analytics:false, whatsapp:false, email:true,  kraForms:false },
+  'Yearly':     { name:'Pro',        price:19999, users:300,  tasksPerMonth:null, analytics:true,  whatsapp:true,  email:true,  kraForms:true },
+  'Enterprise': { name:'Enterprise', price:0,     users:null, tasksPerMonth:null, analytics:true,  whatsapp:true,  email:true,  kraForms:true },
 };
 
+/* Both vocabularies resolve: what the sheet stores, and what the pricing page
+   calls them. An unrecognised name is treated as Free, never as the most
+   generous tier. */
 var PLAN_ALIASES = {
-  'free': 'Free Tier', 'free tier': 'Free Tier', 'trial': 'Free Tier', '': 'Free Tier',
-  'standard': 'Standard', 'basic': 'Standard',
-  'pro': 'Pro Yearly', 'pro yearly': 'Pro Yearly', 'proyearly': 'Pro Yearly', 'premium': 'Pro Yearly',
+  '': 'Free', 'free': 'Free', 'free tier': 'Free', 'freetier': 'Free', 'trial': 'Free',
+  'monthly': 'Monthly', 'standard': 'Monthly', 'basic': 'Monthly',
+  'yearly': 'Yearly', 'pro': 'Yearly', 'pro yearly': 'Yearly', 'proyearly': 'Yearly',
+  'premium': 'Yearly', 'annual': 'Yearly',
   'enterprise': 'Enterprise', 'custom': 'Enterprise',
 };
 
-/** An unknown plan name must fall back to the LEAST generous tier, never the most. */
 function normalizePlan(name) {
   var raw = String(name == null ? '' : name).trim();
   if (PLANS[raw]) return raw;
   var k = raw.toLowerCase().replace(/\s+/g, ' ');
-  return PLAN_ALIASES[k] || 'Free Tier';
+  return PLAN_ALIASES[k] || 'Free';
 }
 
 function planLimits(name) { return PLANS[normalizePlan(name)]; }
@@ -72,7 +82,7 @@ function canAddUser(plan, activeUserCount) {
     return { ok: true, remaining: lim.users - activeUserCount, limit: lim.users };
   }
   return { ok: false, limit: lim.users,
-    reason: normalizePlan(plan) + ' includes ' + lim.users + ' users. You have ' + activeUserCount + '.',
+    reason: lim.name + ' includes ' + lim.users + ' users. You have ' + activeUserCount + '.',
     upgradeTo: nextPlanUp(plan) };
 }
 
@@ -84,17 +94,18 @@ function canCreateTask(plan, tasksThisMonth) {
     return { ok: true, remaining: lim.tasksPerMonth - tasksThisMonth, limit: lim.tasksPerMonth };
   }
   return { ok: false, limit: lim.tasksPerMonth,
-    reason: normalizePlan(plan) + ' includes ' + lim.tasksPerMonth + ' tasks a month. ' +
+    reason: lim.name + ' includes ' + lim.tasksPerMonth + ' tasks a month. ' +
             'You have created ' + tasksThisMonth + '. It resets on the 1st.',
     upgradeTo: nextPlanUp(plan) };
 }
 
 function planAllows(plan, feature) { return !!planLimits(plan)[feature]; }
 
-var PLAN_ORDER = ['Free Tier', 'Standard', 'Pro Yearly', 'Enterprise'];
+var PLAN_ORDER = ['Free', 'Monthly', 'Yearly', 'Enterprise'];
 function nextPlanUp(plan) {
   var i = PLAN_ORDER.indexOf(normalizePlan(plan));
-  return i > -1 && i < PLAN_ORDER.length - 1 ? PLAN_ORDER[i + 1] : null;
+  var next = i > -1 && i < PLAN_ORDER.length - 1 ? PLAN_ORDER[i + 1] : null;
+  return next ? PLANS[next].name : null;      // the name the customer recognises
 }
 
 /**

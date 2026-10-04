@@ -1,0 +1,89 @@
+const { call, env } = require('./server.js');
+let pass=0,fail=0;
+const ok=(n,v,x)=>{console.log((v?'  PASS ':'  FAIL ')+n+(v||!x?'':'  ['+String(x).slice(0,100)+']'));v?pass++:fail++;};
+const err=f=>{ try{ const r=f(); return r.status==='error'?r.message:null; }catch(e){ return e.message; } };
+
+const reg = call({action:'register', form:{companyName:'Delta Tools', name:'Ravi K',
+  email:'ravi@delta.in', password:'strongpass123'}});
+const A = reg.token;
+call({action:'addUser', token:A, form:{name:'Meena S', username:'meena', email:'meena@delta.in',
+  role:'Doer', jobProfile:'Executive', password:'staffpass123'}});
+
+console.log('\n=== stop a recurring series ===');
+call({action:'createTask', token:A, form:{title:'Weekly line check', assignTo:'meena',
+  dueDate:'2026-10-20', frequency:'Weekly', priority:'Medium'}});
+let d = call({action:'getDashboard', token:A});
+const rec = d.tasks.find(t=>t.title==='Weekly line check');
+ok('created as Weekly', rec.frequency==='Weekly');
+ok('stop recurrence succeeds', call({action:'stopRecurringTask', token:A, taskId:rec.id}).status==='success');
+d = call({action:'getDashboard', token:A});
+ok('now One Time', d.tasks.find(t=>t.id===rec.id).frequency==='One Time');
+const m = call({action:'login', username:'meena@delta.in', password:'staffpass123'}).token;
+call({action:'updateTask', token:m, taskId:rec.id, status:'In Progress'});
+call({action:'updateTask', token:m, taskId:rec.id, status:'For Review'});
+const n0 = call({action:'getDashboard', token:A}).tasks.length;
+call({action:'updateTask', token:A, taskId:rec.id, status:'Verified'});
+ok('verifying a stopped series spawns nothing',
+   call({action:'getDashboard', token:A}).tasks.length===n0);
+
+console.log('\n=== archive after a week ===');
+const sheet = env.FILES[Object.keys(env.FILES).find(k=>k.startsWith('SHEET_') &&
+  env.FILES[k].getSheetByName('Tasks') &&
+  env.FILES[k].getSheetByName('Tasks')._data.some(r=>r[3]==='Weekly line check'))];
+const tasksSheet = sheet.getSheetByName('Tasks');
+const row = tasksSheet._data.find(r=>r[3]==='Weekly line check');
+const old = new Date(); old.setDate(old.getDate()-20);
+row[12] = JSON.stringify([{date: old.toISOString(), status:'Verified', user:'Ravi K', note:''}]);
+const after = call({action:'getDashboard', token:A}).tasks.find(t=>t.title==='Weekly line check');
+ok('work closed 20 days ago is archived', after.isArchived===true);
+ok('and leaves the active counts alone',
+   call({action:'getDashboard', token:A}).stats.completed===0);
+
+console.log('\n=== read-only guards on a Doer ===');
+ok('a Doer cannot assign work',
+   /manager account/.test(err(()=>call({action:'createTask', token:m,
+     form:{title:'x', assignTo:'meena', dueDate:'2026-11-01'}}))||''));
+ok('a Doer cannot add people',
+   /manager account/.test(err(()=>call({action:'addUser', token:m,
+     form:{name:'X', username:'x', email:'x@d.in', password:'strongpass123'}}))||''));
+ok('a Doer cannot open an appraisal',
+   /manager account/.test(err(()=>call({action:'getAppraisalForm', token:m, username:'meena'}))||''));
+ok('a Doer cannot buy a plan',
+   /Admin account/.test(err(()=>call({action:'initiateRazorpay', token:m, planName:'Yearly'}))||''));
+
+console.log('\n=== tenants cannot see each other ===');
+const other = call({action:'register', form:{companyName:'Zeta Ltd', name:'Zed',
+  email:'zed@zeta.in', password:'strongpass123'}});
+call({action:'createTask', token:other.token, form:{title:'Zeta secret work',
+  assignTo:'zed', dueDate:'2026-11-01'}});
+const mine = call({action:'getDashboard', token:A}).tasks.map(t=>t.title);
+ok('one tenant never sees another\'s tasks', mine.indexOf('Zeta secret work')<0);
+const zed = call({action:'getDashboard', token:other.token}).tasks.map(t=>t.title);
+ok('and the reverse holds', zed.indexOf('Weekly line check')<0);
+ok('every tenant file is private',
+   Object.values(env.META).every(m=>m.sharing==='PRIVATE'), JSON.stringify(env.META));
+
+console.log('\n=== plan names: the sheet\'s vocabulary must keep working ===');
+/* The Directory sheet stores Free / Monthly / Yearly / Enterprise. normalizePlan
+   falls back to the LEAST generous tier on an unknown name, so if these stopped
+   resolving, every paying customer would be silently downgraded to Free the
+   moment the new code read their row. */
+const fs2 = require('fs'); const pm = {exports:{}};
+new Function('module','exports', fs2.readFileSync('/home/user/stockpilot/domebox/plans.gs','utf8'))(pm, pm.exports);
+const P = pm.exports;
+[['Yearly','Yearly',300,true],['Monthly','Monthly',20,false],['Free','Free',5,false],
+ ['Enterprise','Enterprise',null,true]].forEach(([stored,want,users,analytics])=>{
+  ok('stored "'+stored+'" resolves', P.normalizePlan(stored)===want, P.normalizePlan(stored));
+  ok('  and keeps its user cap', P.planLimits(stored).users===users, String(P.planLimits(stored).users));
+  ok('  and its reports entitlement', P.planAllows(stored,'analytics')===analytics);
+});
+[['Pro Yearly','Yearly'],['Standard','Monthly'],['Free Tier','Free'],['pro','Yearly'],
+ ['PRO YEARLY','Yearly']].forEach(([shown,want])=>{
+  ok('pricing-page name "'+shown+'" also resolves', P.normalizePlan(shown)===want, P.normalizePlan(shown));
+});
+ok('an unknown plan falls back to Free, never upward', P.normalizePlan('Platinum')==='Free');
+ok('and that fallback is a real key', P.planLimits('Platinum').users===5);
+ok('upgrade prompts name what the customer sees', P.nextPlanUp('Free')==='Standard', P.nextPlanUp('Free'));
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail?1:0);
