@@ -124,10 +124,28 @@ function restoreSession() {
 function signOut(expired) {
   STATE.token = null; STATE.user = null; STATE.data = null;
   try { sessionStorage.removeItem('dbx'); } catch (e) {}
+  closeModal(); closeDrawer();
   $('view-app').classList.add('hidden');
   $('view-auth').classList.remove('hidden');
+  resetAuthForms();
   showAuth('login');
   if (expired) toast('Your session ended. Please sign in again.', 'info');
+}
+
+/**
+ * A successful sign-in leaves its button disabled and reading "Signing in…",
+ * because the page navigates into the app rather than finishing the call. On
+ * the way back out that stale state would lock the user out of their own login
+ * form until they refreshed, so every auth button and password field is reset
+ * whenever the auth view is shown.
+ */
+function resetAuthForms() {
+  ['btnLogin','btnSignup','btnForgot','btnReset'].forEach(function (id) {
+    busy($(id), false);
+  });
+  ['liPass','suPass','rsPass','rsPass2'].forEach(function (id) {
+    if ($(id)) $(id).value = '';
+  });
 }
 
 function enterApp() {
