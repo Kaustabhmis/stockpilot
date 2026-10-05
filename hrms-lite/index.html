@@ -552,8 +552,12 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           </label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="ghost sm" onclick="saveLoginUrl()">Save on this device</button>
+            <button class="ghost sm" onclick="testLoginUrl()">Test this address</button>
             <button class="ghost sm" id="btn-demo">Open the demo</button>
           </div>
+          <pre id="setup-test" style="display:none;margin:10px 0 0;padding:10px;border-radius:8px;
+            background:#0f172a;color:#e2e8f0;font-size:.72rem;line-height:1.6;white-space:pre-wrap;
+            word-break:break-word;max-height:220px;overflow:auto"></pre>
           <p style="font-size:.74rem;color:var(--text-muted);margin-top:10px;line-height:1.6">
             Set once per device by whoever installs it. Staff never see this panel.
           </p>
@@ -1416,7 +1420,11 @@ function api(action, payload) {
   var body = JSON.stringify({ action: action, payload: p, token: token });
   return fetch(S.api, {
     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body
-  }).then(function (r) { return r.json(); }).catch(function (netErr) {
+  }).then(readReply).catch(function (netErr) {
+    /* A reply that is not JSON is not a network fault, and retrying it over
+       JSONP asks the same broken address the same question a second time.
+       Only a genuine transport failure earns the fallback. */
+    if (netErr && netErr.notJson) throw netErr;
     if (body.length > 6000) throw netErr;
     return jsonpCall(action, p, token);
   }).then(function (j) {
@@ -1431,6 +1439,154 @@ function api(action, payload) {
     if (j.rev !== undefined) S._rev = j.rev;
     return j.data;
   });
+}
+
+/* Read what the workspace actually said.
+ *
+ * Everything inside the backend is wrapped and answers in JSON, including
+ * its own failures. So a reply that is NOT JSON never reached the backend at
+ * all - something in front of it answered instead, and what that something
+ * sent is the whole diagnosis. Calling r.json() blind threw
+ *
+ *     Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+ *
+ * on every screen, which tells the person nothing and sends them looking at
+ * their own data. The reply is read as text first so the real cause can be
+ * named: a Google sign-in page means the deployment is not open to everyone,
+ * a 404 means the address is not a live deployment, and an address pointing
+ * at the website itself means the connection setting was never filled in.
+ */
+/* Ask the address one harmless question and report exactly what came back.
+   "It does not work" and "it answered with Google's sign-in page" need
+   completely different fixes, and without this the person on site has no way
+   to tell which one they have. */
+function testLoginUrl() {
+  var url = (el('in-api').value || '').trim();
+  var out = el('setup-test');
+  out.style.display = '';
+  if (!url) { out.textContent = 'Type the address above first.'; return; }
+  out.textContent = 'Asking ' + url + ' ...';
+  var t0 = Date.now();
+  fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'ping', payload: {}, token: '' })
+  }).then(function (r) {
+    return r.text().then(function (text) { return { r: r, text: text }; });
+  }).then(function (got) {
+    var ms = Date.now() - t0;
+    var lines = ['address : ' + url,
+                 'status  : HTTP ' + got.r.status + ' in ' + ms + ' ms',
+                 'type    : ' + (got.r.headers.get('content-type') || 'not stated')];
+    var j = null;
+    try { j = JSON.parse(got.text); } catch (e) {}
+    if (j && j.ok && j.data && j.data.service) {
+      lines.push('answer  : ' + j.data.service +
+                 (j.data.store ? ' (' + j.data.store + ')' : '') +
+                 (j.data.version ? ' v' + j.data.version : ''));
+      lines.push('');
+      lines.push('This address is a working workspace. Press "Save on this device".');
+    } else if (j) {
+      lines.push('answer  : ' + JSON.stringify(j).slice(0, 200));
+      lines.push('');
+      lines.push('It answered in data, but not as a workspace. Check the address.');
+    } else {
+      lines.push('answer  : ' + String(got.text).trim().slice(0, 200).replace(/\s+/g, ' '));
+      lines.push('');
+      var save = S.api; S.api = url;
+      lines.push(diagnoseReply(got.r, got.text));
+      S.api = save;
+    }
+    out.textContent = lines.join('\n');
+  }).catch(function (e) {
+    out.textContent = 'address : ' + url + '\n' +
+      'result  : could not reach it at all - ' + e.message + '\n\n' +
+      'Either the address is wrong, this device has no internet, or the ' +
+      'browser blocked it. A Google address must start https://script.google.com/.';
+  });
+}
+
+function readReply(r) {
+  return r.text().then(function (text) {
+    try { return JSON.parse(text); }
+    catch (e) {
+      var err = new Error(diagnoseReply(r, text));
+      err.notJson = true;
+      err.status = r.status;
+      err.body = String(text || '').slice(0, 400);
+      return Promise.reject(err);
+    }
+  });
+}
+
+/* What to tell the person, from what actually came back.
+ *
+ * Read in this order on purpose: what the reply SAYS first, then its status,
+ * then the address. The address is the weakest signal of the three, because
+ * fetch follows redirects - Google answers an unauthorised /exec by
+ * redirecting to accounts.google.com, so by the time the reply is in hand it
+ * is not a script.google.com reply at all. Keying on the address would have
+ * missed the single most common cause of this error. */
+function diagnoseReply(r, text) {
+  var body = String(text || ''), head = body.trim().slice(0, 400);
+  var isHtml = /^<(!doctype|html|\?xml)/i.test(head);
+  var from = String((r && r.url) || ''), url = String(S.api || '');
+  var here = location.origin;
+  var status = r ? r.status : 0;
+
+  /* 1. where it was pointed. This comes before reading the reply because our
+     OWN sign-in page contains the words "Sign in", and sniffing the body
+     first would diagnose the app as a Google login screen. */
+  if (!url) {
+    return 'This copy has no workspace address set. Open this page with #setup on the end of ' +
+           'the address and fill in the connection box.';
+  }
+  if (url.indexOf(here) === 0) {
+    return 'The workspace address is pointing at this website (' + here + '), which serves ' +
+           'pages, not data. Open this page with #setup on the end and set it to the /exec ' +
+           'address of your backend.';
+  }
+
+  /* 2. what the reply says. Google's own markers only - a bare "Sign in" is
+     a phrase half the web uses, this app included. */
+  if (/accounts\.google\.com|ServiceLogin|Sign in - Google/i.test(body)) {
+    return 'Google is asking whoever opened this to sign in, instead of answering. In the ' +
+           'Apps Script editor: Deploy \u2192 Manage deployments \u2192 the pencil \u2192 ' +
+           '"Who has access" must be set to Anyone. Then Deploy.';
+  }
+  if (/unable to open the file|Sorry, unable|script function not found|is not a function/i.test(body)) {
+    return 'Google does not recognise that deployment (HTTP ' + status + '). The address is not ' +
+           'a live /exec deployment - it may have been deleted, or a NEW deployment was made ' +
+           'instead of a new version, which gives a different address. Check Deploy \u2192 ' +
+           'Manage deployments and use the /exec address shown there.';
+  }
+  if (/exceeded maximum execution time|Service invoked too many times|quota/i.test(body)) {
+    return 'The script ran out of time or hit a Google quota before it could answer. Wait a ' +
+           'minute and try again; if it keeps happening, the sheet has grown past what one ' +
+           'request can read.';
+  }
+
+  /* 3. the status, and whatever it sent */
+  if (status === 401 || status === 403) {
+    return 'The workspace refused the request (HTTP ' + status + '). The deployment is not open ' +
+           'to everyone - set "Who has access" to Anyone and deploy again.';
+  }
+  if (status === 404) {
+    return 'Nothing is published at that address (HTTP 404). Check it is the /exec address of a ' +
+           'live deployment, under #setup.';
+  }
+  if (status >= 500) {
+    return 'The script failed before it could answer (HTTP ' + status + '). It is an error page, ' +
+           'not data - open the Apps Script editor and look at Executions for the error, or ' +
+           'check the code saved cleanly.';
+  }
+  if (isHtml) {
+    return 'The address answered with a web page instead of data (HTTP ' + status + ')' +
+           (from && from !== url ? ', after sending this browser to ' + from.split('/')[2] : '') +
+           '. The backend always answers in data, even when it refuses - so this reply never ' +
+           'reached it. Check the address under #setup.';
+  }
+  return 'The workspace sent something this app could not read (HTTP ' + status + '): ' +
+         head.replace(/\s+/g, ' ').slice(0, 140);
 }
 
 function sessionEnded(msg) {

@@ -393,7 +393,29 @@ function api(action, payload) {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: action, payload: payload || {}, token: token })
-  }).then(function (r) { return r.json(); }).then(function (j) {
+  }).then(function (r) {
+    /* Read it as text first. The backend answers in JSON even when it is
+       refusing, so a reply that will not parse never reached the backend -
+       something in front of it answered, and what that something sent is
+       the diagnosis. Parsing blind threw "Unexpected token '<'" at a worker
+       standing at the gate, which tells them nothing they can act on. */
+    return r.text().then(function (text) {
+      try { return JSON.parse(text); }
+      catch (e) {
+        var head = String(text || '').trim().slice(0, 200);
+        if (/accounts\.google\.com|sign in/i.test(head)) {
+          throw new Error('The workspace is asking for a Google sign-in instead of ' +
+            'answering. Ask HR to set the Apps Script deployment to "Anyone".');
+        }
+        if (r.status === 404) {
+          throw new Error('The workspace address is not a live deployment any more ' +
+            '(404). Ask HR - the Apps Script deployment has probably been replaced.');
+        }
+        throw new Error('The workspace answered with a web page instead of data ' +
+          '(HTTP ' + r.status + '). Ask HR to check the Apps Script deployment.');
+      }
+    });
+  }).then(function (j) {
     if (!j.ok) {
       if (j.authFailed) signedOut(j.error || 'Please sign in again.');
       throw new Error(j.error || 'Something went wrong');
