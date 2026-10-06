@@ -1,8 +1,9 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **89 API + 13 guard + 33 browser**, run against the real `code.gs` on an
-in-memory Sheets shim, driven by the real `index.html`.
+Tests: **384 checks across twelve suites**, run against the real `code.gs` on an
+in-memory Sheets shim, driven by the real `index.html` in a real browser. See
+`tests/README.md`.
 
 ## Accounts
 - [x] Company signup, creates the tenant spreadsheet from your template
@@ -38,14 +39,51 @@ in-memory Sheets shim, driven by the real `index.html`.
 - [x] **Deactivation forces reassignment** of open work
 
 ## Scoring & appraisals
-- [x] Delegation score with a visible breakdown ("See why")
-- [x] KRA master per job profile, editable, weights validated ≤100%
+- [x] Delegation score with a visible breakdown ("See why"), grouped by heading
+- [x] KRA/KPI per person: target, unit, direction, how measured — target optional
+- [x] KRA standard per job profile; rolling it out never overwrites a tailored set
 - [x] Appraisal: KRA ratings + behaviours + brownie points (capped at 5)
-- [x] Final score = performance + delegation
 - [x] Review history per month, with bands
-- [x] Rework/accountability report
+- [x] Accountability report: rework and lateness, *and* approvals/reviews held
 - [x] Performance report
-- [x] **Leave does not count as lateness** (new)
+- [x] **Leave does not count as lateness**
+- [x] **Managers are measured too** (new) — see below
+
+### How the final score is built
+
+    Performance = KRA 75% + Behaviour 20% + Brownie (max 5)   → out of 100
+    Delegation  = measured from the task record               → out of 100
+    Final       = (Performance + Delegation) / 2
+
+Somebody with no closed work is scored on performance alone rather than halved.
+Delegation is re-measured on the server when an appraisal is saved, so a figure
+the browser sent cannot decide anyone's rating.
+
+Delegation itself is on-time delivery, first-pass quality and queue health,
+weighted by priority — minus a responsiveness penalty.
+
+### Responsiveness — the manager's half
+
+A doer is measured on delivering. Whoever has to approve or review is measured
+on not sitting on it. Held time is counted **in working days from when the item
+reached that person**, not from the task's deadline: work handed in early that
+then waits a fortnight is counted properly.
+
+| | |
+|---|---|
+| Expected turnaround | 2 working days |
+| Beyond that | 2 points per day |
+| Cap per item | 10 points |
+| Cap overall | 20 points |
+| Not counted | weekends, company holidays, that person's own approved leave |
+
+A head of department who owns no tasks but has four people stuck is scored
+purely on how fast they clear the queue — otherwise the least accountable
+person in the workspace is the one person the system cannot measure.
+
+Every deduction appears in the breakdown naming the item, the working days held
+and the points lost. A number nobody can see the derivation of is a number they
+will dispute, and they would be right to.
 
 ## Notifications
 - [x] Bell: overdue, awaiting approval, awaiting review, due today, team overdue
