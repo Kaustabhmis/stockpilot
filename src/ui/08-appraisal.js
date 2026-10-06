@@ -22,14 +22,32 @@ function loadAppraisal(username) {
   $('apBody').innerHTML = '<p class="text-sm text-gray-400 font-semibold">Loading…</p>';
   api('getAppraisalForm', { username: username }).then(function (f) {
     $('apBody').innerHTML =
-      '<div class="bg-gray-50 rounded-2xl p-4 mb-5 flex items-center gap-5">' +
+      '<div class="bg-gray-50 rounded-2xl p-4 mb-3 flex items-center gap-5">' +
         '<div><div class="lb mb-0">Delegation score</div>' +
-        '<div class="text-3xl font-black">' + (f.hasData ? f.delegationScore : '—') + '</div></div>' +
+        '<div class="text-3xl font-black">' + (f.hasData ? f.delegationScore : '\u2014') + '</div></div>' +
         '<div class="text-xs text-gray-500 font-semibold flex-1">' +
           (f.hasData ? 'Measured from their task record — on-time delivery, first-pass quality and queue health.'
                      : 'No closed work to measure yet, so this half carries no score.') +
           ' <button type="button" class="text-blue-600 font-black" onclick="showDelBreakdown()">See why</button></div>' +
       '</div>' +
+      /* How they treated OTHER people's work. A department head who delivers
+         their own tasks and sits on everyone else's would otherwise appraise
+         well, which is the exact behaviour a team notices first. */
+      (f.responsiveness ? '<div class="rounded-2xl border ' +
+        (f.responsiveness.penalty ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50') +
+        ' p-4 mb-5 text-[13px] font-semibold text-gray-700">' +
+        '<span class="font-black text-gray-900">Approvals and reviews: </span>' +
+        esc(f.responsiveness.withinSla + ' of ' + f.responsiveness.items + ' cleared within ' +
+            f.responsiveness.slaDays + ' working days') +
+        (f.responsiveness.avgHeldDays != null
+          ? esc(', ' + f.responsiveness.avgHeldDays + ' days held on average') : '') +
+        (f.responsiveness.pending ? esc('. ' + f.responsiveness.pending + ' still waiting on them') +
+          (f.responsiveness.overdueNow ? esc(', ' + f.responsiveness.overdueNow + ' past the mark') : '') : '') +
+        (f.responsiveness.penalty
+          ? '<span class="block font-black text-red-800 mt-1">' +
+            esc('\u2212' + f.responsiveness.penalty + ' \u2014 already counted in the delegation score above') + '</span>'
+          : '<span class="block font-black text-emerald-800 mt-1">Nothing lost here</span>') +
+        '</div>' : '') +
       '<h3 class="font-black text-sm mb-2">KRA ratings</h3>' +
       (f.kras.length ? '<div class="space-y-2 mb-5">' + f.kras.map(function (k, i) {
         return '<div class="border border-gray-100 rounded-xl p-3">' +
@@ -37,6 +55,13 @@ function loadAppraisal(username) {
             '<span class="font-bold text-sm">' + esc(k.item || k.name) + '</span>' +
             '<span class="text-xs font-black text-blue-600 whitespace-nowrap">Weight ' + esc(k.weight) + '</span></div>' +
           (k.desc ? '<div class="text-xs text-gray-500 mt-1">' + esc(k.desc) + '</div>' : '') +
+          /* The target is what stops this being two people's recollections. */
+          (k.target ? '<div class="text-xs font-bold text-gray-700 mt-1">Target: ' +
+            esc(k.target + (k.unit ? ' ' + k.unit : '')) +
+            (k.direction ? '<span class="font-semibold text-gray-400"> · ' + esc(k.direction) + '</span>' : '') +
+            (k.measured ? '<span class="font-semibold text-gray-400"> · ' + esc(k.measured) + '</span>' : '') +
+            '</div>'
+            : '<div class="text-xs font-semibold text-gray-400 mt-1">No KPI target — rate this on judgement.</div>') +
           '<select class="in mt-2 kraR" data-w="' + esc(k.weight) + '">' +
             '<option value="0">Not rated</option>' +
             [1,2,3,4,5].map(function (n) { return '<option value="'+n+'">'+n+' — '+
@@ -44,7 +69,8 @@ function loadAppraisal(username) {
           '</select></div>';
       }).join('') + '</div>'
       : '<p class="text-sm bg-amber-50 text-amber-900 rounded-xl p-3 mb-5 font-semibold">' +
-        'No KRAs set for this job profile yet. Add them on the Team tab, under the person.</p>') +
+        'No KRAs set for this person yet, so the appraisal rests on behaviour and ' +
+        'delivery alone. Set them up under Team \u2192 KRA &amp; KPI.</p>') +
       '<h3 class="font-black text-sm mb-2">Behaviour</h3>' +
       '<div class="space-y-2 mb-5">' + f.behaviors.map(function (b) {
         return '<div class="border border-gray-100 rounded-xl p-3">' +

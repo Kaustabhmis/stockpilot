@@ -80,6 +80,20 @@ const hit = (path) => new Promise((res, rej) =>
   ok('the team report scores the manager rather than writing them off as "no data"',
      /Rohan\s*\d/.test(board), (board.match(/Rohan[\s\S]{0,30}/) || [''])[0]);
 
+  console.log('\n--- and it is in front of whoever writes the appraisal ---');
+  await p.click('#btnAppraise'); await p.waitForTimeout(900);
+  await p.selectOption('#apWho', 'payel' + RUN); await p.waitForTimeout(1400);
+  const ap = await p.locator('#modal').textContent();
+  ok('a doer who approves nothing is not shown an approval record',
+     !/Approvals and reviews:/.test(ap), ap.slice(0, 200));
+  await p.selectOption('#apWho', { index: (await p.locator('#apWho option').allTextContents()).findIndex((t) => /Rohan Mehta/.test(t)) });
+  await p.waitForTimeout(1400);
+  const ap2 = await p.locator('#modal').textContent();
+  ok('the manager\'s own appraisal states their approval record',
+     /Approvals and reviews:/.test(ap2), ap2.slice(0, 220));
+  ok('and says the points were already taken off', /already counted in the delegation score/.test(ap2));
+  await p.screenshot({ path: 'shot-22-appraisal.png' });
+
   ok('no console errors', errs.length === 0, errs.join(' | '));
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   await b.close();

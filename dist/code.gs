@@ -1595,6 +1595,13 @@ function getAppraisalForm_(ctx, username) {
   return { status: 'success', employee: { username: u.username, name: u.name,
       jobProfile: u.jobProfile, dept: u.dept },
     delegationScore: del.score, delegationBreakdown: del.breakdown, hasData: del.hasData,
+    /* So the reviewer can see what this person did with other people's work,
+       not only their own. A head of department is mostly judged on this. */
+    responsiveness: del.responsiveness && del.responsiveness.hasData ? {
+      score: del.responsiveness.responsiveness, items: del.responsiveness.items,
+      withinSla: del.responsiveness.withinSla, pending: del.responsiveness.pending,
+      overdueNow: del.responsiveness.overdueNow, avgHeldDays: del.responsiveness.avgHeldDays,
+      slaDays: del.responsiveness.slaDays, penalty: del.responsiveness.penalty } : null,
     kras: kras,
     behaviors: [
       { section: 'Collaboration', question: 'Actively contributes in team discussions', weight: 1 },
