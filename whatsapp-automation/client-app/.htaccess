@@ -1,0 +1,29 @@
+# Apache / cPanel hosting for the client app (e.g. https://wa.biscsindia.com)
+DirectoryIndex index.html
+Options -Indexes
+
+# Always use HTTPS
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+<IfModule mod_headers.c>
+  # Block other sites from embedding the app (clickjacking protection)
+  Header always set X-Frame-Options "DENY"
+  Header always set Content-Security-Policy "frame-ancestors 'none'"
+  Header always set Referrer-Policy "no-referrer"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  # Always load the latest app and settings after you upload changes
+  <FilesMatch "\.(html|js)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+
+# Don't serve the docs file
+<Files "README.md">
+  Require all denied
+</Files>

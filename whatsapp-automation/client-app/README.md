@@ -20,3 +20,22 @@ hosts, set the same headers (`X-Frame-Options: DENY`, `Content-Security-Policy: 
 
 No build step, no server, no framework. The only external script is the SheetJS Excel reader, loaded from cdnjs when a
 client uploads a file. See `../GUIDE.md` Part 15 for details.
+
+## Hosting on a subdomain (example: `wa.biscsindia.com`)
+
+Upload these files to the subdomain's folder: `index.html`, `config.js`, `.htaccess` (Apache/cPanel), `_headers` (Netlify/Cloudflare).
+
+**cPanel hosting (Hostinger, GoDaddy, BigRock, …)**
+1. cPanel → **Domains** (or **Subdomains**) → create `wa.biscsindia.com`. Note its document root, e.g. `public_html/wa`.
+2. cPanel → **SSL/TLS Status** (or **Let's Encrypt / AutoSSL**) → issue a certificate for `wa.biscsindia.com`.
+3. **File Manager** → open the document root → **Upload** the zip → **Extract**. (`.htaccess` is a hidden file: enable "Show hidden files" to see it.)
+4. Edit `config.js` there: set `apiUrl` to your Apps Script `/exec` URL and your branding.
+5. Open `https://wa.biscsindia.com/?demo` to check the app, then `https://wa.biscsindia.com` to sign in.
+
+**If your DNS is managed elsewhere** (Cloudflare, GoDaddy DNS, …): add an **A record** `wa` → your hosting server's IP
+(shown in cPanel → Server Information). DNS changes can take from a few minutes up to 24 hours.
+
+**Netlify / Cloudflare Pages instead**: deploy the folder, add the custom domain `wa.biscsindia.com`, then at your DNS
+provider add a **CNAME** `wa` → the target they show (e.g. `your-site.netlify.app`). HTTPS is automatic.
+
+Finally, in the spreadsheet set **SETTINGS → CLIENT_APP_URL** = `https://wa.biscsindia.com`.
