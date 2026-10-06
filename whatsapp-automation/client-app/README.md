@@ -25,7 +25,16 @@ client uploads a file. See `../GUIDE.md` Part 15 for details.
 
 Upload these files to the subdomain's folder: `index.html`, `config.js`, `.htaccess` (Apache/cPanel), `_headers` (Netlify/Cloudflare).
 
-**cPanel hosting (Hostinger, GoDaddy, BigRock, …)**
+**Hostinger (hPanel)**
+1. hPanel → **Websites** → *biscsindia.com* → **Manage** → **Domains → Subdomains** → create `wa` (folder `public_html/wa`).
+2. **Security → SSL** → make sure `wa.biscsindia.com` shows an active SSL (install the free one if not; it can take up to ~30 min).
+3. **Files → File Manager** → `public_html/wa` → **Upload** the zip → right-click → **Extract** → delete the zip.
+   To see `.htaccess`, turn on hidden files in the File Manager settings.
+4. Edit `config.js` (right-click → Edit): set `apiUrl` and your branding → Save.
+5. Open `https://wa.biscsindia.com/?demo`, then `https://wa.biscsindia.com`.
+If the domain does not use Hostinger nameservers, add an **A record** `wa` → the IP shown in hPanel (Hosting → Details) at your DNS provider.
+
+**cPanel hosting (GoDaddy, BigRock, …)**
 1. cPanel → **Domains** (or **Subdomains**) → create `wa.biscsindia.com`. Note its document root, e.g. `public_html/wa`.
 2. cPanel → **SSL/TLS Status** (or **Let's Encrypt / AutoSSL**) → issue a certificate for `wa.biscsindia.com`.
 3. **File Manager** → open the document root → **Upload** the zip → **Extract**. (`.htaccess` is a hidden file: enable "Show hidden files" to see it.)
