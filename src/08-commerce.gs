@@ -277,6 +277,33 @@ function notifyStatus_(ctx, t, status, note) {
     btn_('Open Dome Box', CFG().siteUrl)));
 }
 
+/** The raiser hears the outcome, with the reason if it was refused. */
+function notifyDecision_(ctx, t, isApproved, remarks) {
+  var raiser = findUser_(ctx.ss, t.by);
+  if (isApproved) {
+    var owner = findUser_(ctx.ss, t.assignee);
+    if (owner && owner.email) {
+      sendEmail_(owner.email, 'New task: ' + t.title, mailShell_('A task has been approved for you',
+        '<p>Hi <strong>' + esc_(owner.name) + '</strong>,</p>' +
+        '<p><strong>' + esc_(ctx.actor.name) + '</strong> has approved this, so it is on your list now.</p>' +
+        infoTable_([['Task', t.title], ['Due', t.due || '—'], ['Raised by', nameOf_(ctx, t.by)]]) +
+        btn_('Open Dome Box', CFG().siteUrl)));
+    }
+  }
+  if (!raiser || !raiser.email) return;
+  sendEmail_(raiser.email,
+    (isApproved ? 'Approved: ' : 'Rejected: ') + t.title,
+    mailShell_(isApproved ? 'Your task was approved' : 'Your task was rejected',
+      '<p>Hi <strong>' + esc_(raiser.name) + '</strong>,</p>' +
+      '<p><strong>' + esc_(ctx.actor.name) + '</strong> has ' +
+      (isApproved ? 'approved the task you raised for ' : 'rejected the task you raised for ') +
+      '<strong>' + esc_(nameOf_(ctx, t.assignee)) + '</strong>.</p>' +
+      infoTable_([['Task', t.title], ['Due', t.due || '—']]) +
+      (remarks ? '<p style="background:#fef2f2;border:1px solid #fecaca;padding:12px;border-radius:8px">' +
+        '<strong>Remark:</strong> ' + esc_(remarks) + '</p>' : '') +
+      btn_('Open Dome Box', CFG().siteUrl)));
+}
+
 function infoTable_(rows) {
   return '<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#f9fafb;border-radius:8px">' +
     rows.map(function (r) {

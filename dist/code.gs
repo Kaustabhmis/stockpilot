@@ -203,13 +203,15 @@ function route_(p) {
     case 'getAccountability':   return getAccountability_(ctx);
     case 'getPerformanceReport':return getPerformanceReport_(ctx);
     case 'getAppraisalForm':    return getAppraisalForm_(ctx, p.username);
+    case 'getKraOverview':      return getKraOverview_(ctx);
+    case 'getKraFor':           return getKraFor_(ctx, p.username);
     case 'getCategories':       return { status:'success', categories: readCategories_(ctx) };
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
     case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
     case 'editTask':            return editTask_(ctx, p.form);
-    case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved);
+    case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);
     case 'stopRecurringTask':   return stopRecurring_(ctx, p.taskId);
     case 'delegateTask':        return delegateTask_(ctx, p.taskId, p.toUsername);
     case 'addBlocker':          return addBlocker_(ctx, p.taskId, p.blockerId);
@@ -225,7 +227,11 @@ function route_(p) {
 
     /* --- appraisal ------------------------------------------------------- */
     case 'submitAppraisal':     return submitAppraisal_(ctx, p.data);
-    case 'addKRA':              return addKRA_(ctx, p.data);
+    case 'addKRA':              return saveKra_(ctx, p.data);     // old name, kept working
+    case 'saveKra':             return saveKra_(ctx, p.data);
+    case 'copyKra':             return copyKraFrom_(ctx, p.from, p.to);
+    case 'applyKraToProfile':   return applyKraToProfile_(ctx, p.profile, p.overwrite);
+    case 'clearKra':            return clearKra_(ctx, p.username);
 
     /* --- commercial & misc ----------------------------------------------- */
     case 'initiateRazorpay':    return createRazorpayOrder_(ctx, p.planName, p.promoCode);
@@ -825,7 +831,9 @@ function esc_(s) {
 // ===========================================================================
 
 function createTask_(ctx, form) {
-  requireManager_(ctx); blockIfStopped_(ctx);
+  /* Deliberately NOT requireManager_: a Doer may raise work upward, to their own
+     manager or to a department head. canAssignTo decides per recipient. */
+  blockIfStopped_(ctx);
   form = form || {};
 
   var title = String(form.title || '').trim();
@@ -848,12 +856,16 @@ function createTask_(ctx, form) {
   var sheet = ctx.ss.getSheetByName(TAB.TASKS);
   var created = [], routed = 0;
 
+  var refused = [];
   assignees.forEach(function (username) {
     var target = byName[username];
     if (!target || target.active === false) return;
 
-    // The engine decides whether this needs the assignee's manager to accept it.
-    var route = initialStatusFor(target, ctx.actor);
+    var allowed = canAssignTo(ctx.me, target);
+    if (!allowed.ok) { refused.push({ name: target.name, reason: allowed.reason }); return; }
+
+    // The engine decides who, if anyone, has to agree before this lands.
+    var route = initialStatusFor(target, ctx.me);
     var id = newTaskId_();
     var row = blankTaskRow_();
     row[T['ID']] = id;
@@ -872,6 +884,7 @@ function createTask_(ctx, form) {
       status: route.status, user: ctx.actor.name, note: route.note }]);
     row[T['Job Category']] = String(form.jobCategory || 'General');
     row[T['Approver Manager']] = route.status === 'Awaiting Approval' ? route.approver : '';
+    row[T['Status']] = route.status;
     row[T['Spawned By']] = '';
     row[T['Blocked By']] = JSON.stringify([]);
     row[T['Subtasks JSON']] = JSON.stringify(parseChecklist_(form.checklist));
@@ -884,9 +897,16 @@ function createTask_(ctx, form) {
     catch (e) { logError_('createTask:notify', e.message); }
   });
 
-  if (!created.length) throw new Error('None of those people are active in this workspace.');
+  if (!created.length) {
+    throw new Error(refused.length ? refused[0].reason
+      : 'None of those people are active in this workspace.');
+  }
   return { status: 'success', created: created.length, routedForApproval: routed,
-    message: created.length + ' task(s) created' + (routed ? ', ' + routed + ' sent for approval' : '') + '.' };
+    refused: refused,
+    message: created.length + ' task(s) created' +
+      (routed ? ', ' + routed + ' sent for approval' : '') + '.' +
+      (refused.length ? ' Not sent to ' +
+        refused.map(function (r) { return r.name; }).join(', ') + '.' : '') };
 }
 
 function parseChecklist_(raw) {
@@ -1006,7 +1026,7 @@ function spawnNextOccurrence_(ctx, hit, t) {
   return due;
 }
 
-function processApproval_(ctx, taskId, isApproved) {
+function processApproval_(ctx, taskId, isApproved, remarks) {
   blockIfStopped_(ctx);
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
@@ -1019,6 +1039,15 @@ function processApproval_(ctx, taskId, isApproved) {
     throw new Error('Only ' + nameOf_(ctx, t.approver) + ' can decide this one.');
   }
 
+  /* A rejection without a reason is the thing people complain about: the task
+     vanishes and whoever raised it has to go and ask why. The remark is the
+     answer, recorded against the task. */
+  remarks = String(remarks || '').trim();
+  if (!isApproved && !remarks) {
+    throw new Error('Add a remark saying why you are rejecting it. ' +
+      'The person who raised it will see this.');
+  }
+
   var next = isApproved ? 'Pending' : 'Rejected';
   if (t.status === 'Delegation Proposed' && isApproved && t.delegateTo) {
     writeTaskField_(hit, 'Assigned To', t.delegateTo);
@@ -1026,9 +1055,15 @@ function processApproval_(ctx, taskId, isApproved) {
   }
   writeTaskField_(hit, 'Status', next);
   writeTaskField_(hit, 'Approver Manager', '');
-  appendHistory_(hit, next, ctx.actor.name, isApproved ? 'Approved by manager' : 'Rejected by manager');
+  appendHistory_(hit, next, ctx.actor.name,
+    (isApproved ? 'Approved' : 'Rejected') + (remarks ? ': ' + remarks : ''));
 
-  return { status: 'success', message: isApproved ? 'Approved.' : 'Rejected.' };
+  try { notifyDecision_(ctx, t, isApproved, remarks); }
+  catch (e) { logError_('processApproval:notify', e.message); }
+
+  return { status: 'success', remarks: remarks,
+    message: isApproved ? 'Approved — it is on their list now.'
+                        : 'Rejected, and ' + nameOf_(ctx, t.by) + ' has been told why.' };
 }
 
 function delegateTask_(ctx, taskId, toUsername) {
@@ -1336,16 +1371,25 @@ function getDashboard_(ctx) {
   var del = delegationScore(tasks.filter(function (t) { return !t.isArchived ||
     inThisMonth_(t); }), me.username, new Date(), cal);
 
-  // Last recorded appraisal, if any.
-  var lastKra = null;
+  /* The last appraisal's PERFORMANCE half, paired with today's delegation half.
+     An empty cell is not a zero: reading it as one used to halve everybody's
+     score the moment they were first appraised. */
+  var lastPerf = null;
   var rv = ctx.ss.getSheetByName(TAB.REVIEWS);
   if (rv) {
     var rd = rv.getDataRange().getValues();
     for (var i = rd.length - 1; i > 0; i--) {
-      if (String(rd[i][1]) === me.username) { lastKra = Number(rd[i][2]); break; }
+      if (String(rd[i][1]) !== me.username) continue;
+      var cell = rd[i][2];
+      if (cell !== '' && cell !== null && !isNaN(Number(cell))) lastPerf = Number(cell);
+      break;
     }
   }
-  var finalScore = lastKra !== null ? (del.score + lastKra) / 2 : del.score;
+  var halves = [];
+  if (lastPerf !== null) halves.push(lastPerf);
+  if (del.hasData) halves.push(del.score);
+  var finalScore = halves.length
+    ? halves.reduce(function (a, b) { return a + b; }, 0) / halves.length : 0;
 
   var digest = buildDigest(tasks, { username: me.username, name: me.name, role: me.role },
     new Date(), { reports: reports, escalateAfterDays: 3 });
@@ -1371,9 +1415,14 @@ function getDashboard_(ctx) {
       completed: active.filter(function (t) { return t.status === 'Verified'; }).length,
       overdue:   active.filter(function (t) { return isOpen(t.status) && t.due &&
                                 dayDiff(new Date(), parseYmd(t.due)) > 0; }).length,
-      scores: { delegation: del.score, kra: lastKra === null ? null : Math.round(lastKra),
-                final: Math.round(finalScore), breakdown: del.breakdown,
-                components: del.components, hasData: del.hasData },
+      scores: { delegation: del.hasData ? del.score : null,
+                performance: lastPerf === null ? null : Math.round(lastPerf),
+                final: halves.length ? Math.round(finalScore) : null,
+                breakdown: del.breakdown, components: del.components, hasData: del.hasData,
+                formula: halves.length === 2
+                  ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
+                  : lastPerf !== null ? 'No closed work yet, so this is the appraisal score alone.'
+                  : 'No appraisal yet, so this is the delegation score alone.' },
     },
     notifications: buildNotifications_(digest, me),
     usage: {
@@ -1510,19 +1559,9 @@ function getAppraisalForm_(ctx, username) {
   var cal = leaveCalendar_(ctx);
   var del = delegationScore(tasks, username, new Date(), cal);
 
-  // KRAs: the person's own blueprint first, else the job-profile master.
-  var kras = (u.kras && u.kras.length) ? u.kras : [];
-  if (!kras.length) {
-    var sh = ctx.ss.getSheetByName(TAB.KRA);
-    if (sh) {
-      var d = sh.getDataRange().getValues();
-      for (var i = 1; i < d.length; i++) {
-        if (String(d[i][0]).trim() === String(u.jobProfile).trim() && d[i][1]) {
-          kras.push({ item: d[i][1], desc: d[i][2], weight: Number(d[i][3]) || 1, grid: d[i][4] });
-        }
-      }
-    }
-  }
+  // Their own set first, else whatever their job profile defines.
+  var kras = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
+  if (!kras.length) kras = readProfileMaster_(ctx, u.jobProfile);
 
   return { status: 'success', employee: { username: u.username, name: u.name,
       jobProfile: u.jobProfile, dept: u.dept },
@@ -1542,55 +1581,40 @@ function submitAppraisal_(ctx, data) {
   data = data || {};
   if (!data.employee) throw new Error('Pick who this appraisal is for.');
 
+  /* The delegation half is re-measured here rather than taken from the request:
+     the browser sent it, and a score an employee can edit in devtools is not a
+     score. */
+  var tasks = readTasks_(ctx);
+  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx));
+
   var result = finalAppraisalScore({
-    delegation: Number(data.delegationScore) || 0,
+    delegationScore: measured.hasData ? measured.score : null,
+    hasDelegationData: measured.hasData,
     kras: (data.kras || []).map(function (k) {
       return { rating: Number(k.rating) || 0, weight: Number(k.weight) || 1 }; }),
     behaviours: (data.behaviors || []).map(function (b) {
       return { rating: Number(b.rating) || 0, weight: Number(b.weight) || 1 }; }),
     brownie: Number(data.brownie) || 0,
   });
+  if (!result.hasData) throw new Error('Rate at least one KRA or behaviour before saving.');
 
   var month = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
   mkTab_(ctx.ss, TAB.REVIEWS, ['Month','Employee','Performance Score','Delegation Score','Final Score','Date'])
-    .appendRow([month, data.employee, result.performance, result.delegation, result.score, new Date()]);
+    .appendRow([month, data.employee,
+      result.performance === null ? '' : result.performance,
+      result.delegation === null ? '' : result.delegation,
+      result.score, new Date()]);
 
   return { status: 'success', score: result.score, band: performanceBand(result.score),
-    breakdown: result.parts,
+    performance: result.performance, delegation: result.delegation,
+    parts: result.parts, formula: result.formula,
     message: 'Appraisal saved: ' + result.score + ' (' + performanceBand(result.score).band + ').' };
 }
 
-function addKRA_(ctx, data) {
-  requireManager_(ctx); blockIfStopped_(ctx);
-  data = data || {};
-  var u = findUser_(ctx.ss, data.employee);
-  if (!u) throw new Error('That person is not in this workspace.');
+/* addKRA_ lived here and wrote a title and a weight. It is replaced by saveKra_
+   in the KRA/KPI module, which carries a measurable target as well. The addKRA
+   route still resolves, so nothing calling it breaks. */
 
-  var rows = (data.kras || []).filter(function (k) { return String(k.name || k.item || '').trim(); })
-    .map(function (k) { return { item: String(k.name || k.item).trim(), desc: String(k.desc || ''),
-      weight: Number(k.weight) || 1, grid: String(k.grid || '') }; });
-
-  var v = validateKraBlueprint(rows);
-  if (!v.ok) throw new Error(v.error);     // weights over 100% never save
-
-  // Stored against the person, and mirrored to the job-profile master so the
-  // next person with the same profile inherits it.
-  setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify(rows));
-
-  if (u.jobProfile) {
-    var sh = mkTab_(ctx.ss, TAB.KRA, ['Job Profile','KRA Title','Description','Weight','Grid/KPI']);
-    var d = sh.getDataRange().getValues();
-    for (var i = d.length - 1; i > 0; i--) {
-      if (String(d[i][0]).trim() === String(u.jobProfile).trim()) sh.deleteRow(i + 1);
-    }
-    if (rows.length) {
-      sh.getRange(sh.getLastRow() + 1, 1, rows.length, 5).setValues(rows.map(function (k) {
-        return [u.jobProfile, k.item, k.desc, k.weight, k.grid]; }));
-    }
-  }
-  return { status: 'success', total: v.total, warning: v.warning || '',
-    message: 'Saved ' + rows.length + ' KRA(s), ' + v.total + '% allocated.' };
-}
 
 
 // ===========================================================================
@@ -1872,6 +1896,33 @@ function notifyStatus_(ctx, t, status, note) {
     btn_('Open Dome Box', CFG().siteUrl)));
 }
 
+/** The raiser hears the outcome, with the reason if it was refused. */
+function notifyDecision_(ctx, t, isApproved, remarks) {
+  var raiser = findUser_(ctx.ss, t.by);
+  if (isApproved) {
+    var owner = findUser_(ctx.ss, t.assignee);
+    if (owner && owner.email) {
+      sendEmail_(owner.email, 'New task: ' + t.title, mailShell_('A task has been approved for you',
+        '<p>Hi <strong>' + esc_(owner.name) + '</strong>,</p>' +
+        '<p><strong>' + esc_(ctx.actor.name) + '</strong> has approved this, so it is on your list now.</p>' +
+        infoTable_([['Task', t.title], ['Due', t.due || '—'], ['Raised by', nameOf_(ctx, t.by)]]) +
+        btn_('Open Dome Box', CFG().siteUrl)));
+    }
+  }
+  if (!raiser || !raiser.email) return;
+  sendEmail_(raiser.email,
+    (isApproved ? 'Approved: ' : 'Rejected: ') + t.title,
+    mailShell_(isApproved ? 'Your task was approved' : 'Your task was rejected',
+      '<p>Hi <strong>' + esc_(raiser.name) + '</strong>,</p>' +
+      '<p><strong>' + esc_(ctx.actor.name) + '</strong> has ' +
+      (isApproved ? 'approved the task you raised for ' : 'rejected the task you raised for ') +
+      '<strong>' + esc_(nameOf_(ctx, t.assignee)) + '</strong>.</p>' +
+      infoTable_([['Task', t.title], ['Due', t.due || '—']]) +
+      (remarks ? '<p style="background:#fef2f2;border:1px solid #fecaca;padding:12px;border-radius:8px">' +
+        '<strong>Remark:</strong> ' + esc_(remarks) + '</p>' : '') +
+      btn_('Open Dome Box', CFG().siteUrl)));
+}
+
 function infoTable_(rows) {
   return '<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#f9fafb;border-radius:8px">' +
     rows.map(function (r) {
@@ -1954,6 +2005,214 @@ function handleRazorpayWebhook_(e, body) {
     }
   } catch (err) { logError_('webhook', err.message); }
   return json_({ status: 'ok' });
+}
+
+
+// =========================================================================
+// KRA / KPI
+// =========================================================================
+// ===========================================================================
+// KRA / KPI
+// ===========================================================================
+//
+// A KRA is the area someone is answerable for. A KPI is the number that says
+// whether they are meeting it. The old build stored only a title and a weight,
+// which makes an appraisal a matter of opinion — "did you do well on Vendor
+// Quality?" has no answer without a target. Each row now carries a measurable
+// target, its unit, and which direction is good, so two managers rating the
+// same person reach the same conclusion.
+//
+// KRA_MASTER_COLS is the old sheet plus appended columns. Existing rows keep
+// working; nothing is rewritten.
+// ===========================================================================
+
+var KRA_MASTER_COLS = ['Job Profile','KRA Title','Description','Weight','Grid/KPI',
+                       'KPI Target','Unit','Direction','How Measured'];
+
+var KPI_UNITS = ['%','days','hours','count','₹','ratio','score'];
+var KPI_DIRECTIONS = ['higher is better','lower is better','on target'];
+
+/** One row, normalised. Accepts the old shape so nothing already saved is lost. */
+function normKra_(k) {
+  k = k || {};
+  var dir = String(k.direction || '').toLowerCase();
+  if (KPI_DIRECTIONS.indexOf(dir) < 0) dir = 'higher is better';
+  return {
+    item:      String(k.item || k.name || '').trim(),
+    desc:      String(k.desc || k.description || '').trim(),
+    weight:    Math.max(0, Number(k.weight) || 0),
+    target:    k.target === '' || k.target == null ? '' : String(k.target).trim(),
+    unit:      KPI_UNITS.indexOf(String(k.unit || '')) > -1 ? String(k.unit) : '',
+    direction: dir,
+    measured:  String(k.measured || k.howMeasured || '').trim(),
+    grid:      String(k.grid || '').trim(),     // kept so old rows survive a round trip
+  };
+}
+
+/**
+ * Who has a usable KRA set and who does not. The point is to make the gap
+ * visible: a workspace where half the team has no KRAs produces appraisals that
+ * look rigorous and are not.
+ */
+function getKraOverview_(ctx) {
+  requireManager_(ctx);
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  var profiles = {};
+
+  var rows = users.map(function (u) {
+    var kras = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
+    var total = kras.reduce(function (s, k) { return s + k.weight; }, 0);
+    var withTarget = kras.filter(function (k) { return k.target !== ''; }).length;
+    if (u.jobProfile) (profiles[u.jobProfile] = profiles[u.jobProfile] || []).push(u.username);
+
+    var state = !kras.length ? 'missing'
+              : total > 100 ? 'over'
+              : total < 100 ? 'partial'
+              : withTarget < kras.length ? 'no-targets'
+              : 'complete';
+    return { username:u.username, name:u.name, role:u.role, dept:u.dept,
+             jobProfile:u.jobProfile || '', count:kras.length, totalWeight:total,
+             withTarget:withTarget, state:state, kras:kras };
+  });
+
+  return { status:'success', people: rows,
+    profiles: Object.keys(profiles).map(function (p) {
+      return { profile:p, people:profiles[p].length }; }),
+    units: KPI_UNITS, directions: KPI_DIRECTIONS,
+    summary: {
+      total: rows.length,
+      complete: rows.filter(function (r) { return r.state === 'complete'; }).length,
+      missing: rows.filter(function (r) { return r.state === 'missing'; }).length,
+      partial: rows.filter(function (r) { return r.state === 'partial' || r.state === 'no-targets'; }).length,
+    } };
+}
+
+/** Saves one person's set. Replaces addKRA_ and keeps its route working. */
+function saveKra_(ctx, data) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  data = data || {};
+  var u = findUser_(ctx.ss, data.employee);
+  if (!u) throw new Error('That person is not in this workspace.');
+  if (u.role === 'Admin' && ctx.actor.role !== 'Admin') {
+    throw new Error('Only an Admin can set another Admin\'s KRAs.');
+  }
+
+  var rows = (data.kras || []).map(normKra_).filter(function (k) { return k.item; });
+  var v = validateKraBlueprint(rows);
+  if (!v.ok) throw new Error(v.error);
+
+  var dupes = {};
+  for (var i = 0; i < rows.length; i++) {
+    var key = rows[i].item.toLowerCase();
+    if (dupes[key]) throw new Error('"' + rows[i].item + '" is listed twice.');
+    dupes[key] = true;
+  }
+
+  setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify(rows));
+
+  /* Writing the job-profile standard is OPT-IN. It used to happen on every save,
+     so tailoring one person's KRAs quietly redefined the standard for everyone
+     holding that job title — and the next person to inherit it got whatever the
+     last editor happened to type. */
+  if (u.jobProfile && data.alsoProfile === true) writeProfileMaster_(ctx, u.jobProfile, rows);
+
+  return { status:'success', total:v.total, warning:v.warning || '',
+    withoutTarget: rows.filter(function (k) { return k.target === ''; }).length,
+    savedAsProfileStandard: u.jobProfile && data.alsoProfile === true ? u.jobProfile : null,
+    message: 'Saved ' + rows.length + ' KRA(s) for ' + u.name + ', ' + v.total + '% allocated.' +
+      (u.jobProfile && data.alsoProfile === true
+        ? ' Also saved as the standard for "' + u.jobProfile + '".' : '') };
+}
+
+/** The job-profile master, so the next person hired into the role inherits it. */
+function writeProfileMaster_(ctx, profile, rows) {
+  var sh = mkTab_(ctx.ss, TAB.KRA, KRA_MASTER_COLS);
+  widen_(sh, KRA_MASTER_COLS);
+  var d = sh.getDataRange().getValues();
+  for (var i = d.length - 1; i > 0; i--) {
+    if (String(d[i][0]).trim().toLowerCase() === String(profile).trim().toLowerCase()) sh.deleteRow(i + 1);
+  }
+  if (!rows.length) return;
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, KRA_MASTER_COLS.length)
+    .setValues(rows.map(function (k) {
+      return [profile, k.item, k.desc, k.weight, k.grid, k.target, k.unit, k.direction, k.measured]; }));
+}
+
+function readProfileMaster_(ctx, profile) {
+  var sh = ctx.ss.getSheetByName(TAB.KRA);
+  if (!sh) return [];
+  var d = sh.getDataRange().getValues(), out = [];
+  for (var i = 1; i < d.length; i++) {
+    if (String(d[i][0]).trim().toLowerCase() !== String(profile).trim().toLowerCase()) continue;
+    if (!d[i][1]) continue;
+    out.push(normKra_({ item:d[i][1], desc:d[i][2], weight:d[i][3], grid:d[i][4],
+                        target:d[i][5], unit:d[i][6], direction:d[i][7], measured:d[i][8] }));
+  }
+  return out;
+}
+
+/** What to prefill the editor with: their own set, else their profile's. */
+function getKraFor_(ctx, username) {
+  requireManager_(ctx);
+  var u = findUser_(ctx.ss, username);
+  if (!u) throw new Error('That person is not in this workspace.');
+  var own = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
+  var fromProfile = own.length ? [] : readProfileMaster_(ctx, u.jobProfile);
+  return { status:'success',
+    employee: { username:u.username, name:u.name, jobProfile:u.jobProfile || '', dept:u.dept, role:u.role },
+    kras: own.length ? own : fromProfile,
+    inheritedFromProfile: !own.length && fromProfile.length > 0,
+    units: KPI_UNITS, directions: KPI_DIRECTIONS };
+}
+
+/** Copies one person's set onto another. */
+function copyKraFrom_(ctx, fromUsername, toUsername) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  var from = findUser_(ctx.ss, fromUsername), to = findUser_(ctx.ss, toUsername);
+  if (!from || !to) throw new Error('One of those people is not in this workspace.');
+  var rows = (from.kras || []).map(normKra_).filter(function (k) { return k.item; });
+  if (!rows.length) throw new Error(from.name + ' has no KRAs to copy.');
+  setUserField_(ctx.ss, to.rowIndex, 'KRAs JSON', JSON.stringify(rows));
+  return { status:'success', count: rows.length,
+    message: 'Copied ' + rows.length + ' KRA(s) from ' + from.name + ' to ' + to.name + '.' };
+}
+
+/**
+ * Applies a profile's set to everyone holding that profile. Only fills people
+ * who have none unless overwrite is explicitly asked for — quietly replacing a
+ * manager's tailored set with a generic one is how trust in the tool is lost.
+ */
+function applyKraToProfile_(ctx, profile, overwrite) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  if (!profile) throw new Error('Pick a job profile.');
+  var rows = readProfileMaster_(ctx, profile);
+  if (!rows.length) throw new Error('No KRA set is saved for "' + profile + '" yet.');
+
+  var users = readUsers_(ctx).filter(function (u) {
+    return u.active !== false &&
+           String(u.jobProfile || '').trim().toLowerCase() === String(profile).trim().toLowerCase(); });
+  if (!users.length) throw new Error('Nobody holds the profile "' + profile + '".');
+
+  var applied = 0, skipped = [];
+  users.forEach(function (u) {
+    var own = (u.kras || []).filter(function (k) { return k && (k.item || k.name); });
+    if (own.length && !overwrite) { skipped.push(u.name); return; }
+    setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify(rows));
+    applied++;
+  });
+
+  return { status:'success', applied:applied, skipped:skipped,
+    message: applied + ' of ' + users.length + ' updated' +
+      (skipped.length ? '. Left alone, because they already have their own: ' + skipped.join(', ') : '.') };
+}
+
+/** Removes a person's set without touching the profile master. */
+function clearKra_(ctx, username) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  var u = findUser_(ctx.ss, username);
+  if (!u) throw new Error('That person is not in this workspace.');
+  setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify([]));
+  return { status:'success', message: 'Cleared the KRAs for ' + u.name + '.' };
 }
 
 
@@ -2481,17 +2740,77 @@ function canTransition(task, actor, next) {
  * manager approves first. Assigning to your own report, or to yourself, needs
  * no gate.
  */
-function initialStatusFor(assignee, raiser) {
-  var needsApproval = !!assignee.manager &&
-    assignee.manager !== raiser.username &&
-    assignee.username !== raiser.username &&
-    raiser.role !== ROLE.ADMIN;
-  return {
-    status: needsApproval ? STATUS.AWAITING_APPROVAL : STATUS.PENDING,
-    approver: needsApproval ? assignee.manager : (raiser.username || ''),
-    note: needsApproval ? 'Awaiting manager approval' : 'Task assigned',
-  };
+/**
+ * MULTI-LEVEL ASSIGNMENT — who may assign work to whom.
+ *
+ *   Admin        anyone
+ *   HOD          anyone, in any department
+ *   Doer         upward only: their own manager, or any HOD/Admin
+ *
+ * A Doer assigning sideways to a peer is deliberately refused. It is the one
+ * direction with no accountability attached — nobody has agreed to the work and
+ * nobody is answerable for it landing, so it becomes a way to move your own
+ * tasks onto someone else's list.
+ */
+function canAssignTo(raiser, assignee) {
+  if (!raiser || !assignee) return { ok: false, reason: 'Unknown person.' };
+  if (assignee.active === false) return { ok: false, reason: assignee.name + ' is no longer active.' };
+  if (raiser.username === assignee.username) return { ok: true, self: true };
+
+  if (raiser.role === ROLE.ADMIN || raiser.role === ROLE.MANAGER) return { ok: true };
+
+  // Doer: upward only.
+  var isOwnManager = assignee.username === raiser.manager;
+  var isSenior = assignee.role === ROLE.MANAGER || assignee.role === ROLE.ADMIN;
+  if (isOwnManager || isSenior) return { ok: true, upward: true };
+
+  return { ok: false, upward: false,
+    reason: 'You can raise work for your manager or a department head, not for a colleague. ' +
+            'Ask your manager to assign it.' };
 }
+
+/**
+ * Where a new task lands, and who decides.
+ *
+ *   raised by an Admin                  → straight to the assignee
+ *   raised by the assignee's manager    → straight to the assignee
+ *   assigned to yourself                → straight to your own list
+ *   raised UPWARD by a Doer             → the recipient accepts or declines it
+ *                                         themselves; it is their time being
+ *                                         asked for, so nobody else arbitrates
+ *   anyone else                         → the assignee's own manager approves
+ *
+ * That last line is the important one: an HOD in another department can give
+ * work to anyone, but it reaches that person only once their own manager has
+ * agreed. A manager always knows what their team has been committed to.
+ */
+function initialStatusFor(assignee, raiser) {
+  if (!assignee || !raiser) {
+    return { status: STATUS.PENDING, approver: '', note: 'Task assigned' };
+  }
+  if (assignee.username === raiser.username) {
+    return { status: STATUS.PENDING, approver: raiser.username || '', note: 'Self-assigned' };
+  }
+  if (raiser.role === ROLE.ADMIN) {
+    return { status: STATUS.PENDING, approver: raiser.username || '', note: 'Task assigned' };
+  }
+
+  var upward = raiser.role === ROLE.DOER &&
+    (assignee.username === raiser.manager ||
+     assignee.role === ROLE.MANAGER || assignee.role === ROLE.ADMIN);
+  if (upward) {
+    return { status: STATUS.AWAITING_APPROVAL, approver: assignee.username,
+             note: 'Raised by ' + (raiser.name || raiser.username) + ' — awaiting your acceptance',
+             upward: true };
+  }
+
+  var needsApproval = !!assignee.manager && assignee.manager !== raiser.username;
+  return needsApproval
+    ? { status: STATUS.AWAITING_APPROVAL, approver: assignee.manager,
+        note: 'Awaiting approval from ' + (assignee.name || assignee.username) + "'s manager" }
+    : { status: STATUS.PENDING, approver: raiser.username || '', note: 'Task assigned' };
+}
+
 
 /**
  * A holder proposing to pass work onward. Their own manager arbitrates, which
@@ -2634,8 +2953,20 @@ function dueOccurrences(job, today, state) {
 var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
 var LATENESS_POINTS_PER_DAY = 10;   // a day late costs 10 on that task
 var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
-var MAX_MANAGER_DEDUCTION = 15;     // total cap
-var MAX_MANAGER_DEDUCTION_PER_TASK = 10;
+/* RESPONSIVENESS — the manager's half of accountability.
+   A doer is measured on delivering. The person who has to approve or sign off
+   is measured on not sitting on it. Without this the score is one-sided: a team
+   can be marked down for lateness that their manager caused, which is the
+   fastest way for a workforce to stop believing the numbers.
+   Measured in WORKING days from when the item landed on their desk — not from
+   the task's deadline, so work submitted early that then waits a fortnight is
+   counted properly. */
+var REVIEW_SLA_DAYS = 2;                  // working days to review or approve
+var RESPONSIVENESS_PENALTY_PER_DAY = 2;   // points lost per working day beyond the SLA
+var MAX_RESPONSIVENESS_PENALTY_PER_ITEM = 10;
+var MAX_RESPONSIVENESS_PENALTY = 20;      // no single oversight can destroy a score
+var MAX_MANAGER_DEDUCTION = MAX_RESPONSIVENESS_PENALTY;   // old names, still referenced
+var MAX_MANAGER_DEDUCTION_PER_TASK = MAX_RESPONSIVENESS_PENALTY_PER_ITEM;
 
 // ---------------------------------------------------------------------------
 // WORKING CALENDAR — holidays and approved leave
@@ -2723,6 +3054,113 @@ function submittedAt(task) {
  * an unearned 0. With nothing at all, hasData is false and the caller should
  * say "not enough data" rather than print a number.
  */
+/**
+ * Every spell an item spent waiting on somebody's decision.
+ *
+ * Reading it out of the history rather than the current status is what lets a
+ * manager be measured on work they have ALREADY actioned — otherwise the only
+ * thing visible is what is stuck right now, and someone who clears their queue
+ * the day before review looks identical to someone who never let it pile up.
+ */
+function queueSpells(task) {
+  var h = (task.history || []).slice().filter(function (e) { return e && e.date; });
+  var out = [];
+  var WAITING = {};
+  WAITING[STATUS.FOR_REVIEW] = 'review';
+  WAITING[STATUS.AWAITING_APPROVAL] = 'approval';
+  WAITING[STATUS.DELEGATION_PROPOSED] = 'approval';
+
+  for (var i = 0; i < h.length; i++) {
+    var kind = WAITING[h[i].status];
+    if (!kind) continue;
+    var from = new Date(h[i].date);
+    if (isNaN(from)) continue;
+    var to = null;
+    for (var j = i + 1; j < h.length; j++) {
+      var d = new Date(h[j].date);
+      if (!isNaN(d)) { to = d; break; }
+    }
+    out.push({ kind: kind, from: from, to: to,
+      holder: kind === 'review' ? (task.approver || task.raisedBy) : task.approver,
+      open: to === null });
+  }
+
+  /* A task sitting in a waiting state with no history entry for it still counts:
+     the clock is running even if nobody wrote it down. */
+  var nowKind = WAITING[task.status];
+  if (nowKind && !out.some(function (s) { return s.open; })) {
+    var started = h.length ? new Date(h[h.length - 1].date) : parseYmd(task.due);
+    if (started && !isNaN(started)) {
+      out.push({ kind: nowKind, from: started, to: null, open: true,
+        holder: nowKind === 'review' ? (task.approver || task.raisedBy) : task.approver });
+    }
+  }
+  return out;
+}
+
+/**
+ * How promptly this person clears what lands on their desk.
+ *
+ * Returns a 0-100 responsiveness figure and the penalty it costs them, with the
+ * working it out attached — every item, how long it was held, and what that
+ * cost. A number a manager cannot see the derivation of is a number they will
+ * dispute, and they will be right to.
+ */
+function responsivenessStats(tasks, username, today, cal, opts) {
+  opts = opts || {};
+  var sla = opts.slaDays == null ? REVIEW_SLA_DAYS : Number(opts.slaDays);
+  var now = today || new Date();
+  var items = [], breakdown = [], penalty = 0;
+
+  (tasks || []).forEach(function (t) {
+    queueSpells(t).forEach(function (sp) {
+      if (sp.holder !== username) return;
+      var end = sp.to || now;
+      if (startOfDay(end) < startOfDay(sp.from)) return;   // clock skew, ignore
+
+      // Working days only, and never charged for their own approved leave.
+      var held = chargeableLateDays(sp.from, end, username, cal);
+      if (held < 0) held = 0;
+      var over = Math.max(0, held - sla);
+      var cost = Math.min(over * RESPONSIVENESS_PENALTY_PER_DAY,
+                          MAX_RESPONSIVENESS_PENALTY_PER_ITEM);
+
+      items.push({ id: t.id, title: t.title, kind: sp.kind, heldDays: held,
+                   overSla: over, open: sp.open, cost: cost });
+      if (cost > 0) {
+        penalty += cost;
+        breakdown.push({
+          group: 'Review Responsiveness', item: t.title,
+          reason: (sp.open ? 'Still waiting on you to ' : 'Took ') +
+                  (sp.open ? (sp.kind === 'review' ? 'review' : 'approve') +
+                             ' after ' + held + ' working day(s)'
+                           : held + ' working day(s) to ' + (sp.kind === 'review' ? 'review' : 'approve')) +
+                  ' (' + sla + ' expected)',
+          impact: '-' + cost,
+        });
+      }
+    });
+  });
+
+  penalty = Math.min(penalty, MAX_RESPONSIVENESS_PENALTY);
+  var withinSla = items.filter(function (i) { return i.overSla === 0; }).length;
+  var pending = items.filter(function (i) { return i.open; });
+
+  return {
+    hasData: items.length > 0,
+    items: items.length,
+    withinSla: withinSla,
+    pending: pending.length,
+    overdueNow: pending.filter(function (i) { return i.overSla > 0; }).length,
+    avgHeldDays: items.length
+      ? Math.round(items.reduce(function (s, i) { return s + i.heldDays; }, 0) / items.length * 10) / 10 : null,
+    responsiveness: items.length ? Math.round(withinSla / items.length * 100) : null,
+    penalty: penalty,
+    slaDays: sla,
+    breakdown: breakdown,
+  };
+}
+
 function delegationScore(tasks, username, today, cal) {
   today = today || new Date();
   var mine = tasks.filter(function (t) { return t.assignee === username; });
@@ -2798,54 +3236,38 @@ function delegationScore(tasks, username, today, cal) {
   var hasData = active.length > 0;
   var composite = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
 
-  // --- responsiveness deduction: separate and capped, never averaged in ---
-  var waitingOnMe = tasks.filter(function (t) {
-    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
-           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
-  });
-  var deduction = 0;
-  waitingOnMe.forEach(function (t) {
-    var due = parseYmd(t.due);
-    var late = due ? chargeableLateDays(due, today, username, cal) : 0;
-    if (late <= 0) return;
-    var penalty = Math.min(late, MAX_MANAGER_DEDUCTION_PER_TASK);
-    deduction += penalty;
-    breakdown.push({
-      group: 'Review Responsiveness', item: t.title,
-      reason: late + ' day(s) waiting on you to ' + (t.status === STATUS.FOR_REVIEW ? 'review' : 'approve'),
-      impact: '-' + penalty,
-    });
-  });
-  deduction = Math.min(deduction, MAX_MANAGER_DEDUCTION);
+  /* --- responsiveness: separate, capped, never averaged into the delivery half ---
+     Held time is measured from when the item landed on this person's desk, in
+     working days, excluding their own approved leave. The old version keyed off
+     the task's deadline, so work handed in early that then sat for a fortnight
+     cost the reviewer nothing. */
+  var resp = responsivenessStats(tasks, username, today, cal);
+  var deduction = resp.penalty;
+  resp.breakdown.forEach(function (b) { breakdown.push(b); });
 
   /**
    * A manager may own no tasks at all and still be the reason four people are
-   * stuck. Scoring them "no data" in that situation is the one hole that would
-   * let the least accountable person on the board look unmeasurable, so when
-   * there is no delivery record but there IS a review queue, the score becomes
-   * responsiveness: how promptly they clear what is waiting on them.
+   * stuck. Scoring them "no data" there is the one hole that would let the least
+   * accountable person on the board look unmeasurable, so with no delivery
+   * record but a queue of their own, the score becomes how promptly they clear
+   * it.
    */
-  if (!hasData && waitingOnMe.length > 0) {
-    var rW = 0, rSum = 0;
-    waitingOnMe.forEach(function (t) {
-      var due = parseYmd(t.due);
-      var waited = due ? chargeableLateDays(due, today, username, cal) : 0;
-      var w = priorityWeight(t.priority);
-      rSum += timelinessPoints(waited) * w;
-      rW += w;
-    });
-    var responsiveness = rW ? Math.round(rSum / rW) : 100;
+  if (!hasData && resp.hasData) {
     return {
-      score: Math.max(0, Math.min(100, responsiveness)),
+      score: Math.max(0, Math.min(100, resp.responsiveness)),
       hasData: true,
       deduction: 0,
+      responsiveness: resp,
       components: [{
-        key: 'responsiveness', label: 'Review Responsiveness', score: responsiveness,
-        weight: 100, basis: waitingOnMe.length + ' waiting on you',
+        key: 'responsiveness', label: 'Review Responsiveness', score: resp.responsiveness,
+        weight: 100,
+        basis: resp.withinSla + ' of ' + resp.items + ' cleared within ' + resp.slaDays + ' days',
       }],
-      summary: { closed: 0, open: 0, overdue: 0, reworkLoops: 0, awaitingMe: waitingOnMe.length },
+      summary: { closed: 0, open: 0, overdue: 0, reworkLoops: 0,
+                 awaitingMe: resp.pending, heldOverSla: resp.overdueNow },
       breakdown: breakdown,
-      note: 'No delivery record of their own — scored purely on how quickly they clear approvals and reviews.',
+      note: 'No delivery record of their own — scored purely on how quickly they clear ' +
+            'approvals and reviews.',
     };
   }
 
@@ -2861,7 +3283,9 @@ function delegationScore(tasks, username, today, cal) {
         basis: p.basis,
       };
     }),
-    summary: { closed: closed.length, open: open.length, overdue: overdue, reworkLoops: reworkTotal },
+    responsiveness: resp,
+    summary: { closed: closed.length, open: open.length, overdue: overdue,
+               reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow },
     breakdown: breakdown,
   };
 }
@@ -2869,7 +3293,10 @@ function delegationScore(tasks, username, today, cal) {
 // ---------------------------------------------------------------------------
 // APPRAISAL — KRA / KPI
 // ---------------------------------------------------------------------------
-var APPRAISAL_WEIGHTS = { delegation: 0.40, kra: 0.40, behaviour: 0.20 };
+/* How the 100 performance points are divided. Delegation is not in here: it is
+   the other half of the final score, not a slice of this one. */
+var APPRAISAL_SPLIT = { kra: 75, behaviour: 20 };     // the remaining 5 are brownie
+var APPRAISAL_WEIGHTS = APPRAISAL_SPLIT;              // old name, still referenced
 var MAX_BROWNIE = 5;
 
 /** Ratings are 0-5 against a weight; 0 means "not rated" and is excluded. */
@@ -2900,35 +3327,85 @@ function validateKraBlueprint(kras) {
  * Any unrated half is dropped and the rest renormalised, so a half-finished
  * appraisal never silently reads as a low score.
  */
+/**
+ * THE ONE DEFINITION OF A FINAL SCORE.
+ *
+ *   Performance = KRA 75% + Behaviour 20% + Brownie (max 5)   → out of 100
+ *   Delegation  = measured from the task record               → out of 100
+ *   Final       = (Performance + Delegation) / 2
+ *
+ * Two halves, weighted equally: what you were judged on, and what the record
+ * shows. There used to be two different formulas — a 40/40/20 blend here and a
+ * flat average on the dashboard — so the number an employee saw was not the
+ * number stored against them. An appraisal figure that cannot be reproduced on
+ * demand is worse than no figure, because it will be challenged and you will
+ * not be able to defend it.
+ *
+ * Someone with no closed work has no delegation half. Their final score is
+ * their performance score rather than half of it — a new joiner is not a poor
+ * performer.
+ */
 function finalAppraisalScore(input) {
-  var kra = weightedRating(input.kras);
-  var behaviour = weightedRating(input.behaviours);
-  var delegation = input.hasDelegationData === false ? null : Number(input.delegationScore || 0);
-
-  var parts = [
-    { v: delegation, w: APPRAISAL_WEIGHTS.delegation, key: 'delegation' },
-    { v: kra,        w: APPRAISAL_WEIGHTS.kra,        key: 'kra' },
-    { v: behaviour,  w: APPRAISAL_WEIGHTS.behaviour,  key: 'behaviour' },
-  ].filter(function (p) { return p.v !== null && !isNaN(p.v); });
-
-  if (!parts.length) return { score: 0, hasData: false, components: {}, brownie: 0 };
-
-  var tw = parts.reduce(function (s, p) { return s + p.w; }, 0);
-  var blended = parts.reduce(function (s, p) { return s + p.v * (p.w / tw); }, 0);
+  input = input || {};
+  var kraPct = ratingPercent_(input.kras);                  // 0..100 or null
+  var behPct = ratingPercent_(input.behaviours);
   var brownie = Math.max(0, Math.min(MAX_BROWNIE, Number(input.brownie || 0)));
 
+  var kraPoints = kraPct === null ? null : (kraPct / 100) * APPRAISAL_SPLIT.kra;
+  var behPoints = behPct === null ? null : (behPct / 100) * APPRAISAL_SPLIT.behaviour;
+
+  var rated = (kraPoints !== null) || (behPoints !== null);
+  var performance = rated
+    ? Math.max(0, Math.min(100, (kraPoints || 0) + (behPoints || 0) + brownie))
+    : null;
+
+  var hasDelegation = input.hasDelegationData !== false &&
+                      input.delegationScore !== null && input.delegationScore !== undefined;
+  var delegation = hasDelegation
+    ? Math.max(0, Math.min(100, Number(input.delegationScore) || 0)) : null;
+
+  var halves = [];
+  if (performance !== null) halves.push(performance);
+  if (delegation !== null) halves.push(delegation);
+
+  var score = halves.length
+    ? Math.round(halves.reduce(function (a, b) { return a + b; }, 0) / halves.length) : 0;
+
   return {
-    score: Math.max(0, Math.min(100, Math.round(blended + brownie))),
-    hasData: true,
+    score: score,
+    performance: performance === null ? null : Math.round(performance * 10) / 10,
+    delegation: delegation === null ? null : Math.round(delegation),
+    hasData: halves.length > 0,
     brownie: brownie,
-    components: {
-      delegation: delegation === null ? null : Math.round(delegation),
-      kra: kra === null ? null : Math.round(kra),
-      behaviour: behaviour === null ? null : Math.round(behaviour),
+    parts: {
+      kra:       { percent: kraPct === null ? null : Math.round(kraPct),
+                   points: kraPoints === null ? null : Math.round(kraPoints * 10) / 10,
+                   outOf: APPRAISAL_SPLIT.kra },
+      behaviour: { percent: behPct === null ? null : Math.round(behPct),
+                   points: behPoints === null ? null : Math.round(behPoints * 10) / 10,
+                   outOf: APPRAISAL_SPLIT.behaviour },
+      brownie:   { points: brownie, outOf: MAX_BROWNIE },
     },
-    weightsUsed: parts.map(function (p) { return p.key + ':' + Math.round(p.w / tw * 100) + '%'; }).join(' '),
+    formula: delegation === null
+      ? 'No closed work to measure, so the final score is the performance score alone.'
+      : 'Final = (Performance ' + Math.round(performance) + ' + Delegation ' + delegation + ') / 2',
   };
 }
+
+/** A weighted set of 0-5 ratings as a percentage, or null if nothing was rated. */
+function ratingPercent_(rows) {
+  var items = (rows || []).filter(function (r) {
+    return r && Number(r.rating) > 0; });
+  if (!items.length) return null;
+  var got = 0, max = 0;
+  items.forEach(function (r) {
+    var w = Number(r.weight) || 1;
+    got += (Number(r.rating) || 0) * w;
+    max += 5 * w;
+  });
+  return max ? (got / max) * 100 : null;
+}
+
 
 /** A/B/C banding with the action each implies. */
 function performanceBand(score) {

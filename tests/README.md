@@ -12,10 +12,18 @@ node api-test.js            # 89 end-to-end API checks
 node extra-test.js          # roles, tenant isolation, plan vocabulary
 node auth-test.js           # hashing, migration, token forgery, throttle
 node pay-test.js            # Razorpay signature forgery and replay
+node multilevel-test.js     # who may assign to whom, and the approval chain
+node kra-test.js            # KRA/KPI sets, profile standards, optional targets
+node responsiveness-test.js # manager accountability (pure rules engine, no server)
 
-node server.js &            # then, for the browser test:
+node server.js &            # then, for the browser tests:
 node ui-test.js
+node seed.js                # prints the seeded owner's email
+node recurring-test.js <that-email>
 ```
+
+`responsiveness-test.js` loads `domebox/domain.gs` straight into a sandbox, so it
+needs no server and no browser.
 
 `gas-shim.js` implements only the Apps Script surface `code.gs` actually uses.
 Anything it does not implement throws rather than silently passing.

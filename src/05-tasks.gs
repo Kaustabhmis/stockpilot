@@ -3,7 +3,9 @@
 // ===========================================================================
 
 function createTask_(ctx, form) {
-  requireManager_(ctx); blockIfStopped_(ctx);
+  /* Deliberately NOT requireManager_: a Doer may raise work upward, to their own
+     manager or to a department head. canAssignTo decides per recipient. */
+  blockIfStopped_(ctx);
   form = form || {};
 
   var title = String(form.title || '').trim();
@@ -26,12 +28,16 @@ function createTask_(ctx, form) {
   var sheet = ctx.ss.getSheetByName(TAB.TASKS);
   var created = [], routed = 0;
 
+  var refused = [];
   assignees.forEach(function (username) {
     var target = byName[username];
     if (!target || target.active === false) return;
 
-    // The engine decides whether this needs the assignee's manager to accept it.
-    var route = initialStatusFor(target, ctx.actor);
+    var allowed = canAssignTo(ctx.me, target);
+    if (!allowed.ok) { refused.push({ name: target.name, reason: allowed.reason }); return; }
+
+    // The engine decides who, if anyone, has to agree before this lands.
+    var route = initialStatusFor(target, ctx.me);
     var id = newTaskId_();
     var row = blankTaskRow_();
     row[T['ID']] = id;
@@ -50,6 +56,7 @@ function createTask_(ctx, form) {
       status: route.status, user: ctx.actor.name, note: route.note }]);
     row[T['Job Category']] = String(form.jobCategory || 'General');
     row[T['Approver Manager']] = route.status === 'Awaiting Approval' ? route.approver : '';
+    row[T['Status']] = route.status;
     row[T['Spawned By']] = '';
     row[T['Blocked By']] = JSON.stringify([]);
     row[T['Subtasks JSON']] = JSON.stringify(parseChecklist_(form.checklist));
@@ -62,9 +69,16 @@ function createTask_(ctx, form) {
     catch (e) { logError_('createTask:notify', e.message); }
   });
 
-  if (!created.length) throw new Error('None of those people are active in this workspace.');
+  if (!created.length) {
+    throw new Error(refused.length ? refused[0].reason
+      : 'None of those people are active in this workspace.');
+  }
   return { status: 'success', created: created.length, routedForApproval: routed,
-    message: created.length + ' task(s) created' + (routed ? ', ' + routed + ' sent for approval' : '') + '.' };
+    refused: refused,
+    message: created.length + ' task(s) created' +
+      (routed ? ', ' + routed + ' sent for approval' : '') + '.' +
+      (refused.length ? ' Not sent to ' +
+        refused.map(function (r) { return r.name; }).join(', ') + '.' : '') };
 }
 
 function parseChecklist_(raw) {
@@ -184,7 +198,7 @@ function spawnNextOccurrence_(ctx, hit, t) {
   return due;
 }
 
-function processApproval_(ctx, taskId, isApproved) {
+function processApproval_(ctx, taskId, isApproved, remarks) {
   blockIfStopped_(ctx);
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
@@ -197,6 +211,15 @@ function processApproval_(ctx, taskId, isApproved) {
     throw new Error('Only ' + nameOf_(ctx, t.approver) + ' can decide this one.');
   }
 
+  /* A rejection without a reason is the thing people complain about: the task
+     vanishes and whoever raised it has to go and ask why. The remark is the
+     answer, recorded against the task. */
+  remarks = String(remarks || '').trim();
+  if (!isApproved && !remarks) {
+    throw new Error('Add a remark saying why you are rejecting it. ' +
+      'The person who raised it will see this.');
+  }
+
   var next = isApproved ? 'Pending' : 'Rejected';
   if (t.status === 'Delegation Proposed' && isApproved && t.delegateTo) {
     writeTaskField_(hit, 'Assigned To', t.delegateTo);
@@ -204,9 +227,15 @@ function processApproval_(ctx, taskId, isApproved) {
   }
   writeTaskField_(hit, 'Status', next);
   writeTaskField_(hit, 'Approver Manager', '');
-  appendHistory_(hit, next, ctx.actor.name, isApproved ? 'Approved by manager' : 'Rejected by manager');
+  appendHistory_(hit, next, ctx.actor.name,
+    (isApproved ? 'Approved' : 'Rejected') + (remarks ? ': ' + remarks : ''));
 
-  return { status: 'success', message: isApproved ? 'Approved.' : 'Rejected.' };
+  try { notifyDecision_(ctx, t, isApproved, remarks); }
+  catch (e) { logError_('processApproval:notify', e.message); }
+
+  return { status: 'success', remarks: remarks,
+    message: isApproved ? 'Approved — it is on their list now.'
+                        : 'Rejected, and ' + nameOf_(ctx, t.by) + ' has been told why.' };
 }
 
 function delegateTask_(ctx, taskId, toUsername) {

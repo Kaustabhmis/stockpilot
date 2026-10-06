@@ -28,16 +28,25 @@ function getDashboard_(ctx) {
   var del = delegationScore(tasks.filter(function (t) { return !t.isArchived ||
     inThisMonth_(t); }), me.username, new Date(), cal);
 
-  // Last recorded appraisal, if any.
-  var lastKra = null;
+  /* The last appraisal's PERFORMANCE half, paired with today's delegation half.
+     An empty cell is not a zero: reading it as one used to halve everybody's
+     score the moment they were first appraised. */
+  var lastPerf = null;
   var rv = ctx.ss.getSheetByName(TAB.REVIEWS);
   if (rv) {
     var rd = rv.getDataRange().getValues();
     for (var i = rd.length - 1; i > 0; i--) {
-      if (String(rd[i][1]) === me.username) { lastKra = Number(rd[i][2]); break; }
+      if (String(rd[i][1]) !== me.username) continue;
+      var cell = rd[i][2];
+      if (cell !== '' && cell !== null && !isNaN(Number(cell))) lastPerf = Number(cell);
+      break;
     }
   }
-  var finalScore = lastKra !== null ? (del.score + lastKra) / 2 : del.score;
+  var halves = [];
+  if (lastPerf !== null) halves.push(lastPerf);
+  if (del.hasData) halves.push(del.score);
+  var finalScore = halves.length
+    ? halves.reduce(function (a, b) { return a + b; }, 0) / halves.length : 0;
 
   var digest = buildDigest(tasks, { username: me.username, name: me.name, role: me.role },
     new Date(), { reports: reports, escalateAfterDays: 3 });
@@ -63,9 +72,14 @@ function getDashboard_(ctx) {
       completed: active.filter(function (t) { return t.status === 'Verified'; }).length,
       overdue:   active.filter(function (t) { return isOpen(t.status) && t.due &&
                                 dayDiff(new Date(), parseYmd(t.due)) > 0; }).length,
-      scores: { delegation: del.score, kra: lastKra === null ? null : Math.round(lastKra),
-                final: Math.round(finalScore), breakdown: del.breakdown,
-                components: del.components, hasData: del.hasData },
+      scores: { delegation: del.hasData ? del.score : null,
+                performance: lastPerf === null ? null : Math.round(lastPerf),
+                final: halves.length ? Math.round(finalScore) : null,
+                breakdown: del.breakdown, components: del.components, hasData: del.hasData,
+                formula: halves.length === 2
+                  ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
+                  : lastPerf !== null ? 'No closed work yet, so this is the appraisal score alone.'
+                  : 'No appraisal yet, so this is the delegation score alone.' },
     },
     notifications: buildNotifications_(digest, me),
     usage: {
@@ -202,19 +216,9 @@ function getAppraisalForm_(ctx, username) {
   var cal = leaveCalendar_(ctx);
   var del = delegationScore(tasks, username, new Date(), cal);
 
-  // KRAs: the person's own blueprint first, else the job-profile master.
-  var kras = (u.kras && u.kras.length) ? u.kras : [];
-  if (!kras.length) {
-    var sh = ctx.ss.getSheetByName(TAB.KRA);
-    if (sh) {
-      var d = sh.getDataRange().getValues();
-      for (var i = 1; i < d.length; i++) {
-        if (String(d[i][0]).trim() === String(u.jobProfile).trim() && d[i][1]) {
-          kras.push({ item: d[i][1], desc: d[i][2], weight: Number(d[i][3]) || 1, grid: d[i][4] });
-        }
-      }
-    }
-  }
+  // Their own set first, else whatever their job profile defines.
+  var kras = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
+  if (!kras.length) kras = readProfileMaster_(ctx, u.jobProfile);
 
   return { status: 'success', employee: { username: u.username, name: u.name,
       jobProfile: u.jobProfile, dept: u.dept },
@@ -234,52 +238,37 @@ function submitAppraisal_(ctx, data) {
   data = data || {};
   if (!data.employee) throw new Error('Pick who this appraisal is for.');
 
+  /* The delegation half is re-measured here rather than taken from the request:
+     the browser sent it, and a score an employee can edit in devtools is not a
+     score. */
+  var tasks = readTasks_(ctx);
+  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx));
+
   var result = finalAppraisalScore({
-    delegation: Number(data.delegationScore) || 0,
+    delegationScore: measured.hasData ? measured.score : null,
+    hasDelegationData: measured.hasData,
     kras: (data.kras || []).map(function (k) {
       return { rating: Number(k.rating) || 0, weight: Number(k.weight) || 1 }; }),
     behaviours: (data.behaviors || []).map(function (b) {
       return { rating: Number(b.rating) || 0, weight: Number(b.weight) || 1 }; }),
     brownie: Number(data.brownie) || 0,
   });
+  if (!result.hasData) throw new Error('Rate at least one KRA or behaviour before saving.');
 
   var month = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
   mkTab_(ctx.ss, TAB.REVIEWS, ['Month','Employee','Performance Score','Delegation Score','Final Score','Date'])
-    .appendRow([month, data.employee, result.performance, result.delegation, result.score, new Date()]);
+    .appendRow([month, data.employee,
+      result.performance === null ? '' : result.performance,
+      result.delegation === null ? '' : result.delegation,
+      result.score, new Date()]);
 
   return { status: 'success', score: result.score, band: performanceBand(result.score),
-    breakdown: result.parts,
+    performance: result.performance, delegation: result.delegation,
+    parts: result.parts, formula: result.formula,
     message: 'Appraisal saved: ' + result.score + ' (' + performanceBand(result.score).band + ').' };
 }
 
-function addKRA_(ctx, data) {
-  requireManager_(ctx); blockIfStopped_(ctx);
-  data = data || {};
-  var u = findUser_(ctx.ss, data.employee);
-  if (!u) throw new Error('That person is not in this workspace.');
+/* addKRA_ lived here and wrote a title and a weight. It is replaced by saveKra_
+   in the KRA/KPI module, which carries a measurable target as well. The addKRA
+   route still resolves, so nothing calling it breaks. */
 
-  var rows = (data.kras || []).filter(function (k) { return String(k.name || k.item || '').trim(); })
-    .map(function (k) { return { item: String(k.name || k.item).trim(), desc: String(k.desc || ''),
-      weight: Number(k.weight) || 1, grid: String(k.grid || '') }; });
-
-  var v = validateKraBlueprint(rows);
-  if (!v.ok) throw new Error(v.error);     // weights over 100% never save
-
-  // Stored against the person, and mirrored to the job-profile master so the
-  // next person with the same profile inherits it.
-  setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify(rows));
-
-  if (u.jobProfile) {
-    var sh = mkTab_(ctx.ss, TAB.KRA, ['Job Profile','KRA Title','Description','Weight','Grid/KPI']);
-    var d = sh.getDataRange().getValues();
-    for (var i = d.length - 1; i > 0; i--) {
-      if (String(d[i][0]).trim() === String(u.jobProfile).trim()) sh.deleteRow(i + 1);
-    }
-    if (rows.length) {
-      sh.getRange(sh.getLastRow() + 1, 1, rows.length, 5).setValues(rows.map(function (k) {
-        return [u.jobProfile, k.item, k.desc, k.weight, k.grid]; }));
-    }
-  }
-  return { status: 'success', total: v.total, warning: v.warning || '',
-    message: 'Saved ' + rows.length + ' KRA(s), ' + v.total + '% allocated.' };
-}

@@ -18,6 +18,7 @@ const parts = [
   ['src/06-team.gs',     null],
   ['src/07-reports.gs',  null],
   ['src/08-commerce.gs', null],
+  ['src/09-kra.gs',      'KRA / KPI'],
   ['domebox/auth.gs',    'AUTHENTICATION'],
   ['domebox/plans.gs',   'PLAN LIMITS'],
   ['domebox/domain.gs',  'RULES ENGINE'],

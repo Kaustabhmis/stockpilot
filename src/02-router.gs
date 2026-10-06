@@ -69,13 +69,15 @@ function route_(p) {
     case 'getAccountability':   return getAccountability_(ctx);
     case 'getPerformanceReport':return getPerformanceReport_(ctx);
     case 'getAppraisalForm':    return getAppraisalForm_(ctx, p.username);
+    case 'getKraOverview':      return getKraOverview_(ctx);
+    case 'getKraFor':           return getKraFor_(ctx, p.username);
     case 'getCategories':       return { status:'success', categories: readCategories_(ctx) };
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
     case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
     case 'editTask':            return editTask_(ctx, p.form);
-    case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved);
+    case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);
     case 'stopRecurringTask':   return stopRecurring_(ctx, p.taskId);
     case 'delegateTask':        return delegateTask_(ctx, p.taskId, p.toUsername);
     case 'addBlocker':          return addBlocker_(ctx, p.taskId, p.blockerId);
@@ -91,7 +93,11 @@ function route_(p) {
 
     /* --- appraisal ------------------------------------------------------- */
     case 'submitAppraisal':     return submitAppraisal_(ctx, p.data);
-    case 'addKRA':              return addKRA_(ctx, p.data);
+    case 'addKRA':              return saveKra_(ctx, p.data);     // old name, kept working
+    case 'saveKra':             return saveKra_(ctx, p.data);
+    case 'copyKra':             return copyKraFrom_(ctx, p.from, p.to);
+    case 'applyKraToProfile':   return applyKraToProfile_(ctx, p.profile, p.overwrite);
+    case 'clearKra':            return clearKra_(ctx, p.username);
 
     /* --- commercial & misc ----------------------------------------------- */
     case 'initiateRazorpay':    return createRazorpayOrder_(ctx, p.planName, p.promoCode);

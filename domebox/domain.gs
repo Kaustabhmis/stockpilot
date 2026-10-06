@@ -139,17 +139,77 @@ function canTransition(task, actor, next) {
  * manager approves first. Assigning to your own report, or to yourself, needs
  * no gate.
  */
-function initialStatusFor(assignee, raiser) {
-  var needsApproval = !!assignee.manager &&
-    assignee.manager !== raiser.username &&
-    assignee.username !== raiser.username &&
-    raiser.role !== ROLE.ADMIN;
-  return {
-    status: needsApproval ? STATUS.AWAITING_APPROVAL : STATUS.PENDING,
-    approver: needsApproval ? assignee.manager : (raiser.username || ''),
-    note: needsApproval ? 'Awaiting manager approval' : 'Task assigned',
-  };
+/**
+ * MULTI-LEVEL ASSIGNMENT — who may assign work to whom.
+ *
+ *   Admin        anyone
+ *   HOD          anyone, in any department
+ *   Doer         upward only: their own manager, or any HOD/Admin
+ *
+ * A Doer assigning sideways to a peer is deliberately refused. It is the one
+ * direction with no accountability attached — nobody has agreed to the work and
+ * nobody is answerable for it landing, so it becomes a way to move your own
+ * tasks onto someone else's list.
+ */
+function canAssignTo(raiser, assignee) {
+  if (!raiser || !assignee) return { ok: false, reason: 'Unknown person.' };
+  if (assignee.active === false) return { ok: false, reason: assignee.name + ' is no longer active.' };
+  if (raiser.username === assignee.username) return { ok: true, self: true };
+
+  if (raiser.role === ROLE.ADMIN || raiser.role === ROLE.MANAGER) return { ok: true };
+
+  // Doer: upward only.
+  var isOwnManager = assignee.username === raiser.manager;
+  var isSenior = assignee.role === ROLE.MANAGER || assignee.role === ROLE.ADMIN;
+  if (isOwnManager || isSenior) return { ok: true, upward: true };
+
+  return { ok: false, upward: false,
+    reason: 'You can raise work for your manager or a department head, not for a colleague. ' +
+            'Ask your manager to assign it.' };
 }
+
+/**
+ * Where a new task lands, and who decides.
+ *
+ *   raised by an Admin                  → straight to the assignee
+ *   raised by the assignee's manager    → straight to the assignee
+ *   assigned to yourself                → straight to your own list
+ *   raised UPWARD by a Doer             → the recipient accepts or declines it
+ *                                         themselves; it is their time being
+ *                                         asked for, so nobody else arbitrates
+ *   anyone else                         → the assignee's own manager approves
+ *
+ * That last line is the important one: an HOD in another department can give
+ * work to anyone, but it reaches that person only once their own manager has
+ * agreed. A manager always knows what their team has been committed to.
+ */
+function initialStatusFor(assignee, raiser) {
+  if (!assignee || !raiser) {
+    return { status: STATUS.PENDING, approver: '', note: 'Task assigned' };
+  }
+  if (assignee.username === raiser.username) {
+    return { status: STATUS.PENDING, approver: raiser.username || '', note: 'Self-assigned' };
+  }
+  if (raiser.role === ROLE.ADMIN) {
+    return { status: STATUS.PENDING, approver: raiser.username || '', note: 'Task assigned' };
+  }
+
+  var upward = raiser.role === ROLE.DOER &&
+    (assignee.username === raiser.manager ||
+     assignee.role === ROLE.MANAGER || assignee.role === ROLE.ADMIN);
+  if (upward) {
+    return { status: STATUS.AWAITING_APPROVAL, approver: assignee.username,
+             note: 'Raised by ' + (raiser.name || raiser.username) + ' — awaiting your acceptance',
+             upward: true };
+  }
+
+  var needsApproval = !!assignee.manager && assignee.manager !== raiser.username;
+  return needsApproval
+    ? { status: STATUS.AWAITING_APPROVAL, approver: assignee.manager,
+        note: 'Awaiting approval from ' + (assignee.name || assignee.username) + "'s manager" }
+    : { status: STATUS.PENDING, approver: raiser.username || '', note: 'Task assigned' };
+}
+
 
 /**
  * A holder proposing to pass work onward. Their own manager arbitrates, which
@@ -292,8 +352,20 @@ function dueOccurrences(job, today, state) {
 var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
 var LATENESS_POINTS_PER_DAY = 10;   // a day late costs 10 on that task
 var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
-var MAX_MANAGER_DEDUCTION = 15;     // total cap
-var MAX_MANAGER_DEDUCTION_PER_TASK = 10;
+/* RESPONSIVENESS — the manager's half of accountability.
+   A doer is measured on delivering. The person who has to approve or sign off
+   is measured on not sitting on it. Without this the score is one-sided: a team
+   can be marked down for lateness that their manager caused, which is the
+   fastest way for a workforce to stop believing the numbers.
+   Measured in WORKING days from when the item landed on their desk — not from
+   the task's deadline, so work submitted early that then waits a fortnight is
+   counted properly. */
+var REVIEW_SLA_DAYS = 2;                  // working days to review or approve
+var RESPONSIVENESS_PENALTY_PER_DAY = 2;   // points lost per working day beyond the SLA
+var MAX_RESPONSIVENESS_PENALTY_PER_ITEM = 10;
+var MAX_RESPONSIVENESS_PENALTY = 20;      // no single oversight can destroy a score
+var MAX_MANAGER_DEDUCTION = MAX_RESPONSIVENESS_PENALTY;   // old names, still referenced
+var MAX_MANAGER_DEDUCTION_PER_TASK = MAX_RESPONSIVENESS_PENALTY_PER_ITEM;
 
 // ---------------------------------------------------------------------------
 // WORKING CALENDAR — holidays and approved leave
@@ -381,6 +453,113 @@ function submittedAt(task) {
  * an unearned 0. With nothing at all, hasData is false and the caller should
  * say "not enough data" rather than print a number.
  */
+/**
+ * Every spell an item spent waiting on somebody's decision.
+ *
+ * Reading it out of the history rather than the current status is what lets a
+ * manager be measured on work they have ALREADY actioned — otherwise the only
+ * thing visible is what is stuck right now, and someone who clears their queue
+ * the day before review looks identical to someone who never let it pile up.
+ */
+function queueSpells(task) {
+  var h = (task.history || []).slice().filter(function (e) { return e && e.date; });
+  var out = [];
+  var WAITING = {};
+  WAITING[STATUS.FOR_REVIEW] = 'review';
+  WAITING[STATUS.AWAITING_APPROVAL] = 'approval';
+  WAITING[STATUS.DELEGATION_PROPOSED] = 'approval';
+
+  for (var i = 0; i < h.length; i++) {
+    var kind = WAITING[h[i].status];
+    if (!kind) continue;
+    var from = new Date(h[i].date);
+    if (isNaN(from)) continue;
+    var to = null;
+    for (var j = i + 1; j < h.length; j++) {
+      var d = new Date(h[j].date);
+      if (!isNaN(d)) { to = d; break; }
+    }
+    out.push({ kind: kind, from: from, to: to,
+      holder: kind === 'review' ? (task.approver || task.raisedBy) : task.approver,
+      open: to === null });
+  }
+
+  /* A task sitting in a waiting state with no history entry for it still counts:
+     the clock is running even if nobody wrote it down. */
+  var nowKind = WAITING[task.status];
+  if (nowKind && !out.some(function (s) { return s.open; })) {
+    var started = h.length ? new Date(h[h.length - 1].date) : parseYmd(task.due);
+    if (started && !isNaN(started)) {
+      out.push({ kind: nowKind, from: started, to: null, open: true,
+        holder: nowKind === 'review' ? (task.approver || task.raisedBy) : task.approver });
+    }
+  }
+  return out;
+}
+
+/**
+ * How promptly this person clears what lands on their desk.
+ *
+ * Returns a 0-100 responsiveness figure and the penalty it costs them, with the
+ * working it out attached — every item, how long it was held, and what that
+ * cost. A number a manager cannot see the derivation of is a number they will
+ * dispute, and they will be right to.
+ */
+function responsivenessStats(tasks, username, today, cal, opts) {
+  opts = opts || {};
+  var sla = opts.slaDays == null ? REVIEW_SLA_DAYS : Number(opts.slaDays);
+  var now = today || new Date();
+  var items = [], breakdown = [], penalty = 0;
+
+  (tasks || []).forEach(function (t) {
+    queueSpells(t).forEach(function (sp) {
+      if (sp.holder !== username) return;
+      var end = sp.to || now;
+      if (startOfDay(end) < startOfDay(sp.from)) return;   // clock skew, ignore
+
+      // Working days only, and never charged for their own approved leave.
+      var held = chargeableLateDays(sp.from, end, username, cal);
+      if (held < 0) held = 0;
+      var over = Math.max(0, held - sla);
+      var cost = Math.min(over * RESPONSIVENESS_PENALTY_PER_DAY,
+                          MAX_RESPONSIVENESS_PENALTY_PER_ITEM);
+
+      items.push({ id: t.id, title: t.title, kind: sp.kind, heldDays: held,
+                   overSla: over, open: sp.open, cost: cost });
+      if (cost > 0) {
+        penalty += cost;
+        breakdown.push({
+          group: 'Review Responsiveness', item: t.title,
+          reason: (sp.open ? 'Still waiting on you to ' : 'Took ') +
+                  (sp.open ? (sp.kind === 'review' ? 'review' : 'approve') +
+                             ' after ' + held + ' working day(s)'
+                           : held + ' working day(s) to ' + (sp.kind === 'review' ? 'review' : 'approve')) +
+                  ' (' + sla + ' expected)',
+          impact: '-' + cost,
+        });
+      }
+    });
+  });
+
+  penalty = Math.min(penalty, MAX_RESPONSIVENESS_PENALTY);
+  var withinSla = items.filter(function (i) { return i.overSla === 0; }).length;
+  var pending = items.filter(function (i) { return i.open; });
+
+  return {
+    hasData: items.length > 0,
+    items: items.length,
+    withinSla: withinSla,
+    pending: pending.length,
+    overdueNow: pending.filter(function (i) { return i.overSla > 0; }).length,
+    avgHeldDays: items.length
+      ? Math.round(items.reduce(function (s, i) { return s + i.heldDays; }, 0) / items.length * 10) / 10 : null,
+    responsiveness: items.length ? Math.round(withinSla / items.length * 100) : null,
+    penalty: penalty,
+    slaDays: sla,
+    breakdown: breakdown,
+  };
+}
+
 function delegationScore(tasks, username, today, cal) {
   today = today || new Date();
   var mine = tasks.filter(function (t) { return t.assignee === username; });
@@ -456,54 +635,38 @@ function delegationScore(tasks, username, today, cal) {
   var hasData = active.length > 0;
   var composite = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
 
-  // --- responsiveness deduction: separate and capped, never averaged in ---
-  var waitingOnMe = tasks.filter(function (t) {
-    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
-           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
-  });
-  var deduction = 0;
-  waitingOnMe.forEach(function (t) {
-    var due = parseYmd(t.due);
-    var late = due ? chargeableLateDays(due, today, username, cal) : 0;
-    if (late <= 0) return;
-    var penalty = Math.min(late, MAX_MANAGER_DEDUCTION_PER_TASK);
-    deduction += penalty;
-    breakdown.push({
-      group: 'Review Responsiveness', item: t.title,
-      reason: late + ' day(s) waiting on you to ' + (t.status === STATUS.FOR_REVIEW ? 'review' : 'approve'),
-      impact: '-' + penalty,
-    });
-  });
-  deduction = Math.min(deduction, MAX_MANAGER_DEDUCTION);
+  /* --- responsiveness: separate, capped, never averaged into the delivery half ---
+     Held time is measured from when the item landed on this person's desk, in
+     working days, excluding their own approved leave. The old version keyed off
+     the task's deadline, so work handed in early that then sat for a fortnight
+     cost the reviewer nothing. */
+  var resp = responsivenessStats(tasks, username, today, cal);
+  var deduction = resp.penalty;
+  resp.breakdown.forEach(function (b) { breakdown.push(b); });
 
   /**
    * A manager may own no tasks at all and still be the reason four people are
-   * stuck. Scoring them "no data" in that situation is the one hole that would
-   * let the least accountable person on the board look unmeasurable, so when
-   * there is no delivery record but there IS a review queue, the score becomes
-   * responsiveness: how promptly they clear what is waiting on them.
+   * stuck. Scoring them "no data" there is the one hole that would let the least
+   * accountable person on the board look unmeasurable, so with no delivery
+   * record but a queue of their own, the score becomes how promptly they clear
+   * it.
    */
-  if (!hasData && waitingOnMe.length > 0) {
-    var rW = 0, rSum = 0;
-    waitingOnMe.forEach(function (t) {
-      var due = parseYmd(t.due);
-      var waited = due ? chargeableLateDays(due, today, username, cal) : 0;
-      var w = priorityWeight(t.priority);
-      rSum += timelinessPoints(waited) * w;
-      rW += w;
-    });
-    var responsiveness = rW ? Math.round(rSum / rW) : 100;
+  if (!hasData && resp.hasData) {
     return {
-      score: Math.max(0, Math.min(100, responsiveness)),
+      score: Math.max(0, Math.min(100, resp.responsiveness)),
       hasData: true,
       deduction: 0,
+      responsiveness: resp,
       components: [{
-        key: 'responsiveness', label: 'Review Responsiveness', score: responsiveness,
-        weight: 100, basis: waitingOnMe.length + ' waiting on you',
+        key: 'responsiveness', label: 'Review Responsiveness', score: resp.responsiveness,
+        weight: 100,
+        basis: resp.withinSla + ' of ' + resp.items + ' cleared within ' + resp.slaDays + ' days',
       }],
-      summary: { closed: 0, open: 0, overdue: 0, reworkLoops: 0, awaitingMe: waitingOnMe.length },
+      summary: { closed: 0, open: 0, overdue: 0, reworkLoops: 0,
+                 awaitingMe: resp.pending, heldOverSla: resp.overdueNow },
       breakdown: breakdown,
-      note: 'No delivery record of their own — scored purely on how quickly they clear approvals and reviews.',
+      note: 'No delivery record of their own — scored purely on how quickly they clear ' +
+            'approvals and reviews.',
     };
   }
 
@@ -519,7 +682,9 @@ function delegationScore(tasks, username, today, cal) {
         basis: p.basis,
       };
     }),
-    summary: { closed: closed.length, open: open.length, overdue: overdue, reworkLoops: reworkTotal },
+    responsiveness: resp,
+    summary: { closed: closed.length, open: open.length, overdue: overdue,
+               reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow },
     breakdown: breakdown,
   };
 }
@@ -527,7 +692,10 @@ function delegationScore(tasks, username, today, cal) {
 // ---------------------------------------------------------------------------
 // APPRAISAL — KRA / KPI
 // ---------------------------------------------------------------------------
-var APPRAISAL_WEIGHTS = { delegation: 0.40, kra: 0.40, behaviour: 0.20 };
+/* How the 100 performance points are divided. Delegation is not in here: it is
+   the other half of the final score, not a slice of this one. */
+var APPRAISAL_SPLIT = { kra: 75, behaviour: 20 };     // the remaining 5 are brownie
+var APPRAISAL_WEIGHTS = APPRAISAL_SPLIT;              // old name, still referenced
 var MAX_BROWNIE = 5;
 
 /** Ratings are 0-5 against a weight; 0 means "not rated" and is excluded. */
@@ -558,35 +726,85 @@ function validateKraBlueprint(kras) {
  * Any unrated half is dropped and the rest renormalised, so a half-finished
  * appraisal never silently reads as a low score.
  */
+/**
+ * THE ONE DEFINITION OF A FINAL SCORE.
+ *
+ *   Performance = KRA 75% + Behaviour 20% + Brownie (max 5)   → out of 100
+ *   Delegation  = measured from the task record               → out of 100
+ *   Final       = (Performance + Delegation) / 2
+ *
+ * Two halves, weighted equally: what you were judged on, and what the record
+ * shows. There used to be two different formulas — a 40/40/20 blend here and a
+ * flat average on the dashboard — so the number an employee saw was not the
+ * number stored against them. An appraisal figure that cannot be reproduced on
+ * demand is worse than no figure, because it will be challenged and you will
+ * not be able to defend it.
+ *
+ * Someone with no closed work has no delegation half. Their final score is
+ * their performance score rather than half of it — a new joiner is not a poor
+ * performer.
+ */
 function finalAppraisalScore(input) {
-  var kra = weightedRating(input.kras);
-  var behaviour = weightedRating(input.behaviours);
-  var delegation = input.hasDelegationData === false ? null : Number(input.delegationScore || 0);
-
-  var parts = [
-    { v: delegation, w: APPRAISAL_WEIGHTS.delegation, key: 'delegation' },
-    { v: kra,        w: APPRAISAL_WEIGHTS.kra,        key: 'kra' },
-    { v: behaviour,  w: APPRAISAL_WEIGHTS.behaviour,  key: 'behaviour' },
-  ].filter(function (p) { return p.v !== null && !isNaN(p.v); });
-
-  if (!parts.length) return { score: 0, hasData: false, components: {}, brownie: 0 };
-
-  var tw = parts.reduce(function (s, p) { return s + p.w; }, 0);
-  var blended = parts.reduce(function (s, p) { return s + p.v * (p.w / tw); }, 0);
+  input = input || {};
+  var kraPct = ratingPercent_(input.kras);                  // 0..100 or null
+  var behPct = ratingPercent_(input.behaviours);
   var brownie = Math.max(0, Math.min(MAX_BROWNIE, Number(input.brownie || 0)));
 
+  var kraPoints = kraPct === null ? null : (kraPct / 100) * APPRAISAL_SPLIT.kra;
+  var behPoints = behPct === null ? null : (behPct / 100) * APPRAISAL_SPLIT.behaviour;
+
+  var rated = (kraPoints !== null) || (behPoints !== null);
+  var performance = rated
+    ? Math.max(0, Math.min(100, (kraPoints || 0) + (behPoints || 0) + brownie))
+    : null;
+
+  var hasDelegation = input.hasDelegationData !== false &&
+                      input.delegationScore !== null && input.delegationScore !== undefined;
+  var delegation = hasDelegation
+    ? Math.max(0, Math.min(100, Number(input.delegationScore) || 0)) : null;
+
+  var halves = [];
+  if (performance !== null) halves.push(performance);
+  if (delegation !== null) halves.push(delegation);
+
+  var score = halves.length
+    ? Math.round(halves.reduce(function (a, b) { return a + b; }, 0) / halves.length) : 0;
+
   return {
-    score: Math.max(0, Math.min(100, Math.round(blended + brownie))),
-    hasData: true,
+    score: score,
+    performance: performance === null ? null : Math.round(performance * 10) / 10,
+    delegation: delegation === null ? null : Math.round(delegation),
+    hasData: halves.length > 0,
     brownie: brownie,
-    components: {
-      delegation: delegation === null ? null : Math.round(delegation),
-      kra: kra === null ? null : Math.round(kra),
-      behaviour: behaviour === null ? null : Math.round(behaviour),
+    parts: {
+      kra:       { percent: kraPct === null ? null : Math.round(kraPct),
+                   points: kraPoints === null ? null : Math.round(kraPoints * 10) / 10,
+                   outOf: APPRAISAL_SPLIT.kra },
+      behaviour: { percent: behPct === null ? null : Math.round(behPct),
+                   points: behPoints === null ? null : Math.round(behPoints * 10) / 10,
+                   outOf: APPRAISAL_SPLIT.behaviour },
+      brownie:   { points: brownie, outOf: MAX_BROWNIE },
     },
-    weightsUsed: parts.map(function (p) { return p.key + ':' + Math.round(p.w / tw * 100) + '%'; }).join(' '),
+    formula: delegation === null
+      ? 'No closed work to measure, so the final score is the performance score alone.'
+      : 'Final = (Performance ' + Math.round(performance) + ' + Delegation ' + delegation + ') / 2',
   };
 }
+
+/** A weighted set of 0-5 ratings as a percentage, or null if nothing was rated. */
+function ratingPercent_(rows) {
+  var items = (rows || []).filter(function (r) {
+    return r && Number(r.rating) > 0; });
+  if (!items.length) return null;
+  var got = 0, max = 0;
+  items.forEach(function (r) {
+    var w = Number(r.weight) || 1;
+    got += (Number(r.rating) || 0) * w;
+    max += 5 * w;
+  });
+  return max ? (got / max) * 100 : null;
+}
+
 
 /** A/B/C banding with the action each implies. */
 function performanceBand(score) {
@@ -1103,11 +1321,13 @@ if (typeof module !== 'undefined' && module.exports) {
     startOfDay: startOfDay, dayDiff: dayDiff, addDays: addDays, addMonths: addMonths,
     ymd: ymd, parseYmd: parseYmd,
     allowedTransitions: allowedTransitions, canTransition: canTransition,
+    canAssignTo: canAssignTo,
     initialStatusFor: initialStatusFor, proposeDelegation: proposeDelegation,
     nextOccurrence: nextOccurrence, dueOccurrences: dueOccurrences,
     timelinessPoints: timelinessPoints, submittedAt: submittedAt, delegationScore: delegationScore,
     weightedRating: weightedRating, validateKraBlueprint: validateKraBlueprint,
     finalAppraisalScore: finalAppraisalScore, performanceBand: performanceBand,
+    ratingPercent_: ratingPercent_, APPRAISAL_SPLIT: APPRAISAL_SPLIT,
     SCORE_WEIGHTS: SCORE_WEIGHTS, APPRAISAL_WEIGHTS: APPRAISAL_WEIGHTS,
     BOARD_COLUMNS: BOARD_COLUMNS, columnForStatus: columnForStatus, statusForColumn: statusForColumn,
     canDropInColumn: canDropInColumn, groupIntoBoard: groupIntoBoard,

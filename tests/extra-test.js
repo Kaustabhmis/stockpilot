@@ -40,9 +40,19 @@ ok('and leaves the active counts alone',
    call({action:'getDashboard', token:A}).stats.completed===0);
 
 console.log('\n=== read-only guards on a Doer ===');
-ok('a Doer cannot assign work',
-   /manager account/.test(err(()=>call({action:'createTask', token:m,
-     form:{title:'x', assignTo:'meena', dueDate:'2026-11-01'}}))||''));
+call({action:'addUser', token:A, form:{name:'Kabir N', username:'kabir', email:'kabir@delta.in',
+  role:'Doer', jobProfile:'Executive', password:'staffpass123'}});
+ok('a Doer cannot hand work to a colleague',
+   /Ask your manager/.test(err(()=>call({action:'createTask', token:m,
+     form:{title:'x', assignTo:'kabir', dueDate:'2026-11-01'}}))||''));
+// Multi-level assignment: raising work UPWARD is allowed, and waits for the
+// senior person to accept it rather than landing on their list unannounced.
+const up = call({action:'createTask', token:m,
+  form:{title:'Need a PO signed', assignTo:'ravi', dueDate:'2026-11-01'}});
+ok('but may raise work for their own manager', up.status==='success', up.message);
+ok('which waits for that manager to accept it',
+   (call({action:'getDashboard', token:A}).tasks.find(t=>t.title==='Need a PO signed')||{})
+     .status==='Awaiting Approval');
 ok('a Doer cannot add people',
    /manager account/.test(err(()=>call({action:'addUser', token:m,
      form:{name:'X', username:'x', email:'x@d.in', password:'strongpass123'}}))||''));
