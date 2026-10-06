@@ -135,6 +135,28 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {'Content-Type':'application/json'});
     res.end(JSON.stringify({ added: n })); return;
   }
+  /* HARNESS ONLY — pushes a task's history back in time so the review clock can
+     be seen running without waiting three days for it. Not part of code.gs. */
+  if (req.url.startsWith('/__backdate')) {
+    const q = new URL('http://x' + req.url).searchParams;
+    const dir = env.FILES.MASTER.getSheetByName('Directory');
+    const d = dir.getDataRange().getValues();
+    let sheetId = null;
+    for (let i = 1; i < d.length; i++)
+      if (String(d[i][1]).toLowerCase() === String(q.get('email')).toLowerCase()) sheetId = String(d[i][5]);
+    if (!sheetId) { res.writeHead(404); res.end('{}'); return; }
+    const back = Number(q.get('days') || 10);
+    const rows = env.FILES[sheetId].getSheetByName('Tasks')._data
+      .filter(r => !q.get('title') || r[3] === q.get('title'));
+    rows.forEach(r => {
+      let h; try { h = JSON.parse(r[12] || '[]'); } catch (e) { h = []; }
+      h.forEach(e => { const t = new Date(e.date);
+        t.setDate(t.getDate() - back); e.date = t.toISOString(); });
+      r[12] = JSON.stringify(h);
+    });
+    res.writeHead(200, {'Content-Type':'application/json'});
+    res.end(JSON.stringify({ moved: rows.length })); return;
+  }
   if (req.url === '/__mails') { res.writeHead(200, {'Content-Type':'application/json'});
     res.end(JSON.stringify(env.mails)); return; }
   if (req.url === '/__sharing') { res.writeHead(200, {'Content-Type':'application/json'});

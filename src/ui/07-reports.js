@@ -236,17 +236,44 @@ function renderReports(a) {
 }
 
 function openAccountability() {
-  openModal('<div class="p-6 lg:p-7"><h2 class="text-xl font-black mb-5">Rework report</h2>' +
+  openModal('<div class="p-6 lg:p-7"><h2 class="text-xl font-black mb-1">Accountability</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Both sides of it: who is handing work ' +
+    'back in, and who is holding it up.</p>' +
     '<div id="accBody" class="text-sm text-gray-400 font-semibold">Loading…</div>' +
-    '<div class="mt-6"><button class="btn btn-g w-full" onclick="closeModal()">Close</button></div></div>', 'max-w-2xl');
+    '<div class="mt-6"><button class="btn btn-g w-full" onclick="closeModal()">Close</button></div></div>', 'max-w-3xl');
   api('getAccountability').then(function (r) {
-    $('accBody').innerHTML = r.report.length ? '<table class="tbl"><thead><tr>' +
+    var h = '<h3 class="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-2">Rework and lateness</h3>';
+    h += r.report.length ? '<table class="tbl"><thead><tr>' +
       '<th>Person</th><th>Tasks</th><th>Reworks</th><th>Late</th><th>Rework %</th></tr></thead><tbody>' +
       r.report.map(function (d) {
         return '<tr><td class="font-bold text-gray-800">'+esc(d.name)+'</td><td>'+d.total+'</td>' +
           '<td class="text-red-700 font-bold">'+d.reworkCount+'</td><td>'+d.lateCount+'</td>' +
           '<td class="font-black '+(d.pct>10?'text-red-700':'text-emerald-700')+'">'+d.pct+'%</td></tr>';
-      }).join('') + '</tbody></table>' : '<p>Nothing to report yet.</p>';
+      }).join('') + '</tbody></table>' : '<p class="text-sm text-gray-400 font-semibold">Nothing to report yet.</p>';
+
+    /* Approvals and reviews held. A team that is marked down for lateness its
+       managers caused will stop believing the whole report, so this sits beside
+       it rather than in a separate screen somebody has to go looking for. */
+    var q = r.queue || [];
+    h += '<h3 class="text-[11px] font-black uppercase tracking-widest text-gray-500 mt-7 mb-2">' +
+      'Approvals and reviews held</h3>';
+    h += q.length ? '<table class="tbl"><thead><tr>' +
+      '<th>Person</th><th>Decisions</th><th>In time</th><th>On their desk now</th>' +
+      '<th>Avg days held</th><th>Cleared in time</th></tr></thead><tbody>' +
+      q.map(function (d) {
+        var tone = d.score >= 85 ? 'text-emerald-700' : d.score >= 60 ? 'text-amber-700' : 'text-red-700';
+        return '<tr><td class="font-bold text-gray-800">'+esc(d.name)+'</td><td>'+d.items+'</td>' +
+          '<td>'+d.withinSla+'</td>' +
+          '<td class="'+(d.overdueNow?'text-red-700 font-bold':'')+'">' + d.pending +
+            (d.overdueNow ? ' (' + d.overdueNow + ' past ' + d.slaDays + ' days)' : '') + '</td>' +
+          '<td>'+(d.avgHeldDays == null ? '—' : d.avgHeldDays)+'</td>' +
+          '<td class="font-black '+tone+'">'+d.score+'%</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="text-[11px] font-semibold text-gray-500 mt-2">Held time is counted in working ' +
+      'days from when the item reached that person. Weekends, company holidays and their own ' +
+      'approved leave are not counted.</p>'
+      : '<p class="text-sm text-gray-400 font-semibold">Nobody has had a decision waiting on them yet.</p>';
+    $('accBody').innerHTML = h;
   }).catch(function (e) { $('accBody').textContent = e.message; });
 }
 

@@ -1419,6 +1419,19 @@ function getDashboard_(ctx) {
                 performance: lastPerf === null ? null : Math.round(lastPerf),
                 final: halves.length ? Math.round(finalScore) : null,
                 breakdown: del.breakdown, components: del.components, hasData: del.hasData,
+                deduction: del.deduction || 0,
+                /* How promptly this person clears what others are waiting on.
+                   Null for someone who has never had to approve anything. */
+                responsiveness: del.responsiveness && del.responsiveness.hasData ? {
+                  score: del.responsiveness.responsiveness,
+                  items: del.responsiveness.items,
+                  withinSla: del.responsiveness.withinSla,
+                  pending: del.responsiveness.pending,
+                  overdueNow: del.responsiveness.overdueNow,
+                  avgHeldDays: del.responsiveness.avgHeldDays,
+                  slaDays: del.responsiveness.slaDays,
+                  penalty: del.responsiveness.penalty,
+                } : null,
                 formula: halves.length === 2
                   ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
                   : lastPerf !== null ? 'No closed work yet, so this is the appraisal score alone.'
@@ -1523,7 +1536,23 @@ function getAccountability_(ctx) {
   var names = {};
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
 
-  return { status: 'success', report: Object.keys(byUser).map(function (k) {
+  /* The other half of accountability: who is holding the work up. Measured for
+     everyone who has ever had something waiting on their decision, so a manager
+     cannot be absent from the report simply by owning no tasks. */
+  var cal = leaveCalendar_(ctx), now = new Date();
+  var holders = {};
+  tasks.forEach(function (t) {
+    queueSpells(t).forEach(function (sp) { if (sp.holder) holders[sp.holder] = true; });
+  });
+  var queue = Object.keys(holders).map(function (k) {
+    var r = responsivenessStats(tasks, k, now, cal);
+    return { username: k, name: names[k] || k, items: r.items, withinSla: r.withinSla,
+             pending: r.pending, overdueNow: r.overdueNow, avgHeldDays: r.avgHeldDays,
+             slaDays: r.slaDays, penalty: r.penalty, score: r.responsiveness };
+  }).filter(function (r) { return r.items > 0; })
+    .sort(function (a, b) { return (a.score - b.score) || (b.overdueNow - a.overdueNow); });
+
+  return { status: 'success', queue: queue, report: Object.keys(byUser).map(function (k) {
     var s = byUser[k];
     return { username: k, name: names[k] || k, total: s.total, reworkCount: s.reworks,
              lateCount: s.late,
@@ -2065,10 +2094,14 @@ function getKraOverview_(ctx) {
     var withTarget = kras.filter(function (k) { return k.target !== ''; }).length;
     if (u.jobProfile) (profiles[u.jobProfile] = profiles[u.jobProfile] || []).push(u.username);
 
+    /* A missing KPI target is NOT an incomplete set. Plenty of real KRAs — keep
+       the plant audit-ready, hold the team together — are judged rather than
+       counted, and flagging those as a defect would push managers into inventing
+       numbers to clear a warning. The count of targets is reported separately so
+       the fact stays visible without being an accusation. */
     var state = !kras.length ? 'missing'
               : total > 100 ? 'over'
               : total < 100 ? 'partial'
-              : withTarget < kras.length ? 'no-targets'
               : 'complete';
     return { username:u.username, name:u.name, role:u.role, dept:u.dept,
              jobProfile:u.jobProfile || '', count:kras.length, totalWeight:total,
@@ -2083,7 +2116,8 @@ function getKraOverview_(ctx) {
       total: rows.length,
       complete: rows.filter(function (r) { return r.state === 'complete'; }).length,
       missing: rows.filter(function (r) { return r.state === 'missing'; }).length,
-      partial: rows.filter(function (r) { return r.state === 'partial' || r.state === 'no-targets'; }).length,
+      partial: rows.filter(function (r) { return r.state === 'partial' || r.state === 'over'; }).length,
+      withoutTargets: rows.filter(function (r) { return r.count && r.withTarget < r.count; }).length,
     } };
 }
 
@@ -3810,10 +3844,12 @@ function scoreForPeriod(tasks, username, range, cal) {
    */
   var waitingOnThem = tasks.filter(function (t) {
     if (t.assignee === username) return false;
-    var due = parseYmd(t.due);
-    if (due && due > range.to) return false;
-    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
-           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
+    /* Gated on when the item LANDED on their desk, not on the task's deadline.
+       Keying it to the deadline hid every held review of work that was not due
+       until next month — which is precisely the work it is easiest to sit on. */
+    return queueSpells(t).some(function (sp) {
+      return sp.holder === username && startOfDay(sp.from) <= range.to;
+    });
   });
 
   var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;

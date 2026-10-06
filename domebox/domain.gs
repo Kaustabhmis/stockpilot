@@ -1209,10 +1209,12 @@ function scoreForPeriod(tasks, username, range, cal) {
    */
   var waitingOnThem = tasks.filter(function (t) {
     if (t.assignee === username) return false;
-    var due = parseYmd(t.due);
-    if (due && due > range.to) return false;
-    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
-           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
+    /* Gated on when the item LANDED on their desk, not on the task's deadline.
+       Keying it to the deadline hid every held review of work that was not due
+       until next month — which is precisely the work it is easiest to sit on. */
+    return queueSpells(t).some(function (sp) {
+      return sp.holder === username && startOfDay(sp.from) <= range.to;
+    });
   });
 
   var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;

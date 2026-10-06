@@ -18,6 +18,8 @@ node responsiveness-test.js # manager accountability (pure rules engine, no serv
 
 node server.js &            # then, for the browser tests:
 node ui-test.js
+node manager-ui-test.js     # the held-review screens, end to end
+node kra-ui-test.js         # the KRA/KPI overview and editor
 node seed.js                # prints the seeded owner's email
 node recurring-test.js <that-email>
 ```
@@ -28,6 +30,8 @@ needs no server and no browser.
 `gas-shim.js` implements only the Apps Script surface `code.gs` actually uses.
 Anything it does not implement throws rather than silently passing.
 
-`server.js` has two endpoints marked HARNESS ONLY (`/__setplan`, `/__history`)
-used to put a tenant on a paid plan and to backdate delivery history for
-screenshots. They are not part of `code.gs` and never reach production.
+`server.js` has three endpoints marked HARNESS ONLY (`/__setplan`, `/__history`,
+`/__backdate`) used to put a tenant on a paid plan, to backdate delivery history
+for screenshots, and to push a task's history back so the review clock can be
+seen running without waiting three days. They are not part of `code.gs` and
+never reach production.

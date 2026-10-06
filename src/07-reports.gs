@@ -76,6 +76,19 @@ function getDashboard_(ctx) {
                 performance: lastPerf === null ? null : Math.round(lastPerf),
                 final: halves.length ? Math.round(finalScore) : null,
                 breakdown: del.breakdown, components: del.components, hasData: del.hasData,
+                deduction: del.deduction || 0,
+                /* How promptly this person clears what others are waiting on.
+                   Null for someone who has never had to approve anything. */
+                responsiveness: del.responsiveness && del.responsiveness.hasData ? {
+                  score: del.responsiveness.responsiveness,
+                  items: del.responsiveness.items,
+                  withinSla: del.responsiveness.withinSla,
+                  pending: del.responsiveness.pending,
+                  overdueNow: del.responsiveness.overdueNow,
+                  avgHeldDays: del.responsiveness.avgHeldDays,
+                  slaDays: del.responsiveness.slaDays,
+                  penalty: del.responsiveness.penalty,
+                } : null,
                 formula: halves.length === 2
                   ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
                   : lastPerf !== null ? 'No closed work yet, so this is the appraisal score alone.'
@@ -180,7 +193,23 @@ function getAccountability_(ctx) {
   var names = {};
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
 
-  return { status: 'success', report: Object.keys(byUser).map(function (k) {
+  /* The other half of accountability: who is holding the work up. Measured for
+     everyone who has ever had something waiting on their decision, so a manager
+     cannot be absent from the report simply by owning no tasks. */
+  var cal = leaveCalendar_(ctx), now = new Date();
+  var holders = {};
+  tasks.forEach(function (t) {
+    queueSpells(t).forEach(function (sp) { if (sp.holder) holders[sp.holder] = true; });
+  });
+  var queue = Object.keys(holders).map(function (k) {
+    var r = responsivenessStats(tasks, k, now, cal);
+    return { username: k, name: names[k] || k, items: r.items, withinSla: r.withinSla,
+             pending: r.pending, overdueNow: r.overdueNow, avgHeldDays: r.avgHeldDays,
+             slaDays: r.slaDays, penalty: r.penalty, score: r.responsiveness };
+  }).filter(function (r) { return r.items > 0; })
+    .sort(function (a, b) { return (a.score - b.score) || (b.overdueNow - a.overdueNow); });
+
+  return { status: 'success', queue: queue, report: Object.keys(byUser).map(function (k) {
     var s = byUser[k];
     return { username: k, name: names[k] || k, total: s.total, reworkCount: s.reworks,
              lateCount: s.late,

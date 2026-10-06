@@ -61,7 +61,7 @@ console.log('\n=== coverage: who is missing KRAs ===');
 const ov=call({action:'getKraOverview',token:A});
 ok('every active person is listed', ov.people.length===4, String(ov.people.length));
 const byName={}; ov.people.forEach(p=>byName[p.name]=p);
-ok('Payel is complete', byName['Payel S'].state==='no-targets' || byName['Payel S'].state==='complete',
+ok('Payel is complete', byName['Payel S'].state==='complete',
    byName['Payel S'].state);
 ok('Vikram is partial at 50%', byName['Vikram R'].state==='partial' &&
    byName['Vikram R'].totalWeight===50, byName['Vikram R'].state+'/'+byName['Vikram R'].totalWeight);

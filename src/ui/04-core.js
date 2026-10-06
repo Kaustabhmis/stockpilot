@@ -218,17 +218,65 @@ function renderTiles() {
     tile('In progress', s.progress) +
     tile('For review', s.review) +
     tile('Overdue', s.overdue, 'needs attention', s.overdue ? 'text-red-700' : '') +
-    tile('Delegation', sc.hasData ? sc.delegation : '—', sc.hasData ? 'this month' : 'no data yet',
+    tile('Delegation', sc.hasData && sc.delegation != null ? sc.delegation : '\u2014', sc.hasData ? 'this month' : 'no data yet',
          sc.hasData ? (sc.delegation >= 85 ? 'text-emerald-700' : sc.delegation >= 60 ? 'text-amber-700' : 'text-red-700') : 'text-gray-300') +
     '<div class="bg-white rounded-2xl border border-gray-100 p-4 cursor-pointer hover:border-blue-300" onclick="openScoreBreakdown()">' +
       '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">Final score</div>' +
-      '<div class="text-3xl font-black mt-1">' + (sc.final || '—') + '</div>' +
+      '<div class="text-3xl font-black mt-1">' + (sc.final == null ? '\u2014' : sc.final) + '</div>' +
       '<div class="text-[11px] font-black text-blue-600 mt-0.5">See why →</div></div>';
 }
 
 function openScoreBreakdown() {
   var sc = STATE.data.stats.scores;
   var rows = (sc.breakdown || []);
+  var resp = sc.responsiveness;
+
+  /* Grouped, because a deduction for sitting on somebody else's work is a
+     different conversation from a late delivery, and lumping them into one
+     list is how a score stops being arguable in good faith. */
+  var order = ['On-Time Delivery', 'First-Pass Quality', 'Queue Health', 'Review Responsiveness'];
+  var groups = {};
+  rows.forEach(function (r) { (groups[r.group || 'Other'] = groups[r.group || 'Other'] || []).push(r); });
+  var names = order.filter(function (g) { return groups[g]; })
+    .concat(Object.keys(groups).filter(function (g) { return order.indexOf(g) < 0; }));
+
+  var table = names.map(function (g) {
+    return '<h3 class="text-[11px] font-black uppercase tracking-widest text-gray-500 mt-5 mb-2">' +
+      esc(g) + '</h3>' +
+      '<table class="tbl"><thead><tr><th>Item</th><th>Reason</th><th>Impact</th></tr></thead><tbody>' +
+      groups[g].map(function (r) {
+        return '<tr><td class="font-bold text-gray-800">' + esc(r.item) + '</td>' +
+          '<td>' + esc(r.reason) + '</td>' +
+          '<td class="font-black ' + (String(r.impact).charAt(0) === '-' ? 'text-red-700' : 'text-emerald-700') +
+          '">' + esc(r.impact) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }).join('');
+
+  var respPanel = resp ? '<div class="rounded-2xl border ' +
+      (resp.penalty ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50') +
+      ' p-4 mb-5">' +
+    '<div class="flex items-start gap-3">' +
+      '<span class="material-icons ' + (resp.penalty ? 'text-red-700' : 'text-emerald-700') + '">' +
+      (resp.penalty ? 'hourglass_bottom' : 'task_alt') + '</span>' +
+      '<div class="min-w-0">' +
+      '<div class="text-sm font-black text-gray-900">Work waiting on you</div>' +
+      '<div class="text-[13px] font-semibold text-gray-700 mt-0.5">' +
+        esc(resp.withinSla + ' of ' + resp.items + ' approvals and reviews cleared within ' +
+            resp.slaDays + ' working days') +
+        (resp.avgHeldDays != null ? esc(' · ' + resp.avgHeldDays + ' days held on average') : '') +
+      '</div>' +
+      (resp.pending ? '<div class="text-[13px] font-bold text-gray-800 mt-1">' +
+         esc(resp.pending + ' still on your desk') +
+         (resp.overdueNow ? esc(', ' + resp.overdueNow + ' of them past the ' + resp.slaDays +
+                                '-day mark') : '') + '</div>' : '') +
+      (resp.penalty ? '<div class="text-[13px] font-black text-red-800 mt-1">' +
+         esc('\u2212' + resp.penalty + ' points for holding your team up') + '</div>'
+       : '<div class="text-[13px] font-black text-emerald-800 mt-1">No points lost here</div>') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        'Counted in working days from when it reached you. Weekends, company holidays ' +
+        'and your own approved leave are not counted.</div>' +
+      '</div></div></div>' : '';
+
   openModal('<div class="p-6 lg:p-7">' +
     '<div class="flex justify-between items-start mb-1">' +
       '<h2 class="text-2xl font-black">How your score is built</h2>' +
@@ -236,21 +284,18 @@ function openScoreBreakdown() {
       '<span class="material-icons">close</span></button></div>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">Every number here comes from your own task record. ' +
       'Nothing is estimated.</p>' +
-    '<div class="grid grid-cols-3 gap-3 mb-5">' +
+    (sc.formula ? '<p class="text-[13px] font-bold text-gray-700 bg-gray-50 rounded-xl px-3 py-2 mb-5">' +
+       esc(sc.formula) + '</p>' : '') +
+    respPanel +
+    '<div class="grid grid-cols-3 gap-3 mb-1">' +
       (sc.components || []).map(function (c) {
         return '<div class="bg-gray-50 rounded-2xl p-3 text-center">' +
           '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(c.label) + '</div>' +
-          '<div class="text-2xl font-black mt-1">' + (c.score == null ? '—' : c.score) + '</div>' +
+          '<div class="text-2xl font-black mt-1">' + (c.score == null ? '\u2014' : c.score) + '</div>' +
           '<div class="text-[10px] font-semibold text-gray-400">' + esc(c.basis) + '</div></div>';
       }).join('') + '</div>' +
-    (rows.length ? '<table class="tbl"><thead><tr><th>Item</th><th>Reason</th><th>Impact</th></tr></thead><tbody>' +
-      rows.map(function (r) {
-        return '<tr><td class="font-bold text-gray-800">' + esc(r.item) + '</td>' +
-          '<td>' + esc(r.reason) + '</td>' +
-          '<td class="font-black ' + (String(r.impact).charAt(0) === '-' ? 'text-red-700' : 'text-emerald-700') +
-          '">' + esc(r.impact) + '</td></tr>';
-      }).join('') + '</tbody></table>'
-      : '<p class="text-sm text-gray-400 font-semibold">Nothing has affected your score yet this month.</p>') +
+    (table ||
+      '<p class="text-sm text-gray-400 font-semibold mt-5">Nothing has affected your score yet this month.</p>') +
     '</div>', 'max-w-2xl');
 }
 

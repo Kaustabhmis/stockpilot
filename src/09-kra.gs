@@ -52,10 +52,14 @@ function getKraOverview_(ctx) {
     var withTarget = kras.filter(function (k) { return k.target !== ''; }).length;
     if (u.jobProfile) (profiles[u.jobProfile] = profiles[u.jobProfile] || []).push(u.username);
 
+    /* A missing KPI target is NOT an incomplete set. Plenty of real KRAs — keep
+       the plant audit-ready, hold the team together — are judged rather than
+       counted, and flagging those as a defect would push managers into inventing
+       numbers to clear a warning. The count of targets is reported separately so
+       the fact stays visible without being an accusation. */
     var state = !kras.length ? 'missing'
               : total > 100 ? 'over'
               : total < 100 ? 'partial'
-              : withTarget < kras.length ? 'no-targets'
               : 'complete';
     return { username:u.username, name:u.name, role:u.role, dept:u.dept,
              jobProfile:u.jobProfile || '', count:kras.length, totalWeight:total,
@@ -70,7 +74,8 @@ function getKraOverview_(ctx) {
       total: rows.length,
       complete: rows.filter(function (r) { return r.state === 'complete'; }).length,
       missing: rows.filter(function (r) { return r.state === 'missing'; }).length,
-      partial: rows.filter(function (r) { return r.state === 'partial' || r.state === 'no-targets'; }).length,
+      partial: rows.filter(function (r) { return r.state === 'partial' || r.state === 'over'; }).length,
+      withoutTargets: rows.filter(function (r) { return r.count && r.withTarget < r.count; }).length,
     } };
 }
 
