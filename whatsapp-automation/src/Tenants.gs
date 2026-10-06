@@ -73,7 +73,7 @@ function monthlySentByClient_(queueRows) {
  * Can this tenant send right now?
  * @return { ok, reason, plan, quota, used, remaining, validUntil, dedicatedNumber }
  */
-function tenantEntitlement_(client, usedThisMonth) {
+function tenantEntitlement_(client, usedThisMonth, plans) {
   const plan = String((client && client['Plan']) || '').trim();
   const quotaRaw = String((client && client['Monthly Quota']) || '').trim();
   const quota = quotaRaw === '' ? null : Math.max(0, Number(quotaRaw) || 0);
@@ -84,11 +84,17 @@ function tenantEntitlement_(client, usedThisMonth) {
     remaining: quota === null ? null : Math.max(0, quota - used),
     validUntil: validUntil,
     dedicatedNumber: !!(client && String(client['Maytapi Phone ID'] || '').trim()),
+    awaitingNumber: false,
   };
+  // Plans that include a dedicated WhatsApp number wait until the admin sets Maytapi Phone ID.
+  const planId = client ? String(client['Plan ID'] || '').trim() : '';
+  const planRow = planId ? (plans || plansById_())[planId] : null;
+  const needsNumber = !!(planRow && isYes_(planRow['Dedicated Number']) && !out.dedicatedNumber);
   if (!client) { out.ok = false; out.reason = 'Client record not found.'; }
   else if (!/^active$/i.test(String(client['Status'] || ''))) { out.ok = false; out.reason = 'Account is ' + (client['Status'] || 'inactive') + '.'; }
   else if (validUntil && validUntil < todayKey_()) { out.ok = false; out.reason = 'Subscription expired on ' + validUntil + '.'; }
   else if (quota !== null && used >= quota) { out.ok = false; out.reason = 'Monthly message quota (' + quota + ') reached.'; }
+  else if (needsNumber) { out.ok = false; out.awaitingNumber = true; out.reason = 'Your WhatsApp number is not connected yet.'; }
   return out;
 }
 

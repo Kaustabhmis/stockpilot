@@ -64,7 +64,7 @@ function createCampaignFromInput_(input, source, opts) {
 
   // Tenant subscription: suspended or expired accounts cannot create campaigns.
   const ent = tenantEntitlementById_(clientId);
-  if (!ent.ok && !/quota/i.test(ent.reason)) {
+  if (!ent.ok && !/quota/i.test(ent.reason) && !ent.awaitingNumber) {
     const errors = ['Your account cannot launch campaigns right now: ' + ent.reason + ' Please contact your service provider.'];
     logEvent_(LOG_LEVEL.WARNING, 'TENANT_BLOCKED', { clientId: clientId, result: 'REJECTED', error: ent.reason });
     if (!opts.silent) sendAttentionEmail_(input, errors);
@@ -75,6 +75,7 @@ function createCampaignFromInput_(input, source, opts) {
   const now = new Date();
   const audienceSize = countAudience_(clientId, d.audience);
   const warnings = v.warnings.slice();
+  if (ent.awaitingNumber) warnings.push('Your WhatsApp number is not connected yet. This campaign will start sending automatically once it is connected.');
   if (ent.remaining !== null && audienceSize > ent.remaining) {
     warnings.push('This campaign targets ' + audienceSize + ' customers but only ' + ent.remaining + ' messages remain in this month\'s plan. Sending pauses when the quota is reached.');
   }

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms, Privacy &amp; Refund Policy</title>
+<style>
+  :root { --brand: #128c4a; --text: #17201b; --muted: #5d6b63; --line: #e1e7e3; }
+  body { margin: 0; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: var(--text); background: #f4f6f5; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 48px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; }
+  h1 { font-size: 24px; margin: 8px 0 4px; } h2 { font-size: 18px; margin: 0 0 8px; color: var(--brand); }
+  nav a { margin-right: 14px; color: var(--brand); font-weight: 600; text-decoration: none; }
+  .muted { color: var(--muted); font-size: 13px; }
+  ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="index.html" style="color:var(--brand)">← Back</a></p>
+  <h1><span data-cfg="brandName">Campaign Studio</span> — Policies</h1>
+  <p class="muted">Operated by <span data-cfg="companyName"></span>. Last updated: <span id="updated"></span>.</p>
+  <nav><a href="#terms">Terms</a><a href="#privacy">Privacy</a><a href="#refund">Refunds</a><a href="#delivery">Delivery</a><a href="#contact">Contact</a></nav>
+
+  <section class="card" id="terms">
+    <h2>Terms of Service</h2>
+    <ul>
+      <li>The service lets your business send WhatsApp marketing messages to customers who have agreed to receive them, through a number connected to our platform.</li>
+      <li>You must only upload and message contacts who have given consent. You are responsible for the content you send and for complying with applicable laws and WhatsApp's policies.</li>
+      <li>Customers who reply STOP (or similar) are unsubscribed automatically and must not be re-added without fresh consent.</li>
+      <li>Plans are prepaid for the period shown at purchase. Message limits apply per calendar month. Unused messages do not carry over.</li>
+      <li>WhatsApp may restrict or ban numbers that send unwanted messages. We are not liable for restrictions caused by your messaging.</li>
+      <li>We may suspend accounts that send spam, illegal or misleading content, without refund.</li>
+    </ul>
+  </section>
+
+  <section class="card" id="privacy">
+    <h2>Privacy Policy</h2>
+    <ul>
+      <li>We collect your business details (name, email, phone, website, GSTIN) to provide the service and issue receipts.</li>
+      <li>Customer lists and campaign content you upload are used only to deliver your campaigns and reports. We do not sell or share them.</li>
+      <li>Payments are processed by Razorpay. We do not store card or bank details.</li>
+      <li>Data is stored with Google Workspace / Google Cloud services. You can request export or deletion of your data by contacting us.</li>
+    </ul>
+  </section>
+
+  <section class="card" id="refund">
+    <h2>Refund &amp; Cancellation Policy</h2>
+    <ul>
+      <li>You can cancel at any time; your plan stays active until the end of the paid period and is not renewed automatically.</li>
+      <li>Refunds: if we cannot activate your service within 7 days of payment, you may request a full refund. Once messages have been sent in a billing period, that period's fee is non-refundable.</li>
+      <li>Approved refunds are returned to the original payment method within 5–7 working days.</li>
+    </ul>
+  </section>
+
+  <section class="card" id="delivery">
+    <h2>Service Delivery</h2>
+    <p>This is a digital service. Your account is activated online immediately after successful payment; access details are shown on screen and emailed to you. Setup of a dedicated WhatsApp number is completed within 2 working days.</p>
+  </section>
+
+  <section class="card" id="contact">
+    <h2>Contact Us</h2>
+    <p><b data-cfg="companyName"></b><br><span data-cfg="address"></span><br>
+      Email: <a data-cfg-mail="contactEmail" href="#"></a><br>Phone: <span data-cfg="contactPhone"></span></p>
+  </section>
+  <p class="muted">This page is a template. Review and adapt it to your business with a legal advisor.</p>
+</main>
+<script src="config.js"></script>
+<script>
+  (function () {
+    var c = window.APP_CONFIG || {};
+    document.querySelectorAll('[data-cfg]').forEach(function (el) { var v = c[el.getAttribute('data-cfg')]; if (v) el.textContent = v; });
+    document.querySelectorAll('[data-cfg-mail]').forEach(function (el) { var v = c[el.getAttribute('data-cfg-mail')]; if (v) { el.textContent = v; el.href = 'mailto:' + v; } });
+    if (c.brandName) document.title = c.brandName + ' — Terms, Privacy & Refund Policy';
+    if (c.primaryColor) document.documentElement.style.setProperty('--brand', c.primaryColor);
+    document.getElementById('updated').textContent = new Date(document.lastModified).toISOString().slice(0, 10);
+  })();
+</script>
+</body>
+</html>

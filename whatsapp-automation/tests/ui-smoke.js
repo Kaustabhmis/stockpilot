@@ -64,8 +64,83 @@ function makeApi() {
     },
     apiCancelCampaign: (t, id) => { boot.campaigns.forEach(c => { if (c.id === id) c.status = 'CANCELLED'; }); return { ok: true, message: 'cancelled', campaigns: boot.campaigns }; },
     apiGetCampaignImage: () => ({ ok: true, image: PREVIEW_JPEG }),
+    apiGetPlans: () => ({ ok: true, signupEnabled: true, paymentMode: 'razorpay', currency: 'INR', plans: [
+      { id: 'STARTER', name: 'Starter', price: 1499, durationDays: 30, quota: 2000, dedicatedNumber: true, features: ['Own number', 'Reports'] },
+      { id: 'PRO', name: 'Pro', price: 5999, durationDays: 30, quota: 15000, dedicatedNumber: true, features: ['Own number', 'Reports', 'Priority support'] }] }),
+    apiSignup: p => {
+      state.lastSignup = p;
+      if (!p.acceptTerms) return { ok: false, errors: ['Please accept the terms to continue.'] };
+      return { ok: true, mode: 'razorpay', keyId: 'rzp_test_KEY', orderId: 'order_1', amount: 149900, currency: 'INR', description: 'Starter plan', prefill: { email: p.email } };
+    },
+    apiConfirmPayment: p => {
+      state.lastConfirm = p;
+      const sub = Object.assign({}, boot.subscription, { plan: 'Starter', planId: 'STARTER', awaitingNumber: true, dedicatedNumber: false });
+      return Object.assign({}, boot, { subscription: sub, ok: true, token: 'b'.repeat(64), accessCode: state.renewing ? '' : 'NEW23-CODE9', planName: 'Starter', validUntil: '2026-11-05' });
+    },
+    apiStartRenewal: (t, planId) => { state.renewing = planId; return { ok: true, mode: 'razorpay', keyId: 'rzp_test_KEY', orderId: 'order_2', amount: 599900, currency: 'INR', description: 'Pro plan' }; },
+    apiWhatsAppConnection: () => ({ ok: true, state: 'qr', qr: PREVIEW_JPEG }),
   };
   return { state, handlers };
+}
+
+// Stand-in for Razorpay Checkout: "pays" immediately and calls the handler like the real widget.
+const FAKE_RAZORPAY = `window.Razorpay = function (o) {
+  window.__rzpOptions = o; this.on = function () {};
+  this.open = function () { setTimeout(function () { o.handler({ razorpay_order_id: o.order_id, razorpay_payment_id: 'pay_TEST1', razorpay_signature: 'sig_TEST' }); }, 50); };
+};`;
+
+/** Pricing → sign-up → Razorpay → success (access code) → dashboard → renew → WhatsApp QR. */
+async function runSignup(viewport, label) {
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const page = await browser.newPage({ viewport, deviceScaleFactor: 2 });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  const { state, handlers } = makeApi();
+  await page.route('https://checkout.razorpay.com/**', r => r.fulfill({ contentType: 'application/javascript', body: FAKE_RAZORPAY }));
+  await page.route('https://app.brandx.test/config.js', r => r.fulfill({ contentType: 'application/javascript', body: CONFIG_JS }));
+  await page.route('https://app.brandx.test/', r => r.fulfill({ contentType: 'text/html', body: HTML }));
+  await page.route(API + '**', async r => {
+    const body = JSON.parse(r.request().postData());
+    const out = handlers[body.action] ? handlers[body.action].apply(null, body.args) : { ok: false, error: 'Unknown action.' };
+    await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(out) });
+  });
+  const shot = async name => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, label + '-' + name + '.png'), fullPage: true }); };
+  await page.goto('https://app.brandx.test/');
+  await page.click('#authTabs button[data-auth=plans]');
+  await page.waitForSelector('#plansGrid .plan');
+  assert.strictEqual(await page.$$eval('#plansGrid .plan', n => n.length), 2);
+  assert.ok((await page.textContent('#plansGrid')).includes('₹1,499'));
+  await shot('s1-plans');
+  await page.click('[data-choose=STARTER]');
+  await page.fill('#suBiz', 'Rahul Sweets'); await page.fill('#suName', 'Rahul'); await page.fill('#suEmail', 'rahul@sweets.example');
+  await page.fill('#suPhone', '9876500000');
+  assert.ok((await page.textContent('#signupBtn')).includes('Pay ₹1,499'));
+  await page.click('#signupBtn');
+  await page.waitForSelector('#signupErr .alert');
+  assert.ok((await page.textContent('#signupErr')).includes('accept the terms'));
+  await page.check('#suTerms');
+  await shot('s2-signup');
+  await page.click('#signupBtn');
+  await page.waitForSelector('#signupResult:not(.hidden) #newCode');
+  assert.strictEqual(await page.textContent('#newCode'), 'NEW23-CODE9');
+  const opts = await page.evaluate(() => ({ key: window.__rzpOptions.key, order: window.__rzpOptions.order_id, amount: window.__rzpOptions.amount, hasSecret: JSON.stringify(window.__rzpOptions).includes('secret') }));
+  assert.deepStrictEqual(opts, { key: 'rzp_test_KEY', order: 'order_1', amount: 149900, hasSecret: false });
+  assert.deepStrictEqual(state.lastConfirm, { orderId: 'order_1', paymentId: 'pay_TEST1', signature: 'sig_TEST' });
+  await shot('s3-activated');
+  await page.click('#openDash');
+  await page.waitForSelector('#app:not(.hidden)');
+  assert.ok((await page.textContent('#waBox')).includes('setting up your WhatsApp number'));
+  // Renew / upgrade
+  await page.click('#renewBtn');
+  await page.waitForSelector('#sheet:not(.hidden) [data-choose=PRO]');
+  await page.click('#sheetBody [data-choose=PRO]');
+  await page.waitForFunction(() => /is active/.test(document.getElementById('sheetBody').textContent));
+  assert.strictEqual(state.renewing, 'PRO');
+  await page.click('#sheetClose');
+  await browser.close();
+  assert.deepStrictEqual(errors, [], label + ' console errors: ' + errors.join(' | '));
+  console.log('  ✓ ' + label + ' sign-up + payment + renewal (' + viewport.width + 'x' + viewport.height + ')');
 }
 
 async function run(viewport, label) {
@@ -284,6 +359,15 @@ async function runDemoInSandbox() {
   await fr.click('#launchBtn');
   await fr.waitForSelector('#step-done:not(.hidden)');
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'demo-sandboxed.png') });
+  // WhatsApp connection in demo: QR first, then connected.
+  await fr.click('#tabs button[data-view=overview]');
+  await fr.click('#waBtn');
+  await fr.waitForSelector('#sheetBody .qr-img');
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'demo-wa-qr.png') });
+  await fr.click('#sheetClose');
+  await fr.click('#waBtn');
+  await fr.waitForFunction(() => /connected/.test(document.getElementById('sheetBody').textContent));
+  await fr.click('#sheetClose');
   await browser.close();
   assert.deepStrictEqual(errors, [], 'demo console errors: ' + errors.join(' | '));
   console.log('  ✓ demo mode inside a sandboxed frame (no config.js)');
@@ -292,6 +376,8 @@ async function runDemoInSandbox() {
 (async () => {
   try {
     await runDemoInSandbox();
+    await runSignup({ width: 390, height: 844 }, 'phone');
+    await runSignup({ width: 1366, height: 860 }, 'desktop');
     await run({ width: 390, height: 844 }, 'phone');
     await run({ width: 768, height: 1024 }, 'tablet');
     await run({ width: 1366, height: 860 }, 'desktop');

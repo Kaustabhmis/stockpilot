@@ -142,6 +142,7 @@ function processMessageQueueLocked_() {
   // DAILY_SEND_LIMIT protects each WhatsApp number (per sending phone ID per day).
   // Monthly Quota / Valid Until / Status are per tenant (CLIENTS row).
   const clients = clientsById_();
+  const plans = plansById_();
   const today = todayKey_();
   const sentTodayByPhone = {};
   queue.rows.forEach(q => {
@@ -180,8 +181,10 @@ function processMessageQueueLocked_() {
 
     // Tenant entitlement: suspended / expired / out of quota => pause the campaign (items are kept).
     const client = clients[clientId];
-    if (!entitlement[clientId]) entitlement[clientId] = tenantEntitlement_(client, usedThisMonth[clientId] || 0);
+    if (!entitlement[clientId]) entitlement[clientId] = tenantEntitlement_(client, usedThisMonth[clientId] || 0, plans);
     const ent = entitlement[clientId];
+    // Dedicated number not connected yet: keep the messages waiting (no pause) — they go out once it is set.
+    if (ent.awaitingNumber) continue;
     if (!ent.ok || (ent.remaining !== null && ent.remaining <= 0)) {
       blockedCampaigns[campaignId] = true;
       setCampaignStatus_(campaignId, CAMPAIGN_STATUS.PAUSED, 'Sending paused: ' + (ent.reason || 'Monthly message quota reached.') + ' Resume after renewal.');
@@ -342,6 +345,11 @@ function runScheduler() {
       if (n) logEvent_(LOG_LEVEL.INFO, 'SCHEDULER', { result: n + ' campaign(s) activated' });
     } catch (err) {
       logEvent_(LOG_LEVEL.ERROR, 'SCHEDULER_ACTIVATE', { error: err.message });
+    }
+    try {
+      reconcilePendingPayments_();
+    } catch (err) {
+      logEvent_(LOG_LEVEL.ERROR, 'SCHEDULER_PAYMENTS', { error: err.message });
     }
     processMessageQueueLocked_();
   } catch (err) {

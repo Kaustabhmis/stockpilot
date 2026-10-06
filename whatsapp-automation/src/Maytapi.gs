@@ -244,3 +244,34 @@ function testMaytapiConnection() {
   try { SpreadsheetApp.getUi().alert('Maytapi connection test', lines.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK); } catch (err) { console.log(lines.join('\n')); }
   return { ok: ok, details: lines };
 }
+
+/**
+ * True when a /status response says the phone is logged in to WhatsApp.
+ * The exact response shape could not be verified, so several common field names are accepted.
+ */
+function maytapiLooksConnected_(response) {
+  if (!response || typeof response !== 'object') return false;
+  const st = response.status && typeof response.status === 'object' ? response.status : (response.data || response);
+  if (st && (st.loggedIn === true || st.isLoggedIn === true || st.connected === true)) return true;
+  const text = JSON.stringify(st || {}).toLowerCase();
+  return /"(state|status)"\s*:\s*"(connected|active|ready|authenticated|logged_in|loggedin)"/.test(text);
+}
+
+/**
+ * GET /{phone_id}/qrCode — returns a data URL of the QR image to link WhatsApp, or '' when
+ * Maytapi returns no image (already logged in, phone loading, or endpoint unavailable).
+ */
+function maytapiQrCode_(cfg) {
+  cfg = cfg || getConfig_();
+  if (!cfg.productId || !cfg.apiToken || !cfg.phoneId) return '';
+  try {
+    const res = UrlFetchApp.fetch(MAYTAPI_BASE_URL + '/' + encodeURIComponent(cfg.productId) + phonePath_(cfg, 'qrCode'), {
+      method: 'get', headers: { 'x-maytapi-key': cfg.apiToken }, muteHttpExceptions: true,
+    });
+    const type = String((res.getHeaders() || {})['Content-Type'] || (res.getHeaders() || {})['content-type'] || '');
+    if (res.getResponseCode() !== 200 || !/^image\//i.test(type)) return '';
+    return 'data:' + type.split(';')[0] + ';base64,' + Utilities.base64Encode(res.getContent());
+  } catch (err) {
+    return '';
+  }
+}

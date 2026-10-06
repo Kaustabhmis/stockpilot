@@ -19,12 +19,19 @@ const SHEETS = {
   RESPONSES: 'RESPONSES',
   TEMPLATES: 'TEMPLATES',
   DASHBOARD: 'DASHBOARD',
+  PLANS: 'PLANS',
+  PAYMENTS: 'PAYMENTS',
 };
 
 const HEADERS = {
   SETTINGS: ['Key', 'Value', 'Description'],
+  PLANS: ['Plan ID', 'Plan Name', 'Price INR', 'Duration Days', 'Monthly Quota', 'Dedicated Number', 'Features', 'Active', 'Sort Order'],
+  PAYMENTS: [
+    'Payment Ref', 'Client ID', 'Plan ID', 'Plan Name', 'Amount', 'Currency', 'Gateway', 'Order ID', 'Gateway Payment ID',
+    'Status', 'Created At', 'Paid At', 'Valid Until', 'Notes',
+  ],
   CLIENTS: ['Client ID', 'Business Name', 'Client Email', 'Business Phone', 'Website', 'Status', 'Created At', 'Updated At', 'Access Code Hash', 'Last Login',
-    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until', 'Store Link'],
+    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until', 'Store Link', 'Plan ID', 'Contact Name', 'GSTIN', 'Signup Source'],
   CONTACTS: [
     'Contact ID', 'Client ID', 'Name', 'Phone', 'Email', 'Company', 'Tags', 'Audience', 'Opt In', 'Status',
     'Last Sent', 'Last Message ID', 'Last Response', 'Created At', 'Updated At', 'Source',

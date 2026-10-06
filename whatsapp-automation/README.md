@@ -13,7 +13,8 @@ Client → Google Form → onFormSubmit() ────────────�
 Customer reply / receipt → Maytapi webhook → doPost() → RESPONSES · status · auto-reply · opt-out · lead
 ```
 
-- **Full guide (Parts 1–16: architecture, form, sheets, code, properties, Maytapi, triggers, deployment, webhook,
+- **Selling subscriptions** (pricing page, sign-up, Razorpay, automatic activation, WhatsApp QR connect): `GUIDE.md` Part 17.
+- **Full guide (Parts 1–17: architecture, form, sheets, code, properties, Maytapi, triggers, deployment, webhook,
   testing, example, troubleshooting, security, checklist, client dashboard, multi-tenant):** [`GUIDE.md`](GUIDE.md)
 - **Client app (static HTML for your domain):** [`client-app/`](client-app). Edit `config.js`, then upload it to any HTTPS host.
 - **Backend code (multi-file):** [`src/`](src). Entry points are in `Code.gs`.

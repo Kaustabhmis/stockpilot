@@ -23,7 +23,7 @@ client uploads a file. See `../GUIDE.md` Part 15 for details.
 
 ## Hosting on a subdomain (example: `wa.biscsindia.com`)
 
-Upload these files to the subdomain's folder: `index.html`, `config.js`, `.htaccess` (Apache/cPanel), `_headers` (Netlify/Cloudflare).
+Upload these files to the subdomain's folder: `index.html`, `config.js`, `legal.html`, `.htaccess` (Apache/cPanel/Hostinger), `_headers` (Netlify/Cloudflare).
 
 **Hostinger (hPanel)**
 1. hPanel → **Websites** → *biscsindia.com* → **Manage** → **Domains → Subdomains** → create `wa` (folder `public_html/wa`).

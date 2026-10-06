@@ -30,6 +30,12 @@ function clientApiActions_() {
     apiCreateCampaign: apiCreateCampaign_,
     apiCancelCampaign: apiCancelCampaign_,
     apiGetCampaignImage: apiGetCampaignImage_,
+    // Subscriptions (Billing.gs)
+    apiGetPlans: apiGetPlans_,
+    apiSignup: apiSignup_,
+    apiConfirmPayment: apiConfirmPayment_,
+    apiStartRenewal: apiStartRenewal_,
+    apiWhatsAppConnection: apiWhatsAppConnection_,
   };
 }
 
@@ -135,7 +141,8 @@ function buildBootstrap_(clientId) {
       const ent = tenantEntitlement_(client, monthlySentByClient_(readTable_(SHEETS.MESSAGE_QUEUE).rows)[clientId] || 0);
       return {
         plan: ent.plan, validUntil: ent.validUntil, quota: ent.quota, used: ent.used, remaining: ent.remaining,
-        canSend: ent.ok, reason: ent.reason, dedicatedNumber: ent.dedicatedNumber,
+        canSend: ent.ok, reason: ent.reason, dedicatedNumber: ent.dedicatedNumber, awaitingNumber: ent.awaitingNumber,
+        planId: String(client['Plan ID'] || ''),
       };
     })(),
     campaigns: clientCampaignSummaries_(clientId),
@@ -406,4 +413,69 @@ function apiGetCampaignImage_(token, campaignId) {
     const blob = DriveApp.getFileById(fileId).getBlob();
     return { image: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes()) };
   });
+}
+
+/* ============================== SUBSCRIPTIONS ============================== */
+
+/** Public: pricing page data. */
+function apiGetPlans_() {
+  try {
+    const cfg = getConfig_(true);
+    return { ok: true, plans: publicPlans_(), signupEnabled: cfg.signupEnabled, paymentMode: razorpayEnabled_(cfg) ? 'razorpay' : 'manual', currency: 'INR' };
+  } catch (err) {
+    logEvent_(LOG_LEVEL.ERROR, 'API_PLANS', { error: err.message });
+    return { ok: false, error: 'Plans are not available right now.' };
+  }
+}
+
+/** Public: start a subscription (see Billing.gs signup_). */
+function apiSignup_(payload) {
+  try {
+    const r = signup_(payload);
+    if (!r.ok) return r;
+    if (r.mode === 'free') return finishActivation_(r.activation, r);
+    return r;
+  } catch (err) {
+    logEvent_(LOG_LEVEL.ERROR, 'API_SIGNUP', { error: err.message });
+    return { ok: false, errors: [err.message] };
+  }
+}
+
+/** Public (signature-verified): Razorpay Checkout success → activate and sign in. */
+function apiConfirmPayment_(payload) {
+  try {
+    const act = confirmRazorpayPayment_(payload);
+    return finishActivation_(act, {});
+  } catch (err) {
+    logEvent_(LOG_LEVEL.ERROR, 'API_CONFIRM_PAYMENT', { error: err.message });
+    return { ok: false, error: err.message };
+  }
+}
+
+/** After activation: open a session for the client (proved by payment) and return the dashboard data. */
+function finishActivation_(act, extra) {
+  const s = openSessionForClient_(act.clientId);
+  const rest = Object.assign({}, extra);
+  delete rest.activation;
+  return Object.assign(rest, { ok: true, accessCode: act.accessCode || '', validUntil: act.validUntil || '',
+    planName: act.planName || '', token: s.token }, buildBootstrap_(act.clientId));
+}
+
+/** Session: renew or upgrade. */
+function apiStartRenewal_(token, planId) {
+  return apiCall_(token, 'RENEWAL', s => {
+    const plan = activePlan_(planId);
+    const c = s.client;
+    const r = startOrder_(s.clientId, plan, getConfig_(true), {
+      name: String(c['Contact Name'] || c['Business Name']), email: String(c['Client Email']),
+      contact: c['Business Phone'] ? '+' + normalizePhoneNumber(c['Business Phone']) : '',
+    });
+    if (r.mode === 'free') return { mode: 'free', bootstrap: buildBootstrap_(s.clientId) };
+    return r;
+  });
+}
+
+/** Session: WhatsApp connection state / QR code for the tenant's number. */
+function apiWhatsAppConnection_(token) {
+  return apiCall_(token, 'WA_CONNECTION', s => whatsappConnection_(s.client));
 }

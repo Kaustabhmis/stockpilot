@@ -9,7 +9,7 @@
  * The API token is never written to a sheet, a log row, console output or an email.
  */
 
-const SECRET_PROPERTY_KEYS = ['MAYTAPI_API_TOKEN', 'WEBHOOK_SECRET'];
+const SECRET_PROPERTY_KEYS = ['MAYTAPI_API_TOKEN', 'WEBHOOK_SECRET', 'RAZORPAY_KEY_SECRET'];
 const REQUIRED_PROPERTY_KEYS = ['MAYTAPI_PRODUCT_ID', 'MAYTAPI_PHONE_ID', 'MAYTAPI_API_TOKEN'];
 const OPTIONAL_PROPERTY_KEYS = ['WEBHOOK_SECRET', 'ADMIN_EMAIL', 'DEFAULT_COUNTRY_CODE', 'TIMEZONE', 'MEDIA_BASE_URL'];
 
@@ -25,6 +25,8 @@ const SETTINGS_DEFAULTS = [
   ['RETRY_BASE_MINUTES', '5', 'Exponential backoff base: retry after base * 2^(attempt-1) minutes.'],
   ['QUEUE_INTERVAL_MINUTES', '5', 'Scheduler trigger frequency. Allowed: 1, 5, 10, 15, 30.'],
   ['WEBHOOK_URL', '', 'Deployed Web App /exec URL (without ?key=). Filled by "Configure Webhook" if empty.'],
+  ['SIGNUP_ENABLED', 'YES', 'YES = anyone can buy a plan from the client app (pricing + sign-up). NO = only admin-created logins.'],
+  ['PAYMENT_INSTRUCTIONS', 'Pay by UPI or bank transfer and share the payment reference with us. Your account is activated after the payment is confirmed.', 'Shown after sign-up when Razorpay keys are not configured (manual activation).'],
   ['CLIENT_APP_URL', '', 'Where you host client-app/ (e.g. https://app.yourbrand.com). Shown to you when creating client logins.'],
   ['MEDIA_MODE', 'BASE64', 'BASE64 = send Drive image bytes inline (file stays private). URL = send a public HTTPS URL (Image URL column or MEDIA_BASE_URL).'],
   ['IMAGE_CTA_STYLE', 'CAPTION_LINK', 'CAPTION_LINK = ONE message: image + text + CTA link line (works everywhere). BUTTONS_WITH_IMAGE = ONE message: image + text + real button (needs BUTTON_IMAGE_FIELD; falls back to CAPTION_LINK if rejected). IMAGE_THEN_BUTTONS = image, then a second message with the button.'],
@@ -88,6 +90,10 @@ function getConfig_(forceReload) {
     queueIntervalMinutes: num('QUEUE_INTERVAL_MINUTES', 5),
     webhookUrl: pick('WEBHOOK_URL', ''),
     clientAppUrl: pick('CLIENT_APP_URL', ''),
+    signupEnabled: yes('SIGNUP_ENABLED', 'YES'),
+    paymentInstructions: pick('PAYMENT_INSTRUCTIONS', ''),
+    razorpayKeyId: String(props.RAZORPAY_KEY_ID || '').trim(),
+    razorpayKeySecret: String(props.RAZORPAY_KEY_SECRET || '').trim(),
     mediaMode: pick('MEDIA_MODE', 'BASE64').toUpperCase(),
     imageCtaStyle: pick('IMAGE_CTA_STYLE', 'CAPTION_LINK').toUpperCase(),
     buttonImageField: pick('BUTTON_IMAGE_FIELD', '').replace(/[^A-Za-z0-9_]/g, ''),

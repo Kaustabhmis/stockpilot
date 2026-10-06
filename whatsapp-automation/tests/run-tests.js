@@ -120,6 +120,7 @@ const context = {
     base64Decode: s => Array.from(Buffer.from(s, 'base64')),
     newBlob: (bytes, mime, name) => ({ bytes, mime, name }),
     DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
+    computeHmacSha256Signature: (value, key) => Array.from(require('crypto').createHmac('sha256', key).update(String(value), 'utf8').digest()).map(b => (b > 127 ? b - 256 : b)),
     computeDigest: (alg, str) => Array.from(require('crypto').createHash('sha256').update(String(str), 'utf8').digest()).map(b => (b > 127 ? b - 256 : b)),
   },
   PropertiesService: { getScriptProperties: () => ({
@@ -140,7 +141,11 @@ const context = {
   UrlFetchApp: { fetch: (url, opts) => {
     fetchLog.push({ url, opts, payload: opts.payload ? JSON.parse(opts.payload) : null });
     const r = fetchResponder(url, opts);
-    return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) };
+    return {
+      getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body),
+      getHeaders: () => r.headers || { 'Content-Type': 'application/json' },
+      getContent: () => r.bytes || Array.from(Buffer.from(JSON.stringify(r.body))),
+    };
   } },
   DriveApp: {
     getFileById: id => {
@@ -786,6 +791,166 @@ test('admin dashboard lists tenants with usage', () => {
   G.refreshDashboard();
   const d = spreadsheet.getSheetByName('DASHBOARD').data;
   assert.ok(d.some(r => String(r[0]).includes('Tenant A Store') && String(r[3]).includes('Dedicated (777)')));
+});
+
+console.log('Subscriptions (self-serve)');
+const crypto = require('crypto');
+const PLAN_IDS = () => G.publicPlans_().map(p => p.id);
+const signupBody = (email, planId) => ({ planId: planId || 'STARTER', businessName: 'Shop ' + email.split('@')[0], contactName: 'Owner',
+  email: email, phone: '9811100000', website: '', gstin: '', acceptTerms: true });
+test('setup seeds example plans; pricing API lists them; manual mode without Razorpay keys', () => {
+  assert.strictEqual(JSON.stringify(PLAN_IDS()), JSON.stringify(['STARTER', 'GROWTH', 'PRO']));
+  const r = G.apiGetPlans_();
+  assert.ok(r.ok && r.plans.length === 3 && r.paymentMode === 'manual');
+  assert.ok(r.plans[0].features.length > 1 && r.plans[0].dedicatedNumber === true);
+});
+test('sign-up validation and manual-payment sign-up (pending, cannot log in)', () => {
+  const bad = G.apiSignup_({ planId: 'STARTER', businessName: '', email: 'x', phone: '1', acceptTerms: false });
+  assert.ok(!bad.ok && bad.errors.length >= 4);
+  assert.ok(!G.apiSignup_(Object.assign(signupBody('n@x.example'), { planId: 'NOPE' })).ok);
+  const r = G.apiSignup_(signupBody('manual@shop.example'));
+  assert.ok(r.ok && r.mode === 'manual' && /^PAY-\d{4}-\d{4}$/.test(r.paymentRef), JSON.stringify(r));
+  const c = table('CLIENTS').find(x => x['Client Email'] === 'manual@shop.example');
+  assert.strictEqual(c.Status, 'Pending Payment');
+  assert.strictEqual(c['Signup Source'], 'SELF_SIGNUP');
+  assert.strictEqual(G.apiLogin_('manual@shop.example', 'AAAAA-BBBBB').ok, false);
+  // Existing active customer cannot sign up again with the same email.
+  assert.ok(/already exists/.test(G.apiSignup_(signupBody('a@tenant-a.example')).errors[0]));
+});
+let manualClient;
+test('admin activation after manual payment: active, quota, validity, access code emailed', () => {
+  mails.length = 0;
+  const pay = table('PAYMENTS').find(p => p.Gateway === 'MANUAL' && p.Status === 'CREATED');
+  const act = G.completePayment_(pay['Payment Ref'], { gatewayPaymentId: 'UPI-123' });
+  manualClient = act.clientId;
+  const c = table('CLIENTS').find(x => x['Client ID'] === manualClient);
+  assert.strictEqual(c.Status, 'Active'); assert.strictEqual(c['Plan ID'], 'STARTER'); assert.strictEqual(Number(c['Monthly Quota']), 2000);
+  const expect = new Date(Date.now() + 29 * 86400000).toISOString().slice(0, 10);
+  assert.ok([expect, new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)].includes(act.validUntil), act.validUntil);
+  assert.ok(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/.test(act.accessCode) && act.needsNumber);
+  const mail = mails.find(m => m.to === 'manual@shop.example');
+  assert.ok(mail && mail.body.includes(act.accessCode) && mail.body.includes('setting up your WhatsApp number'));
+  assert.ok(mails.some(m => m.to === 'admin@example.com' && /ACTION NEEDED/.test(m.body)));
+  assert.ok(G.apiLogin_('manual@shop.example', act.accessCode).ok);
+  // Idempotent
+  assert.ok(G.completePayment_(pay['Payment Ref'], {}).already);
+});
+test('dedicated plan without a number: campaign accepted, messages wait (not paused); send after Phone ID is set', () => {
+  G.appendObjects_('CONTACTS', [{ 'Contact ID': 'CON-M1', 'Client ID': manualClient, Name: 'Kiran', Phone: '9811122222', 'Opt In': 'YES', Status: 'Active' }]);
+  const code = G.issueAccessCode_(manualClient);
+  const t = G.apiLogin_('manual@shop.example', code).token;
+  assert.strictEqual(G.apiBootstrap_(t).subscription.awaitingNumber, true);
+  G.updateQueueStatusWhere_('*', ['PENDING', 'QUEUED'], 'CANCELLED', 'isolation');
+  const r = G.apiCreateCampaign_(t, { campaignName: 'Waiting', message: 'Hello {{Name}}', ctaType: 'NONE', audience: { all: true }, sendMode: 'NOW' });
+  assert.ok(r.created && r.warnings.some(w => /not connected yet/.test(w)), JSON.stringify(r));
+  fetchLog.length = 0;
+  G.processMessageQueue_();
+  assert.strictEqual(fetchLog.length, 0);
+  assert.strictEqual(table('CAMPAIGNS').find(c => c['Campaign ID'] === r.campaignId).Status, 'ACTIVE');
+  assert.strictEqual(G.apiWhatsAppConnection_(t).state, 'pending');
+  setClient(manualClient, { 'Maytapi Phone ID': '888' });
+  G.processMessageQueue_();
+  assert.ok(fetchLog.some(f => f.url.includes('/888/sendMessage')));
+});
+test('WhatsApp connection: QR image when not logged in, connected when logged in', () => {
+  const code = G.issueAccessCode_(manualClient);
+  const t = G.apiLogin_('manual@shop.example', code).token;
+  fetchResponder = url => url.endsWith('/888/status') ? { code: 200, body: { success: true, status: { loggedIn: false } } }
+    : url.endsWith('/888/qrCode') ? { code: 200, headers: { 'Content-Type': 'image/png' }, bytes: [137, 80, 78, 71] }
+    : { code: 200, body: { success: true, data: { msgId: 'X' } } };
+  const q = G.apiWhatsAppConnection_(t);
+  assert.strictEqual(q.state, 'qr'); assert.ok(q.qr.startsWith('data:image/png;base64,'));
+  fetchResponder = url => url.endsWith('/888/status') ? { code: 200, body: { success: true, status: { loggedIn: true } } } : { code: 200, body: { success: true, data: { msgId: 'X' } } };
+  assert.strictEqual(G.apiWhatsAppConnection_(t).state, 'connected');
+  fetchResponder = () => ({ code: 200, body: { success: true, data: { msgId: 'OK' + fetchLog.length } } });
+});
+
+// ---- Razorpay ----
+const rzp = { orders: {}, payments: {}, captures: [] };
+function razorpayFetch(url, opts) {
+  const body = opts.payload ? JSON.parse(opts.payload) : null;
+  assert.strictEqual(opts.headers.Authorization, 'Basic ' + Buffer.from('rzp_test_KEY:rzp_secret_XYZ').toString('base64'));
+  let m;
+  if (url.endsWith('/v1/orders') && opts.method === 'post') {
+    const id = 'order_' + (Object.keys(rzp.orders).length + 1);
+    rzp.orders[id] = Object.assign({ id: id, status: 'created' }, body);
+    return { code: 200, body: rzp.orders[id] };
+  }
+  if ((m = url.match(/\/v1\/payments\/([^/]+)\/capture$/))) { rzp.captures.push(m[1]); rzp.payments[m[1]].status = 'captured'; return { code: 200, body: rzp.payments[m[1]] }; }
+  if ((m = url.match(/\/v1\/payments\/([^/]+)$/))) return rzp.payments[m[1]] ? { code: 200, body: rzp.payments[m[1]] } : { code: 400, body: { error: { description: 'not found' } } };
+  if ((m = url.match(/\/v1\/orders\/([^/]+)\/payments$/))) return { code: 200, body: { items: Object.values(rzp.payments).filter(p => p.order_id === m[1]) } };
+  return { code: 404, body: {} };
+}
+function payOrder(orderId, status) {
+  const id = 'pay_' + (Object.keys(rzp.payments).length + 1);
+  rzp.payments[id] = { id: id, order_id: orderId, amount: rzp.orders[orderId].amount, currency: 'INR', status: status || 'authorized' };
+  return { orderId: orderId, paymentId: id, signature: crypto.createHmac('sha256', 'rzp_secret_XYZ').update(orderId + '|' + id).digest('hex') };
+}
+test('Razorpay sign-up: order created with amount in paise and receipt = payment ref', () => {
+  Object.assign(props, { RAZORPAY_KEY_ID: 'rzp_test_KEY', RAZORPAY_KEY_SECRET: 'rzp_secret_XYZ' });
+  G.__api.CONFIG_RESET();
+  fetchResponder = (url, opts) => (url.includes('api.razorpay.com') ? razorpayFetch(url, opts) : { code: 200, body: { success: true, data: { msgId: 'M' } } });
+  assert.strictEqual(G.apiGetPlans_().paymentMode, 'razorpay');
+  const r = G.apiSignup_(signupBody('online@shop.example', 'GROWTH'));
+  assert.ok(r.ok && r.mode === 'razorpay', JSON.stringify(r));
+  assert.strictEqual(r.keyId, 'rzp_test_KEY'); assert.strictEqual(r.amount, 299900);
+  assert.strictEqual(rzp.orders[r.orderId].receipt, r.paymentRef);
+  assert.ok(!JSON.stringify(r).includes('rzp_secret_XYZ'), 'secret never sent to the browser');
+  assert.strictEqual(table('PAYMENTS').find(p => p['Order ID'] === r.orderId).Status, 'CREATED');
+});
+let onlineToken;
+test('Razorpay confirm: bad signature rejected; valid one captures, activates, signs in; replay is harmless', () => {
+  mails.length = 0;
+  const orderId = table('PAYMENTS').find(p => p.Gateway === 'RAZORPAY' && p.Status === 'CREATED')['Order ID'];
+  const p = payOrder(orderId);
+  assert.ok(/could not be verified/.test(G.apiConfirmPayment_(Object.assign({}, p, { signature: 'deadbeef' })).error));
+  const r = G.apiConfirmPayment_(p);
+  assert.ok(r.ok && /^[a-f0-9]{64}$/.test(r.token) && r.accessCode && r.planName === 'Growth', JSON.stringify(r).slice(0, 300));
+  assert.ok(rzp.captures.includes(p.paymentId), 'authorized payment is captured');
+  assert.strictEqual(r.profile.email, 'online@shop.example');
+  assert.strictEqual(r.subscription.planId, 'GROWTH');
+  const pay = table('PAYMENTS').find(x => x['Order ID'] === orderId);
+  assert.strictEqual(pay.Status, 'PAID'); assert.strictEqual(pay['Gateway Payment ID'], p.paymentId);
+  onlineToken = r.token;
+  const again = G.apiConfirmPayment_(p);
+  assert.ok(again.ok && !again.accessCode);
+  assert.strictEqual(table('PAYMENTS').filter(x => x.Status === 'PAID' && x['Order ID'] === orderId).length, 1);
+});
+test('amount mismatch is rejected', () => {
+  const r = G.apiSignup_(signupBody('cheat@shop.example', 'PRO'));
+  const p = payOrder(r.orderId, 'captured');
+  rzp.payments[p.paymentId].amount = 100;
+  assert.ok(/do not match/.test(G.apiConfirmPayment_(p).error));
+  assert.strictEqual(table('CLIENTS').find(c => c['Client Email'] === 'cheat@shop.example').Status, 'Pending Payment');
+});
+test('renewal from the dashboard extends validity and resumes paused campaigns', () => {
+  const client = table('CLIENTS').find(c => c['Client Email'] === 'online@shop.example');
+  const before = G.cellDateStr_(client['Valid Until']);
+  const ct = G.readTable_('CAMPAIGNS');
+  G.appendObject_('CAMPAIGNS', { 'Campaign ID': 'CMP-PAUSED-1', 'Client ID': client['Client ID'], 'Campaign Name': 'Paused one', Status: 'PAUSED', Notes: 'Sending paused: Monthly message quota (6000) reached.' });
+  const r = G.apiStartRenewal_(onlineToken, 'PRO');
+  assert.ok(r.ok && r.mode === 'razorpay' && r.amount === 599900, JSON.stringify(r));
+  const c2 = G.apiConfirmPayment_(payOrder(r.orderId, 'captured'));
+  assert.ok(c2.ok && !c2.accessCode, 'existing login keeps its code');
+  const after = G.cellDateStr_(table('CLIENTS').find(c => c['Client Email'] === 'online@shop.example')['Valid Until']);
+  assert.strictEqual(after, G.addDaysKey_(before, 30));
+  assert.strictEqual(table('CLIENTS').find(c => c['Client Email'] === 'online@shop.example')['Plan ID'], 'PRO');
+  assert.strictEqual(table('CAMPAIGNS').find(c => c['Campaign ID'] === 'CMP-PAUSED-1').Status, 'ACTIVE');
+});
+test('reconciliation activates a paid order whose browser closed before confirming', () => {
+  const r = G.apiSignup_(signupBody('closedtab@shop.example', 'STARTER'));
+  payOrder(r.orderId, 'captured');
+  Object.keys(cacheStore).filter(k => k === 'recon_payments').forEach(k => delete cacheStore[k]);
+  assert.strictEqual(G.reconcilePendingPayments_(), 1);
+  assert.strictEqual(table('CLIENTS').find(c => c['Client Email'] === 'closedtab@shop.example').Status, 'Active');
+  assert.strictEqual(G.reconcilePendingPayments_(), 0, 'throttled');
+  fetchResponder = () => ({ code: 200, body: { success: true, data: { msgId: 'OK' + fetchLog.length } } });
+  delete props.RAZORPAY_KEY_ID; delete props.RAZORPAY_KEY_SECRET; G.__api.CONFIG_RESET();
+});
+test('client API exposes only the whitelisted billing actions', () => {
+  const call = body => JSON.parse(G.doPost({ parameter: { route: 'api' }, postData: { contents: JSON.stringify(body) } }).text);
+  assert.ok(call({ action: 'apiGetPlans', args: [] }).ok);
+  ['completePayment_', 'activateSubscription', 'activateSubscription_', 'setPaymentKeys'].forEach(a => assert.strictEqual(call({ action: a, args: [] }).error, 'Unknown action.'));
 });
 
 console.log('Single-file build');

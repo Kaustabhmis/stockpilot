@@ -11,6 +11,8 @@ function onOpen() {
     .addItem('Create Campaign Form', 'createCampaignForm')
     .addSeparator()
     .addItem('Create Client Login', 'createClientLogin')
+    .addItem('Activate Subscription (manual payment)', 'activateSubscription')
+    .addItem('Set Payment Keys (Razorpay)', 'setPaymentKeys')
     .addItem('Reset Client Access Code', 'resetClientAccessCode')
     .addItem('Show Client App URLs', 'showDashboardUrl')
     .addSeparator()
@@ -85,6 +87,8 @@ function setupSystem() {
   setTextColumns_(SHEETS.MESSAGE_QUEUE, ['Phone', 'CTA Value', 'Message ID', 'Sender Phone ID']);
   setTextColumns_(SHEETS.RESPONSES, ['Phone', 'Message ID']);
   setTextColumns_(SHEETS.SETTINGS, ['Value']);
+  setTextColumns_(SHEETS.PAYMENTS, ['Order ID', 'Gateway Payment ID', 'Valid Until']);
+  setTextColumns_(SHEETS.CLIENTS, ['GSTIN']);
 
   // Seed missing SETTINGS keys (existing values untouched).
   const settings = readTable_(SHEETS.SETTINGS);
@@ -106,6 +110,17 @@ function setupSystem() {
       'Image URL': s[4] || '', 'Button Text': s[5] || '', 'Button Type': s[6] || '', 'Button Value': s[7] || '', 'Active': 'YES',
     })));
     report.push('TEMPLATES: added starter replies');
+  }
+
+  // Example plans (only when PLANS is empty). Edit prices/limits in the sheet — they are placeholders.
+  if (!readTable_(SHEETS.PLANS).rows.length) {
+    const feats = 'Your own WhatsApp number; Image + text ads with button; Excel / CSV customer upload; Scheduling; Delivery & read reports';
+    appendObjects_(SHEETS.PLANS, [
+      { 'Plan ID': 'STARTER', 'Plan Name': 'Starter', 'Price INR': 1499, 'Duration Days': 30, 'Monthly Quota': 2000, 'Dedicated Number': 'YES', 'Features': feats, 'Active': 'YES', 'Sort Order': 1 },
+      { 'Plan ID': 'GROWTH', 'Plan Name': 'Growth', 'Price INR': 2999, 'Duration Days': 30, 'Monthly Quota': 6000, 'Dedicated Number': 'YES', 'Features': feats + '; Auto-replies', 'Active': 'YES', 'Sort Order': 2 },
+      { 'Plan ID': 'PRO', 'Plan Name': 'Pro', 'Price INR': 5999, 'Duration Days': 30, 'Monthly Quota': 15000, 'Dedicated Number': 'YES', 'Features': feats + '; Auto-replies; Priority support', 'Active': 'YES', 'Sort Order': 3 },
+    ]);
+    report.push('PLANS: added example plans (edit the prices!)');
   }
 
   addValidations_();
@@ -140,7 +155,9 @@ function addValidations_() {
   };
   apply(SHEETS.CONTACTS, 'Opt In', list(['YES', 'NO']));
   apply(SHEETS.CONTACTS, 'Status', list(['Active', 'Inactive']));
-  apply(SHEETS.CLIENTS, 'Status', list(['Active', 'Suspended', 'Inactive']));
+  apply(SHEETS.CLIENTS, 'Status', list(['Active', 'Pending Payment', 'Suspended', 'Inactive']));
+  apply(SHEETS.PLANS, 'Active', list(['YES', 'NO']));
+  apply(SHEETS.PLANS, 'Dedicated Number', list(['YES', 'NO']));
   apply(SHEETS.CAMPAIGNS, 'Status', list(Object.keys(CAMPAIGN_STATUS)));
   apply(SHEETS.CAMPAIGNS, 'CTA Type', list(CTA_TYPES.concat([''])));
   apply(SHEETS.TEMPLATES, 'Reply Type', list(['TEXT', 'IMAGE', 'BUTTONS']));

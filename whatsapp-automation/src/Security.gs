@@ -173,6 +173,17 @@ function loginClient_(email, code) {
   return { token: token, clientId: String(row['Client ID']) };
 }
 
+/** Opens a session for a client without a code (used right after a verified payment). */
+function openSessionForClient_(clientId) {
+  const row = findRow_(readTable_(SHEETS.CLIENTS), 'Client ID', clientId);
+  if (!row || !/^active$/i.test(String(row['Status'] || ''))) throw authError_('Account is not active.');
+  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  CacheService.getScriptCache().put('sess_' + token, JSON.stringify({
+    clientId: String(clientId), email: String(row['Client Email']).toLowerCase(), codeTag: String(row['Access Code Hash']).slice(0, 16),
+  }), SESSION_TTL_SECONDS);
+  return { token: token };
+}
+
 /** Resolves a session token to { clientId, client } or throws an AUTH error. Sliding expiry. */
 function requireSession_(token) {
   if (!token || !/^[a-f0-9]{64}$/.test(String(token))) throw authError_();

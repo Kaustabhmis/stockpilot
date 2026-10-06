@@ -559,3 +559,55 @@ One spreadsheet and one Apps Script deployment serve every tenant. Each row in *
 **Limits of this architecture**: Google Sheets comfortably handles a few thousand messages per day in total across all tenants.
 Apps Script quotas (UrlFetch calls/day, trigger runtime) are per Google account, not per tenant. When you outgrow this, the
 `api*` and `*_` layers are the seams for moving storage to a database without changing the dashboard.
+
+---
+
+## PART 17: Selling subscriptions (self-serve sign-up and payments)
+
+Anyone can open your client app (e.g. `https://wa.biscsindia.com`), choose a plan, pay and start, with no manual work from you
+except connecting their WhatsApp number in Maytapi.
+
+**1. Plans (PLANS sheet)**: created by Setup System with **example prices. Edit them.**
+
+| Column | Meaning |
+|---|---|
+| Plan ID | Short code, e.g. `STARTER` (don't change it once people have bought it) |
+| Plan Name / Price INR / Duration Days | Shown on the pricing page. Price is charged as-is (include GST in the price if you charge it). |
+| Monthly Quota | Messages per calendar month (blank = unlimited) |
+| Dedicated Number | `YES` = the client gets their own WhatsApp number (you add a phone in Maytapi for them) |
+| Features | `;`-separated bullet points for the pricing card |
+| Active / Sort Order | Show or hide, and the display order |
+
+A plan priced `0` is a free plan, which can be used once per client (for example a trial).
+
+**2. Payments**
+- **Razorpay (recommended)**: create a Razorpay account, complete KYC, and copy the **Key ID** and **Key Secret** (Settings → API Keys).
+  Then run the menu **Set Payment Keys (Razorpay)**. Test with `rzp_test_…` keys first, then switch to live keys.
+  Razorpay asks for website policies during activation. Fill in your business details in `client-app/config.js`, and
+  `legal.html` shows Terms, Privacy, Refund, Delivery and Contact (it's a template, so review it).
+- **Without Razorpay**: sign-ups are saved as *Pending Payment* and shown `SETTINGS → PAYMENT_INSTRUCTIONS` (your UPI ID or bank details).
+  You get an email. When the money arrives, run **Activate Subscription (manual payment)**.
+- `SETTINGS → SIGNUP_ENABLED = NO` closes public sign-up.
+
+**3. What happens after payment** (automatic):
+- The server checks Razorpay's signature (`HMAC_SHA256(order_id|payment_id, key secret)`), re-reads the payment from Razorpay
+  (order, amount, captured), and captures it if it was only authorised. The browser never sees your key secret.
+- CLIENTS row: Status Active, Plan, Plan ID, Monthly Quota, and Valid Until = today + duration. Renewals extend from the current end date.
+- An access code is generated, shown on screen and emailed. The client is signed straight into the dashboard.
+- Campaigns that were paused for an expired plan or a used-up quota resume automatically.
+- PAYMENTS sheet: one row per order (CREATED → PAID, or EXPIRED after 3 days unpaid).
+- If the customer closes the tab right after paying, the scheduler finds the paid order within about 15 minutes and activates it.
+
+**4. Your step for each new subscriber (Dedicated Number plans)**: you get an email titled "New subscriber … ACTION NEEDED".
+1. In the Maytapi console, **add a phone** to your product and copy its **Phone ID**.
+2. Paste it into **CLIENTS → Maytapi Phone ID** for that client.
+3. The client opens **Home → WhatsApp connection → Check / connect WhatsApp** and scans the QR code with WhatsApp
+   (**Linked devices → Link a device**) on their business phone. The card then shows *connected*.
+Until step 2 is done, the client can already upload customers and create campaigns. Those wait (they don't fail) and send once the number is connected.
+The QR code and status come from Maytapi's `GET /{phone_id}/qrCode` and `/status` endpoints. If the QR doesn't appear, the client sees
+"contact support", and you can scan the QR from the Maytapi console together with the client instead.
+
+**5. Renewals and upgrades**: Home → **Renew / Upgrade** in the client dashboard. It uses the same payment and activation flow.
+Plans don't auto-renew. The client renews when you remind them, or when the dashboard shows the expiry.
+
+**Admin menu additions**: Set Payment Keys (Razorpay) · Activate Subscription (manual payment).

@@ -26,12 +26,19 @@ const SHEETS = {
   RESPONSES: 'RESPONSES',
   TEMPLATES: 'TEMPLATES',
   DASHBOARD: 'DASHBOARD',
+  PLANS: 'PLANS',
+  PAYMENTS: 'PAYMENTS',
 };
 
 const HEADERS = {
   SETTINGS: ['Key', 'Value', 'Description'],
+  PLANS: ['Plan ID', 'Plan Name', 'Price INR', 'Duration Days', 'Monthly Quota', 'Dedicated Number', 'Features', 'Active', 'Sort Order'],
+  PAYMENTS: [
+    'Payment Ref', 'Client ID', 'Plan ID', 'Plan Name', 'Amount', 'Currency', 'Gateway', 'Order ID', 'Gateway Payment ID',
+    'Status', 'Created At', 'Paid At', 'Valid Until', 'Notes',
+  ],
   CLIENTS: ['Client ID', 'Business Name', 'Client Email', 'Business Phone', 'Website', 'Status', 'Created At', 'Updated At', 'Access Code Hash', 'Last Login',
-    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until', 'Store Link'],
+    'Plan', 'Maytapi Phone ID', 'Monthly Quota', 'Valid Until', 'Store Link', 'Plan ID', 'Contact Name', 'GSTIN', 'Signup Source'],
   CONTACTS: [
     'Contact ID', 'Client ID', 'Name', 'Phone', 'Email', 'Company', 'Tags', 'Audience', 'Opt In', 'Status',
     'Last Sent', 'Last Message ID', 'Last Response', 'Created At', 'Updated At', 'Source',
@@ -135,7 +142,7 @@ const SUPPORTED_IMAGE_MIME = ['image/jpeg', 'image/png'];
  * The API token is never written to a sheet, a log row, console output or an email.
  */
 
-const SECRET_PROPERTY_KEYS = ['MAYTAPI_API_TOKEN', 'WEBHOOK_SECRET'];
+const SECRET_PROPERTY_KEYS = ['MAYTAPI_API_TOKEN', 'WEBHOOK_SECRET', 'RAZORPAY_KEY_SECRET'];
 const REQUIRED_PROPERTY_KEYS = ['MAYTAPI_PRODUCT_ID', 'MAYTAPI_PHONE_ID', 'MAYTAPI_API_TOKEN'];
 const OPTIONAL_PROPERTY_KEYS = ['WEBHOOK_SECRET', 'ADMIN_EMAIL', 'DEFAULT_COUNTRY_CODE', 'TIMEZONE', 'MEDIA_BASE_URL'];
 
@@ -151,6 +158,8 @@ const SETTINGS_DEFAULTS = [
   ['RETRY_BASE_MINUTES', '5', 'Exponential backoff base: retry after base * 2^(attempt-1) minutes.'],
   ['QUEUE_INTERVAL_MINUTES', '5', 'Scheduler trigger frequency. Allowed: 1, 5, 10, 15, 30.'],
   ['WEBHOOK_URL', '', 'Deployed Web App /exec URL (without ?key=). Filled by "Configure Webhook" if empty.'],
+  ['SIGNUP_ENABLED', 'YES', 'YES = anyone can buy a plan from the client app (pricing + sign-up). NO = only admin-created logins.'],
+  ['PAYMENT_INSTRUCTIONS', 'Pay by UPI or bank transfer and share the payment reference with us. Your account is activated after the payment is confirmed.', 'Shown after sign-up when Razorpay keys are not configured (manual activation).'],
   ['CLIENT_APP_URL', '', 'Where you host client-app/ (e.g. https://app.yourbrand.com). Shown to you when creating client logins.'],
   ['MEDIA_MODE', 'BASE64', 'BASE64 = send Drive image bytes inline (file stays private). URL = send a public HTTPS URL (Image URL column or MEDIA_BASE_URL).'],
   ['IMAGE_CTA_STYLE', 'CAPTION_LINK', 'CAPTION_LINK = ONE message: image + text + CTA link line (works everywhere). BUTTONS_WITH_IMAGE = ONE message: image + text + real button (needs BUTTON_IMAGE_FIELD; falls back to CAPTION_LINK if rejected). IMAGE_THEN_BUTTONS = image, then a second message with the button.'],
@@ -214,6 +223,10 @@ function getConfig_(forceReload) {
     queueIntervalMinutes: num('QUEUE_INTERVAL_MINUTES', 5),
     webhookUrl: pick('WEBHOOK_URL', ''),
     clientAppUrl: pick('CLIENT_APP_URL', ''),
+    signupEnabled: yes('SIGNUP_ENABLED', 'YES'),
+    paymentInstructions: pick('PAYMENT_INSTRUCTIONS', ''),
+    razorpayKeyId: String(props.RAZORPAY_KEY_ID || '').trim(),
+    razorpayKeySecret: String(props.RAZORPAY_KEY_SECRET || '').trim(),
     mediaMode: pick('MEDIA_MODE', 'BASE64').toUpperCase(),
     imageCtaStyle: pick('IMAGE_CTA_STYLE', 'CAPTION_LINK').toUpperCase(),
     buttonImageField: pick('BUTTON_IMAGE_FIELD', '').replace(/[^A-Za-z0-9_]/g, ''),
@@ -729,6 +742,438 @@ function promptCampaignId_(title) {
   return res.getResponseText().trim() || suggestion;
 }
 
+/* ============================== Billing.gs ============================== */
+
+/**
+ * Billing.gs
+ * Self-serve subscriptions: plans, sign-up, Razorpay payments, activation and renewals.
+ *
+ * FLOW (client app → Apps Script JSON API)
+ *   1. apiGetPlans          → active rows of the PLANS sheet (prices in INR)
+ *   2. apiSignup            → CLIENTS row (Status "Pending Payment") + PAYMENTS row + Razorpay order
+ *   3. Razorpay Checkout    → customer pays (UPI / card / netbanking) in the browser
+ *   4. apiConfirmPayment    → server verifies the signature HMAC_SHA256(order_id|payment_id, key secret),
+ *                             re-reads the payment from Razorpay (amount, order, captured),
+ *                             activates the plan, issues + emails the access code, signs the client in
+ *   5. reconcilePendingPayments_ (scheduler) activates paid orders whose browser closed before step 4.
+ * Renewals/upgrades use the same order + confirm steps from inside the dashboard and extend Valid Until.
+ *
+ * Razorpay contract used (Standard Checkout): POST https://api.razorpay.com/v1/orders {amount (paise),
+ * currency, receipt, notes}; Checkout returns razorpay_payment_id / razorpay_order_id / razorpay_signature;
+ * GET /v1/payments/{id}; POST /v1/payments/{id}/capture; GET /v1/orders/{id}/payments. Basic auth key_id:key_secret.
+ *
+ * Without Razorpay keys (Script Properties RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET) sign-ups are recorded as
+ * "Pending Payment" and shown PAYMENT_INSTRUCTIONS; the admin activates them with "Activate Subscription".
+ *
+ * A plan with Dedicated Number = YES waits for the admin to add a phone in Maytapi and paste its
+ * Phone ID into CLIENTS → Maytapi Phone ID; campaigns stay queued (not failed) until then.
+ */
+
+const RAZORPAY_API = 'https://api.razorpay.com/v1';
+const PENDING_ORDER_DAYS = 3;
+
+/* ============================== PLANS ============================== */
+
+function plansById_() {
+  const out = {};
+  try {
+    readTable_(SHEETS.PLANS).rows.forEach(p => { if (String(p['Plan ID']).trim()) out[String(p['Plan ID']).trim()] = p; });
+  } catch (err) { /* PLANS sheet not created yet */ }
+  return out;
+}
+
+/** Active plans for the pricing page (plain JSON). */
+function publicPlans_() {
+  const plans = plansById_();
+  return Object.keys(plans).map(k => plans[k])
+    .filter(p => isYes_(p['Active']))
+    .sort((a, b) => (Number(a['Sort Order']) || 0) - (Number(b['Sort Order']) || 0))
+    .map(p => ({
+      id: String(p['Plan ID']),
+      name: String(p['Plan Name'] || p['Plan ID']),
+      price: Number(p['Price INR']) || 0,
+      durationDays: Number(p['Duration Days']) || 30,
+      quota: String(p['Monthly Quota']).trim() === '' ? null : Number(p['Monthly Quota']) || 0,
+      dedicatedNumber: isYes_(p['Dedicated Number']),
+      features: String(p['Features'] || '').split(/[;\n]/).map(s => s.trim()).filter(Boolean),
+    }));
+}
+
+function activePlan_(planId) {
+  const p = plansById_()[String(planId || '').trim()];
+  if (!p || !isYes_(p['Active'])) throw new Error('Please choose a valid plan.');
+  return p;
+}
+
+/* ============================== RAZORPAY ============================== */
+
+function razorpayEnabled_(cfg) {
+  cfg = cfg || getConfig_();
+  return !!(cfg.razorpayKeyId && cfg.razorpayKeySecret);
+}
+
+function razorpayRequest_(method, path, payload, cfg) {
+  cfg = cfg || getConfig_();
+  const options = {
+    method: method, muteHttpExceptions: true, contentType: 'application/json',
+    headers: { Authorization: 'Basic ' + Utilities.base64Encode(cfg.razorpayKeyId + ':' + cfg.razorpayKeySecret) },
+  };
+  if (payload) options.payload = JSON.stringify(payload);
+  let res;
+  try {
+    res = UrlFetchApp.fetch(RAZORPAY_API + path, options);
+  } catch (err) {
+    return { ok: false, status: 0, json: null, error: 'Payment gateway not reachable: ' + redactSecrets_(err.message) };
+  }
+  const status = res.getResponseCode();
+  let json = null;
+  try { json = JSON.parse(res.getContentText() || '{}'); } catch (err) { json = null; }
+  const ok = status >= 200 && status < 300;
+  const error = ok ? '' : redactSecrets_((json && json.error && (json.error.description || json.error.code)) || ('HTTP ' + status));
+  return { ok: ok, status: status, json: json, error: error };
+}
+
+function hexOf_(bytes) {
+  return bytes.map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+
+/** Razorpay Checkout signature: HMAC_SHA256(order_id + "|" + payment_id, key_secret), hex. Constant-time compare. */
+function verifyRazorpaySignature_(orderId, paymentId, signature, secret) {
+  if (!orderId || !paymentId || !signature || !secret) return false;
+  const expected = hexOf_(Utilities.computeHmacSha256Signature(orderId + '|' + paymentId, secret));
+  const given = String(signature);
+  let diff = expected.length ^ given.length;
+  for (let i = 0; i < Math.min(expected.length, given.length); i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
+  return diff === 0;
+}
+
+/* ============================== SIGN-UP ============================== */
+
+/**
+ * Public sign-up. payload = { planId, businessName, contactName, email, phone, website, gstin, acceptTerms }
+ * Returns checkout details (razorpay), payment instructions (manual) or an immediately activated free plan.
+ */
+function signup_(payload) {
+  const cfg = getConfig_(true);
+  if (!cfg.signupEnabled) throw new Error('Online sign-up is closed. Please contact us.');
+  payload = payload || {};
+  const plan = activePlan_(payload.planId);
+  const email = String(payload.email || '').trim().toLowerCase();
+  const businessName = String(payload.businessName || '').trim().slice(0, 120);
+  const contactName = String(payload.contactName || '').trim().slice(0, 80);
+  const phone = normalizePhoneNumber(payload.phone);
+  const website = String(payload.website || '').trim() ? normalizeUrl_(payload.website) : '';
+  const gstin = String(payload.gstin || '').trim().toUpperCase();
+
+  const errors = [];
+  if (!businessName) errors.push('Enter your business name.');
+  if (!contactName) errors.push('Enter your name.');
+  if (!isValidEmail_(email)) errors.push('Enter a valid email address.');
+  if (!phone) errors.push('Enter a valid mobile number.');
+  if (String(payload.website || '').trim() && !website) errors.push('Website is not a valid web address.');
+  if (gstin && !/^[0-9]{2}[A-Z0-9]{13}$/.test(gstin)) errors.push('GSTIN should be 15 characters (or leave it blank).');
+  if (payload.acceptTerms !== true) errors.push('Please accept the terms to continue.');
+  if (errors.length) return { ok: false, errors: errors };
+
+  // Abuse protection: per-email and global sign-up rate limits.
+  const cache = CacheService.getScriptCache();
+  const ek = 'signup_' + Utilities.base64EncodeWebSafe(email).slice(0, 200);
+  const perEmail = Number(cache.get(ek) || 0);
+  const global = Number(cache.get('signup_global') || 0);
+  if (perEmail >= 5 || global >= 60) return { ok: false, errors: ['Too many attempts. Please try again later.'] };
+  cache.put(ek, String(perEmail + 1), 3600);
+  cache.put('signup_global', String(global + 1), 3600);
+
+  const table = readTable_(SHEETS.CLIENTS);
+  let client = table.rows.find(r => String(r['Client Email']).trim().toLowerCase() === email);
+  if (client && !/^pending payment$/i.test(String(client['Status']))) {
+    return { ok: false, errors: ['An account with this email already exists. Please sign in — you can renew or upgrade from your dashboard.'] };
+  }
+  const now = new Date();
+  const fields = {
+    'Business Name': businessName, 'Client Email': email, 'Business Phone': phone, 'Website': website,
+    'Contact Name': contactName, 'GSTIN': gstin, 'Updated At': now,
+  };
+  let clientId;
+  if (client) {
+    clientId = String(client['Client ID']);
+    updateFields_(table, client._row, fields);
+  } else {
+    clientId = newClientId_();
+    appendObject_(SHEETS.CLIENTS, Object.assign({
+      'Client ID': clientId, 'Status': 'Pending Payment', 'Created At': now, 'Signup Source': 'SELF_SIGNUP',
+    }, fields));
+    logEvent_(LOG_LEVEL.INFO, 'SIGNUP', { clientId: clientId, result: plan['Plan ID'] });
+  }
+  return Object.assign({ ok: true, clientId: clientId }, startOrder_(clientId, plan, cfg, { name: contactName, email: email, contact: '+' + phone }));
+}
+
+/**
+ * Creates a PAYMENTS row (+ Razorpay order). Free plans (price 0) activate immediately, once per client.
+ */
+function startOrder_(clientId, plan, cfg, prefill) {
+  cfg = cfg || getConfig_();
+  const price = Number(plan['Price INR']) || 0;
+  const ref = nextIds_('PAY', 4, 1, SHEETS.PAYMENTS, 'Payment Ref')[0];
+  const base = {
+    'Payment Ref': ref, 'Client ID': clientId, 'Plan ID': plan['Plan ID'], 'Plan Name': plan['Plan Name'],
+    'Amount': price, 'Currency': 'INR', 'Created At': new Date(),
+  };
+
+  if (price <= 0) {
+    const used = readTable_(SHEETS.PAYMENTS).rows.some(p => String(p['Client ID']) === clientId && Number(p['Amount']) === 0 && String(p['Status']) === 'PAID');
+    if (used) throw new Error('The free plan can only be used once. Please choose a paid plan.');
+    appendObject_(SHEETS.PAYMENTS, Object.assign(base, { 'Gateway': 'FREE', 'Status': 'CREATED' }));
+    const act = completePayment_(ref, { gatewayPaymentId: 'FREE', notes: 'Free plan' });
+    return { mode: 'free', paymentRef: ref, activation: act };
+  }
+
+  if (!razorpayEnabled_(cfg)) {
+    appendObject_(SHEETS.PAYMENTS, Object.assign(base, { 'Gateway': 'MANUAL', 'Status': 'CREATED' }));
+    notifyAdmin_('New sign-up awaiting payment', 'Client: ' + clientId + '\nPlan: ' + plan['Plan Name'] + ' (₹' + price + ')\nPayment ref: ' + ref +
+      '\n\nWhen payment is received, use WhatsApp Automation → Activate Subscription.');
+    return { mode: 'manual', paymentRef: ref, amount: price, currency: 'INR', instructions: cfg.paymentInstructions };
+  }
+
+  const order = razorpayRequest_('post', '/orders', {
+    amount: Math.round(price * 100), currency: 'INR', receipt: ref,
+    notes: { client_id: clientId, plan_id: String(plan['Plan ID']), payment_ref: ref },
+  }, cfg);
+  if (!order.ok || !order.json || !order.json.id) {
+    logEvent_(LOG_LEVEL.ERROR, 'RAZORPAY_ORDER', { clientId: clientId, httpStatus: order.status, error: order.error });
+    throw new Error('Could not start the payment. Please try again in a minute.');
+  }
+  appendObject_(SHEETS.PAYMENTS, Object.assign(base, { 'Gateway': 'RAZORPAY', 'Order ID': order.json.id, 'Status': 'CREATED' }));
+  return {
+    mode: 'razorpay', paymentRef: ref, keyId: cfg.razorpayKeyId, orderId: order.json.id,
+    amount: Math.round(price * 100), currency: 'INR', name: cfg.systemName,
+    description: String(plan['Plan Name']) + ' plan', prefill: prefill || {},
+  };
+}
+
+/* ============================== CONFIRM / ACTIVATE ============================== */
+
+/**
+ * Browser → server after Razorpay Checkout success.
+ * p = { orderId, paymentId, signature }  (razorpay_order_id / razorpay_payment_id / razorpay_signature)
+ */
+function confirmRazorpayPayment_(p) {
+  const cfg = getConfig_(true);
+  if (!razorpayEnabled_(cfg)) throw new Error('Online payments are not enabled.');
+  p = p || {};
+  const orderId = String(p.orderId || ''), paymentId = String(p.paymentId || '');
+  if (!verifyRazorpaySignature_(orderId, paymentId, p.signature, cfg.razorpayKeySecret)) {
+    logEvent_(LOG_LEVEL.WARNING, 'PAYMENT_SIGNATURE_INVALID', { details: orderId });
+    throw new Error('Payment could not be verified. If money was deducted, contact us with your payment ID.');
+  }
+  const row = findRow_(readTable_(SHEETS.PAYMENTS), 'Order ID', orderId);
+  if (!row) throw new Error('Order not found.');
+  if (String(row['Status']) === 'PAID') return { already: true, clientId: String(row['Client ID']), accessCode: '' };
+  const check = fetchAndCapture_(paymentId, row, cfg);
+  if (!check.ok) throw new Error(check.error);
+  return completePayment_(String(row['Payment Ref']), { gatewayPaymentId: paymentId });
+}
+
+/** Re-reads the payment from Razorpay; captures it if only authorized; checks order + amount. */
+function fetchAndCapture_(paymentId, row, cfg) {
+  const r = razorpayRequest_('get', '/payments/' + encodeURIComponent(paymentId), null, cfg);
+  if (!r.ok || !r.json) return { ok: false, error: 'Could not confirm the payment with Razorpay. Please contact us with payment ID ' + paymentId + '.' };
+  const pay = r.json;
+  const expected = Math.round(Number(row['Amount']) * 100);
+  if (String(pay.order_id) !== String(row['Order ID']) || Number(pay.amount) !== expected || String(pay.currency || 'INR') !== 'INR') {
+    logEvent_(LOG_LEVEL.ERROR, 'PAYMENT_MISMATCH', { clientId: row['Client ID'], details: { paymentId: paymentId, order: pay.order_id, amount: pay.amount } });
+    return { ok: false, error: 'Payment details do not match the order. Please contact us.' };
+  }
+  if (pay.status === 'authorized') {
+    const c = razorpayRequest_('post', '/payments/' + encodeURIComponent(paymentId) + '/capture', { amount: expected, currency: 'INR' }, cfg);
+    if (!c.ok) return { ok: false, error: 'Payment authorised but could not be captured yet. It will be retried automatically.' };
+    pay.status = (c.json && c.json.status) || 'captured';
+  }
+  if (pay.status !== 'captured') return { ok: false, error: 'Payment is ' + pay.status + '. Please try again.' };
+  return { ok: true };
+}
+
+/**
+ * Marks a PAYMENTS row PAID (idempotent) and activates/extends the subscription.
+ * @return { clientId, accessCode ('' for existing logins), validUntil, planName }
+ */
+function completePayment_(paymentRef, info) {
+  const lock = LockService.getDocumentLock() || LockService.getUserLock();
+  lock.waitLock(30000);
+  let row, payments, plan;
+  try {
+    payments = readTable_(SHEETS.PAYMENTS);
+    row = findRow_(payments, 'Payment Ref', paymentRef);
+    if (!row) throw new Error('Payment ' + paymentRef + ' not found.');
+    if (String(row['Status']) === 'PAID') return { already: true, clientId: String(row['Client ID']), accessCode: '', validUntil: cellDateStr_(row['Valid Until']) };
+    plan = plansById_()[String(row['Plan ID'])];
+    if (!plan) throw new Error('Plan ' + row['Plan ID'] + ' no longer exists.');
+    updateFields_(payments, row._row, { 'Status': 'PAID', 'Paid At': new Date(), 'Gateway Payment ID': info.gatewayPaymentId || '', 'Notes': info.notes || '' });
+  } finally {
+    lock.releaseLock();
+  }
+  const act = activateSubscription_(String(row['Client ID']), plan, row);
+  updateFields_(readTable_(SHEETS.PAYMENTS), row._row, { 'Valid Until': act.validUntil });
+  return act;
+}
+
+/** Sets plan, quota and validity; issues a login if needed; resumes paused campaigns; emails client + admin. */
+function activateSubscription_(clientId, plan, paymentRow) {
+  const table = readTable_(SHEETS.CLIENTS);
+  const client = findRow_(table, 'Client ID', clientId);
+  if (!client) throw new Error('Client ' + clientId + ' not found.');
+  const days = Math.max(1, Number(plan['Duration Days']) || 30);
+  const today = todayKey_();
+  const current = cellDateStr_(client['Valid Until']);
+  const start = current && current >= today && /^active$/i.test(String(client['Status'])) ? addDaysKey_(current, 1) : today;
+  const validUntil = addDaysKey_(start, days - 1);
+
+  updateFields_(table, client._row, {
+    'Status': 'Active', 'Plan': plan['Plan Name'], 'Plan ID': plan['Plan ID'],
+    'Monthly Quota': String(plan['Monthly Quota']).trim() === '' ? '' : Number(plan['Monthly Quota']),
+    'Valid Until': validUntil, 'Updated At': new Date(),
+  });
+  const isNewLogin = !String(client['Access Code Hash'] || '').trim();
+  const accessCode = isNewLogin ? issueAccessCode_(clientId) : '';
+
+  // Resume campaigns that were paused for expiry / quota.
+  readTable_(SHEETS.CAMPAIGNS).rows
+    .filter(c => String(c['Client ID']) === clientId && String(c['Status']) === CAMPAIGN_STATUS.PAUSED && /Sending paused:/.test(String(c['Notes'])))
+    .forEach(c => setCampaignStatus_(String(c['Campaign ID']), CAMPAIGN_STATUS.ACTIVE, 'Resumed after subscription payment.'));
+
+  const cfg = getConfig_();
+  const needsNumber = isYes_(plan['Dedicated Number']) && !String(client['Maytapi Phone ID'] || '').trim();
+  const loginUrl = cfg.clientAppUrl || '';
+  const lines = [
+    'Hello ' + (client['Contact Name'] || client['Business Name']) + ',', '',
+    'Thank you! Your ' + plan['Plan Name'] + ' subscription is active until ' + validUntil + '.', '',
+    'Business: ' + client['Business Name'],
+    'Amount: ₹' + (paymentRow ? paymentRow['Amount'] : plan['Price INR']),
+    'Payment reference: ' + (paymentRow ? paymentRow['Payment Ref'] : '—'),
+  ];
+  if (accessCode) lines.push('', 'Sign in: ' + (loginUrl || '(your dashboard link)'), 'Email: ' + client['Client Email'], 'Access code: ' + accessCode, 'Keep this code private.');
+  if (needsNumber) lines.push('', 'Next step: we are setting up your WhatsApp number. You will be able to connect it from your dashboard shortly.');
+  lines.push('', 'Regards,', cfg.systemName);
+  safeSendEmail_(String(client['Client Email']), 'Subscription active – ' + plan['Plan Name'], lines.join('\n'));
+  notifyAdmin_((isNewLogin ? 'New subscriber: ' : 'Renewal: ') + client['Business Name'],
+    'Client: ' + clientId + ' – ' + client['Business Name'] + ' <' + client['Client Email'] + '>, ' + (client['Business Phone'] ? '+' + client['Business Phone'] : '') +
+    '\nPlan: ' + plan['Plan Name'] + ' until ' + validUntil + (client['GSTIN'] ? '\nGSTIN: ' + client['GSTIN'] : '') +
+    (needsNumber ? '\n\nACTION NEEDED: add a phone for this client in your Maytapi product and paste its Phone ID into CLIENTS → Maytapi Phone ID. ' +
+      'The client then scans the QR code from their dashboard (Home → WhatsApp connection).' : ''));
+  logEvent_(LOG_LEVEL.SUCCESS, 'SUBSCRIPTION_ACTIVE', { clientId: clientId, result: plan['Plan ID'] + ' until ' + validUntil });
+  return { clientId: clientId, accessCode: accessCode, validUntil: validUntil, planName: String(plan['Plan Name']), needsNumber: needsNumber };
+}
+
+function addDaysKey_(ymd, days) {
+  const d = new Date(ymd + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Scheduler: activates Razorpay orders that were paid but never confirmed by the browser (tab closed),
+ * and expires stale orders. Runs at most every 10 minutes.
+ */
+function reconcilePendingPayments_() {
+  const cfg = getConfig_();
+  if (!razorpayEnabled_(cfg)) return 0;
+  const cache = CacheService.getScriptCache();
+  if (cache.get('recon_payments')) return 0;
+  cache.put('recon_payments', '1', 600);
+  let n = 0;
+  readTable_(SHEETS.PAYMENTS).rows.forEach(row => {
+    if (String(row['Gateway']) !== 'RAZORPAY' || String(row['Status']) !== 'CREATED' || !row['Order ID']) return;
+    const created = toDate_(row['Created At']);
+    if (created && Date.now() - created.getTime() > PENDING_ORDER_DAYS * 86400000) {
+      updateFields_(readTable_(SHEETS.PAYMENTS), row._row, { 'Status': 'EXPIRED' });
+      return;
+    }
+    const r = razorpayRequest_('get', '/orders/' + encodeURIComponent(row['Order ID']) + '/payments', null, cfg);
+    const items = (r.ok && r.json && r.json.items) || [];
+    const paid = items.find(p => p.status === 'captured') || items.find(p => p.status === 'authorized');
+    if (!paid) return;
+    if (fetchAndCapture_(paid.id, row, cfg).ok) {
+      completePayment_(String(row['Payment Ref']), { gatewayPaymentId: paid.id, notes: 'Reconciled' });
+      n++;
+    }
+  });
+  if (n) logEvent_(LOG_LEVEL.INFO, 'PAYMENTS_RECONCILED', { result: n + ' activated' });
+  return n;
+}
+
+/* ============================== ADMIN ============================== */
+
+/** Menu: activate (or renew) a subscription after a manual UPI / bank payment. */
+function activateSubscription() {
+  requireAdmin_();
+  const ui = SpreadsheetApp.getUi();
+  const ask = label => {
+    const r = ui.prompt('Activate Subscription', label, ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) throw new Error('CANCELLED');
+    return r.getResponseText().trim();
+  };
+  try {
+    const who = ask('Client ID or email:');
+    const client = readTable_(SHEETS.CLIENTS).rows.find(c => String(c['Client ID']) === who || String(c['Client Email']).toLowerCase() === who.toLowerCase());
+    if (!client) throw new Error('Client not found.');
+    const plan = activePlan_(ask('Plan ID (' + publicPlans_().map(p => p.id).join(', ') + '):'));
+    const note = ask('Payment reference (UPI / bank ref, optional):');
+    const ref = nextIds_('PAY', 4, 1, SHEETS.PAYMENTS, 'Payment Ref')[0];
+    appendObject_(SHEETS.PAYMENTS, {
+      'Payment Ref': ref, 'Client ID': client['Client ID'], 'Plan ID': plan['Plan ID'], 'Plan Name': plan['Plan Name'],
+      'Amount': Number(plan['Price INR']) || 0, 'Currency': 'INR', 'Gateway': 'MANUAL', 'Status': 'CREATED', 'Created At': new Date(),
+    });
+    const act = completePayment_(ref, { gatewayPaymentId: note || 'MANUAL', notes: 'Activated by admin' });
+    ui.alert('Subscription active', client['Business Name'] + ': ' + act.planName + ' until ' + act.validUntil +
+      (act.accessCode ? '\n\nNew access code (also emailed): ' + act.accessCode : '') +
+      (act.needsNumber ? '\n\nNext: add their phone in Maytapi and set CLIENTS → Maytapi Phone ID.' : ''), ui.ButtonSet.OK);
+  } catch (err) {
+    if (err.message !== 'CANCELLED') ui.alert('Activate Subscription', 'Error: ' + err.message, ui.ButtonSet.OK);
+  }
+}
+
+/** Menu: store Razorpay keys in Script Properties (never in the sheet). */
+function setPaymentKeys() {
+  requireAdmin_();
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  const ask = (key, label) => {
+    const r = ui.prompt('Razorpay keys', label + (props.getProperty(key) ? ' (set — leave blank to keep)' : ''), ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) return false;
+    if (r.getResponseText().trim()) props.setProperty(key, r.getResponseText().trim());
+    return true;
+  };
+  if (!ask('RAZORPAY_KEY_ID', 'Razorpay Key ID (rzp_live_… or rzp_test_…)')) return;
+  if (!ask('RAZORPAY_KEY_SECRET', 'Razorpay Key Secret')) return;
+  CONFIG_CACHE_ = null;
+  ui.alert(razorpayEnabled_(getConfig_(true)) ? 'Razorpay keys saved. Online payments are enabled.' : 'Keys incomplete — online payments stay disabled.');
+}
+
+/* ============================== WHATSAPP CONNECTION (QR) ============================== */
+
+/**
+ * The tenant's WhatsApp connection state for the dashboard:
+ *   shared    — uses the platform number (nothing to connect)
+ *   pending   — dedicated plan, admin has not set Maytapi Phone ID yet
+ *   connected — phone logged in
+ *   qr        — not logged in: scan the QR (data URL) in WhatsApp → Linked devices
+ *   unknown   — Maytapi did not return a usable status/QR (contact support)
+ * Maytapi endpoints used: GET /{phone_id}/status and GET /{phone_id}/qrCode (verify in the Maytapi docs).
+ */
+function whatsappConnection_(client) {
+  const phoneId = String(client['Maytapi Phone ID'] || '').trim();
+  if (!phoneId) {
+    const plan = plansById_()[String(client['Plan ID'] || '')];
+    return { state: plan && isYes_(plan['Dedicated Number']) ? 'pending' : 'shared' };
+  }
+  const cfg = cfgForClient_(client, getConfig_());
+  const st = maytapiPhoneStatus_(cfg);
+  if (st.success && maytapiLooksConnected_(st.response)) return { state: 'connected' };
+  const qr = maytapiQrCode_(cfg);
+  if (qr) return { state: 'qr', qr: qr };
+  return { state: 'unknown' };
+}
+
 /* ============================== Campaigns.gs ============================== */
 
 /**
@@ -1167,6 +1612,12 @@ function clientApiActions_() {
     apiCreateCampaign: apiCreateCampaign_,
     apiCancelCampaign: apiCancelCampaign_,
     apiGetCampaignImage: apiGetCampaignImage_,
+    // Subscriptions (Billing.gs)
+    apiGetPlans: apiGetPlans_,
+    apiSignup: apiSignup_,
+    apiConfirmPayment: apiConfirmPayment_,
+    apiStartRenewal: apiStartRenewal_,
+    apiWhatsAppConnection: apiWhatsAppConnection_,
   };
 }
 
@@ -1272,7 +1723,8 @@ function buildBootstrap_(clientId) {
       const ent = tenantEntitlement_(client, monthlySentByClient_(readTable_(SHEETS.MESSAGE_QUEUE).rows)[clientId] || 0);
       return {
         plan: ent.plan, validUntil: ent.validUntil, quota: ent.quota, used: ent.used, remaining: ent.remaining,
-        canSend: ent.ok, reason: ent.reason, dedicatedNumber: ent.dedicatedNumber,
+        canSend: ent.ok, reason: ent.reason, dedicatedNumber: ent.dedicatedNumber, awaitingNumber: ent.awaitingNumber,
+        planId: String(client['Plan ID'] || ''),
       };
     })(),
     campaigns: clientCampaignSummaries_(clientId),
@@ -1545,6 +1997,71 @@ function apiGetCampaignImage_(token, campaignId) {
   });
 }
 
+/* ============================== SUBSCRIPTIONS ============================== */
+
+/** Public: pricing page data. */
+function apiGetPlans_() {
+  try {
+    const cfg = getConfig_(true);
+    return { ok: true, plans: publicPlans_(), signupEnabled: cfg.signupEnabled, paymentMode: razorpayEnabled_(cfg) ? 'razorpay' : 'manual', currency: 'INR' };
+  } catch (err) {
+    logEvent_(LOG_LEVEL.ERROR, 'API_PLANS', { error: err.message });
+    return { ok: false, error: 'Plans are not available right now.' };
+  }
+}
+
+/** Public: start a subscription (see Billing.gs signup_). */
+function apiSignup_(payload) {
+  try {
+    const r = signup_(payload);
+    if (!r.ok) return r;
+    if (r.mode === 'free') return finishActivation_(r.activation, r);
+    return r;
+  } catch (err) {
+    logEvent_(LOG_LEVEL.ERROR, 'API_SIGNUP', { error: err.message });
+    return { ok: false, errors: [err.message] };
+  }
+}
+
+/** Public (signature-verified): Razorpay Checkout success → activate and sign in. */
+function apiConfirmPayment_(payload) {
+  try {
+    const act = confirmRazorpayPayment_(payload);
+    return finishActivation_(act, {});
+  } catch (err) {
+    logEvent_(LOG_LEVEL.ERROR, 'API_CONFIRM_PAYMENT', { error: err.message });
+    return { ok: false, error: err.message };
+  }
+}
+
+/** After activation: open a session for the client (proved by payment) and return the dashboard data. */
+function finishActivation_(act, extra) {
+  const s = openSessionForClient_(act.clientId);
+  const rest = Object.assign({}, extra);
+  delete rest.activation;
+  return Object.assign(rest, { ok: true, accessCode: act.accessCode || '', validUntil: act.validUntil || '',
+    planName: act.planName || '', token: s.token }, buildBootstrap_(act.clientId));
+}
+
+/** Session: renew or upgrade. */
+function apiStartRenewal_(token, planId) {
+  return apiCall_(token, 'RENEWAL', s => {
+    const plan = activePlan_(planId);
+    const c = s.client;
+    const r = startOrder_(s.clientId, plan, getConfig_(true), {
+      name: String(c['Contact Name'] || c['Business Name']), email: String(c['Client Email']),
+      contact: c['Business Phone'] ? '+' + normalizePhoneNumber(c['Business Phone']) : '',
+    });
+    if (r.mode === 'free') return { mode: 'free', bootstrap: buildBootstrap_(s.clientId) };
+    return r;
+  });
+}
+
+/** Session: WhatsApp connection state / QR code for the tenant's number. */
+function apiWhatsAppConnection_(token) {
+  return apiCall_(token, 'WA_CONNECTION', s => whatsappConnection_(s.client));
+}
+
 /* ============================== Code.gs ============================== */
 
 /**
@@ -1560,6 +2077,8 @@ function onOpen() {
     .addItem('Create Campaign Form', 'createCampaignForm')
     .addSeparator()
     .addItem('Create Client Login', 'createClientLogin')
+    .addItem('Activate Subscription (manual payment)', 'activateSubscription')
+    .addItem('Set Payment Keys (Razorpay)', 'setPaymentKeys')
     .addItem('Reset Client Access Code', 'resetClientAccessCode')
     .addItem('Show Client App URLs', 'showDashboardUrl')
     .addSeparator()
@@ -1634,6 +2153,8 @@ function setupSystem() {
   setTextColumns_(SHEETS.MESSAGE_QUEUE, ['Phone', 'CTA Value', 'Message ID', 'Sender Phone ID']);
   setTextColumns_(SHEETS.RESPONSES, ['Phone', 'Message ID']);
   setTextColumns_(SHEETS.SETTINGS, ['Value']);
+  setTextColumns_(SHEETS.PAYMENTS, ['Order ID', 'Gateway Payment ID', 'Valid Until']);
+  setTextColumns_(SHEETS.CLIENTS, ['GSTIN']);
 
   // Seed missing SETTINGS keys (existing values untouched).
   const settings = readTable_(SHEETS.SETTINGS);
@@ -1655,6 +2176,17 @@ function setupSystem() {
       'Image URL': s[4] || '', 'Button Text': s[5] || '', 'Button Type': s[6] || '', 'Button Value': s[7] || '', 'Active': 'YES',
     })));
     report.push('TEMPLATES: added starter replies');
+  }
+
+  // Example plans (only when PLANS is empty). Edit prices/limits in the sheet — they are placeholders.
+  if (!readTable_(SHEETS.PLANS).rows.length) {
+    const feats = 'Your own WhatsApp number; Image + text ads with button; Excel / CSV customer upload; Scheduling; Delivery & read reports';
+    appendObjects_(SHEETS.PLANS, [
+      { 'Plan ID': 'STARTER', 'Plan Name': 'Starter', 'Price INR': 1499, 'Duration Days': 30, 'Monthly Quota': 2000, 'Dedicated Number': 'YES', 'Features': feats, 'Active': 'YES', 'Sort Order': 1 },
+      { 'Plan ID': 'GROWTH', 'Plan Name': 'Growth', 'Price INR': 2999, 'Duration Days': 30, 'Monthly Quota': 6000, 'Dedicated Number': 'YES', 'Features': feats + '; Auto-replies', 'Active': 'YES', 'Sort Order': 2 },
+      { 'Plan ID': 'PRO', 'Plan Name': 'Pro', 'Price INR': 5999, 'Duration Days': 30, 'Monthly Quota': 15000, 'Dedicated Number': 'YES', 'Features': feats + '; Auto-replies; Priority support', 'Active': 'YES', 'Sort Order': 3 },
+    ]);
+    report.push('PLANS: added example plans (edit the prices!)');
   }
 
   addValidations_();
@@ -1689,7 +2221,9 @@ function addValidations_() {
   };
   apply(SHEETS.CONTACTS, 'Opt In', list(['YES', 'NO']));
   apply(SHEETS.CONTACTS, 'Status', list(['Active', 'Inactive']));
-  apply(SHEETS.CLIENTS, 'Status', list(['Active', 'Suspended', 'Inactive']));
+  apply(SHEETS.CLIENTS, 'Status', list(['Active', 'Pending Payment', 'Suspended', 'Inactive']));
+  apply(SHEETS.PLANS, 'Active', list(['YES', 'NO']));
+  apply(SHEETS.PLANS, 'Dedicated Number', list(['YES', 'NO']));
   apply(SHEETS.CAMPAIGNS, 'Status', list(Object.keys(CAMPAIGN_STATUS)));
   apply(SHEETS.CAMPAIGNS, 'CTA Type', list(CTA_TYPES.concat([''])));
   apply(SHEETS.TEMPLATES, 'Reply Type', list(['TEXT', 'IMAGE', 'BUTTONS']));
@@ -2012,7 +2546,7 @@ function createCampaignFromInput_(input, source, opts) {
 
   // Tenant subscription: suspended or expired accounts cannot create campaigns.
   const ent = tenantEntitlementById_(clientId);
-  if (!ent.ok && !/quota/i.test(ent.reason)) {
+  if (!ent.ok && !/quota/i.test(ent.reason) && !ent.awaitingNumber) {
     const errors = ['Your account cannot launch campaigns right now: ' + ent.reason + ' Please contact your service provider.'];
     logEvent_(LOG_LEVEL.WARNING, 'TENANT_BLOCKED', { clientId: clientId, result: 'REJECTED', error: ent.reason });
     if (!opts.silent) sendAttentionEmail_(input, errors);
@@ -2023,6 +2557,7 @@ function createCampaignFromInput_(input, source, opts) {
   const now = new Date();
   const audienceSize = countAudience_(clientId, d.audience);
   const warnings = v.warnings.slice();
+  if (ent.awaitingNumber) warnings.push('Your WhatsApp number is not connected yet. This campaign will start sending automatically once it is connected.');
   if (ent.remaining !== null && audienceSize > ent.remaining) {
     warnings.push('This campaign targets ' + audienceSize + ' customers but only ' + ent.remaining + ' messages remain in this month\'s plan. Sending pauses when the quota is reached.');
   }
@@ -2451,6 +2986,37 @@ function testMaytapiConnection() {
   logEvent_(ok ? LOG_LEVEL.SUCCESS : LOG_LEVEL.ERROR, 'TEST_CONNECTION', { result: ok ? 'OK' : 'FAILED', details: lines.join(' | ') });
   try { SpreadsheetApp.getUi().alert('Maytapi connection test', lines.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK); } catch (err) { console.log(lines.join('\n')); }
   return { ok: ok, details: lines };
+}
+
+/**
+ * True when a /status response says the phone is logged in to WhatsApp.
+ * The exact response shape could not be verified, so several common field names are accepted.
+ */
+function maytapiLooksConnected_(response) {
+  if (!response || typeof response !== 'object') return false;
+  const st = response.status && typeof response.status === 'object' ? response.status : (response.data || response);
+  if (st && (st.loggedIn === true || st.isLoggedIn === true || st.connected === true)) return true;
+  const text = JSON.stringify(st || {}).toLowerCase();
+  return /"(state|status)"\s*:\s*"(connected|active|ready|authenticated|logged_in|loggedin)"/.test(text);
+}
+
+/**
+ * GET /{phone_id}/qrCode — returns a data URL of the QR image to link WhatsApp, or '' when
+ * Maytapi returns no image (already logged in, phone loading, or endpoint unavailable).
+ */
+function maytapiQrCode_(cfg) {
+  cfg = cfg || getConfig_();
+  if (!cfg.productId || !cfg.apiToken || !cfg.phoneId) return '';
+  try {
+    const res = UrlFetchApp.fetch(MAYTAPI_BASE_URL + '/' + encodeURIComponent(cfg.productId) + phonePath_(cfg, 'qrCode'), {
+      method: 'get', headers: { 'x-maytapi-key': cfg.apiToken }, muteHttpExceptions: true,
+    });
+    const type = String((res.getHeaders() || {})['Content-Type'] || (res.getHeaders() || {})['content-type'] || '');
+    if (res.getResponseCode() !== 200 || !/^image\//i.test(type)) return '';
+    return 'data:' + type.split(';')[0] + ';base64,' + Utilities.base64Encode(res.getContent());
+  } catch (err) {
+    return '';
+  }
 }
 
 /* ============================== Media.gs ============================== */
@@ -2926,6 +3492,7 @@ function processMessageQueueLocked_() {
   // DAILY_SEND_LIMIT protects each WhatsApp number (per sending phone ID per day).
   // Monthly Quota / Valid Until / Status are per tenant (CLIENTS row).
   const clients = clientsById_();
+  const plans = plansById_();
   const today = todayKey_();
   const sentTodayByPhone = {};
   queue.rows.forEach(q => {
@@ -2964,8 +3531,10 @@ function processMessageQueueLocked_() {
 
     // Tenant entitlement: suspended / expired / out of quota => pause the campaign (items are kept).
     const client = clients[clientId];
-    if (!entitlement[clientId]) entitlement[clientId] = tenantEntitlement_(client, usedThisMonth[clientId] || 0);
+    if (!entitlement[clientId]) entitlement[clientId] = tenantEntitlement_(client, usedThisMonth[clientId] || 0, plans);
     const ent = entitlement[clientId];
+    // Dedicated number not connected yet: keep the messages waiting (no pause) — they go out once it is set.
+    if (ent.awaitingNumber) continue;
     if (!ent.ok || (ent.remaining !== null && ent.remaining <= 0)) {
       blockedCampaigns[campaignId] = true;
       setCampaignStatus_(campaignId, CAMPAIGN_STATUS.PAUSED, 'Sending paused: ' + (ent.reason || 'Monthly message quota reached.') + ' Resume after renewal.');
@@ -3126,6 +3695,11 @@ function runScheduler() {
       if (n) logEvent_(LOG_LEVEL.INFO, 'SCHEDULER', { result: n + ' campaign(s) activated' });
     } catch (err) {
       logEvent_(LOG_LEVEL.ERROR, 'SCHEDULER_ACTIVATE', { error: err.message });
+    }
+    try {
+      reconcilePendingPayments_();
+    } catch (err) {
+      logEvent_(LOG_LEVEL.ERROR, 'SCHEDULER_PAYMENTS', { error: err.message });
     }
     processMessageQueueLocked_();
   } catch (err) {
@@ -3312,6 +3886,17 @@ function loginClient_(email, code) {
   return { token: token, clientId: String(row['Client ID']) };
 }
 
+/** Opens a session for a client without a code (used right after a verified payment). */
+function openSessionForClient_(clientId) {
+  const row = findRow_(readTable_(SHEETS.CLIENTS), 'Client ID', clientId);
+  if (!row || !/^active$/i.test(String(row['Status'] || ''))) throw authError_('Account is not active.');
+  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  CacheService.getScriptCache().put('sess_' + token, JSON.stringify({
+    clientId: String(clientId), email: String(row['Client Email']).toLowerCase(), codeTag: String(row['Access Code Hash']).slice(0, 16),
+  }), SESSION_TTL_SECONDS);
+  return { token: token };
+}
+
 /** Resolves a session token to { clientId, client } or throws an AUTH error. Sliding expiry. */
 function requireSession_(token) {
   if (!token || !/^[a-f0-9]{64}$/.test(String(token))) throw authError_();
@@ -3409,7 +3994,7 @@ function monthlySentByClient_(queueRows) {
  * Can this tenant send right now?
  * @return { ok, reason, plan, quota, used, remaining, validUntil, dedicatedNumber }
  */
-function tenantEntitlement_(client, usedThisMonth) {
+function tenantEntitlement_(client, usedThisMonth, plans) {
   const plan = String((client && client['Plan']) || '').trim();
   const quotaRaw = String((client && client['Monthly Quota']) || '').trim();
   const quota = quotaRaw === '' ? null : Math.max(0, Number(quotaRaw) || 0);
@@ -3420,11 +4005,17 @@ function tenantEntitlement_(client, usedThisMonth) {
     remaining: quota === null ? null : Math.max(0, quota - used),
     validUntil: validUntil,
     dedicatedNumber: !!(client && String(client['Maytapi Phone ID'] || '').trim()),
+    awaitingNumber: false,
   };
+  // Plans that include a dedicated WhatsApp number wait until the admin sets Maytapi Phone ID.
+  const planId = client ? String(client['Plan ID'] || '').trim() : '';
+  const planRow = planId ? (plans || plansById_())[planId] : null;
+  const needsNumber = !!(planRow && isYes_(planRow['Dedicated Number']) && !out.dedicatedNumber);
   if (!client) { out.ok = false; out.reason = 'Client record not found.'; }
   else if (!/^active$/i.test(String(client['Status'] || ''))) { out.ok = false; out.reason = 'Account is ' + (client['Status'] || 'inactive') + '.'; }
   else if (validUntil && validUntil < todayKey_()) { out.ok = false; out.reason = 'Subscription expired on ' + validUntil + '.'; }
   else if (quota !== null && used >= quota) { out.ok = false; out.reason = 'Monthly message quota (' + quota + ') reached.'; }
+  else if (needsNumber) { out.ok = false; out.awaitingNumber = true; out.reason = 'Your WhatsApp number is not connected yet.'; }
   return out;
 }
 
