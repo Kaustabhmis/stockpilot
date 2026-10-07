@@ -6,7 +6,7 @@ const env = build();
 const src = fs.readFileSync('/home/user/stockpilot/dist/code.gs', 'utf8');
 const names = Object.keys(env.G);
 const APP = new Function(...names, src + '\n;return { doPost: doPost, doGet: doGet, setupDomeBox: setupDomeBox, '
-        + 'ensureRegistry: ensureRegistry, __env: 1, '
+        + 'ensureRegistry: ensureRegistry, createDemoAccount: createDemoAccount, __env: 1, '
         /* HARNESS ONLY. In Apps Script every request is a fresh execution, so the
            alias lookup is cached for the life of one. Here the whole suite runs in
            a single execution, so a test that changes the aliases needs a way to say
@@ -73,6 +73,13 @@ const server = http.createServer((req, res) => {
   }
   /* HARNESS ONLY — not part of code.gs. Lets the screenshot seed put a tenant
      on a paid plan without going through Razorpay. */
+  /* HARNESS ONLY — builds the real demo workspace, so a browser suite can look
+     at exactly what an operator gets from createDemoAccount(). */
+  if (req.url.startsWith('/__demo')) {
+    let out;
+    try { out = APP.createDemoAccount(); } catch (e) { out = 'ERROR ' + e.message; }
+    res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(String(out)); return;
+  }
   if (req.url.startsWith('/__setplan')) {
     const q = new URL('http://x' + req.url).searchParams;
     const dir = env.FILES.MASTER.getSheetByName('Directory');

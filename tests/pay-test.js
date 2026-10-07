@@ -12,9 +12,14 @@ const sandbox={
     'Yearly':{price:19999,name:'Pro'},'Enterprise':{price:0,name:'Enterprise'}},
   MASTER_DB_ID:'x', sendEmailSafe:()=>{}, Date,
 };
+/* payments-secure.gs is the superseded standalone module, kept as the record
+   of the signature fix. Its grantPlan_/hex_/receiptHtml_ were renamed `legacy*`
+   so that pasting it beside code.gs cannot silently replace the live payment
+   path — hence legacyHex_ below. The verification logic itself is unchanged,
+   and handleVerifiedPayment_ in code.gs is covered by api-test and invoice-test. */
 const src=fs.readFileSync('/home/user/stockpilot/domebox/payments-secure.gs','utf8');
 const A=new Function(...Object.keys(sandbox), src+`
-  return {verifyRazorpaySignature, planForAmountPaise_, eq_, hex_};`)(...Object.values(sandbox));
+  return {verifyRazorpaySignature, planForAmountPaise_, eq_, hex_: legacyHex_};`)(...Object.values(sandbox));
 
 let pass=0,fail=0;
 const ok=(n,v,x)=>{console.log((v?'  PASS ':'  FAIL ')+n+(v||!x?'':'  ['+x+']'));v?pass++:fail++;};

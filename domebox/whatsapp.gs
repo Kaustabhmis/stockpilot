@@ -414,7 +414,21 @@ function sendWhatsAppReminders() {
 }
 
 /* ---- inbound webhook: delivery status and STOP --------------------------- */
-function doGet(e) {
+/**
+ * RENAMED FROM doGet / doPost, and this matters more than it looks.
+ *
+ * Apps Script puts every .gs file in ONE global scope, and the last definition
+ * of a name wins. While these were called doGet and doPost, adding this file
+ * to the project that serves the app would replace the API's entry points with
+ * WhatsApp's — every login, every task, every payment, gone, with no error
+ * anywhere to explain it.
+ *
+ * code.gs now routes to these: its doGet already answers Meta's verification
+ * handshake, and its doPost hands a `whatsapp_business_account` payload to
+ * waDoPost below when this file is present. So WhatsApp works by adding this
+ * file and nothing else, and the API keeps its own front door.
+ */
+function waDoGet(e) {
   // Meta's one-time webhook verification handshake.
   var p = (e && e.parameter) || {}, c = waConfig_();
   if (p['hub.mode'] === 'subscribe' && p['hub.verify_token'] === c.verify && c.verify) {
@@ -423,7 +437,7 @@ function doGet(e) {
   return ContentService.createTextOutput('ok');
 }
 
-function doPost(e) {
+function waDoPost(e) {
   var ack = ContentService.createTextOutput('EVENT_RECEIVED');
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');

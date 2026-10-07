@@ -21,6 +21,17 @@ function doPost(e) {
   // Razorpay posts its own shape, not ours.
   if (body.event && body.payload) return handleRazorpayWebhook_(e, body);
 
+  /* So does Meta. Routed from here rather than from a second doPost, because
+     Apps Script has one global scope and a second doPost would replace this
+     one — taking every login, task and payment with it. whatsapp.gs is
+     optional, so the handler is called only if that file is in the project;
+     without it the event is acknowledged and dropped, which is what Meta wants
+     and is better than retrying forever against a 500. */
+  if (body.object === 'whatsapp_business_account') {
+    if (typeof waDoPost === 'function') return waDoPost(e);
+    return ContentService.createTextOutput('EVENT_RECEIVED');
+  }
+
   try {
     return json_(route_(body));
   } catch (err) {

@@ -30,12 +30,15 @@ node invoice-test.js        # GST arithmetic to the paisa, and a gapless number 
 node repeat-test.js         # every cadence, and the two ways a repeat ends by itself
 node leaderboard-test.js    # the ranking, and who it refuses to rank
 node netlify-test.js        # the real deploy build, run into a throwaway folder
+node scope-test.js          # no .gs file redefines another's names in one project
+node demo-test.js           # the demo workspace, and that it demos something
 
 node server.js &            # then, for the browser tests:
 node ui-test.js
 node billing-ui-test.js     # the invoice details are asked for before the card
 node repeat-ui-test.js      # setting a stop rule the way a person would
 node leaderboard-ui-test.js # the board top to bottom, and what a Doer sees of it
+node demo-ui-test.js        # the demo workspace on screen, tab by tab
 node manager-ui-test.js     # the held-review screens, end to end
 node kra-ui-test.js         # the KRA/KPI overview and editor
 node project-ui-test.js     # building a project and watching a stage release

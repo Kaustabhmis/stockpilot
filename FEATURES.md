@@ -1,9 +1,9 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **871 checks across twenty-three suites**, run against the real `code.gs` on an
-in-memory Sheets shim, driven by the real `index.html` in a real browser. See
-`tests/README.md`.
+Tests: **1,245 checks across thirty-four suites**, run against the real
+`dist/code.gs` on an in-memory Sheets shim, driven by the real
+`dist/index.html` in a real browser. See `tests/README.md`.
 
 ## Accounts
 - [x] Company signup, creates the tenant spreadsheet from your template

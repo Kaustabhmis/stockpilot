@@ -1,4 +1,24 @@
 /**
+ * SUPERSEDED — DO NOT PASTE THIS INTO THE SAME APPS SCRIPT PROJECT AS code.gs
+ * =============================================================================
+ * Everything here now lives in code.gs (src/08-commerce.gs), with the API
+ * re-confirmation and the invoice that follows a payment. This file is kept as
+ * the record of the fix, not as something to deploy.
+ *
+ * Apps Script puts every .gs file in ONE global scope and the last definition
+ * of a name wins. This file used to define legacyGrantPlan_, legacyHex_ and legacyReceiptHtml_ —
+ * the same three names code.gs defines — so pasting it in would silently
+ * replace the live payment path with this older, differently-shaped one: plans
+ * granted without the term coming from the plan table, and no invoice issued
+ * for the payment at all. Nothing would error. You would find out when a
+ * customer asked for their invoice.
+ *
+ * Those three are renamed `legacy*` below so the file is inert if it is ever
+ * pasted in anyway. It still should not be.
+ * =============================================================================
+ */
+
+/**
  * DOME BOX — PAYMENT VERIFICATION
  * =============================================================================
  * Replaces handlePaymentSuccess(sheetId, planName), which grants a plan because
@@ -37,7 +57,7 @@ function razorpaySecret_() {
   return v;
 }
 
-function hex_(bytes) {
+function legacyHex_(bytes) {
   var s = '';
   for (var i = 0; i < bytes.length; i++) s += ('0' + (bytes[i] & 0xFF).toString(16)).slice(-2);
   return s;
@@ -53,7 +73,7 @@ function eq_(a, b) {
 /** Razorpay signs `order_id|payment_id` with your key secret. */
 function verifyRazorpaySignature(orderId, paymentId, signature) {
   if (!orderId || !paymentId || !signature) return false;
-  var expected = hex_(Utilities.computeHmacSha256Signature(
+  var expected = legacyHex_(Utilities.computeHmacSha256Signature(
     String(orderId) + '|' + String(paymentId), razorpaySecret_()));
   return eq_(expected, signature);
 }
@@ -115,7 +135,7 @@ function handleVerifiedPayment(sheetId, params) {
     throw new Error('We could not match that amount to a plan. Contact support.');
   }
 
-  var granted = grantPlan_(sheetId, planName, paid);
+  var granted = legacyGrantPlan_(sheetId, planName, paid);
   paymentLog_('GRANTED', sheetId, planName + ' via ' + params.razorpay_payment_id);
   return { status: 'success', plan: planName, validUntil: granted };
 }
@@ -142,7 +162,7 @@ function planForAmountPaise_(paise) {
  * early adds time instead of throwing away what is left — the existing code
  * dates from today and silently shortens an early renewal.
  */
-function grantPlan_(sheetId, planName, paid) {
+function legacyGrantPlan_(sheetId, planName, paid) {
   var dir = SpreadsheetApp.openById(MASTER_DB_ID).getSheetByName('Directory');
   var data = dir.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -159,14 +179,14 @@ function grantPlan_(sheetId, planName, paid) {
 
     try {
       sendEmailSafe(data[i][1], 'Dome Box — Payment Receipt',
-        receiptHtml_(data[i][0], planName, paid, until));
+        legacyReceiptHtml_(data[i][0], planName, paid, until));
     } catch (e) { /* a failed receipt must never undo a paid upgrade */ }
     return until;
   }
   throw new Error('That workspace is not in the registry.');
 }
 
-function receiptHtml_(company, planName, paid, until) {
+function legacyReceiptHtml_(company, planName, paid, until) {
   var esc = function (s) { return String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var amount = '₹' + (Number(paid.amount) / 100).toLocaleString('en-IN');

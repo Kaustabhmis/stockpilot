@@ -29,7 +29,7 @@ committed.
 ## Checking it
 
 ```bash
-node tests/netlify-test.js     # 71 checks, from the repository root
+node tests/netlify-test.js     # 74 checks, from the repository root
 ```
 
 It runs the real build into a throwaway copy and asserts the things that are

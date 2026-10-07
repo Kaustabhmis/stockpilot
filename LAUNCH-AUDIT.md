@@ -156,8 +156,11 @@ to a real provider before it starts failing silently. Noted in `DEPLOY-NEW.md` �
 | Scoring | 0–100 at both ends, enforced in one clamp. |
 | Schema changes | Additive only — columns appended, never inserted or moved. |
 
-**718 checks across twenty suites**, run against the real `dist/code.gs` on an
-in-memory Sheets shim and the real `dist/index.html` in a real browser.
+**718 checks across twenty suites** at the time of this audit, run against the
+real `dist/code.gs` on an in-memory Sheets shim and the real `dist/index.html`
+in a real browser. The suite has grown since; `tests/README.md` is the current
+list. This document is the record of what that audit found, not a running
+total.
 
 ---
 

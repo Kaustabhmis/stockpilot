@@ -49,6 +49,14 @@ Your current customers keep running on the old one until you decide otherwise.
    It is not pasted into a file any more: the site build substitutes it, and
    refuses to build without it. See `netlify/DEPLOY.md`.
 8. Open the deployed site, sign up a test company, and walk through it.
+9. Optional, but do it before the first sales call: run `createDemoAccount()`.
+   It builds a real workspace on the Enterprise plan with a month of plausible
+   work already in it — eight people in a reporting line, forty-odd jobs
+   delivered at different times against different deadlines, some late, some
+   reworked, a project mid-flight, cookie points, leave and measurable KRAs.
+   It prints the login. An empty workspace demonstrates nothing: the score,
+   the leaderboard and the priority list all need history to say anything.
+   `deleteDemoAccount(true)` removes it.
 
 ### 1a. The Razorpay webhook — without it, some paid customers stay on Free
 

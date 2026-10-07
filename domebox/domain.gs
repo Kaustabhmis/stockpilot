@@ -1954,9 +1954,20 @@ function leaderboard(people, previousPeople) {
            String(a.name).localeCompare(String(b.name));
   });
 
-  var rows = ranked.map(function (p, i) {
-    var row = {
-      rank: 0, username: p.username, name: p.name, role: p.role, dept: p.dept,
+  /* Built with a loop rather than map(). The tie branch has to look at the row
+     before it, and inside a map() callback the array being assigned does not
+     exist yet — so `rows[i - 1]` threw, but only ever on a tie, which no test
+     had produced until a demo workspace with two people on the same score did.
+     A local carries the previous rank instead, and reads the same. */
+  var rows = [], prevRank_ = 0;
+  for (var i = 0; i < ranked.length; i++) {
+    var p = ranked[i];
+    var tie = i > 0 && ranked[i - 1].score === p.score &&
+              (ranked[i - 1].delivered || 0) === (p.delivered || 0);
+    rows.push({
+      // Dense-at-the-top ranking: equal scores share a place, the next is skipped.
+      rank: tie ? prevRank_ : i + 1,
+      username: p.username, name: p.name, role: p.role, dept: p.dept,
       score: p.score, band: p.band, delivered: p.delivered || 0,
       loadPercent: p.loadPercent, provisional: !!p.provisional,
       cookiePoints: p.cookiePoints || 0,
@@ -1964,16 +1975,9 @@ function leaderboard(people, previousPeople) {
       /* Scored, but on other people's work rather than their own. Flagged
          rather than hidden: it is the honest reading of the row. */
       decisionsOnly: !(p.delivered || 0),
-    };
-    // Dense-at-the-top ranking: equal scores share a place, the next is skipped.
-    if (i > 0 && ranked[i - 1].score === p.score &&
-        (ranked[i - 1].delivered || 0) === (p.delivered || 0)) {
-      row.rank = rows[i - 1].rank;
-    } else {
-      row.rank = i + 1;
-    }
-    return row;
-  });
+    });
+    prevRank_ = rows[rows.length - 1].rank;
+  }
 
   rows.forEach(function (r) {
     var was = prevRank[r.username];
