@@ -313,6 +313,8 @@
         <h2 class="text-2xl font-black">Team</h2>
         <span class="flex-1"></span>
         <button id="btnLeave" class="btn btn-g">Record leave</button>
+        <button id="btnCookie" class="btn btn-g flex items-center gap-1"><span class="material-icons text-base">emoji_events</span> Cookie points</button>
+        <button id="btnOrg" class="btn btn-g">Org chart</button>
         <button id="btnKra" class="btn btn-g">KRA &amp; KPI</button>
         <button id="btnCategories" class="btn btn-g sm-up">Job categories</button>
         <button id="btnNewUser" class="btn btn-p flex items-center gap-1">
@@ -602,7 +604,8 @@ function renderTiles() {
     tile('In progress', s.progress) +
     tile('For review', s.review) +
     tile('Overdue', s.overdue, 'needs attention', s.overdue ? 'text-red-700' : '') +
-    tile('Delegation', sc.hasData && sc.delegation != null ? sc.delegation : '\u2014', sc.hasData ? 'this month' : 'no data yet',
+    tile('Delegation', sc.hasData && sc.delegation != null ? sc.delegation : '\u2014',
+         sc.hasData ? (sc.load ? sc.load.percent + '% of an expected load' : 'this month') : 'no data yet',
          sc.hasData ? (sc.delegation >= 85 ? 'text-emerald-700' : sc.delegation >= 60 ? 'text-amber-700' : 'text-red-700') : 'text-gray-300') +
     '<div class="bg-white rounded-2xl border border-gray-100 p-4 cursor-pointer hover:border-blue-300" onclick="openScoreBreakdown()">' +
       '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">Final score</div>' +
@@ -618,8 +621,8 @@ function openScoreBreakdown() {
   /* Grouped, because a deduction for sitting on somebody else's work is a
      different conversation from a late delivery, and lumping them into one
      list is how a score stops being arguable in good faith. */
-  var order = ['Project Milestones', 'On-Time Delivery', 'First-Pass Quality',
-               'Queue Health', 'Review Responsiveness'];
+  var order = ['Workload Credit', 'Cookie Points', 'Project Milestones', 'On-Time Delivery',
+               'First-Pass Quality', 'Queue Health', 'Review Responsiveness'];
   var groups = {};
   rows.forEach(function (r) { (groups[r.group || 'Other'] = groups[r.group || 'Other'] || []).push(r); });
   var names = order.filter(function (g) { return groups[g]; })
@@ -662,6 +665,51 @@ function openScoreBreakdown() {
         'and your own approved leave are not counted.</div>' +
       '</div></div></div>' : '';
 
+  /* The headline answer to "why is my score what it is?". Ten jobs with seven
+     delivered on time has to beat one easy job delivered, and the only honest
+     way to show that is to put the load and the rate side by side. */
+  var ld = sc.load;
+  var loadPanel = ld ? '<div class="rounded-2xl border ' +
+      (ld.full ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-blue-50') + ' p-4 mb-5">' +
+    '<div class="flex items-start gap-3">' +
+      '<span class="material-icons ' + (ld.full ? 'text-emerald-700' : 'text-blue-700') + '">scale</span>' +
+      '<div class="min-w-0 w-full">' +
+      '<div class="text-sm font-black text-gray-900">How well, times how much</div>' +
+      '<div class="text-[13px] font-semibold text-gray-700 mt-1">' +
+        (sc.rate != null ? '<span class="font-black">' + sc.rate + '</span> for how well you delivered, ' : '') +
+        'carried on <span class="font-black">' + ld.percent + '%</span> of an expected load.' +
+      '</div>' +
+      '<div class="h-2 rounded-full bg-white/70 overflow-hidden my-2">' +
+        '<div class="h-full ' + (ld.full ? 'bg-emerald-500' : 'bg-blue-600') + '" ' +
+        'style="width:' + Math.min(100, ld.percent) + '%"></div></div>' +
+      (sc.delegationFormula ? '<div class="text-[13px] font-bold text-gray-800">' +
+        esc(sc.delegationFormula) + '</div>' : '') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        'A rate on its own says nothing about how much you took on, so ten jobs with seven ' +
+        'delivered on time outscores one easy job delivered. Work in hand counts, and so do ' +
+        'the approvals and reviews you clear for other people.</div>' +
+      (sc.provisional ? '<div class="text-[12px] font-black text-amber-800 mt-2">' +
+        'A light month so far — this is not yet a full picture of your work.</div>' : '') +
+      '</div></div></div>' : '';
+
+  var ck = sc.cookies;
+  var cookiePanel = ck && ck.awarded ? '<div class="rounded-2xl border border-amber-200 ' +
+      'bg-amber-50 p-4 mb-5"><div class="flex items-start gap-3">' +
+      '<span class="material-icons text-amber-700">emoji_events</span>' +
+      '<div class="min-w-0">' +
+      '<div class="text-sm font-black text-gray-900">' +
+        esc(ck.awarded + ' cookie point' + (ck.awarded === 1 ? '' : 's') + ' this month') + '</div>' +
+      (ck.list || []).map(function (c) {
+        return '<div class="text-[13px] font-semibold text-gray-700 mt-1">' +
+          '<span class="font-black">+' + c.points + '</span> ' + esc(c.reason || 'Recognised') +
+          '<span class="text-gray-500"> — ' + esc(c.byName || c.by || 'a manager') + '</span></div>';
+      }).join('') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        esc(ck.capped
+          ? 'Adding ' + ck.bonus + ' to your score — that is the monthly cap. The rest still stands on the record.'
+          : 'Adding ' + ck.bonus + ' to your score.') + '</div>' +
+      '</div></div></div>' : '';
+
   /* The gains, stated as plainly as the losses. A score that only ever shows a
      person what went wrong is read as a punishment ledger, and stops changing
      anybody's behaviour after the first month. */
@@ -694,7 +742,7 @@ function openScoreBreakdown() {
       'Nothing is estimated.</p>' +
     (sc.formula ? '<p class="text-[13px] font-bold text-gray-700 bg-gray-50 rounded-xl px-3 py-2 mb-5">' +
        esc(sc.formula) + '</p>' : '') +
-    msPanel + respPanel +
+    loadPanel + cookiePanel + msPanel + respPanel +
     '<div class="grid gap-3 mb-1" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">' +
       (sc.components || []).map(function (c) {
         return '<div class="bg-gray-50 rounded-2xl p-3 text-center">' +
@@ -2438,6 +2486,162 @@ function gateOption(value, title, blurb, checked) {
 }
 
 
+/* ---------- cookie points & the org chart ---------------------------------
+   Recognition on the day it happens, and a chart of who reports to whom that
+   nobody has to draw — it is a view of the "reports to" already set on each
+   person, so it cannot drift out of date the way a drawn one does.
+   -------------------------------------------------------------------------- */
+
+function openCookie(preset) {
+  var me = STATE.data.user || {};
+  var staff = (STATE.data.staff || []).filter(function (u) {
+    if (u.active === false || u.username === me.username) return false;
+    return me.role === 'Admin' || u.manager === me.username;
+  });
+
+  if (!staff.length) {
+    toast('Cookie points go to the people who report to you, and nobody does yet.', 'err');
+    return;
+  }
+
+  openModal('<form id="fCookie" class="p-6 lg:p-7">' +
+    '<h2 class="text-2xl font-black mb-1">Cookie points</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">For work worth marking on the day it ' +
+      'happened, not six months later. It counts towards their score this month and is on the ' +
+      'record at their review.</p>' +
+    '<label class="lb" for="ckWho">Who</label>' +
+    '<select id="ckWho" class="in mb-4">' + staff.map(function (u) {
+      return '<option value="' + esc(u.username) + '"' +
+        (preset && preset === u.username ? ' selected' : '') + '>' + esc(u.name) + '</option>';
+    }).join('') + '</select>' +
+    '<label class="lb">How many</label>' +
+    '<div class="flex gap-2 mb-4" id="ckPts">' + [1, 2, 3, 4, 5].map(function (n) {
+      return '<button type="button" data-n="' + n + '" class="flex-1 py-3 rounded-xl border ' +
+        'font-black ' + (n === 2 ? 'border-blue-600 bg-blue-50 text-blue-700 on'
+                                 : 'border-gray-200 text-gray-500') + '">' + n + '</button>';
+    }).join('') + '</div>' +
+    '<label class="lb" for="ckWhy">What it is for</label>' +
+    '<textarea id="ckWhy" class="in" rows="3" required minlength="5" ' +
+      'placeholder="e.g. Stayed back to clear the audit list before the visit"></textarea>' +
+    '<p class="text-xs font-semibold text-gray-400 mt-2">They will see this, and so will whoever ' +
+      'writes their appraisal. An award with no stated reason reads as favouritism.</p>' +
+    '<div class="flex gap-3 mt-6">' +
+      '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+      '<button type="submit" class="btn btn-p flex-1">Award</button></div></form>', 'max-w-lg');
+
+  var points = 2;
+  $('ckPts').querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      points = Number(b.dataset.n);
+      $('ckPts').querySelectorAll('button').forEach(function (x) {
+        var on = x === b;
+        x.className = 'flex-1 py-3 rounded-xl border font-black ' +
+          (on ? 'border-blue-600 bg-blue-50 text-blue-700 on' : 'border-gray-200 text-gray-500');
+      });
+    });
+  });
+
+  $('fCookie').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = e.target.querySelector('button[type=submit]');
+    busy(btn, true, 'Awarding…');
+    api('awardCookie', { data: { employee: $('ckWho').value, points: points,
+      reason: $('ckWhy').value } })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
+      .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
+  });
+}
+
+function openCookieFeed() {
+  openModal('<div class="p-6 lg:p-7"><div class="flex justify-between items-start mb-1">' +
+    '<h2 class="text-2xl font-black">Cookie points</h2>' +
+    '<button onclick="closeModal()" class="text-gray-400 hover:text-gray-900">' +
+    '<span class="material-icons">close</span></button></div>' +
+    '<div id="ckBody" class="text-sm text-gray-400 font-semibold mt-4">Loading…</div></div>', 'max-w-2xl');
+  api('getCookies').then(function (r) {
+    $('ckBody').innerHTML =
+      '<p class="text-sm text-gray-400 font-semibold mb-4">' + esc(r.month) +
+        '. Up to ' + r.maxBonus + ' points can move a score in a month — anything beyond that is ' +
+        'still recorded and still counts at the review.</p>' +
+      (r.leaderboard.length ? '<table class="tbl mb-6"><thead><tr><th>Person</th>' +
+        '<th>Points</th><th>Counting towards score</th></tr></thead><tbody>' +
+        r.leaderboard.map(function (l) {
+          return '<tr><td class="font-bold text-gray-800">' + esc(l.name) + '</td>' +
+            '<td class="font-black">' + l.points + '</td>' +
+            '<td class="' + (l.bonus < l.points ? 'text-amber-700 font-bold' : '') + '">+' + l.bonus +
+              (l.bonus < l.points ? ' (capped)' : '') + '</td></tr>';
+        }).join('') + '</tbody></table>' : '') +
+      (r.cookies.length ? r.cookies.map(function (c) {
+        return '<div class="border-b border-gray-100 py-3">' +
+          '<div class="text-sm font-bold text-gray-800">' + esc(c.toName) +
+            ' <span class="chip bg-emerald-50 text-emerald-700 ml-1">+' + c.points + '</span></div>' +
+          '<div class="text-[13px] text-gray-600 font-semibold mt-0.5">' + esc(c.reason) + '</div>' +
+          '<div class="text-[11px] text-gray-400 font-semibold mt-0.5">' +
+            esc('from ' + c.byName) + ' · ' + fmtDate(String(c.date).slice(0, 10)) + '</div></div>';
+      }).join('') : '<p class="text-sm text-gray-400 font-semibold">Nothing awarded this month yet.</p>');
+  }).catch(function (e) { $('ckBody').textContent = e.message; });
+}
+
+/* ---------- org chart ----------------------------------------------------- */
+function openOrgChart() {
+  openModal('<div class="p-6 lg:p-7"><div class="flex justify-between items-start mb-1">' +
+    '<h2 class="text-2xl font-black">Org chart</h2>' +
+    '<button onclick="closeModal()" class="text-gray-400 hover:text-gray-900">' +
+    '<span class="material-icons">close</span></button></div>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Built from who reports to whom. ' +
+      'Change a person\'s manager on the Team tab and this changes with it.</p>' +
+    '<div id="orgBody" class="text-sm text-gray-400 font-semibold">Loading…</div></div>', 'max-w-3xl');
+
+  api('getOrgChart').then(function (r) {
+    $('orgBody').innerHTML =
+      '<div class="grid grid-cols-3 gap-3 mb-5">' +
+        orgTile('People', r.people) + orgTile('Levels', r.levels) +
+        orgTile('No manager set', r.unassigned.length, r.unassigned.length ? 'text-amber-700' : '') +
+      '</div>' +
+      (r.cycles.length ? '<div class="rounded-2xl border border-red-200 bg-red-50 p-3 mb-4 ' +
+        'text-[13px] font-bold text-red-900">' +
+        esc(r.cycles.map(function (c) { return c.name + ' and ' + c.managerName +
+          ' report to each other'; }).join('; ')) +
+        '. Approvals between them cannot go anywhere — fix one of the two on the Team tab.</div>' : '') +
+      (r.note ? '<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 mb-4 ' +
+        'text-[13px] font-bold text-amber-900">' + esc(r.note) + '</div>' : '') +
+      '<div class="overflow-x-auto">' + r.tree.map(function (n) { return orgBranch(n); }).join('') + '</div>';
+  }).catch(function (e) { $('orgBody').textContent = e.message; });
+}
+
+function orgTile(k, v, tone) {
+  return '<div class="bg-gray-50 rounded-2xl p-3 text-center">' +
+    '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(k) + '</div>' +
+    '<div class="text-2xl font-black mt-1 ' + (tone || '') + '">' + v + '</div></div>';
+}
+
+/* Drawn as an indented tree rather than boxes and connectors: it stays legible
+   at six levels, it reads on a phone, and it never needs a scroll in two
+   directions at once. */
+function orgBranch(n) {
+  var roleTone = n.role === 'Admin' ? 'bg-purple-50 text-purple-700'
+    : n.role === 'HOD' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600';
+  /* Inline, not a utility class: the indent and the rule that draws the line
+     down a branch are structural, and they have to survive whatever stylesheet
+     the page is served with. */
+  return '<div style="' + (n.level ? 'margin-left:18px;padding-left:16px;' +
+      'border-left:2px solid #e5e7eb' : '') + '">' +
+    '<div class="flex flex-wrap items-center gap-2 py-2">' +
+      '<span class="h-8 w-8 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black ' +
+        'flex items-center justify-center shrink-0">' + esc(initials(n.name)) + '</span>' +
+      '<span class="font-bold text-sm text-gray-800">' + esc(n.name) + '</span>' +
+      '<span class="chip ' + roleTone + '">' + esc(n.role) + '</span>' +
+      (n.jobProfile ? '<span class="text-xs font-semibold text-gray-400">' + esc(n.jobProfile) + '</span>' : '') +
+      (n.headcount ? '<span class="chip bg-slate-100 text-slate-600">' + n.headcount + ' under them</span>' : '') +
+      (n.openTasks ? '<span class="chip bg-gray-100 text-gray-500">' + n.openTasks + ' open</span>' : '') +
+      (n.impliedManager ? '<span class="chip bg-amber-50 text-amber-800" ' +
+        'title="No manager set, so an Admin approves their work">manager not set</span>' : '') +
+    '</div>' +
+    n.reports.map(function (c) { return orgBranch(c); }).join('') +
+    '</div>';
+}
+
+
 /* ---------- wiring ------------------------------------------------------- */
 $('formLogin').addEventListener('submit', function (e) {
   e.preventDefault();
@@ -2518,6 +2722,12 @@ $('btnLeave').addEventListener('click', openLeave);
 $('btnCategories').addEventListener('click', openCategories);
 $('btnKra').addEventListener('click', openKraOverview);
 $('btnNewProject').addEventListener('click', openProjectBuilder);
+$('btnOrg').addEventListener('click', openOrgChart);
+$('btnCookie').addEventListener('click', function () {
+  /* A Doer has nobody to recognise, so the same button shows them what they
+     have been given rather than a form they cannot use. */
+  if ((STATE.data.user || {}).role === 'Doer') openCookieFeed(); else openCookie();
+});
 $('btnAppraise').addEventListener('click', openAppraisal);
 $('btnAccount2').addEventListener('click', openAccountability);
 $('btnHistoryRpt').addEventListener('click', openReviewHistory);

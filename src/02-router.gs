@@ -66,6 +66,8 @@ function route_(p) {
     case 'getTasks':            return { status:'success', tasks: readTasks_(ctx) };
     case 'getUsers':            return getUsers_(ctx);
     case 'getProjects':         return getProjects_(ctx);
+    case 'getOrgChart':         return getOrgChart_(ctx);
+    case 'getCookies':          return getCookies_(ctx);
     case 'getAnalytics':        return getAnalytics_(ctx, p.period, p.offset, p.span, p.person);
     case 'getAccountability':   return getAccountability_(ctx);
     case 'getPerformanceReport':return getPerformanceReport_(ctx);
@@ -77,6 +79,7 @@ function route_(p) {
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
     case 'createProject':       return createProject_(ctx, p.form);
+    case 'awardCookie':         return awardCookie_(ctx, p.data);
     case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
     case 'editTask':            return editTask_(ctx, p.form);
     case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);

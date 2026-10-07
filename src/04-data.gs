@@ -8,6 +8,7 @@ function ensureTenantTabs_(ss) {
   mkTab_(ss, TAB.KRA, ['Job Profile','KRA Title','Description','Weight','Grid/KPI']);
   mkTab_(ss, TAB.REVIEWS, ['Month','Employee','Performance Score','Delegation Score','Final Score','Date']);
   mkTab_(ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
+  mkTab_(ss, TAB.COOKIES, ['Date','To','By','Points','Reason']);
   var set = ss.getSheetByName(TAB.SETTINGS);
   if (!set) {
     set = ss.insertSheet(TAB.SETTINGS);

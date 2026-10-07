@@ -78,6 +78,12 @@ $('btnLeave').addEventListener('click', openLeave);
 $('btnCategories').addEventListener('click', openCategories);
 $('btnKra').addEventListener('click', openKraOverview);
 $('btnNewProject').addEventListener('click', openProjectBuilder);
+$('btnOrg').addEventListener('click', openOrgChart);
+$('btnCookie').addEventListener('click', function () {
+  /* A Doer has nobody to recognise, so the same button shows them what they
+     have been given rather than a form they cannot use. */
+  if ((STATE.data.user || {}).role === 'Doer') openCookieFeed(); else openCookie();
+});
 $('btnAppraise').addEventListener('click', openAppraisal);
 $('btnAccount2').addEventListener('click', openAccountability);
 $('btnHistoryRpt').addEventListener('click', openReviewHistory);

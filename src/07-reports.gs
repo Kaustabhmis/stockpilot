@@ -26,7 +26,7 @@ function getDashboard_(ctx) {
                      .map(function (u) { return u.username; });
 
   var del = delegationScore(tasks.filter(function (t) { return !t.isArchived ||
-    inThisMonth_(t); }), me.username, new Date(), cal);
+    inThisMonth_(t); }), me.username, new Date(), cal, scoreOpts_(ctx, me.username));
 
   /* The last appraisal's PERFORMANCE half, paired with today's delegation half.
      An empty cell is not a zero: reading it as one used to halve everybody's
@@ -97,6 +97,18 @@ function getDashboard_(ctx) {
                   pending: del.milestones.pending, atRisk: del.milestones.atRisk,
                   hitRate: del.milestones.hitRate, score: del.milestones.score,
                 } : null,
+                /* The two numbers that answer "why is my score what it is?"
+                   before anybody has to open the breakdown. */
+                load: del.workload ? { percent: del.workload.percent,
+                                       delivered: del.workload.delivered,
+                                       expected: del.workload.expected,
+                                       full: del.workload.full } : null,
+                provisional: !!del.provisional,
+                rate: del.rate == null ? null : del.rate,
+                cookies: del.cookies ? { awarded: del.cookies.awarded, bonus: del.cookies.bonus,
+                                         count: del.cookies.count, capped: del.cookies.capped,
+                                         list: del.cookies.list || [] } : null,
+                delegationFormula: del.formula || '',
                 formula: halves.length === 2
                   ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
                   : lastPerf !== null ? 'No closed work yet, so this is the appraisal score alone.'
@@ -155,17 +167,18 @@ function getAnalytics_(ctx, period, offset, span, person) {
   var count = Number(span || 12);
 
   var range = periodRange(kind, off);
-  var a = periodAnalytics(tasks, users, range, new Date(), cal);
+  var optsFor = function (u) { return scoreOpts_(ctx, u.username); };
+  var a = periodAnalytics(tasks, users, range, new Date(), cal, optsFor);
 
   var trend = [];
   for (var i = count - 1 + off; i >= off; i--) {
     var r = periodRange(kind, i);
-    var p = periodAnalytics(tasks, users, r, new Date(), cal);
+    var p = periodAnalytics(tasks, users, r, new Date(), cal, optsFor);
     trend.push({ label: r.short, full: r.label, teamScore: p.teamScore, delivered: p.delivered });
   }
 
   var personTrend = person
-    ? scoreTrend(tasks, person, kind, count, null, off, cal).map(function (x) {
+    ? scoreTrend(tasks, person, kind, count, null, off, cal, scoreOpts_(ctx, person)).map(function (x) {
         return { label: x.short, score: x.score, delivered: x.delivered }; })
     : null;
 
@@ -251,7 +264,7 @@ function getAppraisalForm_(ctx, username) {
 
   var tasks = readTasks_(ctx);
   var cal = leaveCalendar_(ctx);
-  var del = delegationScore(tasks, username, new Date(), cal);
+  var del = delegationScore(tasks, username, new Date(), cal, scoreOpts_(ctx, username));
 
   // Their own set first, else whatever their job profile defines.
   var kras = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
@@ -286,7 +299,8 @@ function submitAppraisal_(ctx, data) {
      the browser sent it, and a score an employee can edit in devtools is not a
      score. */
   var tasks = readTasks_(ctx);
-  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx));
+  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx),
+    scoreOpts_(ctx, data.employee));
 
   var result = finalAppraisalScore({
     delegationScore: measured.hasData ? measured.score : null,
@@ -316,3 +330,18 @@ function submitAppraisal_(ctx, data) {
    in the KRA/KPI module, which carries a measurable target as well. The addKRA
    route still resolves, so nothing calling it breaks. */
 
+
+/**
+ * What the score engine needs to know about this person beyond their tasks:
+ * the load expected of them, and the recognition they were given this month.
+ *
+ * The expectation is their WIP limit, so a part-time or deliberately
+ * low-volume role is measured against its own bar rather than the busiest desk
+ * in the building.
+ */
+function scoreOpts_(ctx, username) {
+  return {
+    expectedTasks: wipLimitFor_(ctx, username),
+    cookies: cookiesFor_(ctx, username, periodRange(PERIOD.MONTH, 0)),
+  };
+}

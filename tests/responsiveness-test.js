@@ -159,9 +159,19 @@ console.log('\n=== it reaches the score the company actually reads ===');
   ok('a manager with no tasks of their own is still scored', r.hasData === true);
   ok('and scored on how promptly they clear the queue', r.score === 0, r.score);
   ok('the note explains the basis', /clear/.test(r.note || ''), r.note);
-  const good = stuck.map((t) => task({ id: t.id, title: t.title, assignee: t.assignee, approver: 'hod',
-    status: S.VERIFIED, history: [at('2026-10-05', S.AWAITING_APPROVAL), at('2026-10-06', S.VERIFIED)] }));
-  ok('one who clears it promptly scores 100', D.delegationScore(good, 'hod', today, CAL).score === 100);
+  const promptly = (n) => Array.from({ length: n }, (_, i) => task({ id: 'G' + i, title: 'Cleared ' + i,
+    assignee: 'd' + i, approver: 'hod', status: S.VERIFIED,
+    history: [at('2026-10-05', S.AWAITING_APPROVAL), at('2026-10-06', S.VERIFIED)] }));
+  /* Clearing everything promptly is a perfect RATE. The score it earns still
+     depends on how much came through — four decisions in a month is a light
+     desk, and the engine says so rather than awarding full marks for it. */
+  ok('clearing everything promptly is a perfect rate',
+     D.delegationScore(promptly(4), 'hod', today, CAL).responsiveness.responsiveness === 100);
+  ok('but four decisions is a light month, and scores like one',
+     D.delegationScore(promptly(4), 'hod', today, CAL).score < 100);
+  ok('a manager who clears a full desk promptly scores 100',
+     D.delegationScore(promptly(10), 'hod', today, CAL).score === 100,
+     D.delegationScore(promptly(10), 'hod', today, CAL).score);
 }
 {
   const t = task({ status: S.FOR_REVIEW, history: [at('2026-01-05', S.FOR_REVIEW)] });
@@ -177,7 +187,10 @@ console.log('\n=== the doer is not punished for the manager\'s delay ===');
   const t = task({ assignee: 'doer', due: '2026-10-05', status: S.VERIFIED,
                    history: [at('2026-10-05', S.FOR_REVIEW), at('2026-10-19', S.VERIFIED)] });
   const r = D.delegationScore([t], 'doer', today, CAL);
-  ok('the doer still scores on-time delivery', r.score === 100, r.score);
+  /* Measured on the rate, not the score: the score also reflects how much they
+     carried, and one task is one task. What matters here is that their
+     delivery was judged clean. */
+  ok('the doer is still judged to have delivered on time', r.rate === 100, r.rate);
   ok('and carries no responsiveness deduction', r.deduction === 0);
   // The reviewer owns no work of their own here, so they are scored purely on
   // the queue: a fortnight's delay reads as zero responsiveness.

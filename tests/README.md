@@ -17,18 +17,22 @@ node kra-test.js            # KRA/KPI sets, profile standards, optional targets
 node responsiveness-test.js # manager accountability (pure rules engine, no server)
 node milestone-test.js      # stage-deadline scoring (pure rules engine, no server)
 node project-test.js        # multi-stage projects end to end
+node fairness-test.js       # load-credited scoring: 10 jobs beats 1 easy one
+node recognition-test.js    # cookie points and the org chart
 
 node server.js &            # then, for the browser tests:
 node ui-test.js
 node manager-ui-test.js     # the held-review screens, end to end
 node kra-ui-test.js         # the KRA/KPI overview and editor
 node project-ui-test.js     # building a project and watching a stage release
+node recognition-ui-test.js # cookie points, the org chart, the load explanation
 node seed.js                # prints the seeded owner's email
 node recurring-test.js <that-email>
 ```
 
-`responsiveness-test.js` and `milestone-test.js` load `domebox/domain.gs` straight
-into a sandbox, so they need no server and no browser.
+`responsiveness-test.js`, `milestone-test.js` and `fairness-test.js` load
+`domebox/domain.gs` straight into a sandbox, so they need no server and no
+browser.
 
 `gas-shim.js` implements only the Apps Script surface `code.gs` actually uses.
 Anything it does not implement throws rather than silently passing.

@@ -43,7 +43,7 @@ function CFG() {
 
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
-            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens' };
+            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points' };
 
 /* Column layout. The first 15 task columns and first 9 user columns match the
    old schema exactly, so an existing tenant sheet keeps working; new fields are
@@ -203,6 +203,8 @@ function route_(p) {
     case 'getTasks':            return { status:'success', tasks: readTasks_(ctx) };
     case 'getUsers':            return getUsers_(ctx);
     case 'getProjects':         return getProjects_(ctx);
+    case 'getOrgChart':         return getOrgChart_(ctx);
+    case 'getCookies':          return getCookies_(ctx);
     case 'getAnalytics':        return getAnalytics_(ctx, p.period, p.offset, p.span, p.person);
     case 'getAccountability':   return getAccountability_(ctx);
     case 'getPerformanceReport':return getPerformanceReport_(ctx);
@@ -214,6 +216,7 @@ function route_(p) {
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
     case 'createProject':       return createProject_(ctx, p.form);
+    case 'awardCookie':         return awardCookie_(ctx, p.data);
     case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
     case 'editTask':            return editTask_(ctx, p.form);
     case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);
@@ -589,6 +592,7 @@ function ensureTenantTabs_(ss) {
   mkTab_(ss, TAB.KRA, ['Job Profile','KRA Title','Description','Weight','Grid/KPI']);
   mkTab_(ss, TAB.REVIEWS, ['Month','Employee','Performance Score','Delegation Score','Final Score','Date']);
   mkTab_(ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
+  mkTab_(ss, TAB.COOKIES, ['Date','To','By','Points','Reason']);
   var set = ss.getSheetByName(TAB.SETTINGS);
   if (!set) {
     set = ss.insertSheet(TAB.SETTINGS);
@@ -1401,7 +1405,7 @@ function getDashboard_(ctx) {
                      .map(function (u) { return u.username; });
 
   var del = delegationScore(tasks.filter(function (t) { return !t.isArchived ||
-    inThisMonth_(t); }), me.username, new Date(), cal);
+    inThisMonth_(t); }), me.username, new Date(), cal, scoreOpts_(ctx, me.username));
 
   /* The last appraisal's PERFORMANCE half, paired with today's delegation half.
      An empty cell is not a zero: reading it as one used to halve everybody's
@@ -1472,6 +1476,18 @@ function getDashboard_(ctx) {
                   pending: del.milestones.pending, atRisk: del.milestones.atRisk,
                   hitRate: del.milestones.hitRate, score: del.milestones.score,
                 } : null,
+                /* The two numbers that answer "why is my score what it is?"
+                   before anybody has to open the breakdown. */
+                load: del.workload ? { percent: del.workload.percent,
+                                       delivered: del.workload.delivered,
+                                       expected: del.workload.expected,
+                                       full: del.workload.full } : null,
+                provisional: !!del.provisional,
+                rate: del.rate == null ? null : del.rate,
+                cookies: del.cookies ? { awarded: del.cookies.awarded, bonus: del.cookies.bonus,
+                                         count: del.cookies.count, capped: del.cookies.capped,
+                                         list: del.cookies.list || [] } : null,
+                delegationFormula: del.formula || '',
                 formula: halves.length === 2
                   ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
                   : lastPerf !== null ? 'No closed work yet, so this is the appraisal score alone.'
@@ -1530,17 +1546,18 @@ function getAnalytics_(ctx, period, offset, span, person) {
   var count = Number(span || 12);
 
   var range = periodRange(kind, off);
-  var a = periodAnalytics(tasks, users, range, new Date(), cal);
+  var optsFor = function (u) { return scoreOpts_(ctx, u.username); };
+  var a = periodAnalytics(tasks, users, range, new Date(), cal, optsFor);
 
   var trend = [];
   for (var i = count - 1 + off; i >= off; i--) {
     var r = periodRange(kind, i);
-    var p = periodAnalytics(tasks, users, r, new Date(), cal);
+    var p = periodAnalytics(tasks, users, r, new Date(), cal, optsFor);
     trend.push({ label: r.short, full: r.label, teamScore: p.teamScore, delivered: p.delivered });
   }
 
   var personTrend = person
-    ? scoreTrend(tasks, person, kind, count, null, off, cal).map(function (x) {
+    ? scoreTrend(tasks, person, kind, count, null, off, cal, scoreOpts_(ctx, person)).map(function (x) {
         return { label: x.short, score: x.score, delivered: x.delivered }; })
     : null;
 
@@ -1626,7 +1643,7 @@ function getAppraisalForm_(ctx, username) {
 
   var tasks = readTasks_(ctx);
   var cal = leaveCalendar_(ctx);
-  var del = delegationScore(tasks, username, new Date(), cal);
+  var del = delegationScore(tasks, username, new Date(), cal, scoreOpts_(ctx, username));
 
   // Their own set first, else whatever their job profile defines.
   var kras = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
@@ -1661,7 +1678,8 @@ function submitAppraisal_(ctx, data) {
      the browser sent it, and a score an employee can edit in devtools is not a
      score. */
   var tasks = readTasks_(ctx);
-  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx));
+  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx),
+    scoreOpts_(ctx, data.employee));
 
   var result = finalAppraisalScore({
     delegationScore: measured.hasData ? measured.score : null,
@@ -1691,6 +1709,21 @@ function submitAppraisal_(ctx, data) {
    in the KRA/KPI module, which carries a measurable target as well. The addKRA
    route still resolves, so nothing calling it breaks. */
 
+
+/**
+ * What the score engine needs to know about this person beyond their tasks:
+ * the load expected of them, and the recognition they were given this month.
+ *
+ * The expectation is their WIP limit, so a part-time or deliberately
+ * low-volume role is measured against its own bar rather than the busiest desk
+ * in the building.
+ */
+function scoreOpts_(ctx, username) {
+  return {
+    expectedTasks: wipLimitFor_(ctx, username),
+    cookies: cookiesFor_(ctx, username, periodRange(PERIOD.MONTH, 0)),
+  };
+}
 
 
 // ===========================================================================
@@ -1987,6 +2020,19 @@ function notifyStageReleased_(ctx, project, stage) {
     'so stage ' + esc_(String(stage.stageNo)) + ' is now yours to start.</p>' +
     infoTable_([['Project', project], ['Stage', stage.stageNo + ' of ' + stage.stageCount],
                 ['Your task', stage.title], ['Due', stage.due || '—']]) +
+    btn_('Open Dome Box', CFG().siteUrl)));
+}
+
+/** Recognition only works if the person hears about it. */
+function notifyCookie_(ctx, who, points, reason) {
+  if (!who || !who.email) return;
+  var subject = 'You picked up ' + points + ' cookie point' + (points === 1 ? '' : 's');
+  sendEmail_(who.email, subject, mailShell_(subject,
+    '<p>Hi <strong>' + esc_(who.name) + '</strong>,</p>' +
+    '<p><strong>' + esc_(ctx.actor.name) + '</strong> has recognised your work.</p>' +
+    '<p style="background:#ecfdf5;border:1px solid #a7f3d0;padding:12px;border-radius:8px">' +
+      '<em>"' + esc_(reason) + '"</em></p>' +
+    '<p>It counts towards your score this month and is on the record at your next review.</p>' +
     btn_('Open Dome Box', CFG().siteUrl)));
 }
 
@@ -2492,6 +2538,226 @@ function getProjects_(ctx) {
     return String(a.currentDue || a.finalDue).localeCompare(String(b.currentDue || b.finalDue));
   });
   return { status: 'success', projects: out };
+}
+
+
+// =========================================================================
+// Cookie points and the org chart
+// =========================================================================
+// ===========================================================================
+// COOKIE POINTS — recognition on the day, not six months later
+// ===========================================================================
+//
+// An appraisal happens once. Good work happens on a Tuesday. Cookie points let
+// a manager mark it while it is still true, and the award carries a name and a
+// reason — an anonymous bonus with no stated cause is indistinguishable from
+// favouritism, and a team reads it that way.
+//
+// The score effect is capped (MAX_COOKIE_BONUS). Cookies are a thank-you, not
+// a back door to a score nobody earned on the work.
+// ===========================================================================
+
+var COOKIE_COLS = ['Date', 'To', 'By', 'Points', 'Reason'];
+
+function readCookies_(ctx) {
+  var sh = ctx.ss.getSheetByName(TAB.COOKIES);
+  if (!sh) return [];
+  var d = sh.getDataRange().getValues(), out = [];
+  for (var i = 1; i < d.length; i++) {
+    if (!d[i][1]) continue;
+    out.push({ date: toIso_(d[i][0]), to: String(d[i][1]).trim(), by: String(d[i][2]).trim(),
+               points: Number(d[i][3]) || 0, reason: String(d[i][4] || '') });
+  }
+  return out;
+}
+
+/** This month's cookies for one person, named, ready for the score engine. */
+function cookiesFor_(ctx, username, range) {
+  var names = {};
+  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+  return readCookies_(ctx).filter(function (c) {
+    if (c.to !== username) return false;
+    if (!range) return true;
+    var d = new Date(c.date);
+    return !isNaN(d) && inWindow(d, range);
+  }).map(function (c) {
+    return { date: c.date, points: c.points, reason: c.reason,
+             by: c.by, byName: names[c.by] || c.by };
+  });
+}
+
+function awardCookie_(ctx, data) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  data = data || {};
+
+  var to = String(data.employee || '').trim();
+  var who = findUser_(ctx.ss, to);
+  if (!who) throw new Error('That person is not in this workspace.');
+
+  /* Nobody hands themselves a bonus. */
+  if (who.username === ctx.actor.username) {
+    throw new Error('Cookie points are for other people. You cannot award them to yourself.');
+  }
+
+  /* A head of department recognises their own people. An Admin may recognise
+     anyone — somebody has to be able to thank a manager. */
+  if (ctx.actor.role !== ROLE.ADMIN && who.manager !== ctx.actor.username) {
+    throw new Error(who.name + ' does not report to you. Their own manager, or an Admin, ' +
+      'can award this.');
+  }
+
+  var points = Math.round(Number(data.points) || 0);
+  if (points < 1 || points > COOKIE_MAX_PER_AWARD) {
+    throw new Error('Award between 1 and ' + COOKIE_MAX_PER_AWARD + ' cookie points.');
+  }
+
+  var reason = String(data.reason || '').trim();
+  if (reason.length < 5) {
+    throw new Error('Say what this is for. The reason is shown to them and counts ' +
+      'at their appraisal — an award with no reason reads as favouritism.');
+  }
+
+  mkTab_(ctx.ss, TAB.COOKIES, COOKIE_COLS)
+    .appendRow([new Date(), who.username, ctx.actor.username, points, reason]);
+
+  try { notifyCookie_(ctx, who, points, reason); }
+  catch (e) { logError_('awardCookie:notify', e.message); }
+
+  var month = cookiesFor_(ctx, who.username, periodRange(PERIOD.MONTH, 0));
+  var tally = cookieBonus(month);
+  return { status: 'success', points: points, monthTotal: tally.awarded,
+    capped: tally.capped,
+    message: points + ' cookie point' + (points === 1 ? '' : 's') + ' to ' + who.name + '.' +
+      (tally.capped ? ' Their score bonus is already at the ' + MAX_COOKIE_BONUS +
+        '-point cap this month — the recognition still stands and shows at appraisal.' : '') };
+}
+
+/** Everything awarded this month, for the team screen. */
+function getCookies_(ctx) {
+  var names = {};
+  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+  var range = periodRange(PERIOD.MONTH, 0);
+  var mine = ctx.me.role === ROLE.DOER;
+
+  var rows = readCookies_(ctx).filter(function (c) {
+    var d = new Date(c.date);
+    if (isNaN(d) || !inWindow(d, range)) return false;
+    return !mine || c.to === ctx.me.username;
+  }).map(function (c) {
+    return { date: c.date, points: c.points, reason: c.reason,
+             to: c.to, toName: names[c.to] || c.to,
+             by: c.by, byName: names[c.by] || c.by };
+  }).reverse();
+
+  var tally = {};
+  rows.forEach(function (c) { tally[c.to] = (tally[c.to] || 0) + c.points; });
+
+  return { status: 'success', month: range.label, cookies: rows,
+    leaderboard: Object.keys(tally).map(function (u) {
+      return { username: u, name: names[u] || u, points: tally[u],
+               bonus: Math.min(tally[u], MAX_COOKIE_BONUS) };
+    }).sort(function (a, b) { return b.points - a.points; }),
+    maxPerAward: COOKIE_MAX_PER_AWARD, maxBonus: MAX_COOKIE_BONUS };
+}
+
+// ===========================================================================
+// ORG CHART — built from who reports to whom
+// ===========================================================================
+//
+// Nobody draws this by hand. "Reports to" is already set on every person when
+// they are added, so the chart is a view of data the workspace has rather than
+// a second copy of it that drifts out of date.
+// ===========================================================================
+
+/** One person and everybody under them. Split out so the recursion is testable. */
+function orgNode_(username, level, byName, kids, open, implied) {
+  var u = byName[username];
+  var children = kids[username].sort(function (a, b) {
+    return String(byName[a].name).localeCompare(String(byName[b].name)); })
+    .map(function (c) { return orgNode_(c, level + 1, byName, kids, open, implied); });
+  return {
+    username: u.username, name: u.name, role: u.role, dept: u.dept || '',
+    jobProfile: u.jobProfile || '', email: u.email,
+    openTasks: open[u.username] || 0,
+    /* Placed here because somebody has to approve their work, not because a
+       manager was chosen for them. The UI says so. */
+    impliedManager: !!(implied && implied[username]),
+    reports: children,
+    /* Everyone underneath, not only the direct line — the number a head of
+       department is actually answerable for. */
+    headcount: children.reduce(function (n, c) { return n + 1 + c.headcount; }, 0),
+    depth: children.reduce(function (n, c) { return Math.max(n, c.depth); }, level + 1),
+    level: level,
+  };
+}
+
+function getOrgChart_(ctx) {
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  var tasks = readTasks_(ctx);
+
+  var byName = {}, kids = {};
+  users.forEach(function (u) { byName[u.username] = u; kids[u.username] = []; });
+
+  var roots = [], cycles = [];
+  users.forEach(function (u) {
+    var mgr = String(u.manager || '').trim();
+    if (!mgr || !byName[mgr] || mgr === u.username) { roots.push(u.username); return; }
+
+    /* A reports to B reports to A would hang the walk below. Spotting it here
+       and naming both people is more use than a blank screen. */
+    var seen = {}, cursor = mgr, loop = false;
+    while (cursor && byName[cursor]) {
+      if (cursor === u.username) { loop = true; break; }
+      if (seen[cursor]) break;
+      seen[cursor] = true;
+      cursor = String(byName[cursor].manager || '').trim();
+    }
+    if (loop) { cycles.push({ username: u.username, name: u.name,
+      manager: mgr, managerName: byName[mgr].name }); roots.push(u.username); return; }
+
+    kids[mgr].push(u.username);
+  });
+
+  var open = {};
+  tasks.forEach(function (t) {
+    if (t.assignee && isOpen(t.status) && !t.isArchived) open[t.assignee] = (open[t.assignee] || 0) + 1;
+  });
+
+  /* A person with nobody above them still has somebody above them in practice:
+     an Admin approves their work. Hanging them off the owner with a marker
+     makes the chart automatic without pretending a manager was set — the gap
+     is still named in `unassigned` and in the note. */
+  var owners = roots.filter(function (r) { return byName[r].role === ROLE.ADMIN; });
+  var implied = {};
+  if (owners.length === 1) {
+    var owner = owners[0];
+    roots = roots.filter(function (r) {
+      if (r === owner || byName[r].role === ROLE.ADMIN) return true;
+      if (String(byName[r].manager || '').trim()) return true;   // a real loop, leave it out
+      kids[owner].push(r); implied[r] = true; return false;
+    });
+  }
+
+  var tree = roots.sort(function (a, b) {
+    var ra = byName[a].role === ROLE.ADMIN ? 0 : byName[a].role === ROLE.MANAGER ? 1 : 2;
+    var rb = byName[b].role === ROLE.ADMIN ? 0 : byName[b].role === ROLE.MANAGER ? 1 : 2;
+    return ra - rb || String(byName[a].name).localeCompare(String(byName[b].name));
+  }).map(function (r) { return orgNode_(r, 0, byName, kids, open, implied); });
+
+  var depth = tree.reduce(function (n, t) { return Math.max(n, t.depth); }, 0);
+
+  var unassigned = Object.keys(implied)
+    .map(function (r) { return { username: r, name: byName[r].name, role: byName[r].role }; });
+
+  return { status: 'success', tree: tree, levels: depth, people: users.length,
+    cycles: cycles, unassigned: unassigned,
+    /* Someone with nobody above them cannot have their work approved by anyone
+       but an Admin, so this is worth saying out loud rather than leaving to be
+       discovered when an approval goes nowhere. */
+    note: unassigned.length
+      ? unassigned.length + ' ' + (unassigned.length === 1 ? 'person reports' : 'people report') +
+        ' to nobody. Their work is approved by an Admin until you set a manager.'
+      : '' };
 }
 
 
@@ -3406,6 +3672,63 @@ function projectSummary(tasks, projectId) {
 var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
 var LATENESS_POINTS_PER_DAY = 10;   // a day late costs 10 on that task
 var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
+
+/* ---------------------------------------------------------------------------
+   WORKLOAD CREDIT — what stops one easy task outscoring ten hard ones.
+
+   Every component above is a RATE: a percentage of the work you took on. On
+   its own a rate is blind to how much work that was, so somebody who closed a
+   single trivial task on time scored 100, while somebody who carried ten and
+   delivered seven of them on time scored 70. The system was quietly telling
+   the hardest workers in the company that they were the worst performers.
+
+   So the rate is credited against the load actually carried. Nobody is handed
+   a score for turning up: you start at zero and earn it by delivering, and
+   because the credit can never exceed 1 the score can never exceed 100.
+
+       score = how well you delivered  ×  how much you delivered
+
+   Load is counted in the same priority weights the rest of the engine uses —
+   a High task is worth three Lows — plus the approvals and reviews you cleared
+   for other people, because that is work too and a manager who spends the
+   month unblocking their team is not idle.
+
+   The expectation is per person, taken from their WIP limit, so a part-time or
+   deliberately low-volume role is measured against its own bar and not against
+   the busiest desk in the building.
+--------------------------------------------------------------------------- */
+var EXPECTED_MONTHLY_TASKS = 5;     // the default WIP limit, in tasks
+var DECISION_EFFORT = 1;            // an approval or review cleared, in load units
+
+/**
+ * How much of the expected load this person actually carried, 0..1.
+ * Capped at 1: carrying double does not make a score of 200, it makes a
+ * complete one.
+ */
+function workloadCredit(deliveredWeight, expectedTasks) {
+  var expected = Math.max(1, Number(expectedTasks) || EXPECTED_MONTHLY_TASKS) *
+                 priorityWeight('Medium');
+  var credit = deliveredWeight / expected;
+  return { delivered: Math.round(deliveredWeight * 10) / 10, expected: expected,
+           credit: Math.max(0, Math.min(1, credit)),
+           percent: Math.round(Math.max(0, Math.min(1, credit)) * 100),
+           full: credit >= 1 };
+}
+
+/* COOKIE POINTS — recognition a manager can give on the day, not six months
+   later at the appraisal. Each one is signed and carries a reason, because an
+   anonymous bonus with no stated cause is indistinguishable from favouritism.
+   The score effect is capped: cookies are a thank-you, not a back door to a
+   score nobody earned on the work. */
+var COOKIE_MAX_PER_AWARD = 5;
+var MAX_COOKIE_BONUS = 10;          // the most cookies can move a score
+
+function cookieBonus(cookies) {
+  var total = (cookies || []).reduce(function (s, c) {
+    return s + Math.max(0, Math.min(COOKIE_MAX_PER_AWARD, Number(c.points) || 0)); }, 0);
+  return { awarded: total, bonus: Math.min(total, MAX_COOKIE_BONUS),
+           capped: total > MAX_COOKIE_BONUS, count: (cookies || []).length };
+}
 /* RESPONSIVENESS — the manager's half of accountability.
    A doer is measured on delivering. The person who has to approve or sign off
    is measured on not sitting on it. Without this the score is one-sided: a team
@@ -3614,8 +3937,9 @@ function responsivenessStats(tasks, username, today, cal, opts) {
   };
 }
 
-function delegationScore(tasks, username, today, cal) {
+function delegationScore(tasks, username, today, cal, opts) {
   today = today || new Date();
+  opts = opts || {};
   var mine = tasks.filter(function (t) { return t.assignee === username; });
   var breakdown = [];
 
@@ -3701,7 +4025,7 @@ function delegationScore(tasks, username, today, cal) {
   var active = parts.filter(function (p) { return p.score !== null; });
   var totalWeight = active.reduce(function (s, p) { return s + p.weight; }, 0);
   var hasData = active.length > 0;
-  var composite = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
+  var rate = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
 
   /* --- responsiveness: separate, capped, never averaged into the delivery half ---
      Held time is measured from when the item landed on this person's desk, in
@@ -3712,6 +4036,50 @@ function delegationScore(tasks, username, today, cal) {
   var deduction = resp.penalty;
   resp.breakdown.forEach(function (b) { breakdown.push(b); });
 
+  /* --- the load that rate was earned on ---
+     Closed work in priority weights, plus the decisions cleared for other
+     people, because unblocking your team is work and a score that ignores it
+     tells managers not to bother. */
+  var deliveredWeight = closed.reduce(function (n, t) { return n + priorityWeight(t.priority); }, 0) +
+                        (resp.items - resp.pending) * DECISION_EFFORT +
+                        /* Work in hand counts half. Somebody three weeks into a
+                           large job has not delivered yet, but they are plainly
+                           not idle, and a load figure that said otherwise would
+                           be read as an accusation. */
+                        open.reduce(function (n, t) { return n + priorityWeight(t.priority) / 2; }, 0);
+  var load = workloadCredit(deliveredWeight, opts.expectedTasks);
+  var composite = rate * load.credit;
+  if (hasData) {
+    breakdown.push({
+      group: 'Workload Credit',
+      item: closed.length + ' closed, ' + open.length + ' in hand, ' +
+            (resp.items - resp.pending) + ' decision(s) cleared',
+      reason: load.full
+        ? 'A full load carried — the rates above count in full'
+        : 'Carried ' + load.percent + '% of an expected load, so the rates above count ' +
+          'for ' + load.percent + '% of their value',
+      impact: load.percent + '%',
+    });
+  }
+
+  /* --- cookie points: recognition, signed and capped --- */
+  var cookies = cookieBonus(opts.cookies);
+  cookies.list = (opts.cookies || []).slice();
+  if (cookies.bonus > 0) {
+    (opts.cookies || []).forEach(function (c) {
+      breakdown.push({ group: 'Cookie Points', item: c.reason || 'Recognised',
+        reason: 'Awarded by ' + (c.byName || c.by || 'a manager') +
+                (c.date ? ' on ' + String(c.date).slice(0, 10) : ''),
+        impact: '+' + Math.max(0, Math.min(COOKIE_MAX_PER_AWARD, Number(c.points) || 0)) });
+    });
+    if (cookies.capped) {
+      breakdown.push({ group: 'Cookie Points', item: 'Capped',
+        reason: cookies.awarded + ' points awarded; cookies can move a score by at most ' +
+                MAX_COOKIE_BONUS,
+        impact: '+' + cookies.bonus });
+    }
+  }
+
   /**
    * A manager may own no tasks at all and still be the reason four people are
    * stuck. Scoring them "no data" there is the one hole that would let the least
@@ -3721,9 +4089,11 @@ function delegationScore(tasks, username, today, cal) {
    */
   if (!hasData && resp.hasData) {
     return {
-      score: Math.max(0, Math.min(100, resp.responsiveness)),
+      score: clampScore_(resp.responsiveness * load.credit + cookies.bonus),
       hasData: true,
       deduction: 0,
+      workload: load,
+      cookies: cookies,
       responsiveness: resp,
       milestones: ms,
       components: [{
@@ -3740,9 +4110,17 @@ function delegationScore(tasks, username, today, cal) {
   }
 
   return {
-    score: hasData ? Math.max(0, Math.min(100, Math.round(composite - deduction))) : 0,
+    /* Clamped at both ends, always: nobody starts above zero and nothing —
+       cookie points included — takes anybody past 100. */
+    score: hasData ? clampScore_(composite - deduction + cookies.bonus) : 0,
+    rate: hasData ? Math.round(rate) : null,
     hasData: hasData,
     deduction: deduction,
+    workload: load,
+    cookies: cookies,
+    /* A score earned on a sliver of work is a fact, not a verdict. Flagging it
+       stops a light month being read as a bad one. */
+    provisional: load.credit < 0.4,
     components: parts.map(function (p) {
       return {
         key: p.key, label: p.label,
@@ -3755,9 +4133,20 @@ function delegationScore(tasks, username, today, cal) {
     milestones: ms,
     summary: { closed: closed.length, open: open.length, overdue: overdue,
                reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow,
-               stagesMet: ms.met, stagesMissed: ms.missed, stagesPending: ms.pending },
+               stagesMet: ms.met, stagesMissed: ms.missed, stagesPending: ms.pending,
+               loadPercent: load.percent, cookiePoints: cookies.awarded },
     breakdown: breakdown,
+    formula: 'Score = how well you delivered (' + Math.round(rate) + ') × the load you carried (' +
+             load.percent + '%)' +
+             (deduction ? ' − ' + deduction + ' for approvals held' : '') +
+             (cookies.bonus ? ' + ' + cookies.bonus + ' cookie points' : ''),
   };
+}
+
+/** Nobody below zero, nobody above a hundred. Enforced in one place. */
+function clampScore_(n) {
+  var v = Math.round(Number(n) || 0);
+  return Math.max(0, Math.min(100, v));
 }
 
 // ---------------------------------------------------------------------------
@@ -4253,7 +4642,7 @@ function inWindow(date, range) {
  * Queue health is judged as at the end of the window, so a historic period is
  * measured on how the queue looked then rather than how it looks today.
  */
-function scoreForPeriod(tasks, username, range, cal) {
+function scoreForPeriod(tasks, username, range, cal, opts) {
   var closedInWindow = tasks.filter(function (t) {
     return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
   });
@@ -4289,7 +4678,8 @@ function scoreForPeriod(tasks, username, range, cal) {
   });
 
   var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
-  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf, cal);
+  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem),
+                               username, asOf, cal, opts);
   result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
   result.delivered = closedInWindow.length;
   result.openThen = openThen.length;
@@ -4317,12 +4707,12 @@ function scoreForPeriod(tasks, username, range, cal) {
 }
 
 /** A trend of the last `count` periods, oldest first — ready to plot. */
-function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
+function scoreTrend(tasks, username, kind, count, today, endOffset, cal, opts) {
   var end = Number(endOffset) || 0;
   var out = [];
   for (var i = count - 1 + end; i >= end; i--) {
     var range = periodRange(kind, i, today);
-    var s = scoreForPeriod(tasks, username, range, cal);
+    var s = scoreForPeriod(tasks, username, range, cal, opts);
     out.push({
       label: range.label, short: range.short,
       score: s.hasData ? s.score : null,
@@ -4338,7 +4728,7 @@ function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
  * Everything the analytics dashboard needs for one period, in one pass:
  * headline counts, per-person scores, KRA split and the A/B/C spread.
  */
-function periodAnalytics(tasks, users, range, today, cal) {
+function periodAnalytics(tasks, users, range, today, cal, optsFor) {
   var delivered = [], overdueNow = [], reworkLoops = 0, onTime = 0, onTimeBase = 0;
 
   tasks.forEach(function (t) {
@@ -4354,11 +4744,15 @@ function periodAnalytics(tasks, users, range, today, cal) {
   });
 
   var people = users.map(function (u) {
-    var s = scoreForPeriod(tasks, u.username, range, cal);
+    var s = scoreForPeriod(tasks, u.username, range, cal,
+      optsFor ? optsFor(u) : null);
     return {
       username: u.username, name: u.name, role: u.role, dept: u.dept,
       score: s.hasData ? s.score : null, hasData: s.hasData,
       delivered: s.delivered, components: s.components,
+      loadPercent: s.workload ? s.workload.percent : null,
+      provisional: !!s.provisional,
+      cookiePoints: s.cookies ? s.cookies.awarded : 0,
       band: s.hasData ? performanceBand(s.score).band : null,
       reason: s.hasData ? null : (s.reason || 'Nothing closed in this period.'),
     };

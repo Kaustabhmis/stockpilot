@@ -295,6 +295,19 @@ function notifyStageReleased_(ctx, project, stage) {
     btn_('Open Dome Box', CFG().siteUrl)));
 }
 
+/** Recognition only works if the person hears about it. */
+function notifyCookie_(ctx, who, points, reason) {
+  if (!who || !who.email) return;
+  var subject = 'You picked up ' + points + ' cookie point' + (points === 1 ? '' : 's');
+  sendEmail_(who.email, subject, mailShell_(subject,
+    '<p>Hi <strong>' + esc_(who.name) + '</strong>,</p>' +
+    '<p><strong>' + esc_(ctx.actor.name) + '</strong> has recognised your work.</p>' +
+    '<p style="background:#ecfdf5;border:1px solid #a7f3d0;padding:12px;border-radius:8px">' +
+      '<em>"' + esc_(reason) + '"</em></p>' +
+    '<p>It counts towards your score this month and is on the record at your next review.</p>' +
+    btn_('Open Dome Box', CFG().siteUrl)));
+}
+
 /** The raiser hears the outcome, with the reason if it was refused. */
 function notifyDecision_(ctx, t, isApproved, remarks) {
   var raiser = findUser_(ctx.ss, t.by);

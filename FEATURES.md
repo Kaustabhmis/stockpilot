@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **466 checks across fourteen suites**, run against the real `code.gs` on an
+Tests: **545 checks across seventeen suites**, run against the real `code.gs` on an
 in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 `tests/README.md`.
 
@@ -48,7 +48,61 @@ in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 - [x] Performance report
 - [x] **Leave does not count as lateness**
 - [x] **Managers are measured too** — see below
-- [x] **Projects: multi-stage work, a deadline per stage, score for meeting one** (new)
+- [x] **Projects: multi-stage work, a deadline per stage, score for meeting one**
+- [x] **Scoring credited against the load carried** (new) — ten jobs beats one easy one
+- [x] **Cookie points**: day-to-day recognition, signed, with a reason, capped (new)
+- [x] **Org chart built from who reports to whom** (new)
+
+### Why ten jobs beats one easy one
+
+This was the real flaw. Every component below is a **rate** — a percentage of
+the work you took on — and a rate is blind to how much work that was. Somebody
+who closed a single trivial task on time scored 100. Somebody who carried ten
+and delivered seven on time scored 70. The system was quietly telling the
+hardest workers in the company that they were the worst performers.
+
+So the rate is credited against the load it was earned on:
+
+    Score = how well you delivered × how much you delivered
+
+Load is counted in the same priority weights as everything else (a High task is
+worth three Lows), and it counts three things: work closed, work in hand at half
+weight (three weeks into a large job is not idleness), and the approvals and
+reviews you cleared for other people (a manager who spends the month unblocking
+their team is not idle either).
+
+The expectation is **per person**, taken from their WIP limit, so a part-time or
+deliberately low-volume role is measured against its own bar and not against the
+busiest desk in the building. Credit is capped at a full load, so carrying
+double does not make a score of 200 — and cutting work into more pieces cannot
+carry anyone past a complete score. A score earned on a sliver of work is
+flagged *provisional* rather than presented as a verdict.
+
+### Nobody starts above zero, nobody ends above a hundred
+
+Every path through `delegationScore` ends at one clamp. A person with no record
+scores 0 and is marked "no data", not graded a nought. A flawless record tops
+out at exactly 100, and cookie points cannot push it past that.
+
+### Cookie points
+
+Recognition on the day, not six months later at the appraisal. A manager awards
+1–5 to someone who reports to them (an Admin can recognise anyone, including a
+manager); nobody can award to themselves, and an award without a stated reason
+is refused — an anonymous bonus with no cause is indistinguishable from
+favouritism, and a team reads it that way. The recipient is emailed, sees it on
+their score screen with the reason and the giver's name, and it is on the record
+at their review. The score effect is capped at 10 a month: cookies are a
+thank-you, not a back door.
+
+### Org chart
+
+Built from the "reports to" already set on each person, so it cannot drift out
+of date the way a drawn chart does. Each node shows role, job profile, open
+tasks and total headcount beneath. Someone with no manager is hung off the owner
+with a "manager not set" marker and named in a note — an Admin approves their
+work until that is fixed. A reporting loop is detected and named rather than
+hanging the walk.
 
 ### How the final score is built
 

@@ -20,6 +20,7 @@ const parts = [
   ['src/08-commerce.gs', null],
   ['src/09-kra.gs',      'KRA / KPI'],
   ['src/10-projects.gs', 'Projects — multi-stage work'],
+  ['src/11-recognition.gs', 'Cookie points and the org chart'],
   ['domebox/auth.gs',    'AUTHENTICATION'],
   ['domebox/plans.gs',   'PLAN LIMITS'],
   ['domebox/domain.gs',  'RULES ENGINE'],

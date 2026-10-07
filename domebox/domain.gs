@@ -526,6 +526,63 @@ function projectSummary(tasks, projectId) {
 var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
 var LATENESS_POINTS_PER_DAY = 10;   // a day late costs 10 on that task
 var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
+
+/* ---------------------------------------------------------------------------
+   WORKLOAD CREDIT — what stops one easy task outscoring ten hard ones.
+
+   Every component above is a RATE: a percentage of the work you took on. On
+   its own a rate is blind to how much work that was, so somebody who closed a
+   single trivial task on time scored 100, while somebody who carried ten and
+   delivered seven of them on time scored 70. The system was quietly telling
+   the hardest workers in the company that they were the worst performers.
+
+   So the rate is credited against the load actually carried. Nobody is handed
+   a score for turning up: you start at zero and earn it by delivering, and
+   because the credit can never exceed 1 the score can never exceed 100.
+
+       score = how well you delivered  ×  how much you delivered
+
+   Load is counted in the same priority weights the rest of the engine uses —
+   a High task is worth three Lows — plus the approvals and reviews you cleared
+   for other people, because that is work too and a manager who spends the
+   month unblocking their team is not idle.
+
+   The expectation is per person, taken from their WIP limit, so a part-time or
+   deliberately low-volume role is measured against its own bar and not against
+   the busiest desk in the building.
+--------------------------------------------------------------------------- */
+var EXPECTED_MONTHLY_TASKS = 5;     // the default WIP limit, in tasks
+var DECISION_EFFORT = 1;            // an approval or review cleared, in load units
+
+/**
+ * How much of the expected load this person actually carried, 0..1.
+ * Capped at 1: carrying double does not make a score of 200, it makes a
+ * complete one.
+ */
+function workloadCredit(deliveredWeight, expectedTasks) {
+  var expected = Math.max(1, Number(expectedTasks) || EXPECTED_MONTHLY_TASKS) *
+                 priorityWeight('Medium');
+  var credit = deliveredWeight / expected;
+  return { delivered: Math.round(deliveredWeight * 10) / 10, expected: expected,
+           credit: Math.max(0, Math.min(1, credit)),
+           percent: Math.round(Math.max(0, Math.min(1, credit)) * 100),
+           full: credit >= 1 };
+}
+
+/* COOKIE POINTS — recognition a manager can give on the day, not six months
+   later at the appraisal. Each one is signed and carries a reason, because an
+   anonymous bonus with no stated cause is indistinguishable from favouritism.
+   The score effect is capped: cookies are a thank-you, not a back door to a
+   score nobody earned on the work. */
+var COOKIE_MAX_PER_AWARD = 5;
+var MAX_COOKIE_BONUS = 10;          // the most cookies can move a score
+
+function cookieBonus(cookies) {
+  var total = (cookies || []).reduce(function (s, c) {
+    return s + Math.max(0, Math.min(COOKIE_MAX_PER_AWARD, Number(c.points) || 0)); }, 0);
+  return { awarded: total, bonus: Math.min(total, MAX_COOKIE_BONUS),
+           capped: total > MAX_COOKIE_BONUS, count: (cookies || []).length };
+}
 /* RESPONSIVENESS — the manager's half of accountability.
    A doer is measured on delivering. The person who has to approve or sign off
    is measured on not sitting on it. Without this the score is one-sided: a team
@@ -734,8 +791,9 @@ function responsivenessStats(tasks, username, today, cal, opts) {
   };
 }
 
-function delegationScore(tasks, username, today, cal) {
+function delegationScore(tasks, username, today, cal, opts) {
   today = today || new Date();
+  opts = opts || {};
   var mine = tasks.filter(function (t) { return t.assignee === username; });
   var breakdown = [];
 
@@ -821,7 +879,7 @@ function delegationScore(tasks, username, today, cal) {
   var active = parts.filter(function (p) { return p.score !== null; });
   var totalWeight = active.reduce(function (s, p) { return s + p.weight; }, 0);
   var hasData = active.length > 0;
-  var composite = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
+  var rate = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
 
   /* --- responsiveness: separate, capped, never averaged into the delivery half ---
      Held time is measured from when the item landed on this person's desk, in
@@ -832,6 +890,50 @@ function delegationScore(tasks, username, today, cal) {
   var deduction = resp.penalty;
   resp.breakdown.forEach(function (b) { breakdown.push(b); });
 
+  /* --- the load that rate was earned on ---
+     Closed work in priority weights, plus the decisions cleared for other
+     people, because unblocking your team is work and a score that ignores it
+     tells managers not to bother. */
+  var deliveredWeight = closed.reduce(function (n, t) { return n + priorityWeight(t.priority); }, 0) +
+                        (resp.items - resp.pending) * DECISION_EFFORT +
+                        /* Work in hand counts half. Somebody three weeks into a
+                           large job has not delivered yet, but they are plainly
+                           not idle, and a load figure that said otherwise would
+                           be read as an accusation. */
+                        open.reduce(function (n, t) { return n + priorityWeight(t.priority) / 2; }, 0);
+  var load = workloadCredit(deliveredWeight, opts.expectedTasks);
+  var composite = rate * load.credit;
+  if (hasData) {
+    breakdown.push({
+      group: 'Workload Credit',
+      item: closed.length + ' closed, ' + open.length + ' in hand, ' +
+            (resp.items - resp.pending) + ' decision(s) cleared',
+      reason: load.full
+        ? 'A full load carried — the rates above count in full'
+        : 'Carried ' + load.percent + '% of an expected load, so the rates above count ' +
+          'for ' + load.percent + '% of their value',
+      impact: load.percent + '%',
+    });
+  }
+
+  /* --- cookie points: recognition, signed and capped --- */
+  var cookies = cookieBonus(opts.cookies);
+  cookies.list = (opts.cookies || []).slice();
+  if (cookies.bonus > 0) {
+    (opts.cookies || []).forEach(function (c) {
+      breakdown.push({ group: 'Cookie Points', item: c.reason || 'Recognised',
+        reason: 'Awarded by ' + (c.byName || c.by || 'a manager') +
+                (c.date ? ' on ' + String(c.date).slice(0, 10) : ''),
+        impact: '+' + Math.max(0, Math.min(COOKIE_MAX_PER_AWARD, Number(c.points) || 0)) });
+    });
+    if (cookies.capped) {
+      breakdown.push({ group: 'Cookie Points', item: 'Capped',
+        reason: cookies.awarded + ' points awarded; cookies can move a score by at most ' +
+                MAX_COOKIE_BONUS,
+        impact: '+' + cookies.bonus });
+    }
+  }
+
   /**
    * A manager may own no tasks at all and still be the reason four people are
    * stuck. Scoring them "no data" there is the one hole that would let the least
@@ -841,9 +943,11 @@ function delegationScore(tasks, username, today, cal) {
    */
   if (!hasData && resp.hasData) {
     return {
-      score: Math.max(0, Math.min(100, resp.responsiveness)),
+      score: clampScore_(resp.responsiveness * load.credit + cookies.bonus),
       hasData: true,
       deduction: 0,
+      workload: load,
+      cookies: cookies,
       responsiveness: resp,
       milestones: ms,
       components: [{
@@ -860,9 +964,17 @@ function delegationScore(tasks, username, today, cal) {
   }
 
   return {
-    score: hasData ? Math.max(0, Math.min(100, Math.round(composite - deduction))) : 0,
+    /* Clamped at both ends, always: nobody starts above zero and nothing —
+       cookie points included — takes anybody past 100. */
+    score: hasData ? clampScore_(composite - deduction + cookies.bonus) : 0,
+    rate: hasData ? Math.round(rate) : null,
     hasData: hasData,
     deduction: deduction,
+    workload: load,
+    cookies: cookies,
+    /* A score earned on a sliver of work is a fact, not a verdict. Flagging it
+       stops a light month being read as a bad one. */
+    provisional: load.credit < 0.4,
     components: parts.map(function (p) {
       return {
         key: p.key, label: p.label,
@@ -875,9 +987,20 @@ function delegationScore(tasks, username, today, cal) {
     milestones: ms,
     summary: { closed: closed.length, open: open.length, overdue: overdue,
                reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow,
-               stagesMet: ms.met, stagesMissed: ms.missed, stagesPending: ms.pending },
+               stagesMet: ms.met, stagesMissed: ms.missed, stagesPending: ms.pending,
+               loadPercent: load.percent, cookiePoints: cookies.awarded },
     breakdown: breakdown,
+    formula: 'Score = how well you delivered (' + Math.round(rate) + ') × the load you carried (' +
+             load.percent + '%)' +
+             (deduction ? ' − ' + deduction + ' for approvals held' : '') +
+             (cookies.bonus ? ' + ' + cookies.bonus + ' cookie points' : ''),
   };
+}
+
+/** Nobody below zero, nobody above a hundred. Enforced in one place. */
+function clampScore_(n) {
+  var v = Math.round(Number(n) || 0);
+  return Math.max(0, Math.min(100, v));
 }
 
 // ---------------------------------------------------------------------------
@@ -1373,7 +1496,7 @@ function inWindow(date, range) {
  * Queue health is judged as at the end of the window, so a historic period is
  * measured on how the queue looked then rather than how it looks today.
  */
-function scoreForPeriod(tasks, username, range, cal) {
+function scoreForPeriod(tasks, username, range, cal, opts) {
   var closedInWindow = tasks.filter(function (t) {
     return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
   });
@@ -1409,7 +1532,8 @@ function scoreForPeriod(tasks, username, range, cal) {
   });
 
   var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
-  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf, cal);
+  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem),
+                               username, asOf, cal, opts);
   result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
   result.delivered = closedInWindow.length;
   result.openThen = openThen.length;
@@ -1437,12 +1561,12 @@ function scoreForPeriod(tasks, username, range, cal) {
 }
 
 /** A trend of the last `count` periods, oldest first — ready to plot. */
-function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
+function scoreTrend(tasks, username, kind, count, today, endOffset, cal, opts) {
   var end = Number(endOffset) || 0;
   var out = [];
   for (var i = count - 1 + end; i >= end; i--) {
     var range = periodRange(kind, i, today);
-    var s = scoreForPeriod(tasks, username, range, cal);
+    var s = scoreForPeriod(tasks, username, range, cal, opts);
     out.push({
       label: range.label, short: range.short,
       score: s.hasData ? s.score : null,
@@ -1458,7 +1582,7 @@ function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
  * Everything the analytics dashboard needs for one period, in one pass:
  * headline counts, per-person scores, KRA split and the A/B/C spread.
  */
-function periodAnalytics(tasks, users, range, today, cal) {
+function periodAnalytics(tasks, users, range, today, cal, optsFor) {
   var delivered = [], overdueNow = [], reworkLoops = 0, onTime = 0, onTimeBase = 0;
 
   tasks.forEach(function (t) {
@@ -1474,11 +1598,15 @@ function periodAnalytics(tasks, users, range, today, cal) {
   });
 
   var people = users.map(function (u) {
-    var s = scoreForPeriod(tasks, u.username, range, cal);
+    var s = scoreForPeriod(tasks, u.username, range, cal,
+      optsFor ? optsFor(u) : null);
     return {
       username: u.username, name: u.name, role: u.role, dept: u.dept,
       score: s.hasData ? s.score : null, hasData: s.hasData,
       delivered: s.delivered, components: s.components,
+      loadPercent: s.workload ? s.workload.percent : null,
+      provisional: !!s.provisional,
+      cookiePoints: s.cookies ? s.cookies.awarded : 0,
       band: s.hasData ? performanceBand(s.score).band : null,
       reason: s.hasData ? null : (s.reason || 'Nothing closed in this period.'),
     };

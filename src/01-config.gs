@@ -41,7 +41,7 @@ function CFG() {
 
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
-            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens' };
+            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points' };
 
 /* Column layout. The first 15 task columns and first 9 user columns match the
    old schema exactly, so an existing tenant sheet keeps working; new fields are

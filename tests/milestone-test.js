@@ -126,9 +126,15 @@ console.log('\n=== it moves the score the company reads ===');
         status: S.VERIFIED, priority: 'Medium', raisedBy: 'b', approver: 'b',
         history: [hist('2026-11-04', S.FOR_REVIEW), hist('2026-11-04', S.VERIFIED)] }], 'p', today, null)
        .components.some((c) => c.key === 'milestones'));
-  ok('splitting work into more stages does not inflate a score',
-     D.delegationScore([done(1, 'p', '2026-11-05', '2026-11-04')], 'p', today, null).score ===
-     D.delegationScore(met, 'p', today, null).score);
+  /* More stages IS more work, and the load credit counts it — but only up to a
+     full load. So cutting a job into more pieces can never carry anybody past
+     a complete score, which is the bound that matters. */
+  const sliced = [];
+  for (let i = 1; i <= 12; i++) sliced.push(done(i, 'p', '2026-11-05', '2026-11-04'));
+  ok('slicing work into more stages cannot take anybody past 100',
+     D.delegationScore(sliced, 'p', today, null).score === 100);
+  ok('and the load credit it earns is capped at a full load',
+     D.delegationScore(sliced, 'p', today, null).workload.credit === 1);
 }
 
 console.log('\n=== the project rollup ===');

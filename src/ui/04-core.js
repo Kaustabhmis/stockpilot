@@ -218,7 +218,8 @@ function renderTiles() {
     tile('In progress', s.progress) +
     tile('For review', s.review) +
     tile('Overdue', s.overdue, 'needs attention', s.overdue ? 'text-red-700' : '') +
-    tile('Delegation', sc.hasData && sc.delegation != null ? sc.delegation : '\u2014', sc.hasData ? 'this month' : 'no data yet',
+    tile('Delegation', sc.hasData && sc.delegation != null ? sc.delegation : '\u2014',
+         sc.hasData ? (sc.load ? sc.load.percent + '% of an expected load' : 'this month') : 'no data yet',
          sc.hasData ? (sc.delegation >= 85 ? 'text-emerald-700' : sc.delegation >= 60 ? 'text-amber-700' : 'text-red-700') : 'text-gray-300') +
     '<div class="bg-white rounded-2xl border border-gray-100 p-4 cursor-pointer hover:border-blue-300" onclick="openScoreBreakdown()">' +
       '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">Final score</div>' +
@@ -234,8 +235,8 @@ function openScoreBreakdown() {
   /* Grouped, because a deduction for sitting on somebody else's work is a
      different conversation from a late delivery, and lumping them into one
      list is how a score stops being arguable in good faith. */
-  var order = ['Project Milestones', 'On-Time Delivery', 'First-Pass Quality',
-               'Queue Health', 'Review Responsiveness'];
+  var order = ['Workload Credit', 'Cookie Points', 'Project Milestones', 'On-Time Delivery',
+               'First-Pass Quality', 'Queue Health', 'Review Responsiveness'];
   var groups = {};
   rows.forEach(function (r) { (groups[r.group || 'Other'] = groups[r.group || 'Other'] || []).push(r); });
   var names = order.filter(function (g) { return groups[g]; })
@@ -278,6 +279,51 @@ function openScoreBreakdown() {
         'and your own approved leave are not counted.</div>' +
       '</div></div></div>' : '';
 
+  /* The headline answer to "why is my score what it is?". Ten jobs with seven
+     delivered on time has to beat one easy job delivered, and the only honest
+     way to show that is to put the load and the rate side by side. */
+  var ld = sc.load;
+  var loadPanel = ld ? '<div class="rounded-2xl border ' +
+      (ld.full ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-blue-50') + ' p-4 mb-5">' +
+    '<div class="flex items-start gap-3">' +
+      '<span class="material-icons ' + (ld.full ? 'text-emerald-700' : 'text-blue-700') + '">scale</span>' +
+      '<div class="min-w-0 w-full">' +
+      '<div class="text-sm font-black text-gray-900">How well, times how much</div>' +
+      '<div class="text-[13px] font-semibold text-gray-700 mt-1">' +
+        (sc.rate != null ? '<span class="font-black">' + sc.rate + '</span> for how well you delivered, ' : '') +
+        'carried on <span class="font-black">' + ld.percent + '%</span> of an expected load.' +
+      '</div>' +
+      '<div class="h-2 rounded-full bg-white/70 overflow-hidden my-2">' +
+        '<div class="h-full ' + (ld.full ? 'bg-emerald-500' : 'bg-blue-600') + '" ' +
+        'style="width:' + Math.min(100, ld.percent) + '%"></div></div>' +
+      (sc.delegationFormula ? '<div class="text-[13px] font-bold text-gray-800">' +
+        esc(sc.delegationFormula) + '</div>' : '') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        'A rate on its own says nothing about how much you took on, so ten jobs with seven ' +
+        'delivered on time outscores one easy job delivered. Work in hand counts, and so do ' +
+        'the approvals and reviews you clear for other people.</div>' +
+      (sc.provisional ? '<div class="text-[12px] font-black text-amber-800 mt-2">' +
+        'A light month so far — this is not yet a full picture of your work.</div>' : '') +
+      '</div></div></div>' : '';
+
+  var ck = sc.cookies;
+  var cookiePanel = ck && ck.awarded ? '<div class="rounded-2xl border border-amber-200 ' +
+      'bg-amber-50 p-4 mb-5"><div class="flex items-start gap-3">' +
+      '<span class="material-icons text-amber-700">emoji_events</span>' +
+      '<div class="min-w-0">' +
+      '<div class="text-sm font-black text-gray-900">' +
+        esc(ck.awarded + ' cookie point' + (ck.awarded === 1 ? '' : 's') + ' this month') + '</div>' +
+      (ck.list || []).map(function (c) {
+        return '<div class="text-[13px] font-semibold text-gray-700 mt-1">' +
+          '<span class="font-black">+' + c.points + '</span> ' + esc(c.reason || 'Recognised') +
+          '<span class="text-gray-500"> — ' + esc(c.byName || c.by || 'a manager') + '</span></div>';
+      }).join('') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        esc(ck.capped
+          ? 'Adding ' + ck.bonus + ' to your score — that is the monthly cap. The rest still stands on the record.'
+          : 'Adding ' + ck.bonus + ' to your score.') + '</div>' +
+      '</div></div></div>' : '';
+
   /* The gains, stated as plainly as the losses. A score that only ever shows a
      person what went wrong is read as a punishment ledger, and stops changing
      anybody's behaviour after the first month. */
@@ -310,7 +356,7 @@ function openScoreBreakdown() {
       'Nothing is estimated.</p>' +
     (sc.formula ? '<p class="text-[13px] font-bold text-gray-700 bg-gray-50 rounded-xl px-3 py-2 mb-5">' +
        esc(sc.formula) + '</p>' : '') +
-    msPanel + respPanel +
+    loadPanel + cookiePanel + msPanel + respPanel +
     '<div class="grid gap-3 mb-1" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">' +
       (sc.components || []).map(function (c) {
         return '<div class="bg-gray-50 rounded-2xl p-3 text-center">' +
