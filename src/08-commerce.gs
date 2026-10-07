@@ -21,6 +21,14 @@ function createRazorpayOrder_(ctx, planName, promoCode) {
     logPayment_('PROMO', ctx.sheetId, promo.code + ' -' + promo.percent + '%');
   }
 
+  /* Every price on the site is published as exclusive of GST, so the tax has
+     to be added here — charging the listed figure and then issuing an invoice
+     that shows tax inside it would mean absorbing 18% on every sale. The rate
+     is 0 until a GSTIN is configured, so an unregistered seller charges and
+     shows exactly the listed price. */
+  var net = amount, rate = gstRate_();
+  if (rate) amount = Math.round(net * (100 + rate) / 100);
+
   var res = UrlFetchApp.fetch('https://api.razorpay.com/v1/orders', {
     method: 'post', contentType: 'application/json',
     headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.razorKey + ':' + c.razorSecret) },
@@ -34,7 +42,11 @@ function createRazorpayOrder_(ctx, planName, promoCode) {
     throw new Error('We could not start the payment. Please try again.');
   }
   var order = JSON.parse(res.getContentText());
-  return { status: 'success', orderData: { key: c.razorKey, order_id: order.id,
+  return { status: 'success',
+    /* The breakdown is shown before the card is, so nobody is surprised by a
+       total that is larger than the price on the card they clicked. */
+    charge: { net: net / 100, rate: rate, tax: (amount - net) / 100, total: amount / 100 },
+    orderData: { key: c.razorKey, order_id: order.id,
     amount: order.amount, currency: 'INR', name: 'Dome Box',
     description: plan.name, prefill: { email: ctx.me.email, contact: ctx.me.phone || '' } } };
 }
@@ -123,6 +135,12 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     dir.getRange(i + 1, 7).setValue('Active');
     try { sendEmail_(d[i][1], 'Dome Box — payment receipt',
       receiptHtml_(company || d[i][0], planName, paid, until)); } catch (e) {}
+    /* The invoice follows the receipt, from inside the same lock, so the
+       serial number cannot collide with another payment landing at the same
+       moment. It is idempotent on the payment id: the browser handler and the
+       webhook both reach here for the same rupee, and only one document is
+       ever issued for it. */
+    issueInvoice_locked_(sheetId, planName, paid, company || d[i][0], until);
     return until;
   }
   throw new Error('That workspace is not in the registry.');
@@ -452,7 +470,8 @@ function receiptHtml_(company, planName, paid, until) {
     infoTable_([['Plan', plan.name],
       ['Amount paid', '₹' + (Number(paid.amount) / 100).toLocaleString('en-IN')],
       ['Payment ID', paid.id], ['Valid until', until]]) +
-    '<p style="font-size:12px;color:#6b7280">A GST invoice follows separately.</p>');
+    '<p style="font-size:12px;color:#6b7280">Your invoice is on its way in a separate ' +
+    'email — it carries the GST details your accountant needs.</p>');
 }
 
 function contactSales_(form) {

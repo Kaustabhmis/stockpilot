@@ -227,7 +227,11 @@ function openBilling() {
     '<div class="mt-5 flex gap-2 items-end">' +
       '<div class="flex-1 max-w-xs"><label class="lb" for="promo">Promo code</label>' +
       '<input id="promo" class="in" placeholder="Optional"></div></div>' +
-    '<p class="text-xs text-gray-400 font-semibold mt-4">Prices exclude 18% GST. ' +
+    '<div class="mt-5 flex flex-wrap gap-2">' +
+      '<button class="btn btn-g" onclick="openInvoices()">Invoices</button>' +
+      '<button class="btn btn-g" onclick="openBillingDetails()">Invoice details</button></div>' +
+    '<p class="text-xs text-gray-400 font-semibold mt-4">Prices exclude 18% GST, added at checkout. ' +
+    'A GST invoice is emailed the moment a payment goes through. ' +
       'Need a few more seats than a band allows? Extra seats are ' + inr(EXTRA_SEAT_PRICE) +
       ' per user a month — ' +
       '<button class="text-blue-600 font-black" onclick="openSupport(\'Extra seats\')">ask us</button>. ' +
@@ -267,12 +271,31 @@ function renderBillingPlans() {
   });
 }
 
+/**
+ * The invoice is issued the instant the payment lands, so the details it will
+ * be written from are collected first. Asked once: if a state or a GSTIN is
+ * already on file we go straight to the card.
+ */
 function startCheckout(planName, promo) {
   if (typeof Razorpay === 'undefined') { toast('The payment library has not loaded. Refresh and try again.', 'err'); return; }
+  api('getBilling', {})
+    .then(function (r) {
+      if (r.billing && (r.billing.gstin || r.billing.state)) return payNow(planName, promo);
+      openBillingDetails(function () { payNow(planName, promo); });
+    })
+    .catch(function () { payNow(planName, promo); });   // never block a sale on this
+}
+
+function payNow(planName, promo) {
   toast('Starting payment…', 'info');
   api('initiateRazorpay', { planName: planName, promoCode: promo })
     .then(function (r) {
-      var o = r.orderData;
+      var o = r.orderData, ch = r.charge || {};
+      /* The site prices exclude GST, so the figure on the card is larger than
+         the figure on the plan card. Saying so before the payment sheet opens
+         is the difference between a sale and a chargeback. */
+      if (ch.tax) toast(inr(ch.net) + ' + ' + ch.rate + '% GST ' + inr(ch.tax) +
+                        ' = ' + inr(ch.total) + ' payable', 'info');
       var rz = new Razorpay({
         key: o.key, order_id: o.order_id, amount: o.amount, currency: o.currency,
         name: o.name, description: o.description, prefill: o.prefill, theme: { color: '#2563eb' },

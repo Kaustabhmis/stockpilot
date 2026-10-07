@@ -24,6 +24,12 @@ Your current customers keep running on the old one until you decide otherwise.
 | `RAZORPAY_KEY_ID` | your **new** key id (after rotating) |
 | `RAZORPAY_KEY_SECRET` | your **new** secret |
 | `RAZORPAY_WEBHOOK_SECRET` | the secret you type into Razorpay (see §1a) |
+| `SELLER_LEGAL_NAME` | the registered name, e.g. `BISCS India` |
+| `SELLER_ADDRESS` | the registered address, one line |
+| `SELLER_STATE` | e.g. `West Bengal` |
+| `SELLER_GSTIN` | **leave blank until registered** — see §1d |
+| `SELLER_PAN` | optional, printed on the invoice |
+| `INVOICE_PREFIX` | optional, defaults to `BISCS` |
 | `GEMINI_KEY` | your **new** Gemini key |
 | `PROMO_CODES` | optional, e.g. `{"LAUNCH20":20}` |
 
@@ -65,6 +71,44 @@ So after step 8, when you have the `/exec` URL:
 Test it: pay once in Razorpay test mode, close the tab the moment the bank page
 submits, and check the company lands on the paid plan anyway. The `Payments`
 log will show `WEBHOOK_GRANTED` rather than the browser path.
+
+### 1d. Invoices — what gets sent, and what decides the tax
+
+Every captured payment produces a document that is emailed from
+`info@biscsindia.com` within the same locked write that grants the plan. It is
+idempotent on the payment id, so the browser path and the webhook both land on
+one invoice, never two.
+
+**Until `SELLER_GSTIN` is set, no tax is charged and no tax is shown.** The
+document is titled "Invoice", carries the whole amount as the value, and says
+in plain words that BISCS India is not registered under GST so nothing may be
+claimed. The checkout charges exactly the listed price. This is the correct
+behaviour for an unregistered supplier and it is what happens today.
+
+**The day a GSTIN is set, three things change at once.** The document becomes a
+"Tax Invoice"; 18% is added *on top* of the listed price at checkout, because
+every price on www.domebox.in is published as exclusive of GST; and the tax is
+split by place of supply — CGST+SGST within your own state, IGST outside it.
+Set `SELLER_STATE` before the GSTIN or every sale is taxed as intra-state.
+
+Run `previewInvoice()` to see the seller block, the rate and the next number
+without sending anything. Run it again after any change.
+
+**The number series** is `BISCS/26-27/0001`, restarting at 0001 each financial
+year (April to March). It is derived under the registry lock from the rows
+already in the `Invoices` tab, so it cannot collide and cannot leave a gap.
+Nothing is ever edited in place: `reissueInvoice("BISCS/26-27/0007")` marks the
+original **Superseded** and issues a fresh number from the corrected details.
+
+**What customers do:** Plans → *Invoice details* captures the registered name,
+GSTIN, address and state. A customer who has given neither a GSTIN nor a state
+is asked for them before the card appears, because an invoice cannot be
+rewritten afterwards. Past invoices are listed under Plans → *Invoices*.
+
+If a payment arrives with no state on file, the invoice is still issued — the
+customer has paid and is owed it — marked `Review — place of supply unknown`
+in the ledger, and `info@biscsindia.com` gets an email naming the invoice and
+the `reissueInvoice()` call to run once the customer answers.
 
 ### 1b. The scheduler — add it, or nothing gets chased
 

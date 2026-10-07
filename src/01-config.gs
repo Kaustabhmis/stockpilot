@@ -160,6 +160,25 @@ function setupDomeBox() {
     else out.push('          This account has no send-as aliases at all.');
   }
 
+  /* An invoice without the supplier's legal name, address and state is not a
+     document anyone can file, and the first customer to ask for one will ask
+     after they have already paid. Checked here, not discovered then. */
+  out.push('');
+  out.push('--- INVOICING ---');
+  var s = sellerIdentity_();
+  out.push('  seller  ' + s.legalName + (s.address ? ', ' + s.address : ''));
+  if (!s.address) { missing.push('SELLER_ADDRESS'); out.push('  MISSING SELLER_ADDRESS — an invoice must carry the supplier address.'); }
+  if (!s.state)   { missing.push('SELLER_STATE');   out.push('  MISSING SELLER_STATE — without it every invoice is taxed as intra-state.'); }
+  if (s.registered) {
+    out.push('  ok      GSTIN ' + s.gstin + ' — tax invoices at ' + s.rate + '%, charged on top of the listed price.');
+  } else {
+    out.push('  note    SELLER_GSTIN is not set. Invoices will be issued with NO tax and');
+    out.push('          the checkout will charge exactly the listed price. Correct while');
+    out.push('          BISCS India is unregistered; set the GSTIN the day that changes,');
+    out.push('          because the site tells customers prices exclude 18% GST.');
+  }
+  out.push('  series  next number ' + s.prefix + '/' + financialYear_(new Date()) + '/0001 onward');
+
   out.push('');
   if (missing.length) {
     out.push('Add ' + missing.join(' and ') + ' under Project Settings > Script Properties,');
@@ -182,6 +201,8 @@ function ensureRegistry() {
   mkTab_(ss, TAB.DIRECTORY, ['Company','Email','Password','Plan','Valid Until','SheetID','Status','Created']);
   mkTab_(ss, TAB.GLOBAL,    ['Email','Password','SheetID','Username']);
   mkTab_(ss, TAB.TOKENS,    ['Token','Email','Created','Used']);
+  mkTab_(ss, 'Billing',     BILLING_HEADERS);
+  mkTab_(ss, 'Invoices',    INVOICE_HEADERS);
   Logger.log('Registry ready: ' + ss.getName());
 }
 

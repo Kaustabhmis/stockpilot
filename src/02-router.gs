@@ -92,6 +92,8 @@ function route_(p) {
     case 'getCategories':       return { status:'success', categories: readCategories_(ctx),
                                           priorities: readPriorities_(ctx) };
     case 'getPriorityList':     return getPriorityList_(ctx, p.username, p.horizon);
+    case 'getBilling':          return getBilling_(ctx);
+    case 'getInvoices':         return getInvoices_(ctx);
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
@@ -125,6 +127,7 @@ function route_(p) {
     /* --- commercial & misc ----------------------------------------------- */
     case 'initiateRazorpay':    return createRazorpayOrder_(ctx, p.planName, p.promoCode);
     case 'paymentSuccess':      return handleVerifiedPayment_(ctx, p);
+    case 'saveBilling':         return saveBilling_(ctx, p.form);
     case 'contactSupport':      return contactSupport_(ctx, p.form);
     case 'aiInsight':           return aiInsight_(ctx, p.question);
     case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);

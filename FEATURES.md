@@ -216,6 +216,32 @@ work still carries them.
 - [x] Promo codes, receipts by email from info@biscsindia.com
 - [x] Plan limits enforced on the SERVER — users, tasks, analytics, KRA, WhatsApp
 - [x] **Priced by team size, every feature in every paid plan** (new)
+- [x] **An invoice from BISCS India for every payment, automatically** (new)
+
+### Invoices
+
+A payment is not finished when the money moves — it is finished when the
+customer has the document their accountant can file. So the invoice is written
+inside the same locked write that grants the plan, and emailed from
+`info@biscsindia.com` without anyone pressing a button.
+
+| | |
+|---|---|
+| Number | `BISCS/26-27/0001`, restarting each financial year |
+| Carries | supplier legal name, address, GSTIN, PAN; buyer name, address, GSTIN; SAC 998314; taxable value; tax split; total; amount in words; payment reference |
+| Tax | CGST+SGST within the seller's state, IGST outside it, decided by the buyer's GSTIN |
+| Before registration | no tax charged, no tax shown, and it says why |
+| Never duplicated | idempotent on the payment id, so the browser path and the webhook produce one document |
+| Never edited | `reissueInvoice()` supersedes and renumbers; both stay in the series |
+
+The serial is derived under the registry lock from the rows already written,
+not from a counter. A counter is faster and leaves a hole in the series the
+first time a write fails after the bump — and a hole is the one thing in an
+invoice series that cannot be explained away afterwards.
+
+Details are asked for **before** the card, because an invoice cannot be
+rewritten once it is issued. A customer who has given neither a GSTIN nor a
+state sees one short form, once.
 
 ### Pricing
 
@@ -231,7 +257,11 @@ Every paid band carries the whole product. A plan that withholds the scoring and
 the appraisals is selling a worse board, and it gives a buyer a reason to stay
 small rather than a reason to grow. Price per user falls as the band rises, so
 growing with us is rewarded and the bill still goes up. Extra seats beyond a
-band are ₹149 per user a month, arranged by hand. Prices exclude 18% GST.
+band are ₹149 per user a month, arranged by hand.
+
+Prices exclude 18% GST, which is added at checkout and shown before the payment
+sheet opens — while BISCS India is unregistered the rate is zero and the
+checkout charges exactly the listed figure.
 
 Yearly is exactly ten times monthly, enforced by a test. The old ladder had
 Standard at ₹2,499/mo — ₹29,988 a year — sitting next to Pro at ₹19,999 a year
