@@ -126,9 +126,11 @@ function signOut(expired) {
   try { sessionStorage.removeItem('dbx'); } catch (e) {}
   closeModal(); closeDrawer();
   $('view-app').classList.add('hidden');
-  $('view-auth').classList.remove('hidden');
   resetAuthForms();
-  showAuth('login');
+  /* Straight back to the sign-in form, because somebody who just signed out of
+     their own workspace is far more likely to be switching accounts than
+     reading the sales page. */
+  goAuth('login');
   if (expired) toast('Your session ended. Please sign in again.', 'info');
 }
 
@@ -150,6 +152,7 @@ function resetAuthForms() {
 
 function enterApp() {
   $('view-auth').classList.add('hidden');
+  $('view-home').classList.add('hidden');
   $('view-app').classList.remove('hidden');
   $('navName').textContent = STATE.user.name;
   $('navRole').textContent = STATE.user.role;

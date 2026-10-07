@@ -152,3 +152,53 @@ function orgBranch(n) {
     n.reports.map(function (c) { return orgBranch(c); }).join('') +
     '</div>';
 }
+
+/* ---------- the landing page ----------------------------------------------
+   Shown to anybody who is not signed in. Its job is to say what this is, who
+   it is for, and why the scoring can be trusted — then get out of the way.
+   -------------------------------------------------------------------------- */
+function showHome() {
+  $('view-home').classList.remove('hidden');
+  $('view-auth').classList.add('hidden');
+  $('view-app').classList.add('hidden');
+  renderHomePlans();
+  window.scrollTo(0, 0);
+}
+
+/** Straight to the form, from any of the buttons on the landing page. */
+function goAuth(which) {
+  $('view-home').classList.add('hidden');
+  $('view-app').classList.add('hidden');
+  $('view-auth').classList.remove('hidden');
+  resetAuthForms();
+  showAuth(which || 'login');
+  window.scrollTo(0, 0);
+  var first = which === 'signup' ? $('suCompany') : $('liUser');
+  if (first) { try { first.focus(); } catch (e) {} }
+}
+
+function renderHomePlans() {
+  var el = $('homePlans');
+  if (!el) return;
+  el.innerHTML = PLAN_CARDS.map(function (p) {
+    var lead = p.tag === 'Most popular';
+    return '<div class="rounded-3xl border-2 p-5 flex flex-col ' +
+      (lead ? 'border-blue-600 shadow-lg' : 'border-gray-100') + '">' +
+      (p.tag ? '<div class="text-[10px] font-black uppercase tracking-widest mb-2 ' +
+        (lead ? 'text-blue-600' : 'text-amber-600') + '">' + esc(p.tag) + '</div>'
+       : '<div class="h-[18px] mb-2"></div>') +
+      '<div class="font-black text-lg">' + esc(p.name) + '</div>' +
+      '<div class="text-[13px] font-semibold text-gray-500 mt-0.5 min-h-[36px]">' + esc(p.blurb) + '</div>' +
+      '<div class="text-3xl font-black mt-3">' + esc(p.price) +
+        '<span class="text-sm font-bold text-gray-400">' + esc(p.per) + '</span></div>' +
+      '<ul class="text-[13px] font-semibold text-gray-600 mt-4 space-y-1.5 flex-1">' +
+        p.bullets.map(function (b) {
+          return '<li class="flex gap-2"><span class="material-icons text-[16px] text-emerald-600">check</span>' +
+            '<span>' + esc(b) + '</span></li>'; }).join('') + '</ul>' +
+      '<button class="btn ' + (lead ? 'btn-p' : 'btn-g') + ' w-full mt-5" ' +
+        (p.key === 'Enterprise'
+          ? 'onclick="goAuth(\'signup\')">Talk to us'
+          : 'onclick="goAuth(\'signup\')">' + (p.key === 'Free' ? 'Start free' : 'Get ' + esc(p.name))) +
+      '</button></div>';
+  }).join('');
+}

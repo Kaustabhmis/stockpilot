@@ -44,7 +44,7 @@ const hit = (path) => new Promise((res, rej) =>
   const p = await b.newPage({ viewport: { width: 1500, height: 950 } });
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 
-  await p.goto('http://localhost:8095/', { waitUntil: 'networkidle' });
+  await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', email); await p.fill('#liPass', 'strongpass123');
   await p.click('#btnLogin'); await p.waitForTimeout(1600);
 
@@ -65,7 +65,7 @@ const hit = (path) => new Promise((res, rej) =>
   await p.keyboard.press('Escape'); await p.waitForTimeout(400);
 
   console.log('\n--- and the company sees it in the report ---');
-  await p.click('[data-view="reports"]').catch(async () => { await p.click('text=Reports'); });
+  await p.click('#navTabs button[data-tab="reports"]');
   await p.waitForTimeout(1200);
   await p.click('#btnAccount2');
   await p.waitForTimeout(1200);

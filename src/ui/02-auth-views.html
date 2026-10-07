@@ -1,6 +1,6 @@
 
 <!-- ============================ AUTH ============================ -->
-<div id="view-auth" class="min-h-screen flex items-center justify-center p-4"
+<div id="view-auth" class="hidden min-h-screen flex items-center justify-center p-4"
      style="background:radial-gradient(circle at 30% 20%,#1e293b 0%,#0b1120 100%)">
   <div class="w-full max-w-sm">
     <div class="text-center mb-6">
@@ -14,6 +14,9 @@
         <span class="font-black text-2xl tracking-tight">Dome Box</span>
       </div>
       <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Task &amp; Team Management</p>
+      <p class="text-slate-300 text-sm font-semibold mt-3 leading-relaxed">
+        Assign the work, approve what comes back, and get a performance score
+        your team can see the working for.</p>
     </div>
 
     <div class="bg-white rounded-3xl shadow-2xl p-7 fade">
@@ -79,7 +82,12 @@
       </form>
     </div>
 
-    <p class="text-center text-slate-500 text-xs mt-5">
+    <p class="text-center mt-5">
+      <button type="button" class="text-slate-400 text-xs font-bold hover:text-slate-200"
+              onclick="showHome()">&larr; Back to the Dome Box home page</button>
+    </p>
+
+    <p class="text-center text-slate-500 text-xs mt-3">
       <a href="/privacy" class="hover:text-slate-300">Privacy</a> ·
       <a href="/terms" class="hover:text-slate-300">Terms</a> ·
       <a href="/refund" class="hover:text-slate-300">Refunds</a> ·

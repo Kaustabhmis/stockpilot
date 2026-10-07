@@ -35,7 +35,7 @@ const hit = (path) => new Promise((res, rej) =>
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   const p = await b.newPage({ viewport: { width: 1500, height: 980 } });
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
-  await p.goto('http://localhost:8095/', { waitUntil: 'networkidle' });
+  await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', email); await p.fill('#liPass', 'strongpass123');
   await p.click('#btnLogin'); await p.waitForTimeout(1600);
 

@@ -125,14 +125,19 @@ setInterval(function () {
 /* ---------- boot --------------------------------------------------------- */
 (function boot() {
   var params = new URLSearchParams(location.search);
-  if (params.get('reset_token')) { showAuth('reset'); return; }
+  /* Somebody following a reset link wants the form, not the sales page. */
+  if (params.get('reset_token')) { goAuth('reset'); return; }
   if (API_URL.indexOf('PASTE_YOUR') === 0) {
     toast('Set API_URL at the top of this file to your Apps Script /exec URL.', 'err');
     return;
   }
   if (restoreSession()) {
     enterApp();
-  } else {
-    showAuth('login');
+    return;
   }
+  /* A stranger gets the home page; ?login=1 and ?signup=1 go straight to the
+     form, so a link in an email or an ad can land where it means to. */
+  if (params.get('signup')) goAuth('signup');
+  else if (params.get('login')) goAuth('login');
+  else showHome();
 })();

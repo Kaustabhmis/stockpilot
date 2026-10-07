@@ -6,7 +6,7 @@ const EMAIL = process.argv[2];
   let pass=0,fail=0;
   const ok=(n,v,x)=>{console.log((v?'  PASS ':'  FAIL ')+n+(v||!x?'':'  ['+String(x).slice(0,110)+']'));v?pass++:fail++;};
 
-  await p.goto('http://localhost:8095/',{waitUntil:'networkidle'});
+  await p.goto('http://localhost:8095/?login=1',{waitUntil:'networkidle'});
   await p.fill('#liUser', EMAIL); await p.fill('#liPass','strongpass123');
   await p.click('#btnLogin'); await p.waitForTimeout(1600);
 

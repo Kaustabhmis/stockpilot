@@ -12,8 +12,24 @@ const { chromium } = require('playwright');
     if(m.type()==='error' && !EXTERNAL.test(s)) errs.push(m.text()); });
   await p.goto('http://localhost:8095/',{waitUntil:'networkidle'});
 
+  console.log('--- the landing page ---');
+  ok('a stranger lands on the home page, not a bare form',
+     await p.locator('#view-home').isVisible() && !(await p.locator('#view-auth').isVisible()));
+  ok('it says what the product is', /Know who is doing what, by when/
+     .test(await p.locator('#view-home').textContent()));
+  ok('and who it is for', /Indian MSMEs/.test(await p.locator('#view-home').textContent()));
+  ok('the plans are priced on the page', (await p.locator('#homePlans > div').count()) === 4);
+  ok('the scoring argument is made', /how well you delivered × how much you delivered/
+     .test(await p.locator('#view-home').textContent()));
+
   console.log('--- signup ---');
-  ok('login screen shown', await p.locator('#formLogin').isVisible());
+  await p.click('#view-home button:has-text("Start free — no card")');
+  await p.waitForTimeout(400);
+  ok('Start free goes straight to the signup form', await p.locator('#formSignup').isVisible());
+  await p.click('button:has-text("Back to sign in")'); await p.waitForTimeout(200);
+  ok('and the sign-in form is one click away', await p.locator('#formLogin').isVisible());
+  ok('with a way back to the home page',
+     await p.locator('button:has-text("Back to the Dome Box home page")').isVisible());
   await p.click('button:has-text("Create a company workspace")');
   await p.waitForTimeout(200);
   ok('signup form shown', await p.locator('#formSignup').isVisible());

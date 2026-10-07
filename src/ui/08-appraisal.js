@@ -136,13 +136,29 @@ function showDelBreakdown() {
 }
 
 /* ---------- billing, AI, support, account -------------------------------- */
+/* The single list of plans the front end shows. The landing page and the
+   billing modal both read it, so a price cannot be right in one place and
+   stale in the other. The server decides what a plan actually allows — this is
+   only how it is described. */
+var PLAN_CARDS = [
+  { key:'Free',    name:'Free Tier', price:'₹0',      per:'',    tag:'',
+    blurb:'For a small team testing the water.',
+    bullets:['Up to 5 users','50 tasks a month','Board, approvals and reminders'] },
+  { key:'Monthly', name:'Standard',  price:'₹2,499',  per:'/mo', tag:'Most popular',
+    blurb:'For a growing business that needs structure.',
+    bullets:['Up to 20 users','500 tasks a month','Delegation scoring','Email alerts'] },
+  { key:'Yearly',  name:'Pro',       price:'₹19,999', per:'/yr', tag:'Best value',
+    blurb:'The whole product, uncapped.',
+    bullets:['Up to 300 users','Unlimited tasks','Full reports and analytics','KRA / KPI and appraisals',
+             'Projects and milestones','WhatsApp alerts'] },
+  { key:'Enterprise', name:'Enterprise', price:'Custom', per:'', tag:'',
+    blurb:'For large or multi-site operations.',
+    bullets:['Unlimited users and tasks','Custom integrations','Dedicated support'] },
+];
+
 function openBilling() {
   var u = STATE.usage;
-  var plans = [
-    { key:'Free',    name:'Free Tier', price:'₹0',       per:'',     bullets:['5 users','50 tasks a month','Task tracking'] },
-    { key:'Monthly', name:'Standard',  price:'₹2,499',   per:'/mo',  bullets:['20 users','500 tasks a month','Delegation scoring','Email alerts'] },
-    { key:'Yearly',  name:'Pro',       price:'₹19,999',  per:'/yr',  bullets:['300 users','Unlimited tasks','Full reports','Custom KRA forms','WhatsApp alerts'] },
-  ];
+  var plans = PLAN_CARDS.filter(function (x) { return x.key !== 'Enterprise'; });
   openModal('<div class="p-6 lg:p-7">' +
     '<div class="flex justify-between items-start mb-1"><h2 class="text-2xl font-black">Plans</h2>' +
     '<button onclick="closeModal()" class="text-gray-400"><span class="material-icons">close</span></button></div>' +
