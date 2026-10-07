@@ -497,6 +497,15 @@ export function createApi(db, opts = {}) {
     return r ? r.n : 0;
   }
 
+  /* One punch, one id, built from the punch itself. The sheet version builds
+     it the same way, so a workspace moved from one to the other keeps the
+     same rows rather than acquiring a duplicate of everything. */
+  function punchId(code, date, time, device) {
+    const slug = String(device || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+    return 'P' + code + '_' + String(date).replace(/-/g, '') +
+           String(time).replace(/:/g, '') + (slug ? '_' + slug : '');
+  }
+
   let idSeq = 0;
   function newId() {
     idSeq = (idSeq + 1) % 100000;
@@ -507,7 +516,7 @@ export function createApi(db, opts = {}) {
   return {
     TABLE, isOwner, isHrOrAbove, settingsMap, bumpRevision, currentRevision,
     signToken, readToken, authenticate, authorize,
-    listSheet, upsertRow, upsertMany, removeRow, removeMany, saveSettings,
+    listSheet, upsertRow, upsertMany, removeRow, removeMany, saveSettings, punchId,
     importTab, countRows, coerce,
     newId, one, all, cols, tableFor, rowOut, yes,
     AUTH_PREFIX

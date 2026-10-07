@@ -1690,6 +1690,30 @@ function appendMany(name, rows) {
 }
 
 /** Keep the audit log from growing without bound. */
+/* One punch, one id, built from the punch itself: who, the second it
+   happened, and which reader recorded it. The reader is part of it because
+   two machines can legitimately record the same person in the same second -
+   a turnstile and a door - and those are two punches, not one. */
+function punchId(code, date, time, device) {
+  var slug = String(device || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+  return 'P' + code + '_' + String(date).replace(/-/g, '') +
+         String(time).replace(/:/g, '') + (slug ? '_' + slug : '');
+}
+
+/* Just the id column. The whole tab is tens of thousands of rows on a real
+   workspace and nothing else about them is needed to answer "do we already
+   hold this one?". */
+function existingPunchIds() {
+  var sh = sheet('Punches');
+  var last = sh.getLastRow();
+  var out = {};
+  if (last < 2) return out;
+  sh.getRange(2, 1, last - 1, 1).getValues().forEach(function (r) {
+    if (r[0]) out[String(r[0])] = 1;
+  });
+  return out;
+}
+
 function trimPunches() {
   var days = parseInt(settingsMap().punch_log_days || '90', 10);
   if (!days) return 0;
@@ -2119,7 +2143,8 @@ function applyPunches(punches, source) {
     if (e.device_id) byDevice[String(e.device_id).trim()] = e.emp_code;
   });
 
-  var days = {}, skipped = [], rawRows = [], stamp = new Date().toISOString();
+  var days = {}, skipped = [], rawRows = [], duplicates = 0,
+      stamp = new Date().toISOString();
   punches.forEach(function (p, i) {
     var code = p.emp_code && known[p.emp_code.toUpperCase()]
       ? known[p.emp_code.toUpperCase()]
@@ -2136,7 +2161,8 @@ function applyPunches(punches, source) {
         '" / device id "' + p.device_id + '"');
       return;
     }
-    rawRows.push({ id: newId(), punch_time: when.date + ' ' + when.time, emp_code: code,
+    rawRows.push({ id: punchId(code, when.date, when.time, p.device),
+                   punch_time: when.date + ' ' + when.time, emp_code: code,
                    device_id: p.device_id, device: p.device, direction: p.direction,
                    source: source, imported_at: stamp });
     var key = code + '|' + when.date;
@@ -2154,8 +2180,38 @@ function applyPunches(punches, source) {
      biometric readers recorded. A punch log missing the biometric punches is
      not a punch log. trimPunches() keeps the tab from growing without end. */
   if (rawRows.length) {
-    appendMany('Punches', rawRows);
-    trimPunches();
+    /* The same export, uploaded again.
+     *
+     * Every punch used to be given a fresh random id, so a file imported a
+     * second time appended every one of its rows a second time. That is not
+     * a corner case here - the reports these come from cover a window, and
+     * the sensible way to work is to upload the latest one each morning,
+     * which means the same punches arrive over and over. A week of daily
+     * uploads of a seven-day report would have stored each punch seven
+     * times, and trimPunches() would then have started dropping genuine
+     * history to make room for the copies.
+     *
+     * The id is now built from the punch itself - who, when, which reader -
+     * so the same punch is always the same row. One column of the tab is
+     * read to see which are already held, and only the new ones are
+     * appended. Importing the same file twice writes nothing the second
+     * time, and the attendance it rebuilds is identical either way. */
+    var have = existingPunchIds();
+    /* Also within this batch. A biometric reader stutters - it reads the same
+       finger three or four times in as many seconds - and the log stores the
+       minute, not the second, so those arrive as several rows that are
+       identical in every stored field. Comparing only against the sheet let
+       them through, because none of them was there yet. They are one punch. */
+    var fresh = rawRows.filter(function (r) {
+      if (have[r.id]) return false;
+      have[r.id] = 1;
+      return true;
+    });
+    duplicates = rawRows.length - fresh.length;
+    if (fresh.length) {
+      appendMany('Punches', fresh);
+      trimPunches();
+    }
   }
 
   var written = 0, conflicts = 0;
@@ -2166,7 +2222,10 @@ function applyPunches(punches, source) {
 
   return {
     punches: punches.length, days: written, skipped: skipped.slice(0, 20),
-    skippedCount: skipped.length, protectedDays: conflicts, source: source
+    skippedCount: skipped.length, protectedDays: conflicts, source: source,
+    /* how many of them we already held - the number that makes re-uploading
+       the same report legible rather than worrying */
+    duplicates: duplicates, added: rawRows.length - duplicates
   };
 }
 

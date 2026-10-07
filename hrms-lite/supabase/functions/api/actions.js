@@ -13,7 +13,7 @@
 export function createActions(api, db, deps) {
   const { one, all, rowOut, yes, isHrOrAbove, isOwner, settingsMap,
           listSheet, upsertRow, upsertMany, removeRow, removeMany,
-          saveSettings, currentRevision, newId, tableFor } = api;
+          saveSettings, currentRevision, newId, punchId, tableFor } = api;
   const now = deps.now || (() => new Date());
   const tz = deps.timezone || 'Asia/Kolkata';
 
@@ -513,14 +513,29 @@ export function createActions(api, db, deps) {
       .map(e => String(e.emp_code)));
 
     const days = {};
+    let added = 0, duplicates = 0;
     for (const r of rows) {
       const code = known.has(r.emp_code) ? r.emp_code : (byDevice[r.emp_code] || r.emp_code);
-      await db.query(
+      /* The id is the punch itself - who, the second it happened, which
+         reader - so the same punch is always the same row. These reports
+         cover a window and the sensible way to work is to upload the latest
+         one each morning, which means the same punches arrive again and
+         again; with a random id each upload appended the lot a second time.
+         The reader is in the key because two machines can legitimately
+         record one person in the same second, and that is two punches. */
+      const res = await db.query(
         `insert into hrms.punches (id, punch_time, emp_code, device_id, device,
                                    direction, source, imported_at)
-         values ($1, ($2::date + $3::time) at time zone $4, $5, $6, $7, $8, $9, now())`,
-        [newId(), r.date, r.time, tz, code, r.device_id, source || 'agent',
-         r.direction, source || 'agent']);
+         values ($1, ($2::date + $3::time) at time zone $4, $5, $6, $7, $8, $9, now())
+         on conflict (id) do nothing
+         returning id`,
+        [punchId(code, r.date, r.time, r.device), r.date, r.time, tz, code,
+         r.device_id, r.device, r.direction, source || 'agent']);
+      /* "returning id" rather than a row count, because the two drivers this
+         runs on report an affected-row count under different names and one of
+         them does not survive the wrapper. A returned row is unambiguous on
+         both: one row means it went in, none means we already had it. */
+      if (res && res.rows && res.rows.length) added++; else duplicates++;
       days[code + '|' + r.date] = { code, date: r.date };
     }
     if (dirty) dirty.Punches = 1;
@@ -531,7 +546,8 @@ export function createActions(api, db, deps) {
       const got = await rebuildDay(days[k].code, days[k].date, source || 'device', [], dirty);
       if (got) written++;
     }
-    return { added: rows.length, days: written, skipped: (punches || []).length - rows.length };
+    return { added: added, duplicates: duplicates, punches: rows.length, days: written,
+             skipped: (punches || []).length - rows.length };
   }
 
   /* ---------------------------------------------------------------- */
