@@ -129,6 +129,49 @@
   .dotted{background-image:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1px);
           background-size:22px 22px}
 
+  /* ---------- the tint set -------------------------------------------------
+     Ten light surfaces, each with an ink from the same hue. Every pair clears
+     4.5:1, so a tint is always a readable label and never just decoration.
+     They are assigned from a hash of the thing's name, so a category or a
+     person keeps the same colour on every screen, forever — a colour that
+     moves between renders is worse than no colour at all. */
+  .t-violet{background:#efecfe;color:#4a3bc4} .t-coral{background:#fdeee8;color:#a33616}
+  .t-teal  {background:#e4f5f2;color:#0b6f64} .t-amber{background:#fdf1dc;color:#8a5d0c}
+  .t-rose  {background:#fdeaf0;color:#a01443} .t-sky  {background:#e5f1fd;color:#1d5fa8}
+  .t-lime  {background:#eef6dd;color:#4f6b14} .t-plum {background:#f4ebfa;color:#6b2e8f}
+  .t-slate {background:#eeedf2;color:#44405a} .t-rust {background:#fbeee4;color:#8a4a12}
+
+  /* Solid versions, for an avatar or a counter that needs to carry weight. */
+  .s-violet{background:#5b4bdb} .s-coral{background:#d4541f} .s-teal{background:#0e8f80}
+  .s-amber {background:#b07d12} .s-rose {background:#c2185b} .s-sky {background:#2a74c9}
+  .s-lime  {background:#6b8f1a} .s-plum {background:#8e3fb8} .s-slate{background:#5e5873}
+  .s-rust  {background:#a9591a}
+  .av{color:#fff;font-weight:900;display:inline-flex;align-items:center;justify-content:center;
+      border-radius:999px;flex-shrink:0;letter-spacing:.02em}
+
+  /* ---------- the board, read left to right -------------------------------
+     Each column carries the colour of the state it holds, so the eye learns
+     the flow instead of re-reading five identical beige trays. The stripe is
+     at the top of the tray, never the only signal: the heading still says the
+     word. */
+  .col{position:relative;padding-top:1rem}
+  .col::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;
+               border-radius:1rem 1rem 0 0;background:var(--col-tone,#cdc3ba)}
+  .colhead{display:inline-flex;align-items:center;gap:6px}
+  .coldot{width:9px;height:9px;border-radius:999px;background:var(--col-tone,#cdc3ba);flex-shrink:0}
+
+  /* ---------- stat tiles --------------------------------------------------- */
+  .tile{background:#fff;border:1.5px solid var(--line);border-radius:1.15rem;padding:1rem;
+        position:relative;overflow:hidden;transition:transform .14s ease,box-shadow .14s ease}
+  .tile:hover{transform:translateY(-2px);box-shadow:var(--lift)}
+  .tile .tv{font-size:1.9rem;font-weight:900;line-height:1.1;margin-top:.15rem}
+  .tile .tk{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;
+            color:var(--muted)}
+  .tile .ts{font-size:11px;font-weight:700;color:var(--muted);margin-top:.1rem}
+  .tile .ti{position:absolute;right:.7rem;top:.7rem;opacity:.9}
+  .tile.lead{cursor:pointer}
+  .tile.lead:hover{border-color:#b3a7f2}
+
   @media(max-width:900px){ .card-12{grid-column:span 12 !important} }
 
   /* Own responsive helpers rather than Tailwind's `hidden md:flex`. The .hidden

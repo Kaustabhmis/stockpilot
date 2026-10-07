@@ -48,19 +48,17 @@ function projectCard(p) {
       '<th>Stage</th><th>Owner</th><th>Deadline</th><th>Status</th><th>Outcome</th>' +
       '</tr></thead><tbody>' +
     p.stageList.map(function (s) {
-      var statusTone = s.status === 'Verified' ? 'bg-emerald-50 text-emerald-700'
-        : s.blocked ? 'bg-gray-100 text-gray-500'
-        : s.status === 'For Review' ? 'bg-purple-50 text-purple-700'
-        : 'bg-blue-50 text-blue-700';
+      var statusTone = s.blocked ? 't-slate' : stateTone(s.status).chip;
       var outcome = s.metOnTime === true
-          ? '<span class="chip bg-emerald-50 text-emerald-700">Met · scored</span>'
+          ? '<span class="chip t-teal">Met · scored</span>'
         : s.metOnTime === false
-          ? '<span class="chip bg-red-50 text-red-700">' + s.daysLate + 'd late</span>'
+          ? '<span class="chip t-coral">' + s.daysLate + 'd late</span>'
         : s.blocked ? '<span class="text-gray-400 font-semibold">Waiting on the stage before it</span>'
         : '<span class="text-gray-400 font-semibold">Open</span>';
       return '<tr class="cursor-pointer" data-task="' + esc(s.id) + '">' +
         '<td class="font-bold text-gray-800 whitespace-nowrap">' + s.no + '. ' + esc(s.title) + '</td>' +
-        '<td class="whitespace-nowrap">' + esc(s.ownerName) + '</td>' +
+        '<td class="whitespace-nowrap"><span class="flex items-center gap-2">' +
+          avatar(s.ownerName, 22) + esc(s.ownerName) + '</span></td>' +
         '<td class="whitespace-nowrap">' + fmtDate(s.due) +
           /* When the stage before it ran over, the owner is answerable for a
              later date than the plan first said. Showing the original with the

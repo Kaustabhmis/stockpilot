@@ -75,6 +75,59 @@ var fmtDate = function (s) {
 };
 var initials = function (n) { return String(n || '?').trim().split(/\s+/).slice(0,2)
   .map(function (w) { return w[0] || ''; }).join('').toUpperCase(); };
+/* ---------- colour that means something -----------------------------------
+   A tint is picked from a hash of the name, so a category or a person keeps
+   the same colour on every screen and between sessions. A colour that moves
+   between renders is worse than no colour: people learn it, then it lies to
+   them. Reserved status colours are never drawn from this set. */
+var TINTS = ['violet','coral','teal','amber','rose','sky','lime','plum','slate','rust'];
+function tintFor(key) {
+  var str = String(key || ''), h = 0;
+  for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return TINTS[h % TINTS.length];
+}
+function tintChip(key, label, title) {
+  return '<span class="chip t-' + tintFor(key) + '"' +
+    (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(label) + '</span>';
+}
+/** An avatar bubble, coloured by who it is rather than all the same blue. */
+function avatar(name, px) {
+  var size = px || 28;
+  return '<span class="av s-' + tintFor(name) + '" title="' + esc(name || '') + '" ' +
+    'style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.37) + 'px">' +
+    esc(initials(name)) + '</span>';
+}
+
+/* The five board states, in the order work moves through them. The colour is
+   the state, never the person or the priority — those have their own. */
+var STATE_TONE = {
+  /* Board column titles… */
+  'Needs Approval':      { tone: '#b07d12', chip: 't-amber' },
+  'To Do':               { tone: '#5e5873', chip: 't-slate' },
+  'In Progress':         { tone: '#2a74c9', chip: 't-sky' },
+  'For Review':          { tone: '#8e3fb8', chip: 't-plum' },
+  'Verified':            { tone: '#0e8f80', chip: 't-teal' },
+  /* …and the status values themselves, which the list and the drawer show.
+     Keyed separately rather than mapped, because "To Do" is a column holding
+     two statuses and the two are not the same thing. */
+  'Pending':             { tone: '#5e5873', chip: 't-slate' },
+  'Awaiting Approval':   { tone: '#b07d12', chip: 't-amber' },
+  'Delegation Proposed': { tone: '#b07d12', chip: 't-amber' },
+  'Rejected':            { tone: '#c0392b', chip: 't-coral' },
+  'Cancelled':           { tone: '#5e5873', chip: 't-slate' },
+};
+function stateTone(key) { return STATE_TONE[key] || { tone: '#cdc3ba', chip: 't-slate' }; }
+
+/* Priority by its rank in the workspace's own list, so a renamed level still
+   gets the right weight of colour: most urgent reads hottest. */
+var PRIORITY_TONE = ['t-rose', 't-coral', 't-amber', 't-sky', 't-slate'];
+function priorityChip(p) {
+  var names = (STATE.data && STATE.data.priorities || []).map(function (x) { return x.name; });
+  var i = names.indexOf(p);
+  var cls = PRIORITY_TONE[i > -1 ? Math.min(i, PRIORITY_TONE.length - 1) : PRIORITY_TONE.length - 1];
+  return '<span class="chip ' + cls + '">' + esc(p || 'Medium') + '</span>';
+}
+
 function nameOf(u) {
   var s = (STATE.data && STATE.data.staff) || [];
   for (var i = 0; i < s.length; i++) if (s[i].username === u) return s[i].name;
@@ -209,25 +262,41 @@ function renderBanner() {
 
 function renderTiles() {
   var s = STATE.data.stats, sc = s.scores;
-  var tile = function (k, v, sub, tone) {
-    return '<div class="bg-white rounded-2xl border border-gray-100 p-4">' +
-      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(k) + '</div>' +
-      '<div class="text-3xl font-black mt-1 ' + (tone || '') + '">' + v + '</div>' +
-      (sub ? '<div class="text-[11px] font-semibold text-gray-400 mt-0.5">' + esc(sub) + '</div>' : '') +
+  /* Each tile carries the colour of the thing it counts, and an icon, so the
+     row is read at a glance instead of five identical white boxes that all
+     have to be decoded by their label. */
+  var tile = function (o) {
+    return '<div class="tile' + (o.lead ? ' lead' : '') + '"' +
+      (o.onclick ? ' onclick="' + o.onclick + '"' : '') + '>' +
+      '<span class="ti material-icons" style="color:' + (o.icon2 || '#d6cec3') + '">' +
+        o.icon + '</span>' +
+      '<div class="tk">' + esc(o.k) + '</div>' +
+      '<div class="tv ' + (o.tone || '') + '">' + o.v + '</div>' +
+      (o.sub ? '<div class="ts">' + esc(o.sub) + '</div>' : '') +
       '</div>';
   };
+  var band = function (n) {
+    return n == null ? 'text-gray-300'
+      : n >= 85 ? 'text-emerald-700' : n >= 60 ? 'text-amber-700' : 'text-red-700';
+  };
+
   $('statTiles').innerHTML =
-    tile('Pending', s.pending) +
-    tile('In progress', s.progress) +
-    tile('For review', s.review) +
-    tile('Overdue', s.overdue, 'needs attention', s.overdue ? 'text-red-700' : '') +
-    tile('Delegation', sc.hasData && sc.delegation != null ? sc.delegation : '\u2014',
-         sc.hasData ? (sc.load ? sc.load.percent + '% of an expected load' : 'this month') : 'no data yet',
-         sc.hasData ? (sc.delegation >= 85 ? 'text-emerald-700' : sc.delegation >= 60 ? 'text-amber-700' : 'text-red-700') : 'text-gray-300') +
-    '<div class="bg-white rounded-2xl border border-gray-100 p-4 cursor-pointer hover:border-blue-300" onclick="openScoreBreakdown()">' +
-      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">Final score</div>' +
-      '<div class="text-3xl font-black mt-1">' + (sc.final == null ? '\u2014' : sc.final) + '</div>' +
-      '<div class="text-[11px] font-black text-blue-600 mt-0.5">See why →</div></div>';
+    tile({ k:'Pending',     v:s.pending,  icon:'inbox',       icon2:'#8a8086' }) +
+    tile({ k:'In progress', v:s.progress, icon:'bolt',        icon2:'#2a74c9' }) +
+    tile({ k:'For review',  v:s.review,   icon:'rate_review', icon2:'#8e3fb8',
+           sub: s.review ? 'with a reviewer' : '' }) +
+    tile({ k:'Overdue',     v:s.overdue,  icon:'warning',
+           icon2: s.overdue ? '#c0392b' : '#d6cec3',
+           tone: s.overdue ? 'text-red-700' : '', sub:'needs attention' }) +
+    tile({ k:'Delegation',  icon:'speed', icon2:'#5b4bdb',
+           v: sc.hasData && sc.delegation != null ? sc.delegation : '—',
+           tone: band(sc.hasData ? sc.delegation : null),
+           sub: sc.hasData ? (sc.load ? sc.load.percent + '% of an expected load' : 'this month')
+                           : 'no data yet' }) +
+    tile({ k:'Final score', icon:'emoji_events',
+           icon2: sc.final == null ? '#d6cec3' : '#d4541f',
+           v: sc.final == null ? '—' : sc.final, tone: band(sc.final),
+           sub:'See why →', lead:true, onclick:'openScoreBreakdown()' });
 }
 
 function openScoreBreakdown() {

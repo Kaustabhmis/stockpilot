@@ -9,36 +9,45 @@ function loadTeam() {
 function renderTeam() {
   var active = TEAM.filter(function (u) { return u.active !== false; });
   var u = STATE.usage;
-  var tile = function (k, v, tone) {
-    return '<div class="bg-white rounded-2xl border border-gray-100 p-4">' +
-      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(k) + '</div>' +
-      '<div class="text-3xl font-black mt-1 ' + (tone || '') + '">' + v + '</div></div>';
+  var tile = function (k, v, icon, colour, tone) {
+    return '<div class="tile">' +
+      '<span class="ti material-icons" style="color:' + colour + '">' + icon + '</span>' +
+      '<div class="tk">' + esc(k) + '</div>' +
+      '<div class="tv ' + (tone || '') + '">' + v + '</div></div>';
   };
+  var atLimit = active.filter(function (x) { return x.wip && x.wip.exceeded; }).length;
   $('teamStats').innerHTML =
-    tile('Members', active.length + (u.maxUsers ? ' <span class="text-base text-gray-400">/ ' + u.maxUsers + '</span>' : '')) +
-    tile('Open tasks', active.reduce(function (n, x) { return n + (x.openTasks || 0); }, 0)) +
-    tile('At WIP limit', active.filter(function (x) { return x.wip && x.wip.exceeded; }).length,
-         active.filter(function (x) { return x.wip && x.wip.exceeded; }).length ? 'text-amber-700' : '') +
-    tile('Scored last month', active.filter(function (x) { return x.lastMonthScore !== null; }).length);
+    tile('Members', active.length +
+         (u.maxUsers ? ' <span class="text-base text-gray-400">/ ' + u.maxUsers + '</span>' : ''),
+         'groups', '#5b4bdb') +
+    tile('Open tasks', active.reduce(function (n, x) { return n + (x.openTasks || 0); }, 0),
+         'assignment', '#2a74c9') +
+    tile('At WIP limit', atLimit, 'running_with_errors',
+         atLimit ? '#b07d12' : '#d6cec3', atLimit ? 'text-amber-700' : '') +
+    tile('Scored last month', active.filter(function (x) { return x.lastMonthScore !== null; }).length,
+         'military_tech', '#0e8f80');
 
   $('teamTable').innerHTML = '<table class="tbl"><thead><tr>' +
     ['Member','Role','Department','Reports to','Open','WIP','Last month',''].map(function (h) {
       return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
     TEAM.map(function (x) {
       return '<tr class="' + (x.active === false ? 'opacity-45' : '') + '">' +
-        '<td><div class="font-bold text-gray-800">' + esc(x.name) + '</div>' +
-          '<div class="text-xs text-gray-400">' + esc(x.email) + '</div></td>' +
-        '<td><span class="chip ' + (x.role === 'Admin' ? 'bg-purple-50 text-purple-700'
-          : x.role === 'HOD' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600') + '">' +
-          esc(x.role) + '</span></td>' +
-        '<td class="whitespace-nowrap">' + esc(x.dept || '—') + '</td>' +
+        '<td><div class="flex items-center gap-2.5">' + avatar(x.name, 32) +
+          '<span><span class="block font-bold text-gray-800">' + esc(x.name) + '</span>' +
+          '<span class="block text-xs text-gray-400">' + esc(x.email) + '</span></span></div></td>' +
+        '<td><span class="chip ' + (x.role === 'Admin' ? 't-plum'
+          : x.role === 'HOD' ? 't-violet' : 't-slate') + '">' + esc(x.role) + '</span></td>' +
+        '<td class="whitespace-nowrap">' +
+          (x.dept ? tintChip(x.dept, x.dept) : '—') + '</td>' +
         '<td class="whitespace-nowrap">' + esc(x.manager ? nameOf(x.manager) : '—') + '</td>' +
         '<td class="font-bold">' + (x.openTasks || 0) + '</td>' +
         '<td class="font-bold whitespace-nowrap ' + (x.wip && x.wip.exceeded ? 'text-red-700' : '') + '">' +
           (x.wip ? x.wip.count + '/' + (x.wip.limit || '∞') : '—') + '</td>' +
-        '<td class="font-black whitespace-nowrap">' + (x.lastMonthScore !== null
-          ? x.lastMonthScore + ' · ' + x.lastMonthBand
-          : '<span class="text-gray-300">no data</span>') + '</td>' +
+        '<td class="whitespace-nowrap">' + (x.lastMonthScore !== null
+          ? '<span class="chip ' + (x.lastMonthScore >= 85 ? 't-teal'
+              : x.lastMonthScore >= 60 ? 't-amber' : 't-coral') + '">' +
+            x.lastMonthScore + ' · ' + esc(x.lastMonthBand) + '</span>'
+          : '<span class="text-gray-300 font-bold">no data</span>') + '</td>' +
         '<td class="text-right whitespace-nowrap">' +
           '<button class="text-blue-600 font-black text-xs hover:underline edit" data-u="' + esc(x.username) + '">Edit</button>' +
         '</td></tr>';

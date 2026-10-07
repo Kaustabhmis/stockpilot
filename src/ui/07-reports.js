@@ -180,18 +180,26 @@ function renderOffsets() {
 
 function renderReports(a) {
   var s = a.summary;
-  var tile = function (k, v, sub, tone) {
-    return '<div class="bg-white rounded-2xl border border-gray-100 p-4">' +
-      '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(k) + '</div>' +
-      '<div class="text-3xl font-black mt-1 ' + (tone||'') + '">' + v + '</div>' +
-      '<div class="text-[11px] font-semibold text-gray-400 mt-0.5">' + esc(sub||'') + '</div></div>';
+  var tile = function (k, v, sub, icon, colour, tone) {
+    return '<div class="tile">' +
+      '<span class="ti material-icons" style="color:' + colour + '">' + icon + '</span>' +
+      '<div class="tk">' + esc(k) + '</div>' +
+      '<div class="tv ' + (tone || '') + '">' + v + '</div>' +
+      '<div class="ts">' + esc(sub || '') + '</div></div>';
+  };
+  var band = function (n) {
+    return n == null ? '' : n >= 85 ? 'text-emerald-700' : n >= 60 ? 'text-amber-700' : 'text-red-700';
   };
   $('rTiles').innerHTML =
-    tile('Team score', s.teamScore == null ? '—' : s.teamScore, a.range.label) +
-    tile('Delivered', s.delivered, 'tasks verified') +
-    tile('On-time', s.onTimeRate == null ? '—' : s.onTimeRate + '%', 'of closed work') +
-    tile('Rework loops', s.reworkLoops, 'quality signal') +
-    tile('Overdue now', s.overdueNow, 'open past deadline', s.overdueNow ? 'text-red-700' : '');
+    tile('Team score', s.teamScore == null ? '\u2014' : s.teamScore, a.range.label,
+         'groups', '#5b4bdb', band(s.teamScore)) +
+    tile('Delivered', s.delivered, 'tasks verified', 'task_alt', '#0e8f80') +
+    tile('On-time', s.onTimeRate == null ? '\u2014' : s.onTimeRate + '%', 'of closed work',
+         'schedule', '#2a74c9', band(s.onTimeRate)) +
+    tile('Rework loops', s.reworkLoops, 'quality signal', 'replay',
+         s.reworkLoops ? '#a9591a' : '#d6cec3', s.reworkLoops ? 'text-orange-700' : '') +
+    tile('Overdue now', s.overdueNow, 'open past deadline', 'warning',
+         s.overdueNow ? '#c0392b' : '#d6cec3', s.overdueNow ? 'text-red-700' : '');
 
   $('rTrendSub').textContent = 'Delegation score across 12 ' + STATE.period + 's ending ' + a.range.short;
   var series = [{ name:'Team', color:C('--s1'),

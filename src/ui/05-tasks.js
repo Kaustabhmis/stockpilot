@@ -80,33 +80,43 @@ function renderTasks() {
 
 function taskCard(t) {
   var late = daysLate(t);
-  var done = (t.subtasks || []).filter(function (s) { return s.done; }).length;
+  var sub = (t.subtasks || []), done = sub.filter(function (s) { return s.done; }).length;
   return '<div class="card p-' + esc(t.priority) + '" draggable="true" data-id="' + esc(t.id) + '">' +
     '<div class="flex justify-between items-start gap-2 mb-2">' +
       '<span class="font-bold text-sm leading-snug">' + esc(t.title) + '</span>' +
-      '<span class="w-7 h-7 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black ' +
-        'flex items-center justify-center shrink-0" title="' + esc(t.toName) + '">' +
-        esc(initials(t.toName)) + '</span></div>' +
+      avatar(t.toName, 28) + '</div>' +
+    /* A checklist deserves a bar, not a fraction nobody reads. */
+    (sub.length ? '<div class="h-1.5 rounded-full bg-gray-100 overflow-hidden mb-2">' +
+      '<div class="h-full" style="width:' + Math.round(done / sub.length * 100) + '%;' +
+      'background:' + (done === sub.length ? '#0e8f80' : '#5b4bdb') + '"></div></div>' : '') +
     '<div class="flex flex-wrap items-center gap-1.5">' +
-      '<span class="chip ' + (late ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500') + '">' +
-        fmtDate(t.due) + (late ? ' · ' + late + 'd late' : '') + '</span>' +
-      (t.projectId ? '<span class="chip bg-violet-50 text-violet-700" title="' + esc(t.projectName) + '">' +
-        esc(t.projectName) + ' · ' + t.stageNo + '/' + t.stageCount + '</span>' : '') +
-      ((t.blockedBy || []).length ? '<span class="chip bg-amber-50 text-amber-800">Blocked</span>' : '') +
-      ((t.subtasks || []).length ? '<span class="chip bg-gray-100 text-gray-500">' + done + '/' + t.subtasks.length + '</span>' : '') +
-      (t.reworkCount ? '<span class="chip bg-orange-50 text-orange-700">Rework ' + t.reworkCount + '</span>' : '') +
-      (t.frequency && t.frequency !== 'One Time' ? '<span class="chip bg-indigo-50 text-indigo-700">' + esc(t.frequency) + '</span>' : '') +
-      (t.jobCategory && t.jobCategory !== 'General' ? '<span class="chip bg-slate-100 text-slate-600">' + esc(t.jobCategory) + '</span>' : '') +
+      '<span class="chip ' + (late ? 't-coral' : 't-slate') + '">' +
+        fmtDate(t.due) + (late ? ' \u00b7 ' + late + 'd late' : '') + '</span>' +
+      priorityChip(t.priority) +
+      (t.projectId ? '<span class="chip t-violet" title="' + esc(t.projectName) + '">' +
+        esc(t.projectName) + ' \u00b7 ' + t.stageNo + '/' + t.stageCount + '</span>' : '') +
+      ((t.blockedBy || []).length ? '<span class="chip t-amber">Blocked</span>' : '') +
+      (sub.length ? '<span class="chip t-slate">' + done + '/' + sub.length + '</span>' : '') +
+      (t.reworkCount ? '<span class="chip t-rust">Rework ' + t.reworkCount + '</span>' : '') +
+      (t.frequency && t.frequency !== 'One Time' ? '<span class="chip t-plum">' + esc(t.frequency) + '</span>' : '') +
+      (t.jobCategory && t.jobCategory !== 'General'
+        ? tintChip(t.jobCategory, t.jobCategory) : '') +
     '</div></div>';
 }
 
 function renderBoard(rows) {
   $('board').innerHTML = COLUMNS.map(function (c) {
     var items = rows.filter(function (t) { return c.statuses.indexOf(t.status) > -1; });
+    var tone = stateTone(c.title).tone;
+    /* The column carries the colour of the state it holds, so the eye learns
+       the flow left to right. The heading still says the word — the colour is
+       never the only thing saying which column this is. */
     return '<div><div class="flex items-center justify-between px-1 mb-2">' +
-      '<span class="text-[10px] font-black uppercase tracking-widest text-gray-500">' + esc(c.title) + '</span>' +
+      '<span class="colhead"><span class="coldot" style="background:' + tone + '"></span>' +
+      '<span class="text-[10px] font-black uppercase tracking-widest text-gray-600">' +
+        esc(c.title) + '</span></span>' +
       '<span class="text-[10px] font-black text-gray-400">' + items.length + '</span></div>' +
-      '<div class="col" data-col="' + c.key + '">' +
+      '<div class="col" data-col="' + c.key + '" style="--col-tone:' + tone + '">' +
       (items.map(taskCard).join('') ||
         '<div class="text-[11px] text-gray-400 font-semibold px-1 py-3">Nothing here</div>') +
       '</div></div>';
@@ -123,12 +133,13 @@ function renderList(rows) {
       return '<tr class="cursor-pointer" data-id="' + esc(t.id) + '">' +
         '<td class="font-bold text-gray-800">' + esc(t.title) +
           '<span class="text-gray-300 font-semibold ml-1">' + esc(t.id) + '</span></td>' +
-        '<td class="whitespace-nowrap">' + esc(t.jobCategory || '—') + '</td>' +
-        '<td class="whitespace-nowrap">' + esc(t.toName) + '</td>' +
-        '<td class="whitespace-nowrap"><span class="chip bg-gray-100 text-gray-600">' + esc(t.status) + '</span></td>' +
-        '<td class="whitespace-nowrap"><span class="chip ' +
-          (t.priority === 'High' ? 'bg-red-50 text-red-700' : t.priority === 'Medium'
-            ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-700') + '">' + esc(t.priority) + '</span></td>' +
+        '<td class="whitespace-nowrap">' +
+          (t.jobCategory ? tintChip(t.jobCategory, t.jobCategory) : '—') + '</td>' +
+        '<td class="whitespace-nowrap"><span class="flex items-center gap-2">' +
+          avatar(t.toName, 22) + esc(t.toName) + '</span></td>' +
+        '<td class="whitespace-nowrap"><span class="chip ' + stateTone(t.status).chip + '">' +
+          esc(t.status) + '</span></td>' +
+        '<td class="whitespace-nowrap">' + priorityChip(t.priority) + '</td>' +
         '<td class="whitespace-nowrap ' + (late ? 'text-red-700 font-black' : '') + '">' +
           fmtDate(t.due) + (late ? ' · ' + late + 'd' : '') + '</td></tr>';
     }).join('') + '</tbody></table>';

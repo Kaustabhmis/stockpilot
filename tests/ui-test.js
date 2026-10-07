@@ -153,6 +153,28 @@ const { chromium } = require('playwright');
   ok('and it says what it is ranking by',
      /not just by the label on it/.test(await p.locator('#tab-priority').textContent()));
 
+  console.log('--- colour that carries meaning ---');
+  await p.click('#navTabs button[data-tab="tasks"]'); await p.waitForTimeout(900);
+  ok('each board column carries the colour of the state it holds',
+     (await p.locator('#board .coldot').count()) === 5);
+  ok('and the heading still says the word, so colour is never the only signal',
+     /NEEDS APPROVAL|Needs Approval/i.test(await p.locator('#board').textContent()));
+  /* A tint is hashed from the name, so it has to be the same on every screen.
+     A colour that moves between renders is worse than none: people learn it,
+     then it lies to them. */
+  const tintOf = (s) => p.evaluate((x) => 't-' + tintFor(x), s);
+  ok('a category keeps one colour everywhere', (await tintOf('PURCHASE')) === (await tintOf('PURCHASE')));
+  ok('and two different names do not have to share one',
+     (await tintOf('PURCHASE')) !== (await tintOf('QUALITY')));
+  ok('every tint pair is a real class in the stylesheet',
+     await p.evaluate(() => TINTS.every((t) => {
+       const el = document.createElement('span');
+       el.className = 't-' + t; document.body.appendChild(el);
+       const bg = getComputedStyle(el).backgroundColor;
+       el.remove();
+       return bg && bg !== 'rgba(0, 0, 0, 0)';
+     })));
+
   console.log('--- responsive ---');
   const of1 = await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
   ok('no overflow at 1500px', of1<=1, String(of1));
