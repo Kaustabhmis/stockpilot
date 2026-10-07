@@ -23,6 +23,7 @@ Your current customers keep running on the old one until you decide otherwise.
 | `MAIL_FROM` | `info@biscsindia.com` |
 | `RAZORPAY_KEY_ID` | your **new** key id (after rotating) |
 | `RAZORPAY_KEY_SECRET` | your **new** secret |
+| `RAZORPAY_WEBHOOK_SECRET` | the secret you type into Razorpay (see §1a) |
 | `GEMINI_KEY` | your **new** Gemini key |
 | `PROMO_CODES` | optional, e.g. `{"LAUNCH20":20}` |
 
@@ -38,6 +39,32 @@ var API_URL = 'https://script.google.com/macros/s/AKfy.../exec';
 ```
 
 9. Open `index.html`, sign up a test company, and walk through it.
+
+### 1a. The Razorpay webhook — without it, some paid customers stay on Free
+
+The browser confirms its own payment: the page calls `paymentSuccess`, the
+signature is checked, Razorpay's API is asked again whether the payment really
+captured, and only then is the plan granted. That path is sound, but it only
+runs **if the customer's tab is still open**. Someone who pays and closes the
+tab, or loses signal on the bank page, is charged and stays on Free.
+
+Razorpay's webhook is the net under that. `handleRazorpayWebhook_` grants the
+plan from the `payment.captured` event instead — but it **ignores every event
+until `RAZORPAY_WEBHOOK_SECRET` is set**, silently, by design, so that nobody
+can post fake payment events at an unconfigured deployment.
+
+So after step 8, when you have the `/exec` URL:
+
+1. Razorpay Dashboard → **Settings → Webhooks → Add New Webhook**.
+2. **Webhook URL**: your `/exec` URL.
+3. **Active Events**: `payment.captured`.
+4. **Secret**: type one in (any long random string) and keep it.
+5. Put that same string into Script Properties as `RAZORPAY_WEBHOOK_SECRET`.
+6. Run `setupDomeBox()` again — it warns while keys are set and this is not.
+
+Test it: pay once in Razorpay test mode, close the tab the moment the bank page
+submits, and check the company lands on the paid plan anyway. The `Payments`
+log will show `WEBHOOK_GRANTED` rather than the browser path.
 
 ### 1b. The scheduler — add it, or nothing gets chased
 

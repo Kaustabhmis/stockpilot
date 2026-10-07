@@ -36,6 +36,7 @@ function CFG() {
     mailFrom:   p.getProperty('MAIL_FROM') || 'info@biscsindia.com',
     razorKey:   p.getProperty('RAZORPAY_KEY_ID') || '',
     razorSecret:p.getProperty('RAZORPAY_KEY_SECRET') || '',
+    razorHook:  p.getProperty('RAZORPAY_WEBHOOK_SECRET') || '',
   };
 }
 
@@ -114,11 +115,25 @@ function setupDomeBox() {
   [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
    ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
    ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
-   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']
+   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online'],
+   ['RAZORPAY_WEBHOOK_SECRET', c.razorHook, 'the safety net under online payment']
   ].forEach(function (r) {
     out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
     if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
   });
+
+  /* Selling online without the webhook secret is the quiet failure that costs
+     money: the browser handler only runs if the customer's tab survives the
+     payment. Razorpay's webhook is what catches the one who closes it, and
+     handleRazorpayWebhook_ ignores every event until this is set. */
+  if (c.razorKey && c.razorSecret && !c.razorHook) {
+    out.push('');
+    out.push('  WARNING online payment is live but RAZORPAY_WEBHOOK_SECRET is not set.');
+    out.push('          A customer who closes the tab while paying is charged and stays');
+    out.push('          on Free. Razorpay Dashboard > Settings > Webhooks > Add: URL is');
+    out.push('          your /exec URL, event payment.captured, then paste the secret');
+    out.push('          you chose there into Script Properties under that name.');
+  }
 
   /* The one check that cannot be done from a config value: whether this Google
      account is actually allowed to send as the brand address. Nothing
