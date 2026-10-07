@@ -183,19 +183,113 @@ function setupDomeBox() {
   }
   out.push('  series  next number ' + s.prefix + '/' + financialYear_(new Date()) + '/0001 onward');
 
+  /* --- the registry ------------------------------------------------------
+     Prepared here rather than named as a next step. ensureRegistry() only adds
+     missing tabs and never rewrites a row, so there is nothing to be gained by
+     making somebody run it separately — and plenty to lose: a registry missing
+     the Invoices tab does not fail, it silently stops recording invoices. */
   out.push('');
-  if (missing.length) {
-    out.push('Add ' + missing.join(' and ') + ' under Project Settings > Script Properties,');
-    out.push('then run setupDomeBox() again.');
+  out.push('--- REGISTRY ---');
+  if (!c.masterId) {
+    out.push('  SKIPPED MASTER_DB_ID is not set yet, so there is nothing to prepare.');
   } else {
-    out.push('Config looks complete. Next:');
-    out.push('  1. ensureRegistry()      prepares the master registry tabs');
-    out.push('  2. Deploy > New deployment > Web app (Execute as Me, Access Anyone)');
-    out.push('  3. Put the /exec URL into index.html as API_URL');
+    try {
+      ensureRegistry();
+      out.push('  ok      tabs present: Directory, Global_Users, Reset_Tokens, Billing, Invoices');
+    } catch (e) {
+      missing.push('access to MASTER_DB_ID');
+      out.push('  FAILED  ' + e.message);
+      out.push('          Check the id is right and that this account can open that file.');
+    }
   }
+
+  /* --- the tenant template ----------------------------------------------- */
+  if (c.templateId) {
+    try {
+      var tpl = SpreadsheetApp.openById(c.templateId);
+      var names = tpl.getSheets().map(function (sh) { return sh.getName(); });
+      var needed = [TAB.USERS, TAB.TASKS, TAB.SETTINGS].filter(function (n) { return names.indexOf(n) < 0; });
+      if (needed.length) {
+        out.push('  WARNING the template is missing ' + needed.join(', ') + '. Every new');
+        out.push('          signup copies this file, so a missing tab is a broken signup.');
+      } else {
+        out.push('  ok      template has the tabs a new company needs');
+      }
+    } catch (e) {
+      out.push('  FAILED  cannot open TEMPLATE_ID: ' + e.message);
+    }
+  }
+
+  /* --- the scheduler ------------------------------------------------------
+     The handlers live in reminders.gs, which is a SECOND file to paste into
+     this project. The triggers are a property of the project either way, so
+     this check works whether or not that file has been added — and the state
+     it catches is the common one: code pasted, triggers never installed, and
+     nothing chased for a month before anyone notices. */
+  out.push('');
+  out.push('--- SCHEDULER ---');
+  var WANT = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders'];
+  var schedulerTodo = '';
+  try {
+    var have = {};
+    ScriptApp.getProjectTriggers().forEach(function (t) { have[t.getHandlerFunction()] = true; });
+    var lacking = WANT.filter(function (fn) { return !have[fn]; });
+    if (lacking.length) {
+      schedulerTodo = 'Add domebox/reminders.gs to this project and run installDomeBoxSchedules()' +
+        (lacking.length === WANT.length ? '' : ' — only ' + (WANT.length - lacking.length) + ' of 3 are installed') +
+        '. Until then nothing is chased and no recurring task is created.';
+    }
+    if (!lacking.length) {
+      out.push('  ok      all three daily jobs are installed');
+    } else if (lacking.length === WANT.length) {
+      out.push('  MISSING no scheduled jobs at all. Nothing will be chased, no recurring');
+      out.push('          task will be created, and no renewal notice will go out.');
+      out.push('          Fix: add domebox/reminders.gs to this project, then run');
+      out.push('          installDomeBoxSchedules() once.');
+    } else {
+      out.push('  PARTIAL missing ' + lacking.join(', ') + '. A half-installed schedule');
+      out.push('          looks fine and quietly does half the job. Run');
+      out.push('          installDomeBoxSchedules() to reinstall all three.');
+    }
+  } catch (e) {
+    out.push('  Could not read the project triggers: ' + e.message);
+  }
+
+  /* --- the deployment ----------------------------------------------------- */
+  out.push('');
+  out.push('--- WEB APP ---');
+  var execUrl = '';
+  try { execUrl = ScriptApp.getService().getUrl() || ''; } catch (e) {}
+  if (execUrl) {
+    out.push('  ok      ' + execUrl);
+    out.push('          This is the API_URL for the site. Set it in Netlify >');
+    out.push('          Site configuration > Environment variables.');
+  } else {
+    out.push('  MISSING not deployed as a web app yet.');
+    out.push('          Deploy > New deployment > Web app, Execute as Me, Access Anyone.');
+    out.push('          Then run this again and it will print the /exec URL for you.');
+  }
+
+  /* --- what is left ------------------------------------------------------- */
+  out.push('');
+  out.push('=== WHAT IS LEFT ===');
+  var todo = [];
+  if (missing.length) todo.push('Set ' + missing.join(' and ') + ' in Project Settings > Script Properties, then run this again.');
+  if (!execUrl) todo.push('Deploy as a web app, then run this again to get the /exec URL.');
+  /* Repeated down here on purpose. It is the step people skip: everything
+     works the day they set it up, and nothing is chased from the day after. */
+  if (schedulerTodo) todo.push(schedulerTodo);
+  if (c.razorKey && c.razorSecret && !c.razorHook) todo.push('Add RAZORPAY_WEBHOOK_SECRET, or a customer who closes the tab mid-payment is charged and stays on Free.');
+  if (!todo.length) {
+    out.push('  Nothing. This project is ready.');
+  } else {
+    todo.forEach(function (t, i) { out.push('  ' + (i + 1) + '. ' + t); });
+  }
+
   out.push('');
   out.push('Back up AUTH_PEPPER somewhere safe. Losing it means every password must be reset.');
   Logger.log(out.join('\n'));
+  return out.join('\n');
 }
 
 function ensureRegistry() {

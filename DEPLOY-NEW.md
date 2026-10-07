@@ -33,18 +33,22 @@ Your current customers keep running on the old one until you decide otherwise.
 | `GEMINI_KEY` | your **new** Gemini key |
 | `PROMO_CODES` | optional, e.g. `{"LAUNCH20":20}` |
 
-5. Run `setupDomeBox()` — it creates the two crypto secrets and tells you what
-   is still missing. **Back up `AUTH_PEPPER`.** Losing it means every password
-   must be reset.
-6. Run `ensureRegistry()`.
-7. **Deploy → New deployment → Web app**, Execute as **Me**, Access **Anyone**.
-8. Copy the `/exec` URL into `index.html`:
+5. Run `setupDomeBox()`. This is the only setup function and it does the work
+   as well as the checking: it generates the two crypto secrets, prepares the
+   registry tabs, verifies the tenant template, checks the send-as alias, the
+   invoicing identity, the scheduled jobs and the web-app deployment, and ends
+   with a numbered list of what is still left. Safe to run as often as you
+   like — it never regenerates a secret it already made, and it never rewrites
+   a row. Run it again after every change until it says *Nothing. This project
+   is ready.*
 
-```js
-var API_URL = 'https://script.google.com/macros/s/AKfy.../exec';
-```
-
-9. Open `index.html`, sign up a test company, and walk through it.
+   **Back up `AUTH_PEPPER`.** Losing it means every password must be reset.
+6. **Deploy → New deployment → Web app**, Execute as **Me**, Access **Anyone**.
+7. Run `setupDomeBox()` once more — it now prints the `/exec` URL. Put that into
+   Netlify under **Site configuration → Environment variables** as `API_URL`.
+   It is not pasted into a file any more: the site build substitutes it, and
+   refuses to build without it. See `netlify/DEPLOY.md`.
+8. Open the deployed site, sign up a test company, and walk through it.
 
 ### 1a. The Razorpay webhook — without it, some paid customers stay on Free
 

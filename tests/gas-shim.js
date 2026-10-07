@@ -176,10 +176,32 @@ function build() {
     MimeType: { JSON: 'JSON', TEXT: 'TEXT' },
     createTextOutput(t) { return { _t: t, setMimeType() { return this; }, getContent: () => t }; },
   };
-  G.Logger = { log: () => {} };
-  G.ScriptApp = { getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ atHour: () => ({ everyDays: () => ({ create(){} }) }) }) }), deleteTrigger(){} };
+  /* setupDomeBox() reads what it printed back to the caller, so the log has to
+     be real here rather than swallowed. */
+  const logs = [];
+  G.Logger = { log: (m) => { logs.push(String(m)); } };
 
-  return { G, FILES, META, props, mails,
+  /* Triggers and the deployment URL are project state in Apps Script, not
+     config, so the shim holds them as mutable arrays a test can arrange: "no
+     triggers installed", "two of three", "not deployed yet". Those are the
+     states setupDomeBox exists to find. */
+  const triggers = [];
+  let execUrl = '';
+  G.ScriptApp = {
+    getProjectTriggers: () => triggers.map((fn) => ({
+      getHandlerFunction: () => fn, getEventType: () => 'CLOCK' })),
+    newTrigger: (fn) => ({ timeBased: () => ({ atHour: () => ({
+      everyDays: () => ({ create() { triggers.push(fn); } }) }) }) }),
+    deleteTrigger(t) {
+      const i = triggers.indexOf(t.getHandlerFunction());
+      if (i > -1) triggers.splice(i, 1);
+    },
+    getService: () => ({ getUrl: () => execUrl }),
+  };
+
+  return { G, FILES, META, props, mails, logs,
+    triggers,
+    setExecUrl(u) { execUrl = u || ''; },
     makeSpreadsheet, makeSheet,
     newFile(id, name) { FILES[id] = makeSpreadsheet(id, name); META[id] = { sharing: 'PRIVATE' }; return FILES[id]; } };
 }

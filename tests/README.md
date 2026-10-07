@@ -8,6 +8,7 @@ tests a mock of the delivered code — it tests the delivered code.
 cd tests
 npm i playwright            # browser test only
 node lint-codegs.js         # static checks on the assembled file
+node setup-test.js          # setupDomeBox() in every state a real deployment hits
 node api-test.js            # 89 end-to-end API checks
 node extra-test.js          # roles, tenant isolation, plan vocabulary
 node auth-test.js           # hashing, migration, token forgery, throttle
