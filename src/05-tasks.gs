@@ -2,7 +2,12 @@
 // TASKS
 // ===========================================================================
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — a workspace slipping past its monthly task cap. */
 function createTask_(ctx, form) {
+  return withLock_(function () { return createTask_locked_(ctx,form); });
+}
+function createTask_locked_(ctx, form) {
   /* Deliberately NOT requireManager_: a Doer may raise work upward, to their own
      manager or to a department head. canAssignTo decides per recipient. */
   blockIfStopped_(ctx);

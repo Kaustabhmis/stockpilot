@@ -37,6 +37,15 @@ const defined=new Set(Object.keys(defs));
 // local `var f = function(){}` / `var f = n => …` are definitions too
 [...src.matchAll(/\bvar\s+([A-Za-z_$][\w$]*)\s*=\s*(?:function\s*\(|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/g)]
   .forEach(m=>defined.add(m[1]));
+/* A parameter that holds a callback is called like any other function. Without
+   this, `withLock_(fn)` reports `fn` as undefined — a false alarm that trains
+   people to ignore the one check here that catches real typos. */
+[...src.matchAll(/\bfunction\s*[A-Za-z0-9_$]*\s*\(([^)]*)\)/g)].forEach(m=>{
+  m[1].split(',').map(a=>a.trim()).filter(Boolean).forEach(a=>{
+    const name=a.split('=')[0].trim();
+    if(/^[A-Za-z_$][\w$]*$/.test(name)) defined.add(name);
+  });
+});
 const called=new Set();
 const re=/(?:^|[^.\w$])([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
 let m; while((m=re.exec(src))) called.add(m[1]);

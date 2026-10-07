@@ -102,7 +102,12 @@ function planForPaise_(paise) {
 
 /** Extends from the current expiry when it is still ahead, so renewing early
  *  adds time instead of discarding what is left. */
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — two payments landing together and one expiry overwriting the other. */
 function grantPlan_(sheetId, planName, paid, company) {
+  return withLock_(function () { return grantPlan_locked_(sheetId,planName,paid,company); });
+}
+function grantPlan_locked_(sheetId, planName, paid, company) {
   var dir = SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.DIRECTORY);
   var d = dir.getDataRange().getValues();
   for (var i = 1; i < d.length; i++) {

@@ -15,11 +15,7 @@ function getDashboard_(ctx) {
   var cal = leaveCalendar_(ctx);
   var me = ctx.actor;
 
-  // What this person is allowed to see.
-  var visible = tasks.filter(function (t) {
-    if (me.role === 'Admin') return true;
-    return t.assignee === me.username || t.by === me.username || t.approver === me.username;
-  });
+  var visible = visibleTasks_(ctx, tasks);
   var active = visible.filter(function (t) { return !t.isArchived; });
 
   var reports = users.filter(function (u) { return u.manager === me.username; })

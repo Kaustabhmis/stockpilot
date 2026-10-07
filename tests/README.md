@@ -21,6 +21,7 @@ node fairness-test.js       # load-credited scoring: 10 jobs beats 1 easy one
 node recognition-test.js    # cookie points and the org chart
 node priority-test.js       # the ranking and the horizons (pure rules engine)
 node priority-api-test.js   # priority levels and the list, over the API
+node audit-test.js          # the launch-audit findings, pinned so they stay shut
 
 node server.js &            # then, for the browser tests:
 node ui-test.js

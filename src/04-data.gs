@@ -149,6 +149,23 @@ function isArchived_(status, created, history) {
   return Math.ceil(Math.abs(new Date() - last) / 86400000) > 7;
 }
 
+/**
+ * What this person is allowed to see.
+ *
+ * Kept here, in one place, because it was written inline in getDashboard and
+ * the getTasks route did not have it — so any signed-in Doer could ask for the
+ * raw list and read every task in the company, including work they were never
+ * part of. One rule, called by everything that hands tasks to a browser.
+ */
+function visibleTasks_(ctx, tasks) {
+  var me = ctx.actor;
+  if (me.role === ROLE.ADMIN) return tasks;
+  return tasks.filter(function (t) {
+    return t.assignee === me.username || t.by === me.username ||
+           t.approver === me.username || t.delegateTo === me.username;
+  });
+}
+
 function findTaskRow_(ctx, taskId) {
   var sh = ctx.ss.getSheetByName(TAB.TASKS);
   var d = sh.getDataRange().getValues();

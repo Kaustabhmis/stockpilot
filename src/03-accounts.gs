@@ -2,7 +2,12 @@
 // ACCOUNTS — signup, login, password reset
 // ===========================================================================
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — two companies registering on one email, which login cannot then tell apart. */
 function registerCompany_(form) {
+  return withLock_(function () { return registerCompany_locked_(form); });
+}
+function registerCompany_locked_(form) {
   form = form || {};
   var c = CFG();
   if (!c.masterId || !c.templateId) throw new Error('The service is not configured yet.');

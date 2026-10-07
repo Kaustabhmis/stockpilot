@@ -39,6 +39,45 @@ var API_URL = 'https://script.google.com/macros/s/AKfy.../exec';
 
 9. Open `index.html`, sign up a test company, and walk through it.
 
+### 1b. The scheduler — add it, or nothing gets chased
+
+`code.gs` serves the app. It does **not** send the daily digest or create
+recurring occurrences on a schedule: those live in `domebox/reminders.gs`, which
+is a *second file in the same Apps Script project*, not part of `code.gs`.
+
+Without it the product still works, but nobody is reminded of anything and a
+recurring job only produces its next occurrence when somebody closes the last
+one — so one forgotten task quietly ends the series, which is exactly when the
+reminder mattered most. The landing page sells reminders. Add the file.
+
+1. In the same Apps Script project: **+ → Script** → name it `reminders` →
+   paste `domebox/reminders.gs`.
+2. Set `REG.SHEET_ID` at the top to your registry's id.
+3. Run `previewDailyReminders()` — sends nothing, logs exactly what would go
+   out. Read the log.
+4. When it looks right, set `SCHED.DRY_RUN = false`.
+5. Run `installDomeBoxSchedules()` **once**. Check with
+   `domeBoxScheduleStatus()`.
+
+Every private helper in that file is prefixed `rm` on purpose. Apps Script puts
+all `.gs` files in one global scope and the last definition of a name wins — the
+file used to define its own `esc_`, which `code.gs` also defines, and the two
+were not the same. Dropping it in would have silently turned off apostrophe
+escaping in every email the product sends. If you add more files, prefix their
+helpers too.
+
+### 1c. Mail quota — know the ceiling before you sell past it
+
+Apps Script allows **100 recipients a day on a consumer account, 1,500 on
+Workspace**, shared by the whole project — every tenant, every email. One digest
+per person per day is far cheaper than per-event mail, and
+`MAX_EMAILS_PER_RUN` hard-stops a run so one large customer cannot silence
+everybody else. Two rough numbers to plan with: on Workspace, ~1,500 digest
+recipients a day is the hard ceiling; the per-event mail (assignment, approval,
+review, verify, cookie points) comes out of the same budget. If you pass a few
+hundred active users, move transactional mail to a real provider before it
+starts failing silently.
+
 ## 2. Then migrate
 
 Only once the sandbox behaves:

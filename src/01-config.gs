@@ -56,6 +56,31 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
 
+/**
+ * Serialise a check-then-act sequence.
+ *
+ * appendRow is atomic on its own, so a plain write needs nothing. What needs
+ * this is the pattern that reads a count or a uniqueness rule and THEN writes:
+ * two people clicking at the same moment both pass the check and both write.
+ * In practice that is a workspace one user over its plan cap, two accounts on
+ * one email with no way to say which is which at login, or a duplicate
+ * username that quietly takes over somebody else's work.
+ *
+ * Thirty seconds is longer than any of these sequences takes and short enough
+ * that a stuck lock surfaces as a clear error rather than a hung tab. If the
+ * lock cannot be had, the write does NOT go ahead — the whole point is that
+ * racing through is the failure being prevented.
+ */
+function withLock_(fn) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch (e) {
+    throw new Error('The workspace is busy saving something else. Try that again in a moment.');
+  }
+  try { return fn(); }
+  finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
 var T = {}; TASK_COLS.forEach(function (c, i) { T[c] = i; });
 var U = {}; USER_COLS.forEach(function (c, i) { U[c] = i; });
 

@@ -181,6 +181,39 @@ function recordFailedLogin_(state) {
 function clearLoginFailures_(state) { CacheService.getScriptCache().remove(state.key); }
 
 /* ---------------------------------------------------------------------------
+   THROTTLING THE ROUTES THAT SEND MAIL OR CREATE ACCOUNTS
+
+   Everything behind a token is naturally limited — you need an account first.
+   The four public routes are not, and three of them send email. Apps Script
+   gives this project a FIXED daily mail quota shared by every tenant, so a bot
+   hammering "forgot password" does not merely annoy one customer: it burns the
+   quota, and every assignment, approval and reminder in the whole product stops
+   going out, silently, for the rest of the day.
+
+   Counted per caller and per target, in the cache, which is the only shared
+   store Apps Script offers that is fast enough to sit in front of every call.
+   ------------------------------------------------------------------------- */
+var PUBLIC_LIMITS = {
+  forgotPassword:       { max: 5,  windowMin: 60 },
+  forgotPasswordGlobal: { max: 60, windowMin: 60 },
+  register:       { max: 3,  windowMin: 60 },
+  contactSales:   { max: 5,  windowMin: 60 },
+};
+
+function throttle_(bucket, key, limit) {
+  if (!limit) return;
+  var cache = CacheService.getScriptCache();
+  var k = 'th_' + bucket + '_' +
+          Utilities.base64EncodeWebSafe(String(key || 'anon').toLowerCase()).slice(0, 70);
+  var n = Number(cache.get(k) || 0);
+  if (n >= limit.max) {
+    throw new Error('Too many attempts. Please wait an hour and try again, or write to ' +
+                    CFG().mailFrom + '.');
+  }
+  cache.put(k, String(n + 1), limit.windowMin * 60);
+}
+
+/* ---------------------------------------------------------------------------
    OPERATIONAL HELPERS
    ------------------------------------------------------------------------- */
 

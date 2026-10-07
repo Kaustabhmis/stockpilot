@@ -113,6 +113,21 @@ function build() {
     getProperty: k => (k in props ? props[k] : null),
     setProperty: (k, v) => { props[k] = v; },
   })};
+  /* One script-wide lock, as Apps Script has. Single-threaded here, so the
+     lock can never actually be contended — but the calls have to exist or the
+     code under test takes a different path from production. */
+  let locked = false;
+  G.LockService = {
+    getScriptLock: () => ({
+      waitLock(ms) { if (locked) throw new Error('Could not obtain lock'); locked = true; },
+      tryLock(ms) { if (locked) return false; locked = true; return true; },
+      releaseLock() { locked = false; },
+      hasLock() { return locked; },
+    }),
+  };
+  G.LockService.getDocumentLock = G.LockService.getScriptLock;
+  G.LockService.getUserLock = G.LockService.getScriptLock;
+
   G.CacheService = { getScriptCache: () => ({
     get: k => (k in cache ? cache[k] : null),
     put: (k, v) => { cache[k] = v; },
@@ -143,7 +158,6 @@ function build() {
   };
   G.Logger = { log: () => {} };
   G.ScriptApp = { getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ atHour: () => ({ everyDays: () => ({ create(){} }) }) }) }), deleteTrigger(){} };
-  G.LockService = { getScriptLock: () => ({ tryLock: () => true, releaseLock(){} }) };
 
   return { G, FILES, META, props, mails,
     makeSpreadsheet, makeSheet,

@@ -58,6 +58,31 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
 
+/**
+ * Serialise a check-then-act sequence.
+ *
+ * appendRow is atomic on its own, so a plain write needs nothing. What needs
+ * this is the pattern that reads a count or a uniqueness rule and THEN writes:
+ * two people clicking at the same moment both pass the check and both write.
+ * In practice that is a workspace one user over its plan cap, two accounts on
+ * one email with no way to say which is which at login, or a duplicate
+ * username that quietly takes over somebody else's work.
+ *
+ * Thirty seconds is longer than any of these sequences takes and short enough
+ * that a stuck lock surfaces as a clear error rather than a hung tab. If the
+ * lock cannot be had, the write does NOT go ahead — the whole point is that
+ * racing through is the failure being prevented.
+ */
+function withLock_(fn) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch (e) {
+    throw new Error('The workspace is busy saving something else. Try that again in a moment.');
+  }
+  try { return fn(); }
+  finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
 var T = {}; TASK_COLS.forEach(function (c, i) { T[c] = i; });
 var U = {}; USER_COLS.forEach(function (c, i) { U[c] = i; });
 
@@ -184,11 +209,25 @@ function route_(p) {
   if (PUBLIC_ACTIONS.indexOf(action) > -1) {
     switch (action) {
       case 'ping':           return { status: 'success', time: new Date().toISOString() };
-      case 'register':       return registerCompany_(p.form);
+      case 'register':
+        throttle_('reg', (p.form && p.form.email) || '', PUBLIC_LIMITS.register);
+        return registerCompany_(p.form);
       case 'login':          return login_(p.username, p.password);
-      case 'forgotPassword': return forgotPassword_(p.email);
+      case 'forgotPassword':
+        /* Two buckets, because they stop two different things. Per address, so
+           nobody's inbox can be used as a weapon — the route deliberately
+           answers the same way whether the account exists or not, which would
+           otherwise make it a free email cannon pointed at any address you can
+           guess. And a global one, because the daily mail quota is shared by
+           every tenant: without it, one bot cycling through addresses takes
+           down assignment and reminder mail for every customer at once. */
+        throttle_('fp', p.email, PUBLIC_LIMITS.forgotPassword);
+        throttle_('fpall', 'global', PUBLIC_LIMITS.forgotPasswordGlobal);
+        return forgotPassword_(p.email);
       case 'resetPassword':  return resetPassword_(p.token, p.password);
-      case 'contactSales':   return contactSales_(p.form);
+      case 'contactSales':
+        throttle_('cs', (p.form && p.form.email) || '', PUBLIC_LIMITS.contactSales);
+        return contactSales_(p.form);
     }
   }
 
@@ -200,7 +239,8 @@ function route_(p) {
   switch (action) {
     /* --- read ------------------------------------------------------------ */
     case 'getDashboard':        return getDashboard_(ctx);
-    case 'getTasks':            return { status:'success', tasks: readTasks_(ctx) };
+    case 'getTasks':            return { status:'success',
+                                        tasks: visibleTasks_(ctx, readTasks_(ctx)) };
     case 'getUsers':            return getUsers_(ctx);
     case 'getProjects':         return getProjects_(ctx);
     case 'getOrgChart':         return getOrgChart_(ctx);
@@ -324,7 +364,12 @@ function logError_(where, message) {
 // ACCOUNTS — signup, login, password reset
 // ===========================================================================
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — two companies registering on one email, which login cannot then tell apart. */
 function registerCompany_(form) {
+  return withLock_(function () { return registerCompany_locked_(form); });
+}
+function registerCompany_locked_(form) {
   form = form || {};
   var c = CFG();
   if (!c.masterId || !c.templateId) throw new Error('The service is not configured yet.');
@@ -745,6 +790,23 @@ function isArchived_(status, created, history) {
   return Math.ceil(Math.abs(new Date() - last) / 86400000) > 7;
 }
 
+/**
+ * What this person is allowed to see.
+ *
+ * Kept here, in one place, because it was written inline in getDashboard and
+ * the getTasks route did not have it — so any signed-in Doer could ask for the
+ * raw list and read every task in the company, including work they were never
+ * part of. One rule, called by everything that hands tasks to a browser.
+ */
+function visibleTasks_(ctx, tasks) {
+  var me = ctx.actor;
+  if (me.role === ROLE.ADMIN) return tasks;
+  return tasks.filter(function (t) {
+    return t.assignee === me.username || t.by === me.username ||
+           t.approver === me.username || t.delegateTo === me.username;
+  });
+}
+
 function findTaskRow_(ctx, taskId) {
   var sh = ctx.ss.getSheetByName(TAB.TASKS);
   var d = sh.getDataRange().getValues();
@@ -919,7 +981,12 @@ function esc_(s) {
 // TASKS
 // ===========================================================================
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — a workspace slipping past its monthly task cap. */
 function createTask_(ctx, form) {
+  return withLock_(function () { return createTask_locked_(ctx,form); });
+}
+function createTask_locked_(ctx, form) {
   /* Deliberately NOT requireManager_: a Doer may raise work upward, to their own
      manager or to a department head. canAssignTo decides per recipient. */
   blockIfStopped_(ctx);
@@ -1321,7 +1388,12 @@ function getUsers_(ctx) {
   }) };
 }
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — a duplicate username, or one user more than the plan allows. */
 function addUser_(ctx, form) {
+  return withLock_(function () { return addUser_locked_(ctx,form); });
+}
+function addUser_locked_(ctx, form) {
   requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
   var username = String(form.username || '').trim();
@@ -1496,11 +1568,7 @@ function getDashboard_(ctx) {
   var cal = leaveCalendar_(ctx);
   var me = ctx.actor;
 
-  // What this person is allowed to see.
-  var visible = tasks.filter(function (t) {
-    if (me.role === 'Admin') return true;
-    return t.assignee === me.username || t.by === me.username || t.approver === me.username;
-  });
+  var visible = visibleTasks_(ctx, tasks);
   var active = visible.filter(function (t) { return !t.isArchived; });
 
   var reports = users.filter(function (u) { return u.manager === me.username; })
@@ -1933,7 +2001,12 @@ function planForPaise_(paise) {
 
 /** Extends from the current expiry when it is still ahead, so renewing early
  *  adds time instead of discarding what is left. */
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — two payments landing together and one expiry overwriting the other. */
 function grantPlan_(sheetId, planName, paid, company) {
+  return withLock_(function () { return grantPlan_locked_(sheetId,planName,paid,company); });
+}
+function grantPlan_locked_(sheetId, planName, paid, company) {
   var dir = SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.DIRECTORY);
   var d = dir.getDataRange().getValues();
   for (var i = 1; i < d.length; i++) {
@@ -2502,7 +2575,12 @@ function clearKra_(ctx, username) {
 // no extra bookkeeping to go wrong.
 // ===========================================================================
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — a project whose stages straddle the task cap. */
 function createProject_(ctx, form) {
+  return withLock_(function () { return createProject_locked_(ctx,form); });
+}
+function createProject_locked_(ctx, form) {
   requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
 
@@ -3068,6 +3146,39 @@ function recordFailedLogin_(state) {
   CacheService.getScriptCache().put(state.key, String(state.attempts + 1), LOGIN_LIMIT.WINDOW_MIN * 60);
 }
 function clearLoginFailures_(state) { CacheService.getScriptCache().remove(state.key); }
+
+/* ---------------------------------------------------------------------------
+   THROTTLING THE ROUTES THAT SEND MAIL OR CREATE ACCOUNTS
+
+   Everything behind a token is naturally limited — you need an account first.
+   The four public routes are not, and three of them send email. Apps Script
+   gives this project a FIXED daily mail quota shared by every tenant, so a bot
+   hammering "forgot password" does not merely annoy one customer: it burns the
+   quota, and every assignment, approval and reminder in the whole product stops
+   going out, silently, for the rest of the day.
+
+   Counted per caller and per target, in the cache, which is the only shared
+   store Apps Script offers that is fast enough to sit in front of every call.
+   ------------------------------------------------------------------------- */
+var PUBLIC_LIMITS = {
+  forgotPassword:       { max: 5,  windowMin: 60 },
+  forgotPasswordGlobal: { max: 60, windowMin: 60 },
+  register:       { max: 3,  windowMin: 60 },
+  contactSales:   { max: 5,  windowMin: 60 },
+};
+
+function throttle_(bucket, key, limit) {
+  if (!limit) return;
+  var cache = CacheService.getScriptCache();
+  var k = 'th_' + bucket + '_' +
+          Utilities.base64EncodeWebSafe(String(key || 'anon').toLowerCase()).slice(0, 70);
+  var n = Number(cache.get(k) || 0);
+  if (n >= limit.max) {
+    throw new Error('Too many attempts. Please wait an hour and try again, or write to ' +
+                    CFG().mailFrom + '.');
+  }
+  cache.put(k, String(n + 1), limit.windowMin * 60);
+}
 
 /* ---------------------------------------------------------------------------
    OPERATIONAL HELPERS

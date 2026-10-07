@@ -13,7 +13,12 @@
 // no extra bookkeeping to go wrong.
 // ===========================================================================
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — a project whose stages straddle the task cap. */
 function createProject_(ctx, form) {
+  return withLock_(function () { return createProject_locked_(ctx,form); });
+}
+function createProject_locked_(ctx, form) {
   requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
 

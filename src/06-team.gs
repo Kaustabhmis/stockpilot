@@ -25,7 +25,12 @@ function getUsers_(ctx) {
   }) };
 }
 
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — a duplicate username, or one user more than the plan allows. */
 function addUser_(ctx, form) {
+  return withLock_(function () { return addUser_locked_(ctx,form); });
+}
+function addUser_locked_(ctx, form) {
   requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
   var username = String(form.username || '').trim();

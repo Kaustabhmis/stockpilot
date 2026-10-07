@@ -47,11 +47,25 @@ function route_(p) {
   if (PUBLIC_ACTIONS.indexOf(action) > -1) {
     switch (action) {
       case 'ping':           return { status: 'success', time: new Date().toISOString() };
-      case 'register':       return registerCompany_(p.form);
+      case 'register':
+        throttle_('reg', (p.form && p.form.email) || '', PUBLIC_LIMITS.register);
+        return registerCompany_(p.form);
       case 'login':          return login_(p.username, p.password);
-      case 'forgotPassword': return forgotPassword_(p.email);
+      case 'forgotPassword':
+        /* Two buckets, because they stop two different things. Per address, so
+           nobody's inbox can be used as a weapon — the route deliberately
+           answers the same way whether the account exists or not, which would
+           otherwise make it a free email cannon pointed at any address you can
+           guess. And a global one, because the daily mail quota is shared by
+           every tenant: without it, one bot cycling through addresses takes
+           down assignment and reminder mail for every customer at once. */
+        throttle_('fp', p.email, PUBLIC_LIMITS.forgotPassword);
+        throttle_('fpall', 'global', PUBLIC_LIMITS.forgotPasswordGlobal);
+        return forgotPassword_(p.email);
       case 'resetPassword':  return resetPassword_(p.token, p.password);
-      case 'contactSales':   return contactSales_(p.form);
+      case 'contactSales':
+        throttle_('cs', (p.form && p.form.email) || '', PUBLIC_LIMITS.contactSales);
+        return contactSales_(p.form);
     }
   }
 
@@ -63,7 +77,8 @@ function route_(p) {
   switch (action) {
     /* --- read ------------------------------------------------------------ */
     case 'getDashboard':        return getDashboard_(ctx);
-    case 'getTasks':            return { status:'success', tasks: readTasks_(ctx) };
+    case 'getTasks':            return { status:'success',
+                                        tasks: visibleTasks_(ctx, readTasks_(ctx)) };
     case 'getUsers':            return getUsers_(ctx);
     case 'getProjects':         return getProjects_(ctx);
     case 'getOrgChart':         return getOrgChart_(ctx);

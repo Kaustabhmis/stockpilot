@@ -31,6 +31,16 @@
  * =============================================================================
  */
 
+/* NAME SAFETY — every private helper below is prefixed `rm`.
+ *
+ * Apps Script puts every .gs file in ONE global scope, and the last definition
+ * of a name wins. This file used to define its own esc_, which code.gs also
+ * defines — and the two were not the same: this one did not escape the single
+ * quote. Adding this file to the project would therefore have silently turned
+ * off apostrophe escaping in every email the product sends, with nothing to
+ * show for it until somebody put a quote in a task title. Prefixing is ugly
+ * and it is the only thing that makes a second file safe to drop in.
+ */
 var REG = {
   SHEET_ID: '',        // registry spreadsheet id
   TAB: '',             // blank = auto-detect
@@ -101,7 +111,7 @@ function sendDailyReminders() {
   var log = ['', '=== DAILY REMINDERS ' + new Date().toDateString() + ' ===',
     SCHED.DRY_RUN ? '*** DRY RUN — nothing will be sent ***' : '*** LIVE ***', ''];
 
-  var tenants = loadTenants_(log);
+  var tenants = rmLoadTenants_(log);
   if (!tenants) { Logger.log(log.join('\n')); return; }
 
   var sent = 0, skipped = 0, quietDays = 0;
@@ -113,7 +123,7 @@ function sendDailyReminders() {
     if (sent >= SCHED.MAX_EMAILS_PER_RUN) { log.push('  ! email cap reached — remaining tenants deferred to tomorrow'); break; }
 
     var data;
-    try { data = readTenant_(tenant.sheetId); }
+    try { data = rmReadTenant_(tenant.sheetId); }
     catch (e) { log.push('  ' + tenant.company + ': CANNOT OPEN (' + e.message + ')'); continue; }
 
     if (SCHED.PAID_PLANS_ONLY && data.plan === 'Free Tier') {
@@ -136,13 +146,13 @@ function sendDailyReminders() {
       });
 
       var wantsAppraisalNudge = isAppraisalWindow && reports.length > 0 &&
-        !alreadySent_(tenant.sheetId, user.username, 'appraisal-' + monthKey_(today));
+        !rmAlreadySent_(tenant.sheetId, user.username, 'appraisal-' + rmMonthKey_(today));
 
       if (digest.isEmpty && !wantsAppraisalNudge) { quietDays++; continue; }
-      if (alreadySent_(tenant.sheetId, user.username, 'digest-' + ymd(today))) { skipped++; continue; }
+      if (rmAlreadySent_(tenant.sheetId, user.username, 'digest-' + ymd(today))) { skipped++; continue; }
 
-      var subject = digestSubject_(digest);
-      var html = digestHtml_(digest, tenant.company, wantsAppraisalNudge, reports.length);
+      var subject = rmDigestSubject_(digest);
+      var html = rmDigestHtml_(digest, tenant.company, wantsAppraisalNudge, reports.length);
 
       log.push('    → ' + user.email + '  [' + subject + ']' +
         '  overdue:' + digest.buckets.overdue.length +
@@ -152,9 +162,9 @@ function sendDailyReminders() {
         ' team:' + digest.buckets.teamOverdue.length);
 
       if (!SCHED.DRY_RUN) {
-        if (sendMail_(user.email, subject, html)) {
-          markSent_(tenant.sheetId, user.username, 'digest-' + ymd(today));
-          if (wantsAppraisalNudge) markSent_(tenant.sheetId, user.username, 'appraisal-' + monthKey_(today));
+        if (rmSendMail_(user.email, subject, html)) {
+          rmMarkSent_(tenant.sheetId, user.username, 'digest-' + ymd(today));
+          if (wantsAppraisalNudge) rmMarkSent_(tenant.sheetId, user.username, 'appraisal-' + rmMonthKey_(today));
           sent++;
         }
       } else {
@@ -169,7 +179,7 @@ function sendDailyReminders() {
   Logger.log(log.join('\n'));
 }
 
-function digestSubject_(d) {
+function rmDigestSubject_(d) {
   var b = d.buckets;
   if (b.overdue.length) return b.overdue.length + ' task' + (b.overdue.length > 1 ? 's' : '') + ' overdue';
   if (b.awaitingMyApproval.length) return b.awaitingMyApproval.length + ' waiting on your approval';
@@ -179,35 +189,35 @@ function digestSubject_(d) {
   return 'Your Dome Box for today';
 }
 
-function digestHtml_(d, company, appraisalNudge, reportCount) {
+function rmDigestHtml_(d, company, appraisalNudge, reportCount) {
   var b = d.buckets;
-  var out = '<p>Good morning ' + esc_(firstName_(d.user.name)) + ',</p>';
+  var out = '<p>Good morning ' + rmEsc_(rmFirstName_(d.user.name)) + ',</p>';
 
   if (b.overdue.length) {
-    out += section_('Overdue — needs attention now', b.overdue.map(function (t) {
-      return row_(t, '<strong style="color:#b91c1c">' + t.daysOverdue + ' day' + (t.daysOverdue > 1 ? 's' : '') + ' late</strong>');
+    out += rmSection_('Overdue — needs attention now', b.overdue.map(function (t) {
+      return rmRow_(t, '<strong style="color:#b91c1c">' + t.daysOverdue + ' day' + (t.daysOverdue > 1 ? 's' : '') + ' late</strong>');
     }), '#b91c1c');
   }
   if (b.rework.length) {
-    out += section_('Sent back for rework', b.rework.map(function (t) { return row_(t, 'rework ' + t.reworkCount + '×'); }), '#b45309');
+    out += rmSection_('Sent back for rework', b.rework.map(function (t) { return rmRow_(t, 'rework ' + t.reworkCount + '×'); }), '#b45309');
   }
-  if (b.dueToday.length) out += section_('Due today', b.dueToday.map(function (t) { return row_(t, 'today'); }), '#1d4ed8');
-  if (b.dueTomorrow.length) out += section_('Due tomorrow', b.dueTomorrow.map(function (t) { return row_(t, 'tomorrow'); }), '#4b5563');
+  if (b.dueToday.length) out += rmSection_('Due today', b.dueToday.map(function (t) { return rmRow_(t, 'today'); }), '#1d4ed8');
+  if (b.dueTomorrow.length) out += rmSection_('Due tomorrow', b.dueTomorrow.map(function (t) { return rmRow_(t, 'tomorrow'); }), '#4b5563');
 
   if (b.awaitingMyApproval.length) {
-    out += section_('Waiting on you to approve', b.awaitingMyApproval.map(function (t) {
-      return row_(t, 'for ' + esc_(t.assigneeName || t.assignee));
+    out += rmSection_('Waiting on you to approve', b.awaitingMyApproval.map(function (t) {
+      return rmRow_(t, 'for ' + rmEsc_(t.assigneeName || t.assignee));
     }), '#7048c4') +
       '<p style="font-size:12px;color:#6b7280;margin:-6px 0 14px">Nobody can start these until you decide, and the delay counts against your own responsiveness score.</p>';
   }
   if (b.awaitingMyReview.length) {
-    out += section_('Ready for your review', b.awaitingMyReview.map(function (t) {
-      return row_(t, 'from ' + esc_(t.assigneeName || t.assignee));
+    out += rmSection_('Ready for your review', b.awaitingMyReview.map(function (t) {
+      return rmRow_(t, 'from ' + rmEsc_(t.assigneeName || t.assignee));
     }), '#7048c4');
   }
   if (b.teamOverdue.length) {
-    out += section_('Your team — overdue ' + SCHED.ESCALATE_AFTER_DAYS + '+ days', b.teamOverdue.map(function (t) {
-      return row_(t, esc_(t.assigneeName || t.assignee) + ' · ' + t.daysOverdue + 'd late');
+    out += rmSection_('Your team — overdue ' + SCHED.ESCALATE_AFTER_DAYS + '+ days', b.teamOverdue.map(function (t) {
+      return rmRow_(t, rmEsc_(t.assigneeName || t.assignee) + ' · ' + t.daysOverdue + 'd late');
     }), '#b91c1c');
   }
 
@@ -221,23 +231,23 @@ function digestHtml_(d, company, appraisalNudge, reportCount) {
   out += '<p style="margin:22px 0"><a href="' + SITE_URL + '" style="background:#2563eb;color:#fff;text-decoration:none;' +
     'padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">Open Dome Box</a></p>';
   out += '<p style="font-size:12px;color:#6b7280">You are getting this because you have open work in ' +
-    esc_(company || 'your workspace') + '. One email a day, and none at all on a clear day.</p>';
+    rmEsc_(company || 'your workspace') + '. One email a day, and none at all on a clear day.</p>';
   return out;
 }
 
-function section_(title, rows, colour) {
+function rmSection_(title, rows, colour) {
   return '<div style="margin:16px 0 14px">' +
     '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:' + colour + ';margin-bottom:7px">' +
-    esc_(title) + '</div>' +
+    rmEsc_(title) + '</div>' +
     '<table style="width:100%;border-collapse:collapse;font-size:13px">' + rows.join('') + '</table></div>';
 }
 
-function row_(t, right) {
+function rmRow_(t, right) {
   var pri = { High: '#dc2626', Medium: '#b45309', Low: '#2563eb' }[t.priority] || '#6b7280';
   return '<tr>' +
     '<td style="padding:7px 0;border-bottom:1px solid #f3f4f6;border-left:3px solid ' + pri + ';padding-left:9px">' +
-    '<strong>' + esc_(t.title) + '</strong>' +
-    (t.kra ? '<span style="color:#6b7280;font-size:11px"> · ' + esc_(t.kra) + '</span>' : '') +
+    '<strong>' + rmEsc_(t.title) + '</strong>' +
+    (t.kra ? '<span style="color:#6b7280;font-size:11px"> · ' + rmEsc_(t.kra) + '</span>' : '') +
     '</td>' +
     '<td style="padding:7px 0;border-bottom:1px solid #f3f4f6;text-align:right;color:#6b7280;font-size:12px;white-space:nowrap">' +
     right + '</td></tr>';
@@ -263,7 +273,7 @@ function generateRecurringJobs() {
   var log = ['', '=== RECURRING JOBS ' + new Date().toDateString() + ' ===',
     SCHED.DRY_RUN ? '*** DRY RUN ***' : '*** LIVE ***', ''];
 
-  var tenants = loadTenants_(log);
+  var tenants = rmLoadTenants_(log);
   if (!tenants) { Logger.log(log.join('\n')); return; }
 
   var today = new Date();
@@ -273,7 +283,7 @@ function generateRecurringJobs() {
     var ss, sheet, headers, rows;
     try {
       ss = SpreadsheetApp.openById(tenant.sheetId);
-      sheet = findTab_(ss, ['tasks', 'task', 'assignments', 'work']);
+      sheet = rmFindTab_(ss, ['tasks', 'task', 'assignments', 'work']);
       if (!sheet) { log.push('  ' + tenant.company + ': no Tasks tab'); return; }
       headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
       rows = sheet.getDataRange().getValues();
@@ -282,7 +292,7 @@ function generateRecurringJobs() {
     }
 
     var col = {};
-    headers.forEach(function (h, i) { col[normKey_(h)] = i; });
+    headers.forEach(function (h, i) { col[rmNormKey_(h)] = i; });
     var need = ['cadence', 'frequency', 'due', 'duedate', 'status'];
     var cadenceIdx = col.cadence !== undefined ? col.cadence : col.frequency;
     var dueIdx = col.due !== undefined ? col.due : col.duedate;
@@ -364,13 +374,13 @@ function generateRecurringJobs() {
 // TENANT ACCESS
 // ============================================================
 
-function loadTenants_(log) {
+function rmLoadTenants_(log) {
   if (!REG.SHEET_ID) { log.push('REG.SHEET_ID is empty — set it at the top of reminders.gs.'); return null; }
   var reg, tab;
   try {
     reg = SpreadsheetApp.openById(REG.SHEET_ID);
     tab = REG.TAB ? reg.getSheetByName(REG.TAB)
-                  : (reg.getSheetByName('Accounts') || findTab_(reg, ['accounts', 'registry', 'master', 'companies', 'tenants']));
+                  : (reg.getSheetByName('Accounts') || rmFindTab_(reg, ['accounts', 'registry', 'master', 'companies', 'tenants']));
   } catch (e) {
     log.push('Cannot open the registry: ' + e.message); return null;
   }
@@ -378,10 +388,10 @@ function loadTenants_(log) {
 
   var rows = tab.getDataRange().getValues();
   var col = {};
-  (rows[0] || []).forEach(function (h, i) { col[normKey_(h)] = i; });
-  var emailIdx = firstDefined_(col, ['email', 'emailid', 'username', 'loginid']);
-  var sheetIdx = firstDefined_(col, ['sheetid', 'spreadsheetid', 'sheet', 'spreadsheet']);
-  var compIdx = firstDefined_(col, ['companyname', 'company', 'organisation', 'organization']);
+  (rows[0] || []).forEach(function (h, i) { col[rmNormKey_(h)] = i; });
+  var emailIdx = rmFirstDefined_(col, ['email', 'emailid', 'username', 'loginid']);
+  var sheetIdx = rmFirstDefined_(col, ['sheetid', 'spreadsheetid', 'sheet', 'spreadsheet']);
+  var compIdx = rmFirstDefined_(col, ['companyname', 'company', 'organisation', 'organization']);
   if (emailIdx === undefined || sheetIdx === undefined) {
     log.push('Registry is missing an email or sheetId column.'); return null;
   }
@@ -399,20 +409,20 @@ function loadTenants_(log) {
   return out;
 }
 
-function readTenant_(sheetId) {
+function rmReadTenant_(sheetId) {
   var ss = SpreadsheetApp.openById(sheetId);
 
-  var usersSheet = findTab_(ss, ['users', 'user', 'staff', 'employees', 'members']);
+  var usersSheet = rmFindTab_(ss, ['users', 'user', 'staff', 'employees', 'members']);
   var users = [];
   if (usersSheet) {
     var urows = usersSheet.getDataRange().getValues();
     var uc = {};
-    (urows[0] || []).forEach(function (h, i) { uc[normKey_(h)] = i; });
-    var uUser = firstDefined_(uc, ['username', 'loginid', 'email']);
-    var uName = firstDefined_(uc, ['name', 'fullname']);
-    var uMail = firstDefined_(uc, ['email', 'emailid', 'mail']);
-    var uMgr = firstDefined_(uc, ['manager', 'reportsto', 'reportingmanager']);
-    var uRole = firstDefined_(uc, ['role', 'usertype']);
+    (urows[0] || []).forEach(function (h, i) { uc[rmNormKey_(h)] = i; });
+    var uUser = rmFirstDefined_(uc, ['username', 'loginid', 'email']);
+    var uName = rmFirstDefined_(uc, ['name', 'fullname']);
+    var uMail = rmFirstDefined_(uc, ['email', 'emailid', 'mail']);
+    var uMgr = rmFirstDefined_(uc, ['manager', 'reportsto', 'reportingmanager']);
+    var uRole = rmFirstDefined_(uc, ['role', 'usertype']);
     for (var i = 1; i < urows.length; i++) {
       var un = uUser !== undefined ? String(urows[i][uUser] || '') : '';
       if (!un) continue;
@@ -426,14 +436,14 @@ function readTenant_(sheetId) {
     }
   }
 
-  var tasksSheet = findTab_(ss, ['tasks', 'task', 'assignments', 'work']);
+  var tasksSheet = rmFindTab_(ss, ['tasks', 'task', 'assignments', 'work']);
   var tasks = [];
   if (tasksSheet) {
     var trows = tasksSheet.getDataRange().getValues();
     var tc = {};
-    (trows[0] || []).forEach(function (h, i) { tc[normKey_(h)] = i; });
+    (trows[0] || []).forEach(function (h, i) { tc[rmNormKey_(h)] = i; });
     var g = function (row, names, dflt) {
-      var idx = firstDefined_(tc, names);
+      var idx = rmFirstDefined_(tc, names);
       return idx === undefined ? dflt : row[idx];
     };
     var byUser = {};
@@ -464,8 +474,8 @@ function readTenant_(sheetId) {
   if (billing && billing.getLastRow() > 1) {
     var brows = billing.getDataRange().getValues();
     var bc = {};
-    (brows[0] || []).forEach(function (h, i) { bc[normKey_(h)] = i; });
-    var pIdx = firstDefined_(bc, ['planname', 'plan']);
+    (brows[0] || []).forEach(function (h, i) { bc[rmNormKey_(h)] = i; });
+    var pIdx = rmFirstDefined_(bc, ['planname', 'plan']);
     if (pIdx !== undefined) plan = String(brows[1][pIdx] || 'Free Tier');
   }
 
@@ -476,7 +486,7 @@ function readTenant_(sheetId) {
 // SEND-ONCE LOG — so a retry or a manual run never double-mails anyone
 // ============================================================
 
-function reminderLog_(sheetId) {
+function rmReminderLog_(sheetId) {
   var ss = SpreadsheetApp.openById(REG.SHEET_ID);
   var sheet = ss.getSheetByName('ReminderLog');
   if (!sheet) {
@@ -488,8 +498,8 @@ function reminderLog_(sheetId) {
   return sheet;
 }
 
-function alreadySent_(sheetId, username, key) {
-  var sheet = reminderLog_(sheetId);
+function rmAlreadySent_(sheetId, username, key) {
+  var sheet = rmReminderLog_(sheetId);
   if (!sheet) return false;
   var rows = sheet.getDataRange().getValues();
   for (var i = rows.length - 1; i > 0; i--) {
@@ -498,8 +508,8 @@ function alreadySent_(sheetId, username, key) {
   return false;
 }
 
-function markSent_(sheetId, username, key) {
-  var sheet = reminderLog_(sheetId);
+function rmMarkSent_(sheetId, username, key) {
+  var sheet = rmReminderLog_(sheetId);
   if (sheet) sheet.appendRow([sheetId, username, key, new Date().toISOString()]);
 }
 
@@ -507,16 +517,16 @@ function markSent_(sheetId, username, key) {
 // HELPERS
 // ============================================================
 
-function sendMail_(to, subject, bodyHtml) {
+function rmSendMail_(to, subject, bodyHtml) {
   if (!to) return false;
   try {
-    var options = { htmlBody: shell_(subject, bodyHtml), name: MAIL_FROM_NAME, replyTo: MAIL_FROM };
+    var options = { htmlBody: rmShell_(subject, bodyHtml), name: MAIL_FROM_NAME, replyTo: MAIL_FROM };
     try {
       var aliases = GmailApp.getAliases();
       if (aliases.indexOf(MAIL_FROM) > -1) options.from = MAIL_FROM;
       else Logger.log('WARNING: ' + MAIL_FROM + ' is not a verified send-as alias; sending as the script owner.');
     } catch (e) { /* alias lookup unavailable — still send */ }
-    GmailApp.sendEmail(to, subject, plain_(bodyHtml), options);
+    GmailApp.sendEmail(to, subject, rmPlain_(bodyHtml), options);
     return true;
   } catch (e) {
     Logger.log('Mail failed to ' + to + ': ' + e.message);
@@ -524,12 +534,12 @@ function sendMail_(to, subject, bodyHtml) {
   }
 }
 
-function shell_(title, inner) {
+function rmShell_(title, inner) {
   return '<div style="margin:0;padding:24px;background:#f3f4f6;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif">' +
     '<div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">' +
       '<div style="background:#1e3a8a;padding:18px 26px;color:#fff">' +
         '<div style="font-size:19px;font-weight:800">Dome Box</div>' +
-        '<div style="font-size:12px;opacity:.8">' + esc_(title) + '</div>' +
+        '<div style="font-size:12px;opacity:.8">' + rmEsc_(title) + '</div>' +
       '</div>' +
       '<div style="padding:26px;color:#1f2937;font-size:14px;line-height:1.6">' + inner + '</div>' +
       '<div style="padding:16px 26px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:11px">' +
@@ -538,33 +548,35 @@ function shell_(title, inner) {
     '</div></div>';
 }
 
-function plain_(html) {
+function rmPlain_(html) {
   return String(html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr)>/gi, '\n')
     .replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')
     .replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function esc_(s) {
+function rmEsc_(s) {
+  /* The apostrophe matters: these strings land inside HTML attributes in the
+     digest, and a task called O'Brien audit would otherwise close one. */
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-function firstName_(n) { return String(n || '').trim().split(/\s+/)[0] || 'there'; }
-function monthKey_(d) { return d.getFullYear() + '-' + (d.getMonth() + 1); }
-function normKey_(h) { return String(h == null ? '' : h).toLowerCase().replace(/[\s_\-]/g, ''); }
-function firstDefined_(map, names) {
+function rmFirstName_(n) { return String(n || '').trim().split(/\s+/)[0] || 'there'; }
+function rmMonthKey_(d) { return d.getFullYear() + '-' + (d.getMonth() + 1); }
+function rmNormKey_(h) { return String(h == null ? '' : h).toLowerCase().replace(/[\s_\-]/g, ''); }
+function rmFirstDefined_(map, names) {
   for (var i = 0; i < names.length; i++) if (map[names[i]] !== undefined) return map[names[i]];
   return undefined;
 }
-function findTab_(ss, names) {
+function rmFindTab_(ss, names) {
   var sheets = ss.getSheets();
   for (var n = 0; n < names.length; n++) {
     for (var s = 0; s < sheets.length; s++) {
-      if (normKey_(sheets[s].getName()) === normKey_(names[n])) return sheets[s];
+      if (rmNormKey_(sheets[s].getName()) === rmNormKey_(names[n])) return sheets[s];
     }
   }
   for (var n2 = 0; n2 < names.length; n2++) {
     for (var s2 = 0; s2 < sheets.length; s2++) {
-      if (normKey_(sheets[s2].getName()).indexOf(normKey_(names[n2])) > -1) return sheets[s2];
+      if (rmNormKey_(sheets[s2].getName()).indexOf(rmNormKey_(names[n2])) > -1) return sheets[s2];
     }
   }
   return null;
