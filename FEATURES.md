@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **718 checks across twenty suites**, run against the real `code.gs` on an
+Tests: **740 checks across twenty-one suites**, run against the real `code.gs` on an
 in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 `tests/README.md`.
 
@@ -202,6 +202,10 @@ work still carries them.
 - [x] Bell: overdue, awaiting approval, awaiting review, due today, team overdue
 - [x] Email on assignment, approval request, review, send-back, verify
 - [x] Email on signup, staff invite, password reset, payment receipt
+- [x] **Renewal reminders** at 14, 7, 3 and 1 days before expiry, on the day,
+      and once after — never to a Free workspace (new)
+- [x] **Every customer email leaves from info@biscsindia.com or is not sent** —
+      no fallback to the script owner's address, ever (new)
 - [x] All email HTML escaped (your current build interpolates raw)
 - [~] **WhatsApp** — the channel is built (`whatsapp.gs`, sent earlier) but is a
       separate file and needs Meta business verification plus template approval.

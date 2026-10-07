@@ -150,8 +150,28 @@ function build() {
     DigestAlgorithm: { SHA_256: 'SHA_256' },
   };
   G.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 503, getContentText: () => '{}' }) };
-  G.GmailApp = { sendEmail(to, subject, body, opts) { mails.push({ to, subject, html: (opts||{}).htmlBody }); } };
-  G.MailApp = { sendEmail(o) { mails.push({ to: o.to, subject: o.subject, html: o.htmlBody }); } };
+  /* The send-as alias is the whole point of the mail rules, so the shim records
+     what each message was actually sent AS — not just that something was sent.
+     `aliases` is mutable so a test can take the alias away and prove nothing
+     goes out from the wrong address. */
+  const aliases = ['info@biscsindia.com'];
+  G.GmailApp = {
+    getAliases: () => aliases.slice(),
+    __setAliases(list) { aliases.length = 0; list.forEach(a => aliases.push(a)); },
+    sendEmail(to, subject, body, opts) {
+      opts = opts || {};
+      mails.push({ to, subject, html: opts.htmlBody, body,
+                   from: opts.from || null, replyTo: opts.replyTo || null,
+                   name: opts.name || null, via: 'gmail' });
+    },
+  };
+  /* MailApp cannot set a from address at all — it always sends as the script
+     owner. Recorded as via:'mailapp' so a test can assert that no CUSTOMER mail
+     ever went out this way. */
+  G.MailApp = { sendEmail(o) {
+    mails.push({ to: o.to, subject: o.subject, html: o.htmlBody, body: o.body,
+                 from: null, name: o.name || null, via: 'mailapp' });
+  } };
   G.ContentService = {
     MimeType: { JSON: 'JSON', TEXT: 'TEXT' },
     createTextOutput(t) { return { _t: t, setMimeType() { return this; }, getContent: () => t }; },

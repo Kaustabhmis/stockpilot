@@ -79,6 +79,10 @@ the apostrophe.
 
 ### 5. The scheduler is not installed (yours, 15 minutes)
 
+It now installs **three** jobs, not two: the daily digest, recurring-job
+generation, and the renewal reminders. `domeBoxScheduleStatus()` names any that
+are missing rather than just counting the ones that are there.
+
 `code.gs` serves the app. It does not send reminders or spawn recurring
 occurrences on a schedule — `reminders.gs` does, and it has to be added as a
 second file and have `installDomeBoxSchedules()` run once.

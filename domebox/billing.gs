@@ -221,7 +221,7 @@ function billingLog_(kind, message, extra) {
 }
 
 function billingAlert_(subject, body) {
-  try { MailApp.sendEmail({ to: BILLING.ALERT_TO, subject: subject, body: body, name: 'Dome Box' }); }
+  try { sendOpsMail_(BILLING.ALERT_TO, subject, body); }
   catch (e) { Logger.log('billing alert failed: ' + e.message); }
 }
 

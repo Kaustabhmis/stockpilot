@@ -5,7 +5,13 @@ const http = require('http'), fs = require('fs'), { build } = require('./gas-shi
 const env = build();
 const src = fs.readFileSync('/home/user/stockpilot/dist/code.gs', 'utf8');
 const names = Object.keys(env.G);
-const APP = new Function(...names, src + '\n;return { doPost: doPost, doGet: doGet, setupDomeBox: setupDomeBox, ensureRegistry: ensureRegistry, __env: 1 };')(...names.map(n => env.G[n]));
+const APP = new Function(...names, src + '\n;return { doPost: doPost, doGet: doGet, setupDomeBox: setupDomeBox, '
+        + 'ensureRegistry: ensureRegistry, __env: 1, '
+        /* HARNESS ONLY. In Apps Script every request is a fresh execution, so the
+           alias lookup is cached for the life of one. Here the whole suite runs in
+           a single execution, so a test that changes the aliases needs a way to say
+           "a new request starts now". Declared inside the wrapper, not in code.gs. */
+        + '__newExecution: function () { MAIL_ALIAS_OK = null; } };')(...names.map(n => env.G[n]));
 
 /* Seed: a registry and a template, exactly as a real deployment would have. */
 const master = env.newFile('MASTER', 'Dome Box Registry');

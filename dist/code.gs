@@ -41,6 +41,11 @@ function CFG() {
   };
 }
 
+/* The only address customer mail ever leaves from, and the name beside it.
+   MAIL_FROM itself is a Script Property so it can be pointed somewhere else in
+   a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
+var MAIL_FROM_NAME = 'Dome Box';
+
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
             GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points' };
@@ -110,6 +115,31 @@ function setupDomeBox() {
     out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
     if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
   });
+
+  /* The one check that cannot be done from a config value: whether this Google
+     account is actually allowed to send as the brand address. Nothing
+     customer-facing leaves without it, so finding out here is the difference
+     between a five-minute Gmail setting and a week of silently undelivered
+     password resets. */
+  out.push('');
+  out.push('--- SENDING ADDRESS ---');
+  var aliasOk = false, aliasList = [];
+  try { aliasList = GmailApp.getAliases(); aliasOk = aliasList.indexOf(c.mailFrom) > -1; }
+  catch (e) { out.push('  Could not read the send-as aliases: ' + e.message); }
+
+  if (aliasOk) {
+    out.push('  ok      every email will leave from ' + c.mailFrom);
+  } else {
+    missing.push('a verified send-as alias for ' + c.mailFrom);
+    out.push('  MISSING "' + c.mailFrom + '" is not a verified send-as alias on this account.');
+    out.push('          NO customer email will be sent until it is — not notifications,');
+    out.push('          not reminders, not payment reminders. Nothing is ever sent from');
+    out.push('          another address instead.');
+    out.push('          Fix: Gmail > Settings > Accounts and Import > Send mail as >');
+    out.push('          Add another email address, then verify it. Then run this again.');
+    if (aliasList.length) out.push('          Aliases this account has: ' + aliasList.join(', '));
+    else out.push('          This account has no send-as aliases at all.');
+  }
 
   out.push('');
   if (missing.length) {
@@ -2109,24 +2139,76 @@ function aiInsight_(ctx, question) {
 
 /* ---------- email -------------------------------------------------------- */
 
-function sendEmail_(to, subject, html) {
+/**
+ * Operator alerts — backup failures, billing anomalies. These go to you, not to
+ * a customer, so they must still send even when the alias is missing: an alert
+ * that cannot be delivered because of the very misconfiguration it is reporting
+ * is no alert at all. It uses the brand address when it can and says so in the
+ * subject when it cannot.
+ */
+function sendOpsMail_(to, subject, body) {
   if (!to) return false;
   var from = CFG().mailFrom;
   try {
+    if (mailAliasVerified_()) {
+      GmailApp.sendEmail(String(to).trim(), subject, body,
+        { name: MAIL_FROM_NAME, from: from, replyTo: from });
+    } else {
+      MailApp.sendEmail({ to: String(to).trim(), name: MAIL_FROM_NAME,
+        subject: '[alias not set] ' + subject,
+        body: body + '\n\n--\nSent from the script owner\'s address because "' + from +
+              '" is not a verified send-as alias. Customer mail is NOT being sent at all ' +
+              'while that is true. Gmail > Settings > Accounts > Send mail as.' });
+    }
+    return true;
+  } catch (e) { return false; }
+}
+
+/* The send-as alias, checked once per execution rather than per email.
+   GmailApp.getAliases() is a network call; a digest run sends dozens. */
+var MAIL_ALIAS_OK = null;
+
+function mailAliasVerified_() {
+  if (MAIL_ALIAS_OK !== null) return MAIL_ALIAS_OK;
+  var from = CFG().mailFrom;
+  try { MAIL_ALIAS_OK = GmailApp.getAliases().indexOf(from) > -1; }
+  catch (e) { MAIL_ALIAS_OK = false; }      // no Gmail scope, or a consumer account
+  return MAIL_ALIAS_OK;
+}
+
+/**
+ * Every customer-facing email leaves from MAIL_FROM — info@biscsindia.com — or
+ * it does not leave at all.
+ *
+ * This used to fall back to MailApp when the alias was not verified, which
+ * silently sent as whichever Google account happens to own the script. A
+ * customer receiving a password reset from someone's personal address is worse
+ * than a customer receiving nothing: it looks like a phishing attempt, it
+ * cannot be replied to, and it teaches people to distrust mail from us. So the
+ * fallback is gone. A send that cannot use the right address fails, loudly, in
+ * the error log, where setupDomeBox() will also have warned about it long
+ * before any customer was involved.
+ */
+function sendEmail_(to, subject, html) {
+  if (!to) return false;
+  var from = CFG().mailFrom;
+
+  if (!mailAliasVerified_()) {
+    logError_('sendEmail:alias',
+      'NOT SENT to ' + to + ' — "' + from + '" is not a verified send-as alias on the ' +
+      'account running this script. Gmail > Settings > Accounts > Send mail as. ' +
+      'Nothing is sent from any other address.');
+    return false;
+  }
+
+  try {
     GmailApp.sendEmail(String(to).trim(), subject,
       'This email needs an HTML-capable client.',
-      { htmlBody: html, name: 'Dome Box', from: from });
+      { htmlBody: html, name: MAIL_FROM_NAME, from: from, replyTo: from });
     return true;
   } catch (e) {
-    /* GmailApp throws if `from` is not a verified alias on the sending account.
-       MailApp ignores `from` and sends as the script owner, which is worse than
-       nothing silently — so this is logged. */
-    logError_('sendEmail:gmail', e.message + ' (is ' + from + ' a verified alias?)');
-    try {
-      MailApp.sendEmail({ to: String(to).trim(), subject: subject,
-        body: 'This email needs an HTML-capable client.', htmlBody: html, name: 'Dome Box' });
-      return true;
-    } catch (e2) { logError_('sendEmail:mailapp', e2.message); return false; }
+    logError_('sendEmail', e.message + ' (to ' + to + ')');
+    return false;
   }
 }
 

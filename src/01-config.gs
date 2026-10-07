@@ -39,6 +39,11 @@ function CFG() {
   };
 }
 
+/* The only address customer mail ever leaves from, and the name beside it.
+   MAIL_FROM itself is a Script Property so it can be pointed somewhere else in
+   a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
+var MAIL_FROM_NAME = 'Dome Box';
+
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
             GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points' };
@@ -108,6 +113,31 @@ function setupDomeBox() {
     out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
     if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
   });
+
+  /* The one check that cannot be done from a config value: whether this Google
+     account is actually allowed to send as the brand address. Nothing
+     customer-facing leaves without it, so finding out here is the difference
+     between a five-minute Gmail setting and a week of silently undelivered
+     password resets. */
+  out.push('');
+  out.push('--- SENDING ADDRESS ---');
+  var aliasOk = false, aliasList = [];
+  try { aliasList = GmailApp.getAliases(); aliasOk = aliasList.indexOf(c.mailFrom) > -1; }
+  catch (e) { out.push('  Could not read the send-as aliases: ' + e.message); }
+
+  if (aliasOk) {
+    out.push('  ok      every email will leave from ' + c.mailFrom);
+  } else {
+    missing.push('a verified send-as alias for ' + c.mailFrom);
+    out.push('  MISSING "' + c.mailFrom + '" is not a verified send-as alias on this account.');
+    out.push('          NO customer email will be sent until it is — not notifications,');
+    out.push('          not reminders, not payment reminders. Nothing is ever sent from');
+    out.push('          another address instead.');
+    out.push('          Fix: Gmail > Settings > Accounts and Import > Send mail as >');
+    out.push('          Add another email address, then verify it. Then run this again.');
+    if (aliasList.length) out.push('          Aliases this account has: ' + aliasList.join(', '));
+    else out.push('          This account has no send-as aliases at all.');
+  }
 
   out.push('');
   if (missing.length) {

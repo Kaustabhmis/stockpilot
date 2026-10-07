@@ -313,6 +313,6 @@ function backupLog_(started, copied, total, failed, mins) {
 
 function backupAlert_(subject, body) {
   try {
-    MailApp.sendEmail({ to: BACKUP.ALERT_TO, subject: subject, body: body, name: 'Dome Box' });
+    sendOpsMail_(BACKUP.ALERT_TO, subject, body);
   } catch (e) { Logger.log('Could not send backup alert: ' + e.message); }
 }

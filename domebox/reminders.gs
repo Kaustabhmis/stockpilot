@@ -56,8 +56,19 @@ var SCHED = {
   RECURRING_CATCHUP_LIMIT: 12,  // matches domain.gs
 };
 
-var MAIL_FROM = 'info@biscsindia.com';
-var MAIL_FROM_NAME = 'Dome Box';
+/* Prefixed, like every other name in this file: Apps Script shares one global
+   scope across .gs files and the last definition wins. code.gs owns MAIL_FROM
+   through Script Properties; this is the fallback for a project where that is
+   not reachable, and rmMailFrom_() prefers the configured one. */
+var RM_MAIL_FROM = 'info@biscsindia.com';
+var RM_MAIL_NAME = 'Dome Box';
+
+/** The configured address if code.gs is in this project, else the constant. */
+function rmMailFrom_() {
+  try { if (typeof CFG === 'function' && CFG().mailFrom) return CFG().mailFrom; }
+  catch (e) {}
+  return RM_MAIL_FROM;
+}
 var SITE_URL = 'https://www.domebox.in';
 
 // ============================================================
@@ -69,30 +80,36 @@ function installDomeBoxSchedules() {
   ScriptApp.newTrigger('sendDailyReminders').timeBased().atHour(SCHED.SEND_HOUR).everyDays(1).create();
   // Runs earlier so today's generated work appears in today's digest.
   ScriptApp.newTrigger('generateRecurringJobs').timeBased().atHour(Math.max(0, SCHED.SEND_HOUR - 2)).everyDays(1).create();
-  Logger.log('Installed:\n  generateRecurringJobs ~' + (SCHED.SEND_HOUR - 2) + ':00\n  sendDailyReminders  ~' + SCHED.SEND_HOUR + ':00');
+  /* An hour after the digest, so the two never compete for the mail quota and a
+     renewal notice is never the thing that gets cut off by MAX_EMAILS_PER_RUN. */
+  ScriptApp.newTrigger('sendRenewalReminders').timeBased().atHour(SCHED.SEND_HOUR + 1).everyDays(1).create();
+  Logger.log('Installed:\n  generateRecurringJobs ~' + (SCHED.SEND_HOUR - 2) + ':00' +
+             '\n  sendDailyReminders    ~' + SCHED.SEND_HOUR + ':00' +
+             '\n  sendRenewalReminders  ~' + (SCHED.SEND_HOUR + 1) + ':00');
 }
 
 function removeDomeBoxSchedules() {
+  var known = ['sendDailyReminders', 'generateRecurringJobs', 'sendRenewalReminders'];
   var removed = 0;
   ScriptApp.getProjectTriggers().forEach(function (t) {
     var fn = t.getHandlerFunction();
-    if (fn === 'sendDailyReminders' || fn === 'generateRecurringJobs') {
-      ScriptApp.deleteTrigger(t); removed++;
-    }
+    if (known.indexOf(fn) > -1) { ScriptApp.deleteTrigger(t); removed++; }
   });
   Logger.log('Removed ' + removed + ' existing Dome Box trigger(s).');
 }
 
 function domeBoxScheduleStatus() {
   var lines = ['', '=== Dome Box schedules ==='];
-  var found = 0;
+  var want = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders'];
+  var have = {};
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (['sendDailyReminders', 'generateRecurringJobs'].indexOf(t.getHandlerFunction()) > -1) {
-      found++;
-      lines.push('  ' + t.getHandlerFunction() + '  (' + t.getEventType() + ')');
-    }
+    var fn = t.getHandlerFunction();
+    if (want.indexOf(fn) > -1) { have[fn] = true; lines.push('  ok      ' + fn + '  (' + t.getEventType() + ')'); }
   });
-  if (!found) lines.push('  none installed — run installDomeBoxSchedules()');
+  /* Naming what is missing, not just counting what is there: a half-installed
+     schedule is the state that looks fine and quietly does half the job. */
+  want.forEach(function (fn) { if (!have[fn]) lines.push('  MISSING ' + fn); });
+  if (!Object.keys(have).length) lines.push('  none installed — run installDomeBoxSchedules()');
   lines.push('  DRY_RUN is currently ' + SCHED.DRY_RUN);
   Logger.log(lines.join('\n'));
 }
@@ -177,6 +194,89 @@ function sendDailyReminders() {
   log.push('Sent: ' + sent + '   Already-sent today: ' + skipped + '   Nothing to say: ' + quietDays);
   log.push('A quiet day sends nothing on purpose — a digest that always arrives gets filtered.');
   Logger.log(log.join('\n'));
+}
+
+/* ---------------------------------------------------------------------------
+   RENEWAL REMINDERS
+
+   A plan used to lapse with nothing but a banner inside the app — which the
+   person who pays the bill may never see, because they are usually not the
+   person using it every day. By the time anybody notices, the workspace is
+   read-only and the customer's first thought is that the product broke.
+
+   One mail per milestone per company, deduped through the same log the daily
+   digest uses, so a re-run or a second trigger cannot send it twice.
+   ------------------------------------------------------------------------- */
+var RENEWAL_MILESTONES = [14, 7, 3, 1, 0, -3];
+
+function previewRenewalReminders() {
+  var keep = SCHED.DRY_RUN; SCHED.DRY_RUN = true;
+  try { sendRenewalReminders(); } finally { SCHED.DRY_RUN = keep; }
+}
+
+function sendRenewalReminders() {
+  var log = ['', '=== Renewal reminders ' + (SCHED.DRY_RUN ? '(DRY RUN)' : '') + ' ==='];
+  var tenants = rmLoadTenants_(log);
+  if (!tenants) { Logger.log(log.join('\n')); return; }
+
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var sent = 0;
+
+  tenants.forEach(function (t) {
+    if (!t.ownerEmail || !t.validUntil) return;
+    /* Free never expires in a way worth chasing, and chasing it would be
+       selling to somebody who has not agreed to be sold to. */
+    var plan = String(t.plan || '').toLowerCase();
+    if (!plan || plan === 'free' || plan === 'free tier') return;
+
+    var until = new Date(t.validUntil);
+    if (isNaN(until)) return;
+    until.setHours(0, 0, 0, 0);
+    var days = Math.round((until - today) / 86400000);
+    if (RENEWAL_MILESTONES.indexOf(days) < 0) return;
+
+    var key = 'renew-' + days;
+    if (rmAlreadySent_(t.sheetId, t.ownerEmail, key)) return;
+
+    var subject = days > 0
+        ? (t.company || 'Your Dome Box plan') + ' renews in ' + days + ' day' + (days === 1 ? '' : 's')
+      : days === 0
+        ? (t.company || 'Your Dome Box plan') + ' expires today'
+        : (t.company || 'Your Dome Box plan') + ' has expired';
+
+    if (SCHED.DRY_RUN) { log.push('  would send: ' + subject + ' -> ' + t.ownerEmail); sent++; return; }
+    if (rmSendMail_(t.ownerEmail, subject, rmRenewalHtml_(t, days, until))) {
+      rmMarkSent_(t.sheetId, t.ownerEmail, key);
+      sent++;
+    }
+  });
+
+  log.push((SCHED.DRY_RUN ? 'Would send ' : 'Sent ') + sent + ' renewal reminder(s).');
+  Logger.log(log.join('\n'));
+}
+
+function rmRenewalHtml_(t, days, until) {
+  var when = Utilities.formatDate(until, Session.getScriptTimeZone(), 'd MMMM yyyy');
+  var head = days > 0
+      ? 'Your ' + rmEsc_(t.plan) + ' plan renews on ' + when + '.'
+    : days === 0
+      ? 'Your ' + rmEsc_(t.plan) + ' plan expires today.'
+      : 'Your ' + rmEsc_(t.plan) + ' plan expired on ' + when + '.';
+
+  /* The grace period is stated plainly rather than left as a surprise: nobody
+     loses their history, and saying so is the difference between a renewal and
+     a panicked support email. */
+  var body = days >= 0
+    ? '<p>Nothing changes before then. You can renew from <strong>Plans</strong> inside Dome Box ' +
+      'at any time, and renewing early adds to the date you already have rather than replacing it.</p>'
+    : '<p>Your workspace is still fully usable for a week after expiry. After that it becomes ' +
+      'read-only — <strong>nothing is deleted</strong>, and everything comes straight back when ' +
+      'you renew.</p>';
+
+  return '<p>Hello' + (t.company ? ' ' + rmEsc_(t.company) : '') + ',</p>' +
+    '<p>' + head + '</p>' + body +
+    '<p style="margin-top:22px">If the invoice should go to somebody else, or you need a GST ' +
+    'invoice, reply to this email and we will sort it out.</p>';
 }
 
 function rmDigestSubject_(d) {
@@ -392,6 +492,10 @@ function rmLoadTenants_(log) {
   var emailIdx = rmFirstDefined_(col, ['email', 'emailid', 'username', 'loginid']);
   var sheetIdx = rmFirstDefined_(col, ['sheetid', 'spreadsheetid', 'sheet', 'spreadsheet']);
   var compIdx = rmFirstDefined_(col, ['companyname', 'company', 'organisation', 'organization']);
+  /* Needed for the renewal reminders. Optional: a registry without them still
+     produces digests, it just cannot warn anybody their plan is running out. */
+  var planIdx = rmFirstDefined_(col, ['plan', 'plantype', 'subscription']);
+  var tillIdx = rmFirstDefined_(col, ['validuntil', 'validtill', 'expiry', 'expireson', 'renewson']);
   if (emailIdx === undefined || sheetIdx === undefined) {
     log.push('Registry is missing an email or sheetId column.'); return null;
   }
@@ -403,7 +507,13 @@ function rmLoadTenants_(log) {
     if (m) sid = m[1];
     if (!sid || seen[sid]) continue;   // one entry per company, not per login
     seen[sid] = true;
-    out.push({ sheetId: sid, company: compIdx !== undefined ? String(rows[r][compIdx] || '') : '' });
+    out.push({
+      sheetId: sid,
+      company: compIdx !== undefined ? String(rows[r][compIdx] || '') : '',
+      ownerEmail: emailIdx !== undefined ? String(rows[r][emailIdx] || '').trim() : '',
+      plan: planIdx !== undefined ? String(rows[r][planIdx] || '').trim() : '',
+      validUntil: tillIdx !== undefined ? rows[r][tillIdx] : null,
+    });
   }
   log.push('Companies: ' + out.length);
   return out;
@@ -517,16 +627,38 @@ function rmMarkSent_(sheetId, username, key) {
 // HELPERS
 // ============================================================
 
+/* Checked once per run, not per email: a digest run sends dozens and
+   getAliases() is a network call. */
+var RM_ALIAS_OK = null;
+
+function rmAliasVerified_() {
+  if (RM_ALIAS_OK !== null) return RM_ALIAS_OK;
+  try { RM_ALIAS_OK = GmailApp.getAliases().indexOf(rmMailFrom_()) > -1; }
+  catch (e) { RM_ALIAS_OK = false; }
+  if (!RM_ALIAS_OK) {
+    Logger.log('STOPPED: "' + rmMailFrom_() + '" is not a verified send-as alias on this ' +
+      'account, so nothing has been sent. Gmail > Settings > Accounts > Send mail as. ' +
+      'Reminders are never sent from any other address.');
+  }
+  return RM_ALIAS_OK;
+}
+
+/**
+ * Every reminder leaves from RM_MAIL_FROM or it does not leave.
+ *
+ * This used to log a warning and send anyway, as whichever Google account owns
+ * the script. A digest arriving from someone's personal address looks like
+ * phishing, cannot be replied to, and teaches a customer's whole team to
+ * distrust mail from us — worse than the reminder not arriving.
+ */
 function rmSendMail_(to, subject, bodyHtml) {
   if (!to) return false;
+  if (!rmAliasVerified_()) return false;
   try {
-    var options = { htmlBody: rmShell_(subject, bodyHtml), name: MAIL_FROM_NAME, replyTo: MAIL_FROM };
-    try {
-      var aliases = GmailApp.getAliases();
-      if (aliases.indexOf(MAIL_FROM) > -1) options.from = MAIL_FROM;
-      else Logger.log('WARNING: ' + MAIL_FROM + ' is not a verified send-as alias; sending as the script owner.');
-    } catch (e) { /* alias lookup unavailable — still send */ }
-    GmailApp.sendEmail(to, subject, rmPlain_(bodyHtml), options);
+    GmailApp.sendEmail(to, subject, rmPlain_(bodyHtml), {
+      htmlBody: rmShell_(subject, bodyHtml),
+      name: RM_MAIL_NAME, from: rmMailFrom_(), replyTo: rmMailFrom_(),
+    });
     return true;
   } catch (e) {
     Logger.log('Mail failed to ' + to + ': ' + e.message);
@@ -543,7 +675,7 @@ function rmShell_(title, inner) {
       '</div>' +
       '<div style="padding:26px;color:#1f2937;font-size:14px;line-height:1.6">' + inner + '</div>' +
       '<div style="padding:16px 26px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:11px">' +
-        'Dome Box · <a href="mailto:' + MAIL_FROM + '" style="color:#2563eb">' + MAIL_FROM + '</a>' +
+        'Dome Box · <a href="mailto:' + RM_MAIL_FROM + '" style="color:#2563eb">' + RM_MAIL_FROM + '</a>' +
       '</div>' +
     '</div></div>';
 }
