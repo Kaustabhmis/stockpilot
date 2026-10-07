@@ -42,9 +42,13 @@ const server = http.createServer((req, res) => {
     let html = fs.readFileSync('/home/user/stockpilot/dist/index.html', 'utf8');
     html = html.replace("var API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';",
                         "var API_URL = '/exec';");
-    // this sandbox blocks the Tailwind CDN, so serve a compiled build instead
-    html = html.replace('<script src="https://cdn.tailwindcss.com"></script>',
-                        '<link rel="stylesheet" href="/tw.app.css">');
+    /* The stylesheet is compiled into dist/index.html by the build, so there is
+       nothing to substitute any more. Fail loudly if a CDN tag ever comes back:
+       this sandbox blocks it, and a silently unstyled page would be mistaken
+       for a layout bug in every screenshot taken afterwards. */
+    if (html.indexOf('cdn.tailwindcss.com') > -1) {
+      throw new Error('dist/index.html still loads Tailwind from the CDN — run build-index.js');
+    }
     // vendor the fonts so the harness renders what production renders
     html = html.replace(/<link href="https:\/\/fonts\.googleapis\.com[^>]*>/g, '');
     html = html.replace('</style>', '</style><link rel="stylesheet" href="/fonts.css">');
@@ -60,10 +64,6 @@ const server = http.createServer((req, res) => {
     if (!fs.existsSync(f)) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, {'Content-Type': req.url.endsWith('.ttf') ? 'font/ttf' : 'font/woff2'});
     res.end(fs.readFileSync(f)); return;
-  }
-  if (req.url === '/tw.app.css') {
-    res.writeHead(200, {'Content-Type':'text/css'});
-    res.end(fs.readFileSync(__dirname + '/tw.app.css')); return;
   }
   /* HARNESS ONLY — not part of code.gs. Lets the screenshot seed put a tenant
      on a paid plan without going through Razorpay. */

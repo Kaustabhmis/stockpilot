@@ -39,7 +39,7 @@ function openCookie(preset) {
       'writes their appraisal. An award with no stated reason reads as favouritism.</p>' +
     '<div class="flex gap-3 mt-6">' +
       '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
-      '<button type="submit" class="btn btn-p flex-1">Award</button></div></form>', 'max-w-lg');
+      '<button type="submit" class="btn btn-a flex-1">Send it</button></div></form>', 'max-w-lg');
 
   var points = 2;
   $('ckPts').querySelectorAll('button').forEach(function (b) {
@@ -59,7 +59,7 @@ function openCookie(preset) {
     busy(btn, true, 'Awarding…');
     api('awardCookie', { data: { employee: $('ckWho').value, points: points,
       reason: $('ckWhy').value } })
-      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
+      .then(function (r) { toast('\uD83C\uDF6A ' + r.message, 'win'); closeModal(); return refresh(); })
       .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
   });
 }
@@ -180,8 +180,11 @@ function goAuth(which) {
 function renderHomePlans() {
   var el = $('homePlans');
   if (!el) return;
+  var cyc = $('homeCycle');
+  if (cyc) cyc.innerHTML = cycleToggle('homeCycleSeg');
   el.innerHTML = PLAN_CARDS.map(function (p) {
     var lead = p.tag === 'Most popular';
+    var L = planPriceLabel(p);
     return '<div class="rounded-3xl border-2 p-5 flex flex-col ' +
       (lead ? 'border-blue-600 shadow-lg' : 'border-gray-100') + '">' +
       (p.tag ? '<div class="text-[10px] font-black uppercase tracking-widest mb-2 ' +
@@ -189,16 +192,16 @@ function renderHomePlans() {
        : '<div class="h-[18px] mb-2"></div>') +
       '<div class="font-black text-lg">' + esc(p.name) + '</div>' +
       '<div class="text-[13px] font-semibold text-gray-500 mt-0.5 min-h-[36px]">' + esc(p.blurb) + '</div>' +
-      '<div class="text-3xl font-black mt-3">' + esc(p.price) +
-        '<span class="text-sm font-bold text-gray-400">' + esc(p.per) + '</span></div>' +
+      '<div class="text-3xl font-black mt-3">' + esc(L.price) +
+        '<span class="text-sm font-bold text-gray-400">' + esc(L.per) + '</span></div>' +
+      '<div class="text-[12px] font-semibold text-gray-400 min-h-[18px]">' + esc(L.note) + '</div>' +
       '<ul class="text-[13px] font-semibold text-gray-600 mt-4 space-y-1.5 flex-1">' +
         p.bullets.map(function (b) {
           return '<li class="flex gap-2"><span class="material-icons text-[16px] text-emerald-600">check</span>' +
             '<span>' + esc(b) + '</span></li>'; }).join('') + '</ul>' +
       '<button class="btn ' + (lead ? 'btn-p' : 'btn-g') + ' w-full mt-5" ' +
-        (p.key === 'Enterprise'
-          ? 'onclick="goAuth(\'signup\')">Talk to us'
-          : 'onclick="goAuth(\'signup\')">' + (p.key === 'Free' ? 'Start free' : 'Get ' + esc(p.name))) +
+        'onclick="goAuth(\'signup\')">' +
+        (p.key === 'Enterprise' ? 'Talk to us' : p.key === 'Free' ? 'Start free' : 'Get ' + esc(p.name)) +
       '</button></div>';
   }).join('');
 }

@@ -89,8 +89,14 @@ function handleVerifiedPayment_(ctx, p) {
     message: 'Upgraded to ' + (PLANS[planName] ? PLANS[planName].name : planName) + '.' };
 }
 
+/* Only ever a fallback — notes.plan is what the order was placed with. Legacy
+   plans are skipped: Starter and the old Standard are both 2,499, and a new
+   payment must never land on a plan that is no longer sold. */
 function planForPaise_(paise) {
-  for (var k in PLANS) if (PLANS[k].price && PLANS[k].price * 100 === Number(paise)) return k;
+  for (var k in PLANS) {
+    if (PLANS[k].legacy || !PLANS[k].offered) continue;
+    if (PLANS[k].price && PLANS[k].price * 100 === Number(paise)) return k;
+  }
   return null;
 }
 
@@ -103,7 +109,9 @@ function grantPlan_(sheetId, planName, paid, company) {
     if (String(d[i][5]).trim() !== String(sheetId).trim()) continue;
     var cur = new Date(d[i][4]);
     var base = (!isNaN(cur) && cur > new Date()) ? cur : new Date();
-    base.setDate(base.getDate() + (planName === 'Yearly' ? 365 : 30));
+    /* The term comes from the plan, not from its name. Keying it off the word
+       "Yearly" worked only while there was exactly one annual plan. */
+    base.setDate(base.getDate() + planTermDays(planName));
     var until = ymd(base);
     dir.getRange(i + 1, 4).setValue(planName);
     dir.getRange(i + 1, 5).setValue(until);
@@ -355,7 +363,7 @@ function sendWelcome_(email, name, company) {
   sendEmail_(email, 'Welcome to Dome Box', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
     '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box. You are on the Free plan ' +
-    '— up to 5 people and 50 tasks a month, with 30 days to try everything.</p>' +
+    '— up to 5 people and 100 tasks a month, with 30 days to try everything.</p>' +
     '<p>Add your team first, then assign the first task.</p>' + btn_('Open Dome Box', CFG().siteUrl)));
 }
 

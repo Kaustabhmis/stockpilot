@@ -1817,8 +1817,14 @@ function handleVerifiedPayment_(ctx, p) {
     message: 'Upgraded to ' + (PLANS[planName] ? PLANS[planName].name : planName) + '.' };
 }
 
+/* Only ever a fallback — notes.plan is what the order was placed with. Legacy
+   plans are skipped: Starter and the old Standard are both 2,499, and a new
+   payment must never land on a plan that is no longer sold. */
 function planForPaise_(paise) {
-  for (var k in PLANS) if (PLANS[k].price && PLANS[k].price * 100 === Number(paise)) return k;
+  for (var k in PLANS) {
+    if (PLANS[k].legacy || !PLANS[k].offered) continue;
+    if (PLANS[k].price && PLANS[k].price * 100 === Number(paise)) return k;
+  }
   return null;
 }
 
@@ -1831,7 +1837,9 @@ function grantPlan_(sheetId, planName, paid, company) {
     if (String(d[i][5]).trim() !== String(sheetId).trim()) continue;
     var cur = new Date(d[i][4]);
     var base = (!isNaN(cur) && cur > new Date()) ? cur : new Date();
-    base.setDate(base.getDate() + (planName === 'Yearly' ? 365 : 30));
+    /* The term comes from the plan, not from its name. Keying it off the word
+       "Yearly" worked only while there was exactly one annual plan. */
+    base.setDate(base.getDate() + planTermDays(planName));
     var until = ymd(base);
     dir.getRange(i + 1, 4).setValue(planName);
     dir.getRange(i + 1, 5).setValue(until);
@@ -2083,7 +2091,7 @@ function sendWelcome_(email, name, company) {
   sendEmail_(email, 'Welcome to Dome Box', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
     '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box. You are on the Free plan ' +
-    '— up to 5 people and 50 tasks a month, with 30 days to try everything.</p>' +
+    '— up to 5 people and 100 tasks a month, with 30 days to try everything.</p>' +
     '<p>Add your team first, then assign the first task.</p>' + btn_('Open Dome Box', CFG().siteUrl)));
 }
 
@@ -3014,19 +3022,62 @@ function countUnmigratedPasswords() {
  * =============================================================================
  */
 
-/* Keyed by the values your Directory sheet already stores — Free, Monthly,
-   Yearly, Enterprise. The display name is separate, so the sheet keeps its
-   existing vocabulary while the UI shows "Standard" and "Pro".
+/* Keyed by the values the Directory sheet stores. The display name is separate,
+   so the sheet keeps its vocabulary while the UI shows a sellable name.
 
    This matters more than it looks: normalizePlan falls back to the LEAST
    generous tier on an unknown name, so keying these by anything else would
-   silently downgrade every paying customer the moment they were read back. */
+   silently downgrade every paying customer the moment they were read back.
+
+   PRICING SHAPE — charge for team size, not for features.
+   Every paid plan carries the whole product. A plan that withholds the scoring
+   and the appraisals is selling a worse board, and it gives a buyer a reason to
+   stay small rather than a reason to grow. The price per user falls as a
+   company grows, so growing with us is rewarded and the bill still rises.
+
+   Yearly is ten times monthly — two months free — which also keeps the ladder
+   honest: the old Standard at 2,499/mo was 29,988 a year against a Pro at
+   19,999 a year with fifteen times the users, so no informed buyer ever had a
+   reason to pick it.
+
+   LEGACY KEYS stay exactly as they were sold. Monthly and Yearly are what
+   existing paying customers have in the Directory, and their caps and prices
+   are untouched — but they are given the full feature set, because nobody
+   should lose capability for having bought early. They are not offered to new
+   buyers (offered:false). */
 var PLANS = {
-  'Free':       { name:'Free Tier',  price:0,     users:5,    tasksPerMonth:50,   analytics:false, whatsapp:false, email:false, kraForms:false },
-  'Monthly':    { name:'Standard',   price:2499,  users:20,   tasksPerMonth:500,  analytics:false, whatsapp:false, email:true,  kraForms:false },
-  'Yearly':     { name:'Pro',        price:19999, users:300,  tasksPerMonth:null, analytics:true,  whatsapp:true,  email:true,  kraForms:true },
-  'Enterprise': { name:'Enterprise', price:0,     users:null, tasksPerMonth:null, analytics:true,  whatsapp:true,  email:true,  kraForms:true },
+  'Free':       { name:'Free Tier',  price:0,      termDays:365, users:5,    tasksPerMonth:100,
+                  analytics:false, whatsapp:false, email:false, kraForms:false, offered:true },
+
+  'Starter':        { name:'Starter', price:2499,   termDays:30,  users:15,  tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+  'Starter Yearly': { name:'Starter', price:24990,  termDays:365, users:15,  tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+
+  'Growth':         { name:'Growth',  price:5999,   termDays:30,  users:50,  tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+  'Growth Yearly':  { name:'Growth',  price:59990,  termDays:365, users:50,  tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+
+  'Scale':          { name:'Scale',   price:12999,  termDays:30,  users:150, tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+  'Scale Yearly':   { name:'Scale',   price:129990, termDays:365, users:150, tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+
+  /* --- sold before the change; honoured, not offered --- */
+  'Monthly':    { name:'Standard',   price:2499,  termDays:30,  users:20,   tasksPerMonth:500,
+                  analytics:true, whatsapp:true, email:true, kraForms:true, offered:false, legacy:true },
+  'Yearly':     { name:'Pro',        price:19999, termDays:365, users:300,  tasksPerMonth:null,
+                  analytics:true, whatsapp:true, email:true, kraForms:true, offered:false, legacy:true },
+
+  'Enterprise': { name:'Enterprise', price:0,     termDays:365, users:null, tasksPerMonth:null,
+                  analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
 };
+
+/* What a seat costs beyond a plan's band, for a company that needs a few more
+   rather than the next tier. Handled by hand on request — there is no
+   self-serve flow for it, so nothing here pretends otherwise. */
+var EXTRA_SEAT_PRICE = 149;
 
 /* Both vocabularies resolve: what the sheet stores, and what the pricing page
    calls them. An unrecognised name is treated as Free, never as the most
@@ -3036,6 +3087,12 @@ var PLAN_ALIASES = {
   'monthly': 'Monthly', 'standard': 'Monthly', 'basic': 'Monthly',
   'yearly': 'Yearly', 'pro': 'Yearly', 'pro yearly': 'Yearly', 'proyearly': 'Yearly',
   'premium': 'Yearly', 'annual': 'Yearly',
+  'starter': 'Starter', 'starter monthly': 'Starter',
+  'starter yearly': 'Starter Yearly', 'starteryearly': 'Starter Yearly',
+  'growth': 'Growth', 'growth monthly': 'Growth',
+  'growth yearly': 'Growth Yearly', 'growthyearly': 'Growth Yearly',
+  'scale': 'Scale', 'scale monthly': 'Scale',
+  'scale yearly': 'Scale Yearly', 'scaleyearly': 'Scale Yearly',
   'enterprise': 'Enterprise', 'custom': 'Enterprise',
 };
 
@@ -3106,11 +3163,30 @@ function canCreateTask(plan, tasksThisMonth) {
 
 function planAllows(plan, feature) { return !!planLimits(plan)[feature]; }
 
-var PLAN_ORDER = ['Free', 'Monthly', 'Yearly', 'Enterprise'];
+/* The ladder a customer is pushed up when they hit a cap. Legacy plans are not
+   on it — nextPlanUp maps them onto the band that actually fits. */
+var PLAN_ORDER = ['Free', 'Starter', 'Growth', 'Scale', 'Enterprise'];
+var LEGACY_NEXT = { 'Monthly': 'Growth', 'Yearly': 'Enterprise' };
 function nextPlanUp(plan) {
-  var i = PLAN_ORDER.indexOf(normalizePlan(plan));
+  var cur = normalizePlan(plan);
+  /* A legacy plan is not on the ladder, so point its holder at the band that
+     actually fits rather than at nothing. */
+  if (LEGACY_NEXT[cur]) return PLANS[LEGACY_NEXT[cur]].name;
+  var i = PLAN_ORDER.indexOf(cur);
   var next = i > -1 && i < PLAN_ORDER.length - 1 ? PLAN_ORDER[i + 1] : null;
   return next ? PLANS[next].name : null;      // the name the customer recognises
+}
+
+/** The plans a new buyer may actually purchase, cheapest first. */
+function offeredPlans() {
+  return Object.keys(PLANS).filter(function (k) {
+    return PLANS[k].offered && k !== 'Free' && k !== 'Enterprise'; });
+}
+
+/** How long a payment for this plan buys. */
+function planTermDays(plan) {
+  var lim = planLimits(plan);
+  return lim && lim.termDays ? lim.termDays : 30;
 }
 
 /**

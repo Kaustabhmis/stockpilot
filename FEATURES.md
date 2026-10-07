@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **545 checks across seventeen suites**, run against the real `code.gs` on an
+Tests: **560 checks across seventeen suites**, run against the real `code.gs` on an
 in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 `tests/README.md`.
 
@@ -176,12 +176,35 @@ will dispute, and they would be right to.
       Not wired into `code.gs` because it cannot send until that is done.
 
 ## Commercial
-- [x] Plan limits enforced server-side: users, tasks/month, reports, WhatsApp
-- [x] Usage and warnings in the UI before the wall is hit
-- [x] Razorpay checkout against a **real order**
-- [x] Promo codes (now from Script Properties, not a literal in the source)
-- [x] Contact sales / contact support
-- [x] Lapsed plan → read-only after a week, data kept
+- [x] Razorpay checkout, signature verified server-side, re-confirmed by API
+- [x] Promo codes, receipts by email from info@biscsindia.com
+- [x] Plan limits enforced on the SERVER — users, tasks, analytics, KRA, WhatsApp
+- [x] **Priced by team size, every feature in every paid plan** (new)
+
+### Pricing
+
+| Plan | Users | Monthly | Yearly (2 months free) | Per user/mo |
+|---|---|---|---|---|
+| Free | 5 | ₹0 | — | — |
+| Starter | 15 | ₹2,499 | ₹24,990 | ₹167 |
+| **Growth** | 50 | ₹5,999 | ₹59,990 | ₹120 |
+| Scale | 150 | ₹12,999 | ₹1,29,990 | ₹87 |
+| Enterprise | 150+ | Custom | Custom | — |
+
+Every paid band carries the whole product. A plan that withholds the scoring and
+the appraisals is selling a worse board, and it gives a buyer a reason to stay
+small rather than a reason to grow. Price per user falls as the band rises, so
+growing with us is rewarded and the bill still goes up. Extra seats beyond a
+band are ₹149 per user a month, arranged by hand. Prices exclude 18% GST.
+
+Yearly is exactly ten times monthly, enforced by a test. The old ladder had
+Standard at ₹2,499/mo — ₹29,988 a year — sitting next to Pro at ₹19,999 a year
+with fifteen times the users, so no informed buyer ever had a reason to pick it.
+
+**Existing customers are honoured, not migrated.** `Monthly` and `Yearly` remain
+live keys with the caps and prices they were sold at, and they gain the full
+feature set, because nobody should lose capability for having bought early. They
+are marked `offered:false` so no new buyer can land on them.
 
 ## AI
 - [x] Gemini insight, from **summary figures only** — never staff records

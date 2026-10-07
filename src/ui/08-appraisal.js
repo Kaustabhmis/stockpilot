@@ -139,52 +139,130 @@ function showDelBreakdown() {
 /* The single list of plans the front end shows. The landing page and the
    billing modal both read it, so a price cannot be right in one place and
    stale in the other. The server decides what a plan actually allows — this is
-   only how it is described. */
+   only how it is described.
+
+   Every paid band carries the whole product; what you pay for is the size of
+   your team. That removes the "which plan do I need?" conversation entirely,
+   and it stops a customer sitting on a crippled tier that makes the product
+   look weaker than it is. */
 var PLAN_CARDS = [
-  { key:'Free',    name:'Free Tier', price:'₹0',      per:'',    tag:'',
+  { key:'Free', yearKey:'Free', name:'Free Tier', price:0, yearPrice:0, users:5, tag:'',
     blurb:'For a small team testing the water.',
-    bullets:['Up to 5 users','50 tasks a month','Board, approvals and reminders'] },
-  { key:'Monthly', name:'Standard',  price:'₹2,499',  per:'/mo', tag:'Most popular',
-    blurb:'For a growing business that needs structure.',
-    bullets:['Up to 20 users','500 tasks a month','Delegation scoring','Email alerts'] },
-  { key:'Yearly',  name:'Pro',       price:'₹19,999', per:'/yr', tag:'Best value',
-    blurb:'The whole product, uncapped.',
-    bullets:['Up to 300 users','Unlimited tasks','Full reports and analytics','KRA / KPI and appraisals',
-             'Projects and milestones','WhatsApp alerts'] },
-  { key:'Enterprise', name:'Enterprise', price:'Custom', per:'', tag:'',
+    bullets:['Up to 5 users','100 tasks a month','Board, approvals and reminders'] },
+
+  { key:'Starter', yearKey:'Starter Yearly', name:'Starter', price:2499, yearPrice:24990,
+    users:15, tag:'',
+    blurb:'For a first team that needs the work written down.',
+    bullets:['Up to 15 users','Unlimited tasks','Scoring, reports and analytics',
+             'KRA / KPI and appraisals','Projects and milestones','Email and WhatsApp alerts'] },
+
+  { key:'Growth', yearKey:'Growth Yearly', name:'Growth', price:5999, yearPrice:59990,
+    users:50, tag:'Most popular',
+    blurb:'For a company running several departments.',
+    bullets:['Up to 50 users','Unlimited tasks','Everything in Starter',
+             'Multi-level approvals across departments','Org chart and cookie points'] },
+
+  { key:'Scale', yearKey:'Scale Yearly', name:'Scale', price:12999, yearPrice:129990,
+    users:150, tag:'Best value per user',
+    blurb:'For a full factory or a multi-branch business.',
+    bullets:['Up to 150 users','Unlimited tasks','Everything in Growth','Priority support'] },
+
+  { key:'Enterprise', yearKey:'Enterprise', name:'Enterprise', price:null, yearPrice:null,
+    users:null, tag:'',
     blurb:'For large or multi-site operations.',
     bullets:['Unlimited users and tasks','Custom integrations','Dedicated support'] },
 ];
 
+var EXTRA_SEAT_PRICE = 149;
+
+/** ₹1,29,990 — grouped the way an Indian reader expects, not 129,990. */
+function inr(n) {
+  var x = String(Math.round(n));
+  if (x.length <= 3) return '₹' + x;
+  var last3 = x.slice(-3), rest = x.slice(0, -3);
+  return '₹' + rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
+}
+
+/** Monthly or yearly. Yearly is shown first because it is the better deal. */
+var PLAN_CYCLE = 'yearly';
+function setPlanCycle(c) {
+  PLAN_CYCLE = c === 'monthly' ? 'monthly' : 'yearly';
+  if ($('homePlans')) renderHomePlans();
+  if ($('billingPlans')) renderBillingPlans();
+}
+
+function planPriceLabel(p) {
+  if (p.price === null) return { price: 'Custom', per: '', note: '' };
+  if (!p.price) return { price: '₹0', per: '', note: 'No card needed' };
+  return PLAN_CYCLE === 'yearly'
+    ? { price: inr(p.yearPrice), per: '/year',
+        note: inr(Math.round(p.yearPrice / 12)) + ' a month, billed yearly' }
+    : { price: inr(p.price), per: '/month', note: 'Billed monthly' };
+}
+
+/** Which PLANS key a purchase of this card actually buys. */
+function planKeyForCycle(p) { return PLAN_CYCLE === 'yearly' ? p.yearKey : p.key; }
+
+function cycleToggle(id) {
+  return '<div class="inline-flex gap-1 bg-gray-100 p-1 rounded-xl" id="' + id + '">' +
+    ['yearly', 'monthly'].map(function (c) {
+      var on = PLAN_CYCLE === c;
+      return '<button type="button" onclick="setPlanCycle(\'' + c + '\')" ' +
+        'class="px-4 py-2 rounded-lg text-xs font-black ' +
+        (on ? 'bg-white shadow text-gray-900' : 'text-gray-500') + '">' +
+        (c === 'yearly' ? 'Yearly — 2 months free' : 'Monthly') + '</button>';
+    }).join('') + '</div>';
+}
+
 function openBilling() {
   var u = STATE.usage;
-  var plans = PLAN_CARDS.filter(function (x) { return x.key !== 'Enterprise'; });
   openModal('<div class="p-6 lg:p-7">' +
     '<div class="flex justify-between items-start mb-1"><h2 class="text-2xl font-black">Plans</h2>' +
     '<button onclick="closeModal()" class="text-gray-400"><span class="material-icons">close</span></button></div>' +
-    '<p class="text-sm text-gray-400 font-semibold mb-5">You are on <strong>' + esc(u.planName) + '</strong>' +
-      (u.daysLeft !== null ? ', ' + (u.daysLeft >= 0 ? u.daysLeft + ' day(s) left' : 'expired') : '') + '.</p>' +
-    '<div class="grid md:grid-cols-3 gap-4">' + plans.map(function (p) {
-      var current = p.key === STATE.plan;
-      return '<div class="border-2 rounded-2xl p-5 flex flex-col ' +
-        (current ? 'border-blue-500 bg-blue-50' : 'border-gray-100') + '">' +
-        '<div class="font-black text-lg">' + esc(p.name) + '</div>' +
-        '<div class="text-2xl font-black mt-1">' + p.price + '<span class="text-sm font-bold text-gray-400">' + p.per + '</span></div>' +
-        '<ul class="text-xs font-semibold text-gray-600 mt-3 space-y-1.5 flex-1">' +
-          p.bullets.map(function (b) { return '<li>· ' + esc(b) + '</li>'; }).join('') + '</ul>' +
-        (current ? '<div class="text-xs font-black text-blue-700 text-center mt-4 py-2">Current plan</div>'
-          : p.key === 'Free' ? ''
-          : '<button class="btn btn-p w-full mt-4 buy" data-plan="' + p.key + '">Upgrade</button>') +
-        '</div>';
-    }).join('') + '</div>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-4">You are on <strong>' + esc(u.planName) + '</strong>' +
+      (u.daysLeft !== null ? ', ' + (u.daysLeft >= 0 ? u.daysLeft + ' day(s) left' : 'expired') : '') + '. ' +
+      'Every paid plan carries the whole product — you pay for the size of your team.</p>' +
+    '<div class="mb-5">' + cycleToggle('billingCycle') + '</div>' +
+    '<div id="billingPlans" class="grid md:grid-cols-3 gap-4"></div>' +
     '<div class="mt-5 flex gap-2 items-end">' +
-      '<div class="flex-1"><label class="lb" for="promo">Promo code</label>' +
+      '<div class="flex-1 max-w-xs"><label class="lb" for="promo">Promo code</label>' +
       '<input id="promo" class="in" placeholder="Optional"></div></div>' +
-    '<p class="text-xs text-gray-400 font-semibold mt-4">Enterprise: unlimited users and tasks, ' +
-      'custom integrations. <button class="text-blue-600 font-black" onclick="openSupport(\'Enterprise enquiry\')">Talk to us</button></p>' +
-    '</div>', 'max-w-3xl');
+    '<p class="text-xs text-gray-400 font-semibold mt-4">Prices exclude 18% GST. ' +
+      'Need a few more seats than a band allows? Extra seats are ' + inr(EXTRA_SEAT_PRICE) +
+      ' per user a month — ' +
+      '<button class="text-blue-600 font-black" onclick="openSupport(\'Extra seats\')">ask us</button>. ' +
+      'Enterprise: unlimited users, custom integrations, dedicated support — ' +
+      '<button class="text-blue-600 font-black" onclick="openSupport(\'Enterprise enquiry\')">talk to us</button>.</p>' +
+    '</div>', 'max-w-4xl');
+  renderBillingPlans();
+}
 
-  document.querySelectorAll('.buy').forEach(function (b) {
+function renderBillingPlans() {
+  var el = $('billingPlans');
+  if (!el) return;
+  /* Free is not a thing to buy, and Enterprise is a conversation. */
+  var buyable = PLAN_CARDS.filter(function (p) { return p.price; });
+  el.innerHTML = buyable.map(function (p) {
+    var key = planKeyForCycle(p);
+    var current = key === STATE.plan || p.key === STATE.plan || p.yearKey === STATE.plan;
+    var L = planPriceLabel(p);
+    var lead = p.tag === 'Most popular';
+    return '<div class="border-2 rounded-2xl p-5 flex flex-col ' +
+      (current ? 'border-blue-500 bg-blue-50' : lead ? 'border-blue-200' : 'border-gray-100') + '">' +
+      '<div class="font-black text-lg">' + esc(p.name) + '</div>' +
+      '<div class="text-[11px] font-black uppercase tracking-widest text-gray-400 mt-0.5">' +
+        'Up to ' + p.users + ' users</div>' +
+      '<div class="text-2xl font-black mt-2">' + esc(L.price) +
+        '<span class="text-sm font-bold text-gray-400">' + esc(L.per) + '</span></div>' +
+      '<div class="text-[11px] font-semibold text-gray-400">' + esc(L.note) + '</div>' +
+      '<ul class="text-xs font-semibold text-gray-600 mt-3 space-y-1.5 flex-1">' +
+        p.bullets.map(function (b) { return '<li>· ' + esc(b) + '</li>'; }).join('') + '</ul>' +
+      (current ? '<div class="text-xs font-black text-blue-700 text-center mt-4 py-2">Current plan</div>'
+        : '<button class="btn btn-p w-full mt-4 buy" data-plan="' + esc(key) + '">' +
+          'Get ' + esc(p.name) + '</button>') +
+      '</div>';
+  }).join('');
+  el.querySelectorAll('.buy').forEach(function (b) {
     b.addEventListener('click', function () { startCheckout(b.dataset.plan, $('promo').value); });
   });
 }

@@ -28,7 +28,9 @@
   </header>
 
   <!-- hero -->
-  <section class="bg-white">
+  <section class="bg-white" style="background:
+      radial-gradient(900px 420px at 88% -8%, #f1eefe 0%, rgba(241,238,254,0) 62%),
+      radial-gradient(640px 360px at 4% 8%, #fdf1ec 0%, rgba(253,241,236,0) 60%), #fff">
     <div class="max-w-[1150px] mx-auto px-5 pt-14 pb-12 lg:pt-20 lg:pb-16">
       <p class="text-xs font-black uppercase tracking-[0.2em] text-blue-600 mb-4">
         Task &amp; team management for Indian MSMEs</p>
@@ -46,23 +48,27 @@
           Sign in to your workspace</button>
       </div>
       <p class="text-[13px] font-semibold text-gray-400 mt-4">
-        Free for 5 people and 50 tasks a month. Set up in an afternoon.</p>
+        Free for 5 people and 100 tasks a month. Set up in an afternoon.</p>
 
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-12">
-        <div class="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <div class="text-2xl font-black">Assign</div>
+        <div class="rounded-2xl border-2 border-gray-200 bg-white p-4" style="border-bottom:5px solid var(--s1)">
+          <span class="material-icons text-[20px]" style="color:var(--s1)">assignment_turned_in</span>
+          <div class="text-2xl font-black mt-1">Assign</div>
           <div class="text-[13px] font-semibold text-gray-500 mt-1">
             One-off, recurring, or a project that runs in stages</div></div>
-        <div class="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <div class="text-2xl font-black">Approve</div>
+        <div class="rounded-2xl border-2 border-gray-200 bg-white p-4" style="border-bottom:5px solid var(--s2)">
+          <span class="material-icons text-[20px]" style="color:var(--s2)">how_to_reg</span>
+          <div class="text-2xl font-black mt-1">Approve</div>
           <div class="text-[13px] font-semibold text-gray-500 mt-1">
             Nothing is "done" until the person who asked for it says so</div></div>
-        <div class="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <div class="text-2xl font-black">Measure</div>
+        <div class="rounded-2xl border-2 border-gray-200 bg-white p-4" style="border-bottom:5px solid var(--s3)">
+          <span class="material-icons text-[20px]" style="color:var(--s3)">speed</span>
+          <div class="text-2xl font-black mt-1">Measure</div>
           <div class="text-[13px] font-semibold text-gray-500 mt-1">
             A score built from the task record, not from memory</div></div>
-        <div class="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <div class="text-2xl font-black">Appraise</div>
+        <div class="rounded-2xl border-2 border-gray-200 bg-white p-4" style="border-bottom:5px solid var(--s4)">
+          <span class="material-icons text-[20px]" style="color:var(--s4)">workspace_premium</span>
+          <div class="text-2xl font-black mt-1">Appraise</div>
           <div class="text-[13px] font-semibold text-gray-500 mt-1">
             KRA, KPI and behaviour in one review you can defend</div></div>
       </div>
@@ -70,7 +76,7 @@
   </section>
 
   <!-- the problem, in their words -->
-  <section class="bg-slate-900 text-white">
+  <section class="bg-slate-900 text-white dotted">
     <div class="max-w-[1150px] mx-auto px-5 py-14">
       <h2 class="text-2xl lg:text-3xl font-black tracking-tight max-w-2xl">
         You already know who is busy. You do not know who is delivering.</h2>
@@ -99,46 +105,46 @@
         today — not a roadmap.</p>
 
       <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
-        <div class="rounded-3xl border border-gray-100 p-5">
-          <span class="material-icons text-blue-600">view_kanban</span>
+        <div class="rounded-3xl border-2 border-gray-200 p-5 bg-white hover:shadow-lift transition">
+          <span class="material-icons text-blue-600 bg-blue-50 rounded-xl p-2">view_kanban</span>
           <h3 class="font-black mt-2">A board the whole company shares</h3>
           <p class="text-[14px] text-gray-600 font-semibold mt-1 leading-relaxed">
             Drag work across To Do, In Progress, For Review and Verified. Priority, category,
             checklist, blockers, WIP limits. Recurring jobs spawn themselves and can be stopped
             with one button.</p></div>
 
-        <div class="rounded-3xl border border-gray-100 p-5">
-          <span class="material-icons text-blue-600">account_tree</span>
+        <div class="rounded-3xl border-2 border-gray-200 p-5 bg-white hover:shadow-lift transition">
+          <span class="material-icons text-blue-600 bg-blue-50 rounded-xl p-2">account_tree</span>
           <h3 class="font-black mt-2">Projects that run in stages</h3>
           <p class="text-[14px] text-gray-600 font-semibold mt-1 leading-relaxed">
             Design, then fabricate, then train — each stage with its own owner and its own
             deadline. A stage opens only when the one before it is signed off, and its owner is
             told the moment it lands.</p></div>
 
-        <div class="rounded-3xl border border-gray-100 p-5">
-          <span class="material-icons text-blue-600">how_to_reg</span>
+        <div class="rounded-3xl border-2 border-gray-200 p-5 bg-white hover:shadow-lift transition">
+          <span class="material-icons text-blue-600 bg-blue-50 rounded-xl p-2">how_to_reg</span>
           <h3 class="font-black mt-2">Approvals that follow your hierarchy</h3>
           <p class="text-[14px] text-gray-600 font-semibold mt-1 leading-relaxed">
             Any head of department can raise work for anyone — it goes to that person's own
             manager first. Rejection needs a reason, and the person who raised it sees it.</p></div>
 
-        <div class="rounded-3xl border border-gray-100 p-5">
-          <span class="material-icons text-blue-600">insights</span>
+        <div class="rounded-3xl border-2 border-gray-200 p-5 bg-white hover:shadow-lift transition">
+          <span class="material-icons text-blue-600 bg-blue-50 rounded-xl p-2">insights</span>
           <h3 class="font-black mt-2">Reports that answer the real questions</h3>
           <p class="text-[14px] text-gray-600 font-semibold mt-1 leading-relaxed">
             Weekly, monthly, quarterly and full-year scoring. Who is handing work back in, who is
             holding it up, where rework is coming from, and a delivery heatmap per person.</p></div>
 
-        <div class="rounded-3xl border border-gray-100 p-5">
-          <span class="material-icons text-blue-600">fact_check</span>
+        <div class="rounded-3xl border-2 border-gray-200 p-5 bg-white hover:shadow-lift transition">
+          <span class="material-icons text-blue-600 bg-blue-50 rounded-xl p-2">fact_check</span>
           <h3 class="font-black mt-2">KRA and KPI per person</h3>
           <p class="text-[14px] text-gray-600 font-semibold mt-1 leading-relaxed">
             A target, its unit, which direction is good and how it is measured — so two managers
             rating the same person reach the same conclusion. A job profile holds the standard for
             the next hire.</p></div>
 
-        <div class="rounded-3xl border border-gray-100 p-5">
-          <span class="material-icons text-blue-600">emoji_events</span>
+        <div class="rounded-3xl border-2 border-gray-200 p-5 bg-white hover:shadow-lift transition">
+          <span class="material-icons text-blue-600 bg-blue-50 rounded-xl p-2">emoji_events</span>
           <h3 class="font-black mt-2">Recognition on the day</h3>
           <p class="text-[14px] text-gray-600 font-semibold mt-1 leading-relaxed">
             Cookie points a manager awards on a Tuesday, with a reason attached, that count towards
@@ -157,7 +163,7 @@
         where it came from. Every figure here traces back to a named task, a date and a person.</p>
 
       <div class="grid lg:grid-cols-2 gap-5 mt-8">
-        <div class="bg-white rounded-3xl border border-gray-100 p-6">
+        <div class="bg-white rounded-3xl border-2 border-gray-200 p-6">
           <div class="text-[11px] font-black uppercase tracking-widest text-gray-400">The formula</div>
           <p class="text-xl font-black mt-2 leading-snug">
             Score = how well you delivered × how much you delivered</p>
@@ -167,7 +173,7 @@
             weighted by priority. Work in hand counts, and so do the approvals you clear for other
             people.</p>
         </div>
-        <div class="bg-white rounded-3xl border border-gray-100 p-6 space-y-4">
+        <div class="bg-white rounded-3xl border-2 border-gray-200 p-6 space-y-4">
           <div><div class="font-black text-sm">Managers are measured too</div>
             <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
               Sit on an approval and you lose score for it, counted in working days from the moment
@@ -193,17 +199,21 @@
   <section id="pricing" class="bg-white">
     <div class="max-w-[1150px] mx-auto px-5 py-14">
       <h2 class="text-2xl lg:text-3xl font-black tracking-tight">Pricing</h2>
-      <p class="text-gray-500 font-semibold mt-2">One workspace per company. Prices in INR,
-        exclusive of GST.</p>
-      <div id="homePlans" class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mt-8"></div>
-      <p class="text-[13px] font-semibold text-gray-400 mt-5">
-        Your plan is enforced on the server, so what you see is what you have. Upgrade or downgrade
-        from inside the app at any time.</p>
+      <p class="text-gray-500 font-semibold mt-2 max-w-2xl">Every paid plan carries the whole
+        product — the scoring, the reports, the appraisals, all of it. What you pay for is the size
+        of your team, and the price per person falls as you grow.</p>
+      <div id="homeCycle" class="mt-5"></div>
+      <div id="homePlans" class="grid md:grid-cols-2 lg:grid-cols-5 gap-4 mt-6"></div>
+      <p class="text-[13px] font-semibold text-gray-400 mt-5 max-w-3xl leading-relaxed">
+        Prices in INR, exclusive of 18% GST. One workspace per company. Need a handful more seats
+        than a band allows? Extra seats are ₹149 per user a month — write to
+        <a href="mailto:info@biscsindia.com" class="text-blue-600 font-bold">info@biscsindia.com</a>.
+        Your plan is enforced on the server, so what you see is what you have.</p>
     </div>
   </section>
 
   <!-- trust -->
-  <section class="bg-slate-900 text-white">
+  <section class="bg-slate-900 text-white dotted">
     <div class="max-w-[1150px] mx-auto px-5 py-12 grid md:grid-cols-3 gap-6">
       <div><div class="font-black mb-1">Your data stays yours</div>
         <p class="text-slate-300 text-[14px] font-semibold leading-relaxed">
@@ -221,7 +231,7 @@
     </div>
   </section>
 
-  <section class="bg-blue-600 text-white">
+  <section class="bg-blue-600 text-white dotted">
     <div class="max-w-[1150px] mx-auto px-5 py-12 text-center">
       <h2 class="text-2xl lg:text-3xl font-black tracking-tight">Start with your own team this week</h2>
       <p class="text-blue-100 font-semibold mt-2">Free for 5 people. Add the rest when it is
