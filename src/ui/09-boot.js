@@ -88,6 +88,17 @@ $('btnCookie').addEventListener('click', function () {
 });
 $('btnAppraise').addEventListener('click', openAppraisal);
 $('btnAccount2').addEventListener('click', openAccountability);
+
+document.querySelectorAll('#lbPeriod button').forEach(function (b) {
+  b.addEventListener('click', function () { setLbPeriod(b.dataset.p); }); });
+$('lbOffset').addEventListener('change', function () {
+  LB.offset = Number(this.value || 0); loadLeaderboard(); });
+$('lbVis').addEventListener('change', function () {
+  var v = this.value;
+  api('setLeaderboardVisibility', { visibility: v })
+    .then(function (r) { toast(r.message, 'ok'); loadLeaderboard(); })
+    .catch(function (e) { toast(e.message, 'err'); loadLeaderboard(); });
+});
 $('btnHistoryRpt').addEventListener('click', openReviewHistory);
 $('btnAi').addEventListener('click', openAi);
 $('btnHelp').addEventListener('click', function () { openSupport(''); });

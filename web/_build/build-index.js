@@ -20,7 +20,7 @@ const html = ['src/ui/01-head.html','src/ui/00-home.html','src/ui/02-auth-views.
   .map(R).join('');
 const js = ['src/ui/04-core.js','src/ui/05-tasks.js','src/ui/06-team.js',
             'src/ui/07-reports.js','src/ui/08-appraisal.js','src/ui/10-kra.js',
-            'src/ui/11-projects.js','src/ui/12-recognition.js','src/ui/13-priority.js','src/ui/14-billing.js','src/ui/09-boot.js']
+            'src/ui/11-projects.js','src/ui/12-recognition.js','src/ui/13-priority.js','src/ui/14-billing.js','src/ui/15-leaderboard.js','src/ui/09-boot.js']
   .map(R).join('\n\n');
 
 const CDN = '<script src="https://cdn.tailwindcss.com"></script>';

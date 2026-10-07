@@ -94,6 +94,7 @@ function route_(p) {
     case 'getPriorityList':     return getPriorityList_(ctx, p.username, p.horizon);
     case 'getBilling':          return getBilling_(ctx);
     case 'getInvoices':         return getInvoices_(ctx);
+    case 'getLeaderboard':      return getLeaderboard_(ctx, p.period, p.offset);
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
@@ -128,6 +129,7 @@ function route_(p) {
     case 'initiateRazorpay':    return createRazorpayOrder_(ctx, p.planName, p.promoCode);
     case 'paymentSuccess':      return handleVerifiedPayment_(ctx, p);
     case 'saveBilling':         return saveBilling_(ctx, p.form);
+    case 'setLeaderboardVisibility': return setLeaderboardVisibility_(ctx, p.visibility);
     case 'contactSupport':      return contactSupport_(ctx, p.form);
     case 'aiInsight':           return aiInsight_(ctx, p.question);
     case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);

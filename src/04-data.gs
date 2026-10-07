@@ -258,6 +258,47 @@ function clearColumn_(sh, col) {
   if (rows > 0) sh.getRange(1, col, rows, 1).clearContent();
 }
 
+/* ---------- named settings ------------------------------------------------
+   Settings column D holds a key and E its value, beside the job categories in
+   A and the priority levels in B/C. One more pair of columns rather than a new
+   tab, for the same reason as the priorities: an existing tenant sheet gains
+   them without a single cell moving. */
+function readSettings_(ctx) {
+  return cached_(ctx, 'settings', function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+    if (!sh || sh.getLastRow() === 0) return {};
+    var d = sh.getRange(1, 4, sh.getLastRow(), 2).getValues(), out = {};
+    for (var i = 0; i < d.length; i++) {
+      var k = String(d[i][0] || '').trim();
+      if (k) out[k] = String(d[i][1] == null ? '' : d[i][1]).trim();
+    }
+    return out;
+  });
+}
+
+function readSetting_(ctx, key, fallback) {
+  var v = readSettings_(ctx)[key];
+  return (v === undefined || v === '') ? fallback : v;
+}
+
+function writeSetting_(ctx, key, value) {
+  return withLock_(function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
+    var rows = sh.getLastRow();
+    var d = rows ? sh.getRange(1, 4, rows, 1).getValues() : [];
+    for (var i = 0; i < d.length; i++) {
+      if (String(d[i][0] || '').trim() === key) {
+        sh.getRange(i + 1, 5).setValue(value);
+        dropCache_(ctx);
+        return value;
+      }
+    }
+    sh.getRange(rows + 1, 4, 1, 2).setValues([[key, value]]);
+    dropCache_(ctx);
+    return value;
+  });
+}
+
 /* ---------- priority levels ----------------------------------------------
    Settings column B holds the level name and C its weight, beside the job
    categories already in A. Appended rather than given a tab of their own so an

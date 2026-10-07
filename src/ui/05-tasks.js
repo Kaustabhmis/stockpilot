@@ -54,7 +54,7 @@ function priorityNames(current) {
 }
 
 function renderTab() {
-  ['tasks','priority','projects','team','reports'].forEach(function (t) {
+  ['tasks','priority','projects','team','reports','board'].forEach(function (t) {
     $('tab-' + t).classList.toggle('hidden', t !== STATE.tab); });
   document.querySelectorAll('#navTabs button,#navTabsMobile button').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === STATE.tab); });
@@ -63,6 +63,7 @@ function renderTab() {
   if (STATE.tab === 'projects') loadProjects();
   if (STATE.tab === 'team') loadTeam();
   if (STATE.tab === 'reports') loadReports();
+  if (STATE.tab === 'board') loadLeaderboard();
 }
 
 function renderTasks() {

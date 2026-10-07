@@ -1897,10 +1897,137 @@ function periodAnalytics(tasks, users, range, today, cal, optsFor) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// THE LEADERBOARD
+// ---------------------------------------------------------------------------
+/* A ranking is a strong instrument. Used carelessly it measures who was handed
+   the easiest work, and then publishes that as a judgement of character — so
+   three rules are built into the ordering rather than left to whoever reads it.
+
+   1. NOBODY IS RANKED ON NOTHING. A person with no closed work in the period
+      is not "last", they are unranked, and they are listed separately with the
+      reason. Ranking an absence is how a leaderboard ends up punishing someone
+      who was on leave, or who had just joined.
+
+   2. THE ORDER IS THE SCORE, AND THE SCORE ALREADY CARRIES LOAD. One easy task
+      done perfectly cannot out-rank ten jobs with seven on time, because the
+      score it ranks by is rate × load credit. A thin month is marked
+      `provisional` so the number is read with the caution it deserves.
+
+   3. TIES ARE TIES. Equal scores share a rank and the next rank is skipped,
+      the way every sport does it — inventing a separation on a decimal nobody
+      can see is how you get two people who did identical work told that one of
+      them is better.
+
+   Movement against last period is computed here too, because "up four places"
+   is the part people act on; a static list is just a wall of names. */
+
+/** `components` is a list of {key, score}, not a map — reading it as a map
+ *  silently yields undefined for every row, which renders as a column of
+ *  dashes that looks like missing data rather than a bug. */
+function componentScore_(components, key) {
+  var list = components || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].key === key) return list[i].score == null ? null : list[i].score;
+  }
+  return null;
+}
+
+function leaderboard(people, previousPeople) {
+  var prevRank = {};
+  (previousPeople || []).forEach(function (p) { if (p.rank) prevRank[p.username] = p.rank; });
+
+  var ranked = (people || []).filter(function (p) { return p.hasData && p.score !== null; });
+  var unranked = (people || []).filter(function (p) { return !p.hasData || p.score === null; })
+    .map(function (p) {
+      return { username: p.username, name: p.name, role: p.role, dept: p.dept,
+               reason: p.reason || 'Nothing closed in this period.' };
+    }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+  ranked.sort(function (a, b) {
+    /* Score first. Then volume delivered, because between two people on the
+       same score the one who carried more work did more. Then the name, so the
+       order is stable run to run rather than dependent on sheet order. */
+    return (b.score - a.score) ||
+           ((b.delivered || 0) - (a.delivered || 0)) ||
+           ((b.cookiePoints || 0) - (a.cookiePoints || 0)) ||
+           String(a.name).localeCompare(String(b.name));
+  });
+
+  var rows = ranked.map(function (p, i) {
+    var row = {
+      rank: 0, username: p.username, name: p.name, role: p.role, dept: p.dept,
+      score: p.score, band: p.band, delivered: p.delivered || 0,
+      loadPercent: p.loadPercent, provisional: !!p.provisional,
+      cookiePoints: p.cookiePoints || 0,
+      onTime: componentScore_(p.components, 'onTime'),
+      /* Scored, but on other people's work rather than their own. Flagged
+         rather than hidden: it is the honest reading of the row. */
+      decisionsOnly: !(p.delivered || 0),
+    };
+    // Dense-at-the-top ranking: equal scores share a place, the next is skipped.
+    if (i > 0 && ranked[i - 1].score === p.score &&
+        (ranked[i - 1].delivered || 0) === (p.delivered || 0)) {
+      row.rank = rows[i - 1].rank;
+    } else {
+      row.rank = i + 1;
+    }
+    return row;
+  });
+
+  rows.forEach(function (r) {
+    var was = prevRank[r.username];
+    r.previousRank = was || null;
+    r.movement = !was ? 'new' : (was > r.rank ? 'up' : was < r.rank ? 'down' : 'same');
+    r.moved = was ? Math.abs(was - r.rank) : 0;
+  });
+
+  /* Employee of the month is not simply row one.
+     A month thin enough to be provisional is not a month anybody should be
+     crowned for — naming someone on a single easy task devalues the award for
+     everyone who earned it properly.
+     Neither is a month made entirely of decisions. The score counts cleared
+     approvals as real load, and it should: a manager who turns work around the
+     same day is doing the job. But an Admin who verifies everybody else's work
+     and delivers nothing of their own would top this board every single month,
+     and a leaderboard whose answer to "employee of the month" is "the person
+     who clicks Verify" is discredited the first time it is published.
+     So the crown needs delivered work behind it. The ranking itself is left
+     alone — managers are measured on the same scale as everyone else, which is
+     the whole point of counting decisions in the first place.
+     If nobody qualifies, nobody is crowned. That is a more honest answer than
+     a reluctant winner. */
+  var champion = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].provisional || rows[i].decisionsOnly) continue;
+    champion = rows[i];
+    break;
+  }
+
+  var scores = rows.map(function (r) { return r.score; });
+  return {
+    rows: rows,
+    unranked: unranked,
+    champion: champion,
+    /* True when the crown did not come from row one — somebody above them
+       scored higher on approvals or on a month too thin to count. Said out
+       loud by the UI, because a card that claims first place while the table
+       underneath shows otherwise is the kind of small lie that costs a feature
+       all of its credibility. */
+    championBelowFirst: !!(champion && champion.rank !== rows[0].rank),
+    shared: champion ? rows.filter(function (r) { return r.rank === champion.rank; }).length > 1 : false,
+    counts: { ranked: rows.length, unranked: unranked.length },
+    median: scores.length ? scores.slice().sort(function (a, b) { return a - b; })[Math.floor(scores.length / 2)] : null,
+    top: scores.length ? scores[0] : null,
+    bottom: scores.length ? scores[scores.length - 1] : null,
+  };
+}
+
 // Export for the Node test harness; harmless inside Apps Script.
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     STATUS: STATUS, ROLE: ROLE, CADENCE: CADENCE, OPEN_STATUSES: OPEN_STATUSES,
+    leaderboard: leaderboard,
     isOpen: isOpen, isClosed: isClosed, priorityWeight: priorityWeight,
     startOfDay: startOfDay, dayDiff: dayDiff, addDays: addDays, addMonths: addMonths,
     ymd: ymd, parseYmd: parseYmd,

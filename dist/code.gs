@@ -332,6 +332,7 @@ function route_(p) {
     case 'getPriorityList':     return getPriorityList_(ctx, p.username, p.horizon);
     case 'getBilling':          return getBilling_(ctx);
     case 'getInvoices':         return getInvoices_(ctx);
+    case 'getLeaderboard':      return getLeaderboard_(ctx, p.period, p.offset);
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
@@ -366,6 +367,7 @@ function route_(p) {
     case 'initiateRazorpay':    return createRazorpayOrder_(ctx, p.planName, p.promoCode);
     case 'paymentSuccess':      return handleVerifiedPayment_(ctx, p);
     case 'saveBilling':         return saveBilling_(ctx, p.form);
+    case 'setLeaderboardVisibility': return setLeaderboardVisibility_(ctx, p.visibility);
     case 'contactSupport':      return contactSupport_(ctx, p.form);
     case 'aiInsight':           return aiInsight_(ctx, p.question);
     case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);
@@ -981,6 +983,47 @@ function updateCategories_(ctx, categories) {
 function clearColumn_(sh, col) {
   var rows = sh.getLastRow();
   if (rows > 0) sh.getRange(1, col, rows, 1).clearContent();
+}
+
+/* ---------- named settings ------------------------------------------------
+   Settings column D holds a key and E its value, beside the job categories in
+   A and the priority levels in B/C. One more pair of columns rather than a new
+   tab, for the same reason as the priorities: an existing tenant sheet gains
+   them without a single cell moving. */
+function readSettings_(ctx) {
+  return cached_(ctx, 'settings', function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+    if (!sh || sh.getLastRow() === 0) return {};
+    var d = sh.getRange(1, 4, sh.getLastRow(), 2).getValues(), out = {};
+    for (var i = 0; i < d.length; i++) {
+      var k = String(d[i][0] || '').trim();
+      if (k) out[k] = String(d[i][1] == null ? '' : d[i][1]).trim();
+    }
+    return out;
+  });
+}
+
+function readSetting_(ctx, key, fallback) {
+  var v = readSettings_(ctx)[key];
+  return (v === undefined || v === '') ? fallback : v;
+}
+
+function writeSetting_(ctx, key, value) {
+  return withLock_(function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
+    var rows = sh.getLastRow();
+    var d = rows ? sh.getRange(1, 4, rows, 1).getValues() : [];
+    for (var i = 0; i < d.length; i++) {
+      if (String(d[i][0] || '').trim() === key) {
+        sh.getRange(i + 1, 5).setValue(value);
+        dropCache_(ctx);
+        return value;
+      }
+    }
+    sh.getRange(rows + 1, 4, 1, 2).setValues([[key, value]]);
+    dropCache_(ctx);
+    return value;
+  });
 }
 
 /* ---------- priority levels ----------------------------------------------
@@ -3761,6 +3804,141 @@ function previewInvoice() {
 }
 
 
+// ===========================================================================
+// LEADERBOARD
+// ===========================================================================
+/**
+ * DOME BOX — THE LEADERBOARD
+ * =============================================================================
+ * Top of the month to bottom, for a workspace that wants its best work seen.
+ *
+ * WHAT THIS DELIBERATELY IS NOT
+ *
+ * It is not a second scoring system. It ranks the score the rest of the product
+ * already computes — rate × load credit, capped at 100, starting from 0 — so a
+ * person cannot be first here and middling on their own dashboard. A
+ * leaderboard that disagreed with the score it claims to rank would be the
+ * fastest way to make both of them ignored.
+ *
+ * WHO CAN SEE IT
+ *
+ * A published ranking is a strong instrument and it points at real people, so
+ * it is the Admin's call, not ours. `leaderboardVisibility` is one of:
+ *
+ *   everyone  (default)  the whole board, top to bottom, to every member
+ *   top       the top three plus "you are 9th of 24" to a Doer; managers see all
+ *   managers             only Admin, HOD and Managers see it at all
+ *
+ * The default is the whole board because that is what a company that asks for a
+ * leaderboard is asking for. The other two exist because the first week of
+ * running one is when people find out whether their culture wants it.
+ *
+ * A Doer always sees their own row whatever the setting, because a ranking you
+ * are in but cannot see is the worst of both worlds.
+ * =============================================================================
+ */
+
+var LEADERBOARD_VISIBILITY = ['everyone', 'top', 'managers'];
+var LEADERBOARD_TOP_N = 3;
+
+function leaderboardVisibility_(ctx) {
+  var v = String(readSetting_(ctx, 'leaderboardVisibility', 'everyone'));
+  return LEADERBOARD_VISIBILITY.indexOf(v) > -1 ? v : 'everyone';
+}
+
+/* Anyone who is not a Doer, matching requireManager_ exactly. Spelled from the
+   same side as that guard so the two can never drift apart and leave the board
+   visible to someone the rest of the product treats as staff. */
+function isManagerish_(actor) { return actor.role !== ROLE.DOER; }
+
+/**
+ * The board for one period.
+ *
+ * `period` is any of the existing period kinds — the month is the default
+ * because "employee of the month" is the thing people actually run — and
+ * `offset` walks backwards, so last month is offset 1.
+ */
+function getLeaderboard_(ctx, period, offset) {
+  var kind = ['week', 'month', 'quarter', 'year'].indexOf(period) > -1 ? period : 'month';
+  var off = Math.max(0, Number(offset || 0));
+  var vis = leaderboardVisibility_(ctx);
+  var mine = ctx.actor.username;
+  var manager = isManagerish_(ctx.actor);
+
+  if (vis === 'managers' && !manager) {
+    return { status: 'error',
+      message: 'The leaderboard is only shown to managers in this workspace.' };
+  }
+
+  var tasks = readTasks_(ctx);
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  var cal = leaveCalendar_(ctx);
+  var opts = scoreOptsMap_(ctx);
+  var optsFor = function (u) { return opts[u.username]; };
+
+  var range = periodRange(kind, off);
+  var now = new Date();
+  var board = leaderboard(
+    periodAnalytics(tasks, users, range, now, cal, optsFor).people,
+    /* Last period's board, for the movement arrows. Computed rather than
+       stored: a stored rank goes stale the moment anything is back-dated, and
+       people notice a wrong arrow faster than a wrong score. */
+    leaderboard(periodAnalytics(tasks, users, periodRange(kind, off + 1), now, cal, optsFor).people).rows
+  );
+
+  var me = null;
+  board.rows.forEach(function (r) { if (r.username === mine) me = r; });
+  var meUnranked = null;
+  board.unranked.forEach(function (u) { if (u.username === mine) meUnranked = u; });
+
+  var rows = board.rows;
+  var trimmed = false;
+  if (vis === 'top' && !manager) {
+    /* The top three, plus the viewer's own row wherever it sits. Their own
+       position is given in full — "9th of 24" — because being told you are
+       outside the top three without being told where is worse than silence. */
+    rows = board.rows.filter(function (r) {
+      return r.rank <= LEADERBOARD_TOP_N || r.username === mine;
+    });
+    trimmed = rows.length < board.rows.length;
+  }
+
+  return {
+    status: 'success',
+    range: { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) },
+    period: kind, offset: off,
+    rows: rows,
+    trimmed: trimmed,
+    /* The unranked are never shown as a tail of the ranking. A Doer is only
+       told about their own absence, not about everybody else's. */
+    unranked: manager ? board.unranked : (meUnranked ? [meUnranked] : []),
+    unrankedCount: board.counts.unranked,
+    champion: board.champion,
+    sharedFirst: board.shared,
+    championBelowFirst: board.championBelowFirst,
+    me: me || meUnranked || null,
+    myRank: me ? me.rank : null,
+    counts: board.counts,
+    stats: { top: board.top, median: board.median, bottom: board.bottom },
+    visibility: vis,
+    canSetVisibility: ctx.actor.role === ROLE.ADMIN,
+  };
+}
+
+function setLeaderboardVisibility_(ctx, value) {
+  requireAdmin_(ctx);
+  var v = String(value || '').trim();
+  if (LEADERBOARD_VISIBILITY.indexOf(v) < 0) {
+    throw new Error('Choose who sees the leaderboard: everyone, top or managers.');
+  }
+  writeSetting_(ctx, 'leaderboardVisibility', v);
+  return { status: 'success', visibility: v, message:
+    v === 'everyone' ? 'Everyone sees the full board.'
+  : v === 'top'      ? 'The team sees the top ' + LEADERBOARD_TOP_N + ' and their own place.'
+                     : 'Only managers see the board.' };
+}
+
+
 // =========================================================================
 // AUTHENTICATION
 // =========================================================================
@@ -6141,6 +6319,132 @@ function periodAnalytics(tasks, users, range, today, cal, optsFor) {
     people: people,
     kra: kraRows,
     bands: bands,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// THE LEADERBOARD
+// ---------------------------------------------------------------------------
+/* A ranking is a strong instrument. Used carelessly it measures who was handed
+   the easiest work, and then publishes that as a judgement of character — so
+   three rules are built into the ordering rather than left to whoever reads it.
+
+   1. NOBODY IS RANKED ON NOTHING. A person with no closed work in the period
+      is not "last", they are unranked, and they are listed separately with the
+      reason. Ranking an absence is how a leaderboard ends up punishing someone
+      who was on leave, or who had just joined.
+
+   2. THE ORDER IS THE SCORE, AND THE SCORE ALREADY CARRIES LOAD. One easy task
+      done perfectly cannot out-rank ten jobs with seven on time, because the
+      score it ranks by is rate × load credit. A thin month is marked
+      `provisional` so the number is read with the caution it deserves.
+
+   3. TIES ARE TIES. Equal scores share a rank and the next rank is skipped,
+      the way every sport does it — inventing a separation on a decimal nobody
+      can see is how you get two people who did identical work told that one of
+      them is better.
+
+   Movement against last period is computed here too, because "up four places"
+   is the part people act on; a static list is just a wall of names. */
+
+/** `components` is a list of {key, score}, not a map — reading it as a map
+ *  silently yields undefined for every row, which renders as a column of
+ *  dashes that looks like missing data rather than a bug. */
+function componentScore_(components, key) {
+  var list = components || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].key === key) return list[i].score == null ? null : list[i].score;
+  }
+  return null;
+}
+
+function leaderboard(people, previousPeople) {
+  var prevRank = {};
+  (previousPeople || []).forEach(function (p) { if (p.rank) prevRank[p.username] = p.rank; });
+
+  var ranked = (people || []).filter(function (p) { return p.hasData && p.score !== null; });
+  var unranked = (people || []).filter(function (p) { return !p.hasData || p.score === null; })
+    .map(function (p) {
+      return { username: p.username, name: p.name, role: p.role, dept: p.dept,
+               reason: p.reason || 'Nothing closed in this period.' };
+    }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+  ranked.sort(function (a, b) {
+    /* Score first. Then volume delivered, because between two people on the
+       same score the one who carried more work did more. Then the name, so the
+       order is stable run to run rather than dependent on sheet order. */
+    return (b.score - a.score) ||
+           ((b.delivered || 0) - (a.delivered || 0)) ||
+           ((b.cookiePoints || 0) - (a.cookiePoints || 0)) ||
+           String(a.name).localeCompare(String(b.name));
+  });
+
+  var rows = ranked.map(function (p, i) {
+    var row = {
+      rank: 0, username: p.username, name: p.name, role: p.role, dept: p.dept,
+      score: p.score, band: p.band, delivered: p.delivered || 0,
+      loadPercent: p.loadPercent, provisional: !!p.provisional,
+      cookiePoints: p.cookiePoints || 0,
+      onTime: componentScore_(p.components, 'onTime'),
+      /* Scored, but on other people's work rather than their own. Flagged
+         rather than hidden: it is the honest reading of the row. */
+      decisionsOnly: !(p.delivered || 0),
+    };
+    // Dense-at-the-top ranking: equal scores share a place, the next is skipped.
+    if (i > 0 && ranked[i - 1].score === p.score &&
+        (ranked[i - 1].delivered || 0) === (p.delivered || 0)) {
+      row.rank = rows[i - 1].rank;
+    } else {
+      row.rank = i + 1;
+    }
+    return row;
+  });
+
+  rows.forEach(function (r) {
+    var was = prevRank[r.username];
+    r.previousRank = was || null;
+    r.movement = !was ? 'new' : (was > r.rank ? 'up' : was < r.rank ? 'down' : 'same');
+    r.moved = was ? Math.abs(was - r.rank) : 0;
+  });
+
+  /* Employee of the month is not simply row one.
+     A month thin enough to be provisional is not a month anybody should be
+     crowned for — naming someone on a single easy task devalues the award for
+     everyone who earned it properly.
+     Neither is a month made entirely of decisions. The score counts cleared
+     approvals as real load, and it should: a manager who turns work around the
+     same day is doing the job. But an Admin who verifies everybody else's work
+     and delivers nothing of their own would top this board every single month,
+     and a leaderboard whose answer to "employee of the month" is "the person
+     who clicks Verify" is discredited the first time it is published.
+     So the crown needs delivered work behind it. The ranking itself is left
+     alone — managers are measured on the same scale as everyone else, which is
+     the whole point of counting decisions in the first place.
+     If nobody qualifies, nobody is crowned. That is a more honest answer than
+     a reluctant winner. */
+  var champion = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].provisional || rows[i].decisionsOnly) continue;
+    champion = rows[i];
+    break;
+  }
+
+  var scores = rows.map(function (r) { return r.score; });
+  return {
+    rows: rows,
+    unranked: unranked,
+    champion: champion,
+    /* True when the crown did not come from row one — somebody above them
+       scored higher on approvals or on a month too thin to count. Said out
+       loud by the UI, because a card that claims first place while the table
+       underneath shows otherwise is the kind of small lie that costs a feature
+       all of its credibility. */
+    championBelowFirst: !!(champion && champion.rank !== rows[0].rank),
+    shared: champion ? rows.filter(function (r) { return r.rank === champion.rank; }).length > 1 : false,
+    counts: { ranked: rows.length, unranked: unranked.length },
+    median: scores.length ? scores.slice().sort(function (a, b) { return a - b; })[Math.floor(scores.length / 2)] : null,
+    top: scores.length ? scores[0] : null,
+    bottom: scores.length ? scores[scores.length - 1] : null,
   };
 }
 

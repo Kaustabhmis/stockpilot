@@ -112,6 +112,47 @@ Every path through `delegationScore` ends at one clamp. A person with no record
 scores 0 and is marked "no data", not graded a nought. A flawless record tops
 out at exactly 100, and cookie points cannot push it past that.
 
+### The leaderboard
+
+Top of the month to bottom, under its own **Board** tab, for week, month,
+quarter or year. It ranks the score the rest of the product already computes —
+rate × load credit, 0 to 100 — so nobody can be first here and middling on
+their own dashboard.
+
+Three rules are built into the ordering rather than left to whoever reads it:
+
+**Nobody is ranked on nothing.** A person who closed nothing is *unranked* and
+listed apart from the table with the reason, never at the bottom of it.
+Ranking an absence is how a leaderboard ends up punishing someone who was on
+leave, or who joined last week.
+
+**One easy task cannot win it.** The score it ranks by already carries load, so
+ten jobs with seven on time beats one easy job done — and a month too thin to
+read is marked `thin month` rather than quietly averaged in.
+
+**The person who clicks Verify is not employee of the month.** Clearing other
+people's approvals promptly is real work and the score counts it, so managers
+stay in the ranking on the same scale as everyone else. But the crown needs
+delivered work behind it, or an Admin who approves everything and delivers
+nothing tops the board every single month. If the top of the table scored on
+approvals, the card says so in words rather than quietly claiming first place.
+
+Ties share a rank and skip the next, the way every sport does it. Movement
+against the previous period is computed, not stored — a stored rank goes stale
+the moment anything is back-dated, and people spot a wrong arrow faster than a
+wrong score.
+
+**Who sees it** is the Admin's call, set on the Board tab itself:
+
+| Setting | A Doer sees |
+|---|---|
+| Everyone *(default)* | the whole board, top to bottom |
+| Top 3 + own place | the podium, their own row, and "you are 9th of 24" |
+| Managers only | nothing — the tab refuses, in words |
+
+A person always sees their own row whatever the setting, because a ranking you
+are in but cannot see is the worst of both worlds.
+
 ### Cookie points
 
 Recognition on the day, not six months later at the appraisal. A manager awards
