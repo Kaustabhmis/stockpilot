@@ -57,7 +57,11 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   'Job Category','Approver Manager','Spawned By','Blocked By','Subtasks JSON','Delegate To',
   /* Projects. Appended, never inserted: an existing tenant sheet keeps every
      column it had, and a task with no project is simply a task. */
-  'Project ID','Project','Stage No','Stage Count','Stage Gate'];
+  'Project ID','Project','Stage No','Stage Count','Stage Gate',
+  /* When a repeat stops on its own. Until these existed a recurring job ran
+     until a manager remembered to go and stop it by hand, which is not a
+     schedule — it is a standing instruction nobody owns. */
+  'Repeat Until','Repeat Count','Repeat Made'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];

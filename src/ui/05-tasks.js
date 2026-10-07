@@ -98,7 +98,7 @@ function taskCard(t) {
       ((t.blockedBy || []).length ? '<span class="chip t-amber">Blocked</span>' : '') +
       (sub.length ? '<span class="chip t-slate">' + done + '/' + sub.length + '</span>' : '') +
       (t.reworkCount ? '<span class="chip t-rust">Rework ' + t.reworkCount + '</span>' : '') +
-      (t.frequency && t.frequency !== 'One Time' ? '<span class="chip t-plum">' + esc(t.frequency) + '</span>' : '') +
+      (t.frequency && t.frequency !== 'One Time' ? '<span class="chip t-plum">' + esc(repeatLabel(t)) + '</span>' : '') +
       (t.jobCategory && t.jobCategory !== 'General'
         ? tintChip(t.jobCategory, t.jobCategory) : '') +
     '</div></div>';
@@ -241,7 +241,7 @@ function openTask(id) {
     '<div class="grid grid-cols-2 gap-4 mb-5 text-sm">' +
       [['Owner', t.toName], ['Raised by', t.byName], ['Approver', nameOf(t.approver)],
        ['Due', fmtDate(t.due)], ['Priority', t.priority], ['Category', t.jobCategory || '—'],
-       ['KRA', t.kra || '—'], ['Repeats', t.frequency], ['Rework loops', String(t.reworkCount || 0)]]
+       ['KRA', t.kra || '—'], ['Repeats', repeatLabel(t)], ['Rework loops', String(t.reworkCount || 0)]]
       .map(function (p) { return '<div><div class="lb">' + esc(p[0]) + '</div>' +
         '<div class="font-bold text-gray-800">' + esc(p[1]) + '</div></div>'; }).join('') + '</div>' +
 
@@ -326,6 +326,21 @@ function stopRecurring(id) {
 }
 
 /** Status change with a note, and a mandatory new deadline when sending back. */
+/**
+ * The cadence AND how it ends, in one phrase. "Monthly" alone is a promise the
+ * product cannot keep looking at — the useful thing to know on a task that
+ * repeats is when it will stop, and how much of it is left.
+ */
+function repeatLabel(t) {
+  if (!t.frequency || t.frequency === 'One Time') return 'One Time';
+  if (t.repeatCount) {
+    var made = Number(t.repeatMade || 1);
+    return t.frequency + ' · ' + made + ' of ' + t.repeatCount;
+  }
+  if (t.repeatUntil) return t.frequency + ' · until ' + t.repeatUntil;
+  return t.frequency;
+}
+
 function openStatus(id, status) {
   var rework = status === 'In Progress';
   openModal('<form id="fStatus" class="p-6 lg:p-7">' +
@@ -460,6 +475,23 @@ function openAssign() {
         '<div><label class="lb" for="asFreq">Repeats</label><select id="asFreq" class="in">' +
           ['One Time','Daily','Weekdays','Weekly','Fortnightly','Monthly','Quarterly','Half-Yearly','Yearly']
             .map(function (f) { return '<option>' + f + '</option>'; }).join('') + '</select></div></div>' +
+      /* A repeat with no end is a standing instruction nobody owns. Asked at
+         the moment the cadence is chosen, because that is the only moment the
+         person is actually thinking about how long this should go on. */
+      '<div id="asStopWrap" class="hidden rounded-xl bg-gray-50 border border-gray-100 p-4">' +
+        '<label class="lb">Stop repeating</label>' +
+        '<div class="flex flex-wrap gap-2 mb-3" id="asStopMode">' +
+          [['never','Never'],['date','On a date'],['count','After a number of times']]
+            .map(function (m, i) {
+              return '<button type="button" data-mode="' + m[0] + '" class="btn ' +
+                (i === 0 ? 'btn-p' : 'btn-g') + ' text-xs py-2 stopMode">' + m[1] + '</button>';
+            }).join('') + '</div>' +
+        '<div id="asStopDate" class="hidden"><input id="asUntil" type="date" class="in"></div>' +
+        '<div id="asStopCount" class="hidden"><input id="asTimes" type="number" min="2" max="500" ' +
+          'class="in" placeholder="e.g. 12"></div>' +
+        '<div class="text-[11px] font-semibold text-gray-400 mt-2" id="asStopNote">' +
+          'It will keep repeating until somebody stops it.</div>' +
+      '</div>' +
       '<div><label class="lb" for="asKra">KRA tag</label><input id="asKra" class="in" placeholder="e.g. Vendor Quality"></div>' +
       '<div><label class="lb">Checklist <span class="normal-case tracking-normal font-semibold">(one per line, optional)</span></label>' +
         '<textarea id="asChk" rows="2" class="in" placeholder="Collect quotes&#10;Compare rates"></textarea></div>' +
@@ -484,6 +516,31 @@ function openAssign() {
   document.querySelectorAll('.asWho').forEach(function (c) {
     c.addEventListener('change', routeNote); });
 
+  /* One mode at a time, and the note says in words what was chosen — a date
+     field and a count field both filled in is a rule nobody can predict. */
+  var stopMode = 'never';
+  var paintStop = function () {
+    var on = $('asFreq').value !== 'One Time';
+    $('asStopWrap').classList.toggle('hidden', !on);
+    if (!on) { stopMode = 'never'; }
+    $('asStopDate').classList.toggle('hidden', stopMode !== 'date');
+    $('asStopCount').classList.toggle('hidden', stopMode !== 'count');
+    document.querySelectorAll('.stopMode').forEach(function (b) {
+      b.className = 'btn ' + (b.dataset.mode === stopMode ? 'btn-p' : 'btn-g') + ' text-xs py-2 stopMode';
+    });
+    $('asStopNote').textContent =
+      stopMode === 'date'  ? ($('asUntil').value ? 'Last occurrence on or before ' + $('asUntil').value + '.'
+                                                 : 'Pick the date it should stop after.')
+    : stopMode === 'count' ? ($('asTimes').value ? 'It will run ' + $('asTimes').value + ' times, then stop.'
+                                                 : 'How many times should it run in total?')
+    : 'It will keep repeating until somebody stops it.';
+  };
+  $('asFreq').addEventListener('change', paintStop);
+  document.querySelectorAll('.stopMode').forEach(function (b) {
+    b.addEventListener('click', function () { stopMode = b.dataset.mode; paintStop(); }); });
+  $('asUntil').addEventListener('change', paintStop);
+  $('asTimes').addEventListener('input', paintStop);
+
   $('fAssign').addEventListener('submit', function (e) {
     e.preventDefault();
     var who = Array.prototype.slice.call(document.querySelectorAll('.asWho:checked'))
@@ -494,6 +551,8 @@ function openAssign() {
     api('createTask', { form: { title: $('asTitle').value, desc: $('asDesc').value,
       assignTo: who.join(','), dueDate: $('asDue').value, priority: $('asPri').value,
       jobCategory: $('asCat').value, frequency: $('asFreq').value, kra: $('asKra').value,
+      repeatUntil: stopMode === 'date' ? $('asUntil').value : '',
+      repeatCount: stopMode === 'count' ? Number($('asTimes').value || 0) : 0,
       checklist: $('asChk').value } })
       .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
       .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });

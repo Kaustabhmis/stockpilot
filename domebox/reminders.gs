@@ -425,15 +425,26 @@ function generateRecurringJobs() {
       var status = String(series.row[col.status] || '');
       var previousOpen = isOpen(status);
 
+      /* The stop rule travels on the row, so the scheduler honours exactly the
+         same limits as the in-app spawn. Reading it here rather than assuming
+         "forever" is the difference between a schedule and a task that outlives
+         the reason it was created. */
+      var until = col.repeatuntil !== undefined ? rmYmd_(series.row[col.repeatuntil]) : '';
+      var limit = col.repeatcount !== undefined ? Number(series.row[col.repeatcount] || 0) : 0;
+      var made  = col.repeatmade  !== undefined ? Number(series.row[col.repeatmade] || 0) : 0;
+
       var plan = dueOccurrences({
         cadence: series.cadence, nextDue: ymd(series.due), active: true,
-        endDate: '', maxOccurrences: 0, occurrencesCreated: 0,
+        endDate: until, maxOccurrences: limit, occurrencesCreated: made || (limit ? 1 : 0),
         skipIfPreviousOpen: false,
       }, today, { previousOpen: previousOpen });
 
       // The occurrence already on the sheet is the first entry; skip it.
       var toCreate = plan.create.filter(function (d) { return d !== ymd(series.due); });
-      if (!toCreate.length) return;
+      if (!toCreate.length) {
+        if (plan.stop) log.push('    · ' + String(series.row[col.title]) + ' — series ended (' + plan.reason + ')');
+        return;
+      }
 
       toCreate.forEach(function (dueDate) {
         log.push('    + ' + String(series.row[col.title]) + ' → ' + dueDate + ' (' + series.cadence + ')' +
@@ -449,6 +460,7 @@ function generateRecurringJobs() {
           // task quota — nobody chose to create it, and a customer on Free with
           // five daily recurring jobs would otherwise burn all 50 in ten days.
           if (col.spawnedby !== undefined) newRow[col.spawnedby] = series.row[col.id] || 'recurring';
+          if (col.repeatmade !== undefined) newRow[col.repeatmade] = (made || 1) + 1 + toCreate.indexOf(dueDate);
           if (col.history !== undefined) {
             newRow[col.history] = JSON.stringify([{
               status: 'Pending', note: 'Auto-generated (' + series.cadence + ')',
@@ -468,6 +480,15 @@ function generateRecurringJobs() {
   log.push('Total created: ' + createdTotal);
   log.push('Generation is schedule-driven: a series continues even if nobody closed the last one.');
   Logger.log(log.join('\n'));
+}
+
+/** A sheet cell holding a date can come back as a Date or as a string, and a
+ *  stop rule compared the wrong way round silently never stops. */
+function rmYmd_(v) {
+  if (!v) return '';
+  if (v instanceof Date) return ymd(v);
+  var str = String(v).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(str) ? str : (parseYmd(str) ? ymd(parseYmd(str)) : '');
 }
 
 // ============================================================

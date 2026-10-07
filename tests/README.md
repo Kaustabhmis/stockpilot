@@ -26,10 +26,12 @@ node mail-test.js           # every email leaves from info@biscsindia.com, or no
 node perf-test.js           # sheet reads stay flat, and nothing is read back stale
 node seo-test.js            # the generated pages, structured data and sitemap
 node invoice-test.js        # GST arithmetic to the paisa, and a gapless number series
+node repeat-test.js         # every cadence, and the two ways a repeat ends by itself
 
 node server.js &            # then, for the browser tests:
 node ui-test.js
 node billing-ui-test.js     # the invoice details are asked for before the card
+node repeat-ui-test.js      # setting a stop rule the way a person would
 node manager-ui-test.js     # the held-review screens, end to end
 node kra-ui-test.js         # the KRA/KPI overview and editor
 node project-ui-test.js     # building a project and watching a stage release

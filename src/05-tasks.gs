@@ -30,6 +30,10 @@ function createTask_locked_(ctx, form) {
   var gate = canCreateTask(ctx.planName, used + assignees.length - 1);
   if (!gate.ok) throw new Error(gate.reason + (gate.upgradeTo ? ' Upgrade to ' + gate.upgradeTo + '.' : ''));
 
+  /* Validated once, before anything is written, so a bad stop rule refuses the
+     whole assignment rather than leaving half the team with a runaway repeat. */
+  var stop = parseRepeatStop_(form);
+
   var sheet = ctx.ss.getSheetByName(TAB.TASKS);
   var created = [], routed = 0;
 
@@ -56,6 +60,9 @@ function createTask_locked_(ctx, form) {
     row[T['KRA Tag']] = String(form.kra || 'General');
     row[T['Priority']] = form.priority || 'Medium';
     row[T['Frequency']] = form.frequency || 'One Time';
+    row[T['Repeat Until']] = stop.until;
+    row[T['Repeat Count']] = stop.count;
+    row[T['Repeat Made']] = stop.count || stop.until ? 1 : 0;
     row[T['Reworks']] = 0;
     row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(),
       status: route.status, user: ctx.actor.name, note: route.note }]);
@@ -85,6 +92,36 @@ function createTask_locked_(ctx, form) {
       (routed ? ', ' + routed + ' sent for approval' : '') + '.' +
       (refused.length ? ' Not sent to ' +
         refused.map(function (r) { return r.name; }).join(', ') + '.' : '') };
+}
+
+/**
+ * How a repeat ends: on a date, after a number of occurrences, or never.
+ *
+ * Both may be set, and then whichever arrives first wins — "every Monday until
+ * March, but no more than ten" is a reasonable thing to mean. A stop rule on a
+ * one-off is refused rather than silently dropped, because it is always a sign
+ * the person thought they were setting up a repeat.
+ */
+function parseRepeatStop_(form) {
+  var freq = String((form && form.frequency) || 'One Time');
+  var until = String((form && form.repeatUntil) || '').trim();
+  var count = Number((form && form.repeatCount) || 0);
+
+  if (freq === 'One Time') {
+    if (until || count) throw new Error('A one-time task does not repeat, so it has nothing to stop. Pick how often it repeats first.');
+    return { until: '', count: 0 };
+  }
+  if (until) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) throw new Error('The repeat end date is not a date.');
+    var due = String((form && form.dueDate) || '');
+    if (due && until < due) throw new Error('The repeat cannot end before the first one is due.');
+  }
+  if (count) {
+    if (count < 1 || count !== Math.floor(count)) throw new Error('Repeat a whole number of times, or leave it blank for no limit.');
+    if (count > 500) throw new Error('That is more than 500 occurrences. Set an end date instead.');
+    if (count === 1) throw new Error('Repeating once is a one-time task — set it to One Time.');
+  }
+  return { until: until, count: count };
 }
 
 function parseChecklist_(raw) {
@@ -191,6 +228,24 @@ function spawnNextOccurrence_(ctx, hit, t) {
   if (!next) return null;
   var due = ymd(next);
 
+  /* The series ends here if it has run its course. Writing the stop onto the
+     task that just closed — rather than simply declining to create the next
+     one — is what makes it visible: the drawer stops offering "Stop
+     repeating", the history says why it ended, and nobody is left wondering
+     whether the schedule is broken or finished. */
+  var made = Number(t.repeatMade || 0) || 1;
+  var ended = '';
+  if (t.repeatCount && made >= Number(t.repeatCount)) {
+    ended = 'Repeat finished — all ' + t.repeatCount + ' occurrences done';
+  } else if (t.repeatUntil && due > t.repeatUntil) {
+    ended = 'Repeat finished — ran to ' + t.repeatUntil;
+  }
+  if (ended) {
+    writeTaskField_(hit, 'Frequency', 'One Time');
+    appendHistory_(hit, t.status, 'System', ended);
+    return null;
+  }
+
   // Never create a second copy for a date that already has an open occurrence.
   var existing = readTasks_(ctx);
   for (var i = 0; i < existing.length; i++) {
@@ -210,6 +265,9 @@ function spawnNextOccurrence_(ctx, hit, t) {
   row[T['KRA Tag']] = t.kra;
   row[T['Priority']] = t.priority;
   row[T['Frequency']] = t.frequency;
+  row[T['Repeat Until']] = t.repeatUntil || '';
+  row[T['Repeat Count']] = t.repeatCount || 0;
+  row[T['Repeat Made']] = made + 1;
   row[T['Reworks']] = 0;
   row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(), status: 'Pending',
     user: 'System', note: 'Recurring occurrence of ' + t.id }]);
@@ -316,6 +374,12 @@ function stopRecurring_(ctx, taskId) {
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
   writeTaskField_(hit, 'Frequency', 'One Time');
+  /* Clear the rule as well as the cadence. Leaving "until March" behind on a
+     stopped series means the count is already part-spent if anyone restarts
+     it, and they would have no way of seeing that. */
+  writeTaskField_(hit, 'Repeat Until', '');
+  writeTaskField_(hit, 'Repeat Count', 0);
+  writeTaskField_(hit, 'Repeat Made', 0);
   appendHistory_(hit, hit.task.status, ctx.actor.name, 'Recurrence stopped');
   return { status: 'success', message: 'This will not repeat again.' };
 }
@@ -338,6 +402,25 @@ function editTask_(ctx, form) {
       changes.push(pair[1]);
     }
   });
+  /* The cadence and its stop rule move together: changing one without the
+     other is how you get "repeats weekly, stops after 3" on a task that has
+     already run eight times. Validated by the same parser as creation. */
+  if (form.frequency !== undefined || form.repeatUntil !== undefined || form.repeatCount !== undefined) {
+    var stop = parseRepeatStop_({
+      frequency: form.frequency !== undefined ? form.frequency : t.frequency,
+      repeatUntil: form.repeatUntil, repeatCount: form.repeatCount,
+      dueDate: form.dueDate !== undefined ? form.dueDate : t.due });
+    var freq = form.frequency !== undefined ? form.frequency : t.frequency;
+    if (freq !== t.frequency) { writeTaskField_(hit, 'Frequency', freq); changes.push('Frequency'); }
+    writeTaskField_(hit, 'Repeat Until', stop.until);
+    writeTaskField_(hit, 'Repeat Count', stop.count);
+    /* The count already spent is not reset by an edit — otherwise "stop after
+       five" could be renewed indefinitely by editing the task each time. */
+    if (!Number(t.repeatMade) && freq !== 'One Time') writeTaskField_(hit, 'Repeat Made', 1);
+    if (String(stop.until) !== String(t.repeatUntil || '') ||
+        Number(stop.count) !== Number(t.repeatCount || 0)) changes.push('Repeat rule');
+  }
+
   if (form.status && form.status !== t.status && ctx.actor.role === 'Admin') {
     writeTaskField_(hit, 'Status', form.status);
     changes.push('Status');

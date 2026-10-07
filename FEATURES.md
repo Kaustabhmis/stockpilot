@@ -22,8 +22,36 @@ in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 - [x] Approve / reject
 - [x] Pending → In Progress → For Review → Verified
 - [x] Rework: send back **with a new deadline**, counter increments
-- [x] Stop a recurring series (and verifying it then spawns nothing)
+- [x] **A repeat that ends by itself: on a date, or after N occurrences** (new)
+- [x] Stop a recurring series by hand (and verifying it then spawns nothing)
 - [x] Next occurrence created on verify, checklist reset, no duplicate for a date
+
+### When a repeat stops
+
+A repeat with no end is a standing instruction nobody owns — it outlives the
+reason it was created, and the only way to end it was for a manager to notice
+and stop it by hand. So the end is set at the moment the cadence is chosen,
+which is the only moment anyone is actually thinking about it:
+
+| Stop | Means |
+|---|---|
+| Never | Runs until someone stops it — the old behaviour, still available |
+| On a date | No occurrence is created due after that date |
+| After N times | Counts occurrences, not completions, and stops at N |
+
+Both may be set together, and whichever arrives first wins. The series does not
+simply stop producing work — the last occurrence is marked as no longer
+repeating and its history records *why* it ended, so nobody is left wondering
+whether the schedule finished or broke. Everywhere a cadence is shown, how far
+through it is shown with it: `Monthly · 3 of 6`, `Weekly · until 2027-03-31`.
+
+The count carried forward is not reset by editing the task, or "stop after
+five" could be renewed indefinitely by editing it five times. Stopping by hand
+clears the rule outright, so a restarted series does not begin part-spent.
+
+The nightly scheduler reads the same two fields off the row and feeds them to
+the same rules engine, so a series ends on the same occurrence whether it was
+closed in the app or generated at 6am.
 - [x] Edit task
 - [x] Full audit trail with notes and deadline changes
 - [x] Archive after 7 days closed; archive view
