@@ -12,6 +12,14 @@ const { chromium } = require('playwright');
     if(m.type()==='error' && !EXTERNAL.test(s)) errs.push(m.text()); });
   await p.goto('http://localhost:8095/',{waitUntil:'networkidle'});
 
+  console.log('--- the mark ---');
+  /* The logo is an inline SVG, not an image file: one HTML file, nothing to
+     fetch, and it renders before anything else on the page has loaded. */
+  ok('the mark is drawn into the page, not loaded from somewhere',
+     (await p.locator('#view-home svg path').count()) >= 2);
+  ok('and it inverts on the dark auth surface',
+     (await p.locator('#view-auth svg path[fill="#fff"]').count()) === 1);
+
   console.log('--- the landing page ---');
   ok('a stranger lands on the home page, not a bare form',
      await p.locator('#view-home').isVisible() && !(await p.locator('#view-auth').isVisible()));

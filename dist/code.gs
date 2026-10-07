@@ -1954,21 +1954,33 @@ function sendEmail_(to, subject, html) {
   }
 }
 
+/* The mark, drawn in a table cell rather than as an image: every mail client
+   renders borders and background colours, and none of them can be relied on to
+   load a remote image or an inline SVG. */
+function mailMark_() {
+  return '<table cellpadding="0" cellspacing="0" style="display:inline-block;vertical-align:middle">' +
+    '<tr><td style="width:26px;height:26px;background:#fff;border-radius:13px 13px 7px 7px;' +
+    'text-align:center;font:900 15px/26px Arial,sans-serif;color:#5b4bdb">&#10003;</td></tr></table>';
+}
+
 function mailShell_(title, inner) {
   return '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
-    'max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">' +
-    '<div style="background:#1e3a8a;color:#fff;padding:20px 24px">' +
-    '<h2 style="margin:0;font-size:18px">' + esc_(title) + '</h2></div>' +
-    '<div style="padding:24px;color:#374151;font-size:14px;line-height:1.6">' + inner + '</div>' +
-    '<div style="padding:16px 24px;background:#f9fafb;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb">' +
-    'Dome Box · BISCS India · <a href="' + CFG().siteUrl + '" style="color:#2563eb">' +
+    'max-width:600px;margin:0 auto;border:1px solid #e7e1d8;border-radius:14px;overflow:hidden">' +
+    '<div style="background:#5b4bdb;color:#fff;padding:18px 24px">' +
+    mailMark_() +
+    '<span style="display:inline-block;vertical-align:middle;margin-left:10px;' +
+    'font-weight:900;font-size:15px;letter-spacing:-.2px">Dome Box</span>' +
+    '<h2 style="margin:12px 0 0;font-size:18px;font-weight:800">' + esc_(title) + '</h2></div>' +
+    '<div style="padding:24px;color:#453f4c;font-size:14px;line-height:1.6">' + inner + '</div>' +
+    '<div style="padding:16px 24px;background:#faf8f5;color:#7d7570;font-size:12px;border-top:1px solid #e7e1d8">' +
+    'Dome Box · BISCS India · <a href="' + CFG().siteUrl + '" style="color:#5b4bdb">' +
     esc_(CFG().siteUrl.replace(/^https?:\/\//, '')) + '</a></div></div>';
 }
 
 function btn_(label, href) {
   return '<p style="text-align:center;margin:28px 0"><a href="' + esc_(href) + '" ' +
-    'style="background:#2563eb;color:#fff;padding:12px 26px;text-decoration:none;' +
-    'border-radius:8px;font-weight:bold;display:inline-block">' + esc_(label) + '</a></p>';
+    'style="background:#5b4bdb;color:#fff;padding:13px 28px;text-decoration:none;' +
+    'border-radius:10px;font-weight:bold;display:inline-block">' + esc_(label) + '</a></p>';
 }
 
 /* Every value interpolated below is escaped. The old build built these strings
