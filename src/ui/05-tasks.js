@@ -44,11 +44,12 @@ function visibleTasks() {
 }
 
 function renderTab() {
-  ['tasks','team','reports'].forEach(function (t) {
+  ['tasks','projects','team','reports'].forEach(function (t) {
     $('tab-' + t).classList.toggle('hidden', t !== STATE.tab); });
   document.querySelectorAll('#navTabs button,#navTabsMobile button').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === STATE.tab); });
   if (STATE.tab === 'tasks') renderTasks();
+  if (STATE.tab === 'projects') loadProjects();
   if (STATE.tab === 'team') loadTeam();
   if (STATE.tab === 'reports') loadReports();
 }
@@ -78,6 +79,8 @@ function taskCard(t) {
     '<div class="flex flex-wrap items-center gap-1.5">' +
       '<span class="chip ' + (late ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500') + '">' +
         fmtDate(t.due) + (late ? ' · ' + late + 'd late' : '') + '</span>' +
+      (t.projectId ? '<span class="chip bg-violet-50 text-violet-700" title="' + esc(t.projectName) + '">' +
+        esc(t.projectName) + ' · ' + t.stageNo + '/' + t.stageCount + '</span>' : '') +
       ((t.blockedBy || []).length ? '<span class="chip bg-amber-50 text-amber-800">Blocked</span>' : '') +
       ((t.subtasks || []).length ? '<span class="chip bg-gray-100 text-gray-500">' + done + '/' + t.subtasks.length + '</span>' : '') +
       (t.reworkCount ? '<span class="chip bg-orange-50 text-orange-700">Rework ' + t.reworkCount + '</span>' : '') +

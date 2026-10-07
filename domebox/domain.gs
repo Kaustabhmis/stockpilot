@@ -347,6 +347,180 @@ function dueOccurrences(job, today, state) {
 }
 
 // ---------------------------------------------------------------------------
+// PROJECTS — multi-stage work with a deadline on every stage
+// ---------------------------------------------------------------------------
+/* A project is a run of stages that share a Project ID. Each stage is an
+   ordinary task — same board, same approvals, same review — carrying its own
+   deadline and its own owner. Stage 2 is blocked by stage 1 through the
+   blocker mechanism that already exists, so nothing new had to be invented to
+   stop somebody starting out of order.
+
+   A stage deadline is a promise to the people downstream, not only to the
+   manager, which is why meeting one is scored in its own right. */
+var MILESTONE_WEIGHTS = { onTime: 0.35, quality: 0.25, queue: 0.20, milestones: 0.20 };
+
+/** Every stage of one project, in order. */
+function projectStages(tasks, projectId) {
+  return (tasks || [])
+    .filter(function (t) { return t.projectId && t.projectId === projectId; })
+    .sort(function (a, b) { return (Number(a.stageNo) || 0) - (Number(b.stageNo) || 0); });
+}
+
+/** The stage immediately before this one, or null for the first. */
+function previousStage(stages, stage) {
+  var n = Number(stage.stageNo) || 0;
+  var best = null;
+  stages.forEach(function (s) {
+    var m = Number(s.stageNo) || 0;
+    if (m < n && (!best || m > (Number(best.stageNo) || 0))) best = s;
+  });
+  return best;
+}
+
+/**
+ * When this stage actually became startable.
+ *
+ * On a sequential project that is when the stage before it was signed off; on
+ * a parallel one, or the first stage, it is the moment the project was raised.
+ */
+function stageReleasedAt(stages, stage) {
+  if (String(stage.stageGate || 'sequential') === 'parallel') return null;
+  var prev = previousStage(stages, stage);
+  if (!prev) return null;
+  return closedAt(prev);
+}
+
+/**
+ * The deadline this stage's owner is actually answerable for.
+ *
+ * If the stage before it ran over, the work could not start on time however
+ * willing the owner was. Charging them the original date would push one
+ * person's slip onto everyone downstream — the surest way to make a team stop
+ * reporting slippage at all.
+ *
+ * So a stage released after its own deadline gets back the window the plan gave
+ * it: the gap between its date and the date of the stage before it, counted
+ * from the day it was actually released. They promised that many days of work,
+ * they get that many days — no more, so a late start is not a blank cheque.
+ */
+function stageEffectiveDue(stages, stage) {
+  var due = parseYmd(stage.due);
+  var released = stageReleasedAt(stages, stage);
+  if (!due) return released ? startOfDay(released) : null;
+  if (!released || startOfDay(released) <= due) return due;
+
+  var prev = previousStage(stages, stage);
+  var prevDue = prev ? parseYmd(prev.due) : null;
+  var planned = prevDue ? Math.max(0, dayDiff(due, prevDue)) : 0;
+  return addDays(startOfDay(released), planned);
+}
+
+/**
+ * How well this person keeps the stage deadlines they were given.
+ *
+ * Deliberately scored in its own right, and NOT folded into on-time delivery:
+ * a stage date is a commitment other people have planned around, so hitting it
+ * is worth more than hitting a date only the manager was watching. Both the
+ * hits and the misses are itemised, because a score that shows a person only
+ * their failures is one they will read as a punishment ledger.
+ */
+function milestoneStats(tasks, username, today, cal) {
+  var now = today || new Date();
+  var mine = (tasks || []).filter(function (t) {
+    return t.assignee === username && t.projectId && Number(t.stageNo) > 0;
+  });
+
+  var byProject = {};
+  (tasks || []).forEach(function (t) {
+    if (!t.projectId) return;
+    (byProject[t.projectId] = byProject[t.projectId] || []).push(t);
+  });
+  Object.keys(byProject).forEach(function (k) {
+    byProject[k].sort(function (a, b) { return (Number(a.stageNo) || 0) - (Number(b.stageNo) || 0); });
+  });
+
+  var met = 0, missed = 0, pending = 0, atRisk = 0, wSum = 0, wTotal = 0;
+  var breakdown = [], items = [];
+
+  mine.forEach(function (t) {
+    var stages = byProject[t.projectId] || [t];
+    var due = stageEffectiveDue(stages, t);
+    var extended = due && parseYmd(t.due) && startOfDay(due) > parseYmd(t.due);
+    var w = priorityWeight(t.priority);
+    var label = t.projectName ? t.projectName + ' · stage ' + t.stageNo : 'Stage ' + t.stageNo;
+
+    if (t.status === STATUS.VERIFIED) {
+      var sub = submittedAt(t);
+      if (!sub || !due) return;
+      var late = chargeableLateDays(due, sub, username, cal);
+      var hit = late <= 0;
+      wTotal += w; wSum += (hit ? 100 : Math.max(0, 100 - late * LATENESS_POINTS_PER_DAY)) * w;
+      if (hit) met++; else missed++;
+      items.push({ id: t.id, title: t.title, project: t.projectName, stage: Number(t.stageNo),
+                   met: hit, daysLate: Math.max(0, late), extended: !!extended });
+      breakdown.push({
+        group: 'Project Milestones', item: label + ' — ' + t.title,
+        reason: hit ? 'Stage deadline met' + (extended ? ' (deadline moved out: the stage before it ran over)' : '')
+                    : 'Stage deadline missed by ' + late + ' day(s)' +
+                      (extended ? ', counted from the day it was actually released' : ''),
+        impact: hit ? '+' + w * 10 : '-' + Math.min(100, late * LATENESS_POINTS_PER_DAY),
+      });
+      return;
+    }
+
+    if (isOpen(t.status) && due) {
+      pending++;
+      if (chargeableLateDays(due, now, username, cal) > 0) atRisk++;
+    }
+  });
+
+  var closedCount = met + missed;
+  return {
+    hasData: closedCount > 0,
+    stages: mine.length,
+    met: met, missed: missed, pending: pending, atRisk: atRisk,
+    hitRate: closedCount ? Math.round(met / closedCount * 100) : null,
+    score: wTotal ? Math.round(wSum / wTotal) : null,
+    items: items,
+    breakdown: breakdown,
+  };
+}
+
+/** A whole project's state, for the board and the project list. */
+function projectSummary(tasks, projectId) {
+  var stages = projectStages(tasks, projectId);
+  if (!stages.length) return null;
+  var done = stages.filter(function (s) { return s.status === STATUS.VERIFIED; });
+  var dead = stages.filter(function (s) { return s.status === STATUS.REJECTED || s.status === STATUS.CANCELLED; });
+  var current = null;
+  for (var i = 0; i < stages.length; i++) {
+    if (isOpen(stages[i].status)) { current = stages[i]; break; }
+  }
+  var metOnTime = 0;
+  done.forEach(function (s) {
+    var sub = submittedAt(s), due = stageEffectiveDue(stages, s);
+    if (sub && due && dayDiff(sub, due) <= 0) metOnTime++;
+  });
+  var last = stages[stages.length - 1];
+  return {
+    projectId: projectId,
+    name: stages[0].projectName || 'Project',
+    gate: String(stages[0].stageGate || 'sequential'),
+    stages: stages.length,
+    done: done.length,
+    metOnTime: metOnTime,
+    percent: Math.round(done.length / stages.length * 100),
+    currentStage: current ? Number(current.stageNo) : null,
+    currentTitle: current ? current.title : null,
+    currentOwner: current ? current.assignee : null,
+    currentDue: current ? current.due : null,
+    finalDue: last ? last.due : '',
+    complete: done.length === stages.length,
+    stalled: dead.length > 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // PERFORMANCE — the Delegation Score
 // ---------------------------------------------------------------------------
 var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
@@ -625,11 +799,25 @@ function delegationScore(tasks, username, today, cal) {
     }
   });
 
+  /* --- project milestones ---
+     A stage deadline is a commitment other people have planned their own work
+     around, so meeting one earns its own score rather than disappearing into
+     the on-time average. It is weighted, not added on top, so nobody can lift
+     their score simply by having their work cut into more pieces. */
+  var ms = milestoneStats(tasks, username, today, cal);
+  ms.breakdown.forEach(function (b) { breakdown.push(b); });
+  var W = ms.hasData ? MILESTONE_WEIGHTS : SCORE_WEIGHTS;
+
   var parts = [
-    { key: 'onTime',  label: 'On-Time Delivery',   score: otW ? otSum / otW : null,   weight: SCORE_WEIGHTS.onTime,  basis: otCount + ' closed' },
-    { key: 'quality', label: 'First-Pass Quality', score: qW ? qSum / qW : null,      weight: SCORE_WEIGHTS.quality, basis: closed.length + ' closed' },
-    { key: 'queue',   label: 'Queue Health',       score: qhW ? qhSum / qhW : null,   weight: SCORE_WEIGHTS.queue,   basis: open.length + ' open' },
+    { key: 'onTime',  label: 'On-Time Delivery',   score: otW ? otSum / otW : null,   weight: W.onTime,  basis: otCount + ' closed' },
+    { key: 'quality', label: 'First-Pass Quality', score: qW ? qSum / qW : null,      weight: W.quality, basis: closed.length + ' closed' },
+    { key: 'queue',   label: 'Queue Health',       score: qhW ? qhSum / qhW : null,   weight: W.queue,   basis: open.length + ' open' },
   ];
+  if (ms.hasData) {
+    parts.push({ key: 'milestones', label: 'Project Milestones', score: ms.score,
+      weight: W.milestones,
+      basis: ms.met + ' of ' + (ms.met + ms.missed) + ' stage deadlines met' });
+  }
   var active = parts.filter(function (p) { return p.score !== null; });
   var totalWeight = active.reduce(function (s, p) { return s + p.weight; }, 0);
   var hasData = active.length > 0;
@@ -657,6 +845,7 @@ function delegationScore(tasks, username, today, cal) {
       hasData: true,
       deduction: 0,
       responsiveness: resp,
+      milestones: ms,
       components: [{
         key: 'responsiveness', label: 'Review Responsiveness', score: resp.responsiveness,
         weight: 100,
@@ -683,8 +872,10 @@ function delegationScore(tasks, username, today, cal) {
       };
     }),
     responsiveness: resp,
+    milestones: ms,
     summary: { closed: closed.length, open: open.length, overdue: overdue,
-               reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow },
+               reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow,
+               stagesMet: ms.met, stagesMissed: ms.missed, stagesPending: ms.pending },
     breakdown: breakdown,
   };
 }

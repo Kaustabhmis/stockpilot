@@ -50,7 +50,10 @@ var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
    appended, which is the only shape of change that cannot corrupt old rows. */
 var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned By',
   'Assigned To','Status','KRA Tag','Priority','Frequency','Reworks','History JSON',
-  'Job Category','Approver Manager','Spawned By','Blocked By','Subtasks JSON','Delegate To'];
+  'Job Category','Approver Manager','Spawned By','Blocked By','Subtasks JSON','Delegate To',
+  /* Projects. Appended, never inserted: an existing tenant sheet keeps every
+     column it had, and a task with no project is simply a task. */
+  'Project ID','Project','Stage No','Stage Count','Stage Gate'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
@@ -199,6 +202,7 @@ function route_(p) {
     case 'getDashboard':        return getDashboard_(ctx);
     case 'getTasks':            return { status:'success', tasks: readTasks_(ctx) };
     case 'getUsers':            return getUsers_(ctx);
+    case 'getProjects':         return getProjects_(ctx);
     case 'getAnalytics':        return getAnalytics_(ctx, p.period, p.offset, p.span, p.person);
     case 'getAccountability':   return getAccountability_(ctx);
     case 'getPerformanceReport':return getPerformanceReport_(ctx);
@@ -209,6 +213,7 @@ function route_(p) {
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
+    case 'createProject':       return createProject_(ctx, p.form);
     case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
     case 'editTask':            return editTask_(ctx, p.form);
     case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);
@@ -700,6 +705,11 @@ function rowToTask_(r, rowIndex, names) {
     blockedBy: safeJson_(r[T['Blocked By']], []),
     subtasks: safeJson_(r[T['Subtasks JSON']], []),
     delegateTo: String(r[T['Delegate To']] || '').trim(),
+    projectId: String(r[T['Project ID']] || '').trim(),
+    projectName: String(r[T['Project']] || '').trim(),
+    stageNo: Number(r[T['Stage No']] || 0),
+    stageCount: Number(r[T['Stage Count']] || 0),
+    stageGate: String(r[T['Stage Gate']] || '').trim() || 'sequential',
     isArchived: isArchived_(status, r[T['Date Created']], history),
     toName: names[String(r[T['Assigned To']] || '').trim()] || r[T['Assigned To']] || '',
     byName: names[String(r[T['Assigned By']] || '').trim()] || r[T['Assigned By']] || '',
@@ -978,12 +988,34 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
     spawned = spawnNextOccurrence_(ctx, hit, t);
   }
 
+  /* Signing off a stage closes it, and a closed blocker stops blocking, so the
+     next stage releases itself. All that is left is to tell whoever it landed
+     on — silently unblocking work nobody is watching is how a project stalls
+     for a week between two people who were each waiting on the other. */
+  var released = null;
+  if (status === 'Verified' && t.projectId && t.stageGate !== 'parallel') {
+    var siblings = projectStages(readTasks_(ctx), t.projectId);
+    for (var si = 0; si < siblings.length; si++) {
+      if (Number(siblings[si].stageNo) === Number(t.stageNo) + 1 && isOpen(siblings[si].status)) {
+        released = siblings[si];
+        try { notifyStageReleased_(ctx, t.projectName, released); }
+        catch (e) { logError_('updateTask:stageRelease', e.message); }
+        break;
+      }
+    }
+  }
+
   try { notifyStatus_(ctx, t, status, note); } catch (e) { logError_('updateTask:notify', e.message); }
 
   return { status: 'success',
-    message: spawned ? 'Verified. Next occurrence due ' + spawned
+    message: released
+             ? 'Verified. Stage ' + released.stageNo + ' is now open for ' +
+               nameOf_(ctx, released.assignee) + '.'
+           : spawned ? 'Verified. Next occurrence due ' + spawned
            : isRework ? 'Sent back for rework.' : 'Moved to ' + status + '.',
-    spawnedDue: spawned };
+    spawnedDue: spawned,
+    releasedStage: released ? { id: released.id, stage: Number(released.stageNo),
+                                title: released.title, to: released.assignee } : null };
 }
 
 function spawnNextOccurrence_(ctx, hit, t) {
@@ -1431,6 +1463,14 @@ function getDashboard_(ctx) {
                   avgHeldDays: del.responsiveness.avgHeldDays,
                   slaDays: del.responsiveness.slaDays,
                   penalty: del.responsiveness.penalty,
+                } : null,
+                /* Stage deadlines met. A doer asked to run multi-stage work
+                   should be able to see the credit for hitting the dates, not
+                   only the cost of missing them. */
+                milestones: del.milestones && del.milestones.stages ? {
+                  met: del.milestones.met, missed: del.milestones.missed,
+                  pending: del.milestones.pending, atRisk: del.milestones.atRisk,
+                  hitRate: del.milestones.hitRate, score: del.milestones.score,
                 } : null,
                 formula: halves.length === 2
                   ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
@@ -1932,6 +1972,24 @@ function notifyStatus_(ctx, t, status, note) {
     btn_('Open Dome Box', CFG().siteUrl)));
 }
 
+/**
+ * The next stage's owner is told the moment the work they were waiting on is
+ * signed off. Without this the release is silent and the handover depends on
+ * somebody happening to look at the board.
+ */
+function notifyStageReleased_(ctx, project, stage) {
+  var who = findUser_(ctx.ss, stage.assignee);
+  if (!who || !who.email) return;
+  var subject = 'Your turn: ' + stage.title;
+  sendEmail_(who.email, subject, mailShell_(subject,
+    '<p>Hi <strong>' + esc_(who.name) + '</strong>,</p>' +
+    '<p>The stage before yours on <strong>' + esc_(project) + '</strong> has been signed off, ' +
+    'so stage ' + esc_(String(stage.stageNo)) + ' is now yours to start.</p>' +
+    infoTable_([['Project', project], ['Stage', stage.stageNo + ' of ' + stage.stageCount],
+                ['Your task', stage.title], ['Due', stage.due || '—']]) +
+    btn_('Open Dome Box', CFG().siteUrl)));
+}
+
 /** The raiser hears the outcome, with the reason if it was refused. */
 function notifyDecision_(ctx, t, isApproved, remarks) {
   var raiser = findUser_(ctx.ss, t.by);
@@ -2254,6 +2312,186 @@ function clearKra_(ctx, username) {
   if (!u) throw new Error('That person is not in this workspace.');
   setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify([]));
   return { status:'success', message: 'Cleared the KRAs for ' + u.name + '.' };
+}
+
+
+// =========================================================================
+// Projects — multi-stage work
+// =========================================================================
+// ===========================================================================
+// PROJECTS — multi-stage work
+// ===========================================================================
+//
+// A project is a run of stages that share a Project ID. Every stage is an
+// ordinary task: same board, same approval route, same review, its own owner
+// and its own deadline. Nothing about a stage is a special case, which is why
+// delegation, rework, blockers and reminders all work on it unchanged.
+//
+// On a sequential project each stage is blocked by the one before it, using
+// the blocker mechanism that already existed. Signing off a stage closes it,
+// and a closed blocker stops blocking — so the next stage releases itself with
+// no extra bookkeeping to go wrong.
+// ===========================================================================
+
+function createProject_(ctx, form) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  form = form || {};
+
+  var name = String(form.name || '').trim();
+  if (!name) throw new Error('Give the project a name.');
+
+  var gate = String(form.gate || 'sequential').toLowerCase() === 'parallel' ? 'parallel' : 'sequential';
+  var stages = (form.stages || []).map(function (s, i) {
+    return {
+      no: i + 1,
+      title: String((s && s.title) || '').trim(),
+      desc: String((s && s.desc) || ''),
+      assignTo: String((s && s.assignTo) || '').trim(),
+      due: String((s && s.dueDate) || '').trim(),
+      priority: (s && s.priority) || 'Medium',
+      checklist: (s && s.checklist) || '',
+    };
+  }).filter(function (s) { return s.title || s.assignTo || s.due; });
+
+  if (stages.length < 2) {
+    throw new Error('A project needs at least two stages. One stage on its own is just a task.');
+  }
+
+  var users = readUsers_(ctx), byName = {};
+  users.forEach(function (u) { byName[u.username] = u; });
+
+  stages.forEach(function (s) {
+    if (!s.title) throw new Error('Stage ' + s.no + ' has no title.');
+    if (!s.assignTo) throw new Error('Stage ' + s.no + ' (' + s.title + ') has nobody on it.');
+    if (!s.due) throw new Error('Stage ' + s.no + ' (' + s.title + ') has no deadline. ' +
+      'Every stage carries its own — that is the point of running it as a project.');
+    var who = byName[s.assignTo];
+    if (!who || who.active === false) throw new Error('Stage ' + s.no + ' is assigned to somebody who is not active.');
+    var allowed = canAssignTo(ctx.me, who);
+    if (!allowed.ok) throw new Error('Stage ' + s.no + ': ' + allowed.reason);
+  });
+
+  /* On a sequential run the dates have to move forwards, or the plan is telling
+     somebody to finish before the work they depend on exists. */
+  if (gate === 'sequential') {
+    for (var i = 1; i < stages.length; i++) {
+      if (parseYmd(stages[i].due) < parseYmd(stages[i - 1].due)) {
+        throw new Error('Stage ' + (i + 1) + ' is due before stage ' + i +
+          '. On a sequential project each stage has to finish after the one it waits on.');
+      }
+    }
+  }
+
+  var all = readTasks_(ctx);
+  var used = tasksCreatedInMonth(all, new Date());
+  var quota = canCreateTask(ctx.planName, used + stages.length - 1);
+  if (!quota.ok) {
+    throw new Error(quota.reason + ' This project needs ' + stages.length + ' of them.' +
+      (quota.upgradeTo ? ' Upgrade to ' + quota.upgradeTo + '.' : ''));
+  }
+
+  var projectId = 'P' + Date.now().toString(36).toUpperCase() +
+                  Math.floor(Math.random() * 1000).toString(36).toUpperCase();
+  var sheet = ctx.ss.getSheetByName(TAB.TASKS);
+  var created = [], routed = 0, prevId = '';
+
+  stages.forEach(function (s) {
+    var target = byName[s.assignTo];
+    var route = initialStatusFor(target, ctx.me);
+    var id = newTaskId_();
+    var row = blankTaskRow_();
+    row[T['ID']] = id;
+    row[T['Date Created']] = new Date();
+    row[T['Due Date']] = s.due;
+    row[T['Title']] = s.title;
+    row[T['Description']] = s.desc;
+    row[T['Assigned By']] = ctx.actor.username;
+    row[T['Assigned To']] = s.assignTo;
+    row[T['Status']] = route.status;
+    row[T['KRA Tag']] = String(form.kra || 'General');
+    row[T['Priority']] = s.priority;
+    row[T['Frequency']] = 'One Time';
+    row[T['Reworks']] = 0;
+    row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(),
+      status: route.status, user: ctx.actor.name,
+      note: 'Stage ' + s.no + ' of ' + stages.length + ' — ' + name }]);
+    row[T['Job Category']] = String(form.jobCategory || 'General');
+    row[T['Approver Manager']] = route.status === 'Awaiting Approval' ? route.approver : '';
+    row[T['Spawned By']] = '';
+    row[T['Blocked By']] = JSON.stringify(gate === 'sequential' && prevId ? [prevId] : []);
+    row[T['Subtasks JSON']] = JSON.stringify(parseChecklist_(s.checklist));
+    row[T['Delegate To']] = '';
+    row[T['Project ID']] = projectId;
+    row[T['Project']] = name;
+    row[T['Stage No']] = s.no;
+    row[T['Stage Count']] = stages.length;
+    row[T['Stage Gate']] = gate;
+    sheet.appendRow(row);
+
+    created.push({ id: id, stage: s.no, to: s.assignTo });
+    if (route.status === 'Awaiting Approval') routed++;
+    prevId = id;
+
+    /* Only the people who can actually start are told to start. Telling stage 5
+       to begin on day one trains everybody to ignore the mail. */
+    if (gate === 'parallel' || s.no === 1) {
+      try { notifyAssignment_(ctx, target, byName[route.approver], s.title, s.due, id, route.status); }
+      catch (e) { logError_('createProject:notify', e.message); }
+    }
+  });
+
+  return { status: 'success', projectId: projectId, stages: created.length,
+    routedForApproval: routed, gate: gate,
+    message: name + ' created with ' + created.length + ' stages' +
+      (routed ? ', ' + routed + ' sent for approval' : '') + '. ' +
+      (gate === 'sequential'
+        ? 'Stage 1 is live; each stage opens when the one before it is signed off.'
+        : 'All stages are live at once.') };
+}
+
+/** Every project in the workspace, with where each one has got to. */
+function getProjects_(ctx) {
+  var tasks = readTasks_(ctx);
+  var names = {};
+  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+
+  var ids = [];
+  tasks.forEach(function (t) { if (t.projectId && ids.indexOf(t.projectId) < 0) ids.push(t.projectId); });
+
+  var mine = ctx.me.role === ROLE.DOER;
+  var out = [];
+  ids.forEach(function (id) {
+    var stages = projectStages(tasks, id);
+    if (mine && !stages.some(function (s) {
+      return s.assignee === ctx.me.username || s.raisedBy === ctx.me.username; })) return;
+
+    var sum = projectSummary(tasks, id);
+    if (!sum) return;
+    sum.currentOwnerName = sum.currentOwner ? (names[sum.currentOwner] || sum.currentOwner) : '';
+    sum.stageList = stages.map(function (s) {
+      var due = stageEffectiveDue(stages, s);
+      var sub = submittedAt(s);
+      return {
+        id: s.id, no: Number(s.stageNo), title: s.title, status: s.status,
+        owner: s.assignee, ownerName: names[s.assignee] || s.assignee,
+        due: s.due, priority: s.priority,
+        /* The date they are actually answerable for. It moves out when the
+           stage before them overran, so nobody wears somebody else's slip. */
+        effectiveDue: due ? ymd(due) : s.due,
+        extended: !!(due && parseYmd(s.due) && startOfDay(due) > parseYmd(s.due)),
+        metOnTime: s.status === 'Verified' && sub && due ? dayDiff(sub, due) <= 0 : null,
+        daysLate: s.status === 'Verified' && sub && due ? Math.max(0, dayDiff(sub, due)) : null,
+        blocked: openBlockers(s, tasks).length > 0,
+      };
+    });
+    out.push(sum);
+  });
+
+  out.sort(function (a, b) {
+    if (a.complete !== b.complete) return a.complete ? 1 : -1;
+    return String(a.currentDue || a.finalDue).localeCompare(String(b.currentDue || b.finalDue));
+  });
+  return { status: 'success', projects: out };
 }
 
 
@@ -2989,6 +3227,180 @@ function dueOccurrences(job, today, state) {
 }
 
 // ---------------------------------------------------------------------------
+// PROJECTS — multi-stage work with a deadline on every stage
+// ---------------------------------------------------------------------------
+/* A project is a run of stages that share a Project ID. Each stage is an
+   ordinary task — same board, same approvals, same review — carrying its own
+   deadline and its own owner. Stage 2 is blocked by stage 1 through the
+   blocker mechanism that already exists, so nothing new had to be invented to
+   stop somebody starting out of order.
+
+   A stage deadline is a promise to the people downstream, not only to the
+   manager, which is why meeting one is scored in its own right. */
+var MILESTONE_WEIGHTS = { onTime: 0.35, quality: 0.25, queue: 0.20, milestones: 0.20 };
+
+/** Every stage of one project, in order. */
+function projectStages(tasks, projectId) {
+  return (tasks || [])
+    .filter(function (t) { return t.projectId && t.projectId === projectId; })
+    .sort(function (a, b) { return (Number(a.stageNo) || 0) - (Number(b.stageNo) || 0); });
+}
+
+/** The stage immediately before this one, or null for the first. */
+function previousStage(stages, stage) {
+  var n = Number(stage.stageNo) || 0;
+  var best = null;
+  stages.forEach(function (s) {
+    var m = Number(s.stageNo) || 0;
+    if (m < n && (!best || m > (Number(best.stageNo) || 0))) best = s;
+  });
+  return best;
+}
+
+/**
+ * When this stage actually became startable.
+ *
+ * On a sequential project that is when the stage before it was signed off; on
+ * a parallel one, or the first stage, it is the moment the project was raised.
+ */
+function stageReleasedAt(stages, stage) {
+  if (String(stage.stageGate || 'sequential') === 'parallel') return null;
+  var prev = previousStage(stages, stage);
+  if (!prev) return null;
+  return closedAt(prev);
+}
+
+/**
+ * The deadline this stage's owner is actually answerable for.
+ *
+ * If the stage before it ran over, the work could not start on time however
+ * willing the owner was. Charging them the original date would push one
+ * person's slip onto everyone downstream — the surest way to make a team stop
+ * reporting slippage at all.
+ *
+ * So a stage released after its own deadline gets back the window the plan gave
+ * it: the gap between its date and the date of the stage before it, counted
+ * from the day it was actually released. They promised that many days of work,
+ * they get that many days — no more, so a late start is not a blank cheque.
+ */
+function stageEffectiveDue(stages, stage) {
+  var due = parseYmd(stage.due);
+  var released = stageReleasedAt(stages, stage);
+  if (!due) return released ? startOfDay(released) : null;
+  if (!released || startOfDay(released) <= due) return due;
+
+  var prev = previousStage(stages, stage);
+  var prevDue = prev ? parseYmd(prev.due) : null;
+  var planned = prevDue ? Math.max(0, dayDiff(due, prevDue)) : 0;
+  return addDays(startOfDay(released), planned);
+}
+
+/**
+ * How well this person keeps the stage deadlines they were given.
+ *
+ * Deliberately scored in its own right, and NOT folded into on-time delivery:
+ * a stage date is a commitment other people have planned around, so hitting it
+ * is worth more than hitting a date only the manager was watching. Both the
+ * hits and the misses are itemised, because a score that shows a person only
+ * their failures is one they will read as a punishment ledger.
+ */
+function milestoneStats(tasks, username, today, cal) {
+  var now = today || new Date();
+  var mine = (tasks || []).filter(function (t) {
+    return t.assignee === username && t.projectId && Number(t.stageNo) > 0;
+  });
+
+  var byProject = {};
+  (tasks || []).forEach(function (t) {
+    if (!t.projectId) return;
+    (byProject[t.projectId] = byProject[t.projectId] || []).push(t);
+  });
+  Object.keys(byProject).forEach(function (k) {
+    byProject[k].sort(function (a, b) { return (Number(a.stageNo) || 0) - (Number(b.stageNo) || 0); });
+  });
+
+  var met = 0, missed = 0, pending = 0, atRisk = 0, wSum = 0, wTotal = 0;
+  var breakdown = [], items = [];
+
+  mine.forEach(function (t) {
+    var stages = byProject[t.projectId] || [t];
+    var due = stageEffectiveDue(stages, t);
+    var extended = due && parseYmd(t.due) && startOfDay(due) > parseYmd(t.due);
+    var w = priorityWeight(t.priority);
+    var label = t.projectName ? t.projectName + ' · stage ' + t.stageNo : 'Stage ' + t.stageNo;
+
+    if (t.status === STATUS.VERIFIED) {
+      var sub = submittedAt(t);
+      if (!sub || !due) return;
+      var late = chargeableLateDays(due, sub, username, cal);
+      var hit = late <= 0;
+      wTotal += w; wSum += (hit ? 100 : Math.max(0, 100 - late * LATENESS_POINTS_PER_DAY)) * w;
+      if (hit) met++; else missed++;
+      items.push({ id: t.id, title: t.title, project: t.projectName, stage: Number(t.stageNo),
+                   met: hit, daysLate: Math.max(0, late), extended: !!extended });
+      breakdown.push({
+        group: 'Project Milestones', item: label + ' — ' + t.title,
+        reason: hit ? 'Stage deadline met' + (extended ? ' (deadline moved out: the stage before it ran over)' : '')
+                    : 'Stage deadline missed by ' + late + ' day(s)' +
+                      (extended ? ', counted from the day it was actually released' : ''),
+        impact: hit ? '+' + w * 10 : '-' + Math.min(100, late * LATENESS_POINTS_PER_DAY),
+      });
+      return;
+    }
+
+    if (isOpen(t.status) && due) {
+      pending++;
+      if (chargeableLateDays(due, now, username, cal) > 0) atRisk++;
+    }
+  });
+
+  var closedCount = met + missed;
+  return {
+    hasData: closedCount > 0,
+    stages: mine.length,
+    met: met, missed: missed, pending: pending, atRisk: atRisk,
+    hitRate: closedCount ? Math.round(met / closedCount * 100) : null,
+    score: wTotal ? Math.round(wSum / wTotal) : null,
+    items: items,
+    breakdown: breakdown,
+  };
+}
+
+/** A whole project's state, for the board and the project list. */
+function projectSummary(tasks, projectId) {
+  var stages = projectStages(tasks, projectId);
+  if (!stages.length) return null;
+  var done = stages.filter(function (s) { return s.status === STATUS.VERIFIED; });
+  var dead = stages.filter(function (s) { return s.status === STATUS.REJECTED || s.status === STATUS.CANCELLED; });
+  var current = null;
+  for (var i = 0; i < stages.length; i++) {
+    if (isOpen(stages[i].status)) { current = stages[i]; break; }
+  }
+  var metOnTime = 0;
+  done.forEach(function (s) {
+    var sub = submittedAt(s), due = stageEffectiveDue(stages, s);
+    if (sub && due && dayDiff(sub, due) <= 0) metOnTime++;
+  });
+  var last = stages[stages.length - 1];
+  return {
+    projectId: projectId,
+    name: stages[0].projectName || 'Project',
+    gate: String(stages[0].stageGate || 'sequential'),
+    stages: stages.length,
+    done: done.length,
+    metOnTime: metOnTime,
+    percent: Math.round(done.length / stages.length * 100),
+    currentStage: current ? Number(current.stageNo) : null,
+    currentTitle: current ? current.title : null,
+    currentOwner: current ? current.assignee : null,
+    currentDue: current ? current.due : null,
+    finalDue: last ? last.due : '',
+    complete: done.length === stages.length,
+    stalled: dead.length > 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // PERFORMANCE — the Delegation Score
 // ---------------------------------------------------------------------------
 var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
@@ -3267,11 +3679,25 @@ function delegationScore(tasks, username, today, cal) {
     }
   });
 
+  /* --- project milestones ---
+     A stage deadline is a commitment other people have planned their own work
+     around, so meeting one earns its own score rather than disappearing into
+     the on-time average. It is weighted, not added on top, so nobody can lift
+     their score simply by having their work cut into more pieces. */
+  var ms = milestoneStats(tasks, username, today, cal);
+  ms.breakdown.forEach(function (b) { breakdown.push(b); });
+  var W = ms.hasData ? MILESTONE_WEIGHTS : SCORE_WEIGHTS;
+
   var parts = [
-    { key: 'onTime',  label: 'On-Time Delivery',   score: otW ? otSum / otW : null,   weight: SCORE_WEIGHTS.onTime,  basis: otCount + ' closed' },
-    { key: 'quality', label: 'First-Pass Quality', score: qW ? qSum / qW : null,      weight: SCORE_WEIGHTS.quality, basis: closed.length + ' closed' },
-    { key: 'queue',   label: 'Queue Health',       score: qhW ? qhSum / qhW : null,   weight: SCORE_WEIGHTS.queue,   basis: open.length + ' open' },
+    { key: 'onTime',  label: 'On-Time Delivery',   score: otW ? otSum / otW : null,   weight: W.onTime,  basis: otCount + ' closed' },
+    { key: 'quality', label: 'First-Pass Quality', score: qW ? qSum / qW : null,      weight: W.quality, basis: closed.length + ' closed' },
+    { key: 'queue',   label: 'Queue Health',       score: qhW ? qhSum / qhW : null,   weight: W.queue,   basis: open.length + ' open' },
   ];
+  if (ms.hasData) {
+    parts.push({ key: 'milestones', label: 'Project Milestones', score: ms.score,
+      weight: W.milestones,
+      basis: ms.met + ' of ' + (ms.met + ms.missed) + ' stage deadlines met' });
+  }
   var active = parts.filter(function (p) { return p.score !== null; });
   var totalWeight = active.reduce(function (s, p) { return s + p.weight; }, 0);
   var hasData = active.length > 0;
@@ -3299,6 +3725,7 @@ function delegationScore(tasks, username, today, cal) {
       hasData: true,
       deduction: 0,
       responsiveness: resp,
+      milestones: ms,
       components: [{
         key: 'responsiveness', label: 'Review Responsiveness', score: resp.responsiveness,
         weight: 100,
@@ -3325,8 +3752,10 @@ function delegationScore(tasks, username, today, cal) {
       };
     }),
     responsiveness: resp,
+    milestones: ms,
     summary: { closed: closed.length, open: open.length, overdue: overdue,
-               reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow },
+               reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow,
+               stagesMet: ms.met, stagesMissed: ms.missed, stagesPending: ms.pending },
     breakdown: breakdown,
   };
 }

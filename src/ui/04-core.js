@@ -234,7 +234,8 @@ function openScoreBreakdown() {
   /* Grouped, because a deduction for sitting on somebody else's work is a
      different conversation from a late delivery, and lumping them into one
      list is how a score stops being arguable in good faith. */
-  var order = ['On-Time Delivery', 'First-Pass Quality', 'Queue Health', 'Review Responsiveness'];
+  var order = ['Project Milestones', 'On-Time Delivery', 'First-Pass Quality',
+               'Queue Health', 'Review Responsiveness'];
   var groups = {};
   rows.forEach(function (r) { (groups[r.group || 'Other'] = groups[r.group || 'Other'] || []).push(r); });
   var names = order.filter(function (g) { return groups[g]; })
@@ -277,6 +278,29 @@ function openScoreBreakdown() {
         'and your own approved leave are not counted.</div>' +
       '</div></div></div>' : '';
 
+  /* The gains, stated as plainly as the losses. A score that only ever shows a
+     person what went wrong is read as a punishment ledger, and stops changing
+     anybody's behaviour after the first month. */
+  var ms = sc.milestones;
+  var msPanel = ms ? '<div class="rounded-2xl border ' +
+      (ms.missed ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50') + ' p-4 mb-5">' +
+    '<div class="flex items-start gap-3">' +
+      '<span class="material-icons ' + (ms.missed ? 'text-amber-700' : 'text-emerald-700') + '">flag</span>' +
+      '<div class="min-w-0">' +
+      '<div class="text-sm font-black text-gray-900">Project stage deadlines</div>' +
+      '<div class="text-[13px] font-semibold text-gray-700 mt-0.5">' +
+        esc(ms.met + ' met' + (ms.missed ? ', ' + ms.missed + ' missed' : '')) +
+        (ms.hitRate != null ? esc(' · ' + ms.hitRate + '% hit rate') : '') +
+        (ms.pending ? esc(' · ' + ms.pending + ' stage' + (ms.pending === 1 ? '' : 's') + ' still running') +
+          (ms.atRisk ? esc(', ' + ms.atRisk + ' past the date') : '') : '') +
+      '</div>' +
+      (ms.met ? '<div class="text-[13px] font-black text-emerald-800 mt-1">' +
+         esc('Every stage deadline you meet adds to this score') + '</div>' : '') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        'A stage date is a promise to the people downstream, so it is scored in its own right. ' +
+        'If the stage before yours ran over, your date moves out with it.</div>' +
+      '</div></div></div>' : '';
+
   openModal('<div class="p-6 lg:p-7">' +
     '<div class="flex justify-between items-start mb-1">' +
       '<h2 class="text-2xl font-black">How your score is built</h2>' +
@@ -286,8 +310,8 @@ function openScoreBreakdown() {
       'Nothing is estimated.</p>' +
     (sc.formula ? '<p class="text-[13px] font-bold text-gray-700 bg-gray-50 rounded-xl px-3 py-2 mb-5">' +
        esc(sc.formula) + '</p>' : '') +
-    respPanel +
-    '<div class="grid grid-cols-3 gap-3 mb-1">' +
+    msPanel + respPanel +
+    '<div class="grid gap-3 mb-1" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">' +
       (sc.components || []).map(function (c) {
         return '<div class="bg-gray-50 rounded-2xl p-3 text-center">' +
           '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(c.label) + '</div>' +

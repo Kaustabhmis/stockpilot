@@ -77,6 +77,7 @@ $('btnNewUser').addEventListener('click', function () { openUser(null); });
 $('btnLeave').addEventListener('click', openLeave);
 $('btnCategories').addEventListener('click', openCategories);
 $('btnKra').addEventListener('click', openKraOverview);
+$('btnNewProject').addEventListener('click', openProjectBuilder);
 $('btnAppraise').addEventListener('click', openAppraisal);
 $('btnAccount2').addEventListener('click', openAccountability);
 $('btnHistoryRpt').addEventListener('click', openReviewHistory);

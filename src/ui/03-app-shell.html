@@ -12,6 +12,7 @@
 
       <div class="seg md-up flex gap-1 bg-gray-100 p-1 rounded-xl" id="navTabs">
         <button data-tab="tasks" class="on">Tasks</button>
+        <button data-tab="projects">Projects</button>
         <button data-tab="team">Team</button>
         <button data-tab="reports">Reports</button>
       </div>
@@ -45,6 +46,7 @@
 
     <div class="seg md-down flex gap-1 bg-gray-100 p-1 mx-4 mb-3 rounded-xl" id="navTabsMobile">
       <button data-tab="tasks" class="on flex-1">Tasks</button>
+      <button data-tab="projects" class="flex-1">Projects</button>
       <button data-tab="team" class="flex-1">Team</button>
       <button data-tab="reports" class="flex-1">Reports</button>
     </div>
@@ -85,6 +87,21 @@
       <div id="board" class="grid gap-4" style="grid-template-columns:repeat(5,minmax(230px,1fr));overflow-x:auto"></div>
       <div id="list" class="hidden bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
       <div id="tasksEmpty" class="hidden text-center py-24 text-gray-400 font-bold"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------- PROJECTS --------------------------- -->
+  <section id="tab-projects" class="hidden">
+    <div class="max-w-[1400px] mx-auto px-4 lg:px-6 py-6">
+      <div class="flex flex-wrap items-center gap-3 mb-1">
+        <h2 class="text-2xl font-black">Projects</h2>
+        <span class="flex-1"></span>
+        <button id="btnNewProject" class="btn btn-p flex items-center gap-1">
+          <span class="material-icons text-base">add</span> New project</button>
+      </div>
+      <p class="text-sm text-gray-400 font-semibold mb-5">Work that runs in stages. Every stage has
+        its own owner and its own deadline, and meeting one earns score in its own right.</p>
+      <div id="projectList"></div>
     </div>
   </section>
 

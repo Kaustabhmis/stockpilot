@@ -277,6 +277,24 @@ function notifyStatus_(ctx, t, status, note) {
     btn_('Open Dome Box', CFG().siteUrl)));
 }
 
+/**
+ * The next stage's owner is told the moment the work they were waiting on is
+ * signed off. Without this the release is silent and the handover depends on
+ * somebody happening to look at the board.
+ */
+function notifyStageReleased_(ctx, project, stage) {
+  var who = findUser_(ctx.ss, stage.assignee);
+  if (!who || !who.email) return;
+  var subject = 'Your turn: ' + stage.title;
+  sendEmail_(who.email, subject, mailShell_(subject,
+    '<p>Hi <strong>' + esc_(who.name) + '</strong>,</p>' +
+    '<p>The stage before yours on <strong>' + esc_(project) + '</strong> has been signed off, ' +
+    'so stage ' + esc_(String(stage.stageNo)) + ' is now yours to start.</p>' +
+    infoTable_([['Project', project], ['Stage', stage.stageNo + ' of ' + stage.stageCount],
+                ['Your task', stage.title], ['Due', stage.due || '—']]) +
+    btn_('Open Dome Box', CFG().siteUrl)));
+}
+
 /** The raiser hears the outcome, with the reason if it was refused. */
 function notifyDecision_(ctx, t, isApproved, remarks) {
   var raiser = findUser_(ctx.ss, t.by);

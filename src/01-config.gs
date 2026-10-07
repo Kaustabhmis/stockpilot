@@ -48,7 +48,10 @@ var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
    appended, which is the only shape of change that cannot corrupt old rows. */
 var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned By',
   'Assigned To','Status','KRA Tag','Priority','Frequency','Reworks','History JSON',
-  'Job Category','Approver Manager','Spawned By','Blocked By','Subtasks JSON','Delegate To'];
+  'Job Category','Approver Manager','Spawned By','Blocked By','Subtasks JSON','Delegate To',
+  /* Projects. Appended, never inserted: an existing tenant sheet keeps every
+     column it had, and a task with no project is simply a task. */
+  'Project ID','Project','Stage No','Stage Count','Stage Gate'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];

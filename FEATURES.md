@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **384 checks across twelve suites**, run against the real `code.gs` on an
+Tests: **466 checks across fourteen suites**, run against the real `code.gs` on an
 in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 `tests/README.md`.
 
@@ -47,7 +47,8 @@ in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 - [x] Accountability report: rework and lateness, *and* approvals/reviews held
 - [x] Performance report
 - [x] **Leave does not count as lateness**
-- [x] **Managers are measured too** (new) — see below
+- [x] **Managers are measured too** — see below
+- [x] **Projects: multi-stage work, a deadline per stage, score for meeting one** (new)
 
 ### How the final score is built
 
@@ -61,6 +62,32 @@ the browser sent cannot decide anyone's rating.
 
 Delegation itself is on-time delivery, first-pass quality and queue health,
 weighted by priority — minus a responsiveness penalty.
+
+### Project milestones — the doer's gain
+
+A project is a run of stages sharing a Project ID. Each stage is an ordinary
+task with its own owner and its own deadline, so delegation, rework, blockers,
+approvals and reminders all work on it unchanged. On a sequential project a
+stage is blocked by the one before it; signing that one off closes it, and a
+closed blocker stops blocking, so the next stage releases itself and its owner
+is emailed.
+
+Meeting a stage deadline is scored in its own right, as **Project Milestones** —
+a fourth weighted component, present only for people who actually run project
+work:
+
+    On-Time Delivery 35% · First-Pass Quality 25% · Queue Health 20% · Milestones 20%
+
+It is weighted, not added on top, so nobody lifts their score by having their
+work cut into more pieces. Hits are itemised in the breakdown alongside the
+misses — a score that shows a person only what went wrong stops changing
+anybody's behaviour after the first month.
+
+**Nobody wears somebody else's slip.** If the stage before yours ran over, you
+could not have started on time. A stage released after its own deadline gets
+back the window the plan gave it — the gap between its date and the previous
+stage's date, counted from the day it was actually released. You promised that
+many days of work; you get that many days, and no more.
 
 ### Responsiveness — the manager's half
 

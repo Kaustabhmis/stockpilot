@@ -89,6 +89,14 @@ function getDashboard_(ctx) {
                   slaDays: del.responsiveness.slaDays,
                   penalty: del.responsiveness.penalty,
                 } : null,
+                /* Stage deadlines met. A doer asked to run multi-stage work
+                   should be able to see the credit for hitting the dates, not
+                   only the cost of missing them. */
+                milestones: del.milestones && del.milestones.stages ? {
+                  met: del.milestones.met, missed: del.milestones.missed,
+                  pending: del.milestones.pending, atRisk: del.milestones.atRisk,
+                  hitRate: del.milestones.hitRate, score: del.milestones.score,
+                } : null,
                 formula: halves.length === 2
                   ? 'Final = (Performance ' + Math.round(lastPerf) + ' + Delegation ' + del.score + ') / 2'
                   : lastPerf !== null ? 'No closed work yet, so this is the appraisal score alone.'

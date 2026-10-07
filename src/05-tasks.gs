@@ -150,12 +150,34 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
     spawned = spawnNextOccurrence_(ctx, hit, t);
   }
 
+  /* Signing off a stage closes it, and a closed blocker stops blocking, so the
+     next stage releases itself. All that is left is to tell whoever it landed
+     on — silently unblocking work nobody is watching is how a project stalls
+     for a week between two people who were each waiting on the other. */
+  var released = null;
+  if (status === 'Verified' && t.projectId && t.stageGate !== 'parallel') {
+    var siblings = projectStages(readTasks_(ctx), t.projectId);
+    for (var si = 0; si < siblings.length; si++) {
+      if (Number(siblings[si].stageNo) === Number(t.stageNo) + 1 && isOpen(siblings[si].status)) {
+        released = siblings[si];
+        try { notifyStageReleased_(ctx, t.projectName, released); }
+        catch (e) { logError_('updateTask:stageRelease', e.message); }
+        break;
+      }
+    }
+  }
+
   try { notifyStatus_(ctx, t, status, note); } catch (e) { logError_('updateTask:notify', e.message); }
 
   return { status: 'success',
-    message: spawned ? 'Verified. Next occurrence due ' + spawned
+    message: released
+             ? 'Verified. Stage ' + released.stageNo + ' is now open for ' +
+               nameOf_(ctx, released.assignee) + '.'
+           : spawned ? 'Verified. Next occurrence due ' + spawned
            : isRework ? 'Sent back for rework.' : 'Moved to ' + status + '.',
-    spawnedDue: spawned };
+    spawnedDue: spawned,
+    releasedStage: released ? { id: released.id, stage: Number(released.stageNo),
+                                title: released.title, to: released.assignee } : null };
 }
 
 function spawnNextOccurrence_(ctx, hit, t) {
