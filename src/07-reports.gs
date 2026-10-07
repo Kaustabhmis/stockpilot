@@ -164,7 +164,8 @@ function getAnalytics_(ctx, period, offset, span, person) {
   var count = Number(span || 12);
 
   var range = periodRange(kind, off);
-  var optsFor = function (u) { return scoreOpts_(ctx, u.username); };
+  var opts = scoreOptsMap_(ctx);
+  var optsFor = function (u) { return opts[u.username]; };
   var a = periodAnalytics(tasks, users, range, new Date(), cal, optsFor);
 
   var trend = [];
@@ -316,6 +317,7 @@ function submitAppraisal_(ctx, data) {
       result.performance === null ? '' : result.performance,
       result.delegation === null ? '' : result.delegation,
       result.score, new Date()]);
+  dropCache_(ctx);
 
   return { status: 'success', score: result.score, band: performanceBand(result.score),
     performance: result.performance, delegation: result.delegation,
@@ -337,8 +339,49 @@ function submitAppraisal_(ctx, data) {
  * in the building.
  */
 function scoreOpts_(ctx, username) {
-  return {
-    expectedTasks: wipLimitFor_(ctx, username),
-    cookies: cookiesFor_(ctx, username, periodRange(PERIOD.MONTH, 0)),
-  };
+  return scoreOptsMap_(ctx)[username] ||
+         { expectedTasks: DEFAULT_WIP_LIMIT, cookies: [] };
+}
+
+/**
+ * Everything the score engine needs about every person, built from ONE read of
+ * each sheet and cached on the request.
+ *
+ * This existed as a per-person function called inside two nested loops: once
+ * per person, per period, on a twelve-period trend. Each call re-read the whole
+ * Users sheet twice and the whole Cookie sheet once, so a twenty-person
+ * workspace spent 780 full-sheet reads building one Reports page, and a
+ * hundred-and-fifty-person one would spend nearly six thousand. It scaled with
+ * headcount, which means the page got slower exactly as a customer became worth
+ * more — and Apps Script kills any execution at six minutes, so the largest
+ * account is the first one that cannot open its own reports.
+ *
+ * None of it varied by period anyway: a WIP limit is a constant and the cookie
+ * window is always the current month.
+ */
+function scoreOptsMap_(ctx) {
+  if (ctx._scoreOpts) return ctx._scoreOpts;
+
+  var range = periodRange(PERIOD.MONTH, 0);
+  var byUser = {};
+  readUsers_(ctx).forEach(function (u) {
+    byUser[u.username] = {
+      expectedTasks: (u.wipLimit != null && !isNaN(u.wipLimit)) ? u.wipLimit : DEFAULT_WIP_LIMIT,
+      cookies: [],
+    };
+  });
+
+  var names = {};
+  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+  readCookies_(ctx).forEach(function (c) {
+    var slot = byUser[c.to];
+    if (!slot) return;
+    var d = new Date(c.date);
+    if (isNaN(d) || !inWindow(d, range)) return;
+    slot.cookies.push({ date: c.date, points: c.points, reason: c.reason,
+                        by: c.by, byName: names[c.by] || c.by });
+  });
+
+  ctx._scoreOpts = byUser;
+  return byUser;
 }

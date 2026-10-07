@@ -123,6 +123,7 @@ function writeProfileMaster_(ctx, profile, rows) {
   var d = sh.getDataRange().getValues();
   for (var i = d.length - 1; i > 0; i--) {
     if (String(d[i][0]).trim().toLowerCase() === String(profile).trim().toLowerCase()) sh.deleteRow(i + 1);
+    dropCache_(ctx);
   }
   if (!rows.length) return;
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, KRA_MASTER_COLS.length)

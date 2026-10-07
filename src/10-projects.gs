@@ -112,6 +112,7 @@ function createProject_locked_(ctx, form) {
     row[T['Stage Count']] = stages.length;
     row[T['Stage Gate']] = gate;
     sheet.appendRow(row);
+    dropCache_(ctx);
 
     created.push({ id: id, stage: s.no, to: s.assignTo });
     if (route.status === 'Awaiting Approval') routed++;

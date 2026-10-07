@@ -75,6 +75,26 @@ the apostrophe.
 
 ---
 
+### 4b. The Reports page scaled with headcount
+
+Measured, not guessed: one Reports load for a twenty-person workspace cost
+**824 full-sheet reads**. `getAnalytics_` builds a twelve-period trend and
+called `scoreOpts_` once per person *per period*, each call re-reading the whole
+Users sheet twice and the Cookies sheet once. At 150 people that is ~5,900
+reads for one page.
+
+The page therefore got slower exactly as a customer became worth more, and Apps
+Script kills any execution at six minutes — so the largest account is the first
+one that cannot open its own reports. None of it varied by period anyway: a WIP
+limit is a constant and the cookie window is always the current month.
+
+Reads are now memoised for the life of a request and every write drops the
+cache, with a lint rule that fails the build if a tenant-scoped function writes
+without invalidating. **824 → 5, and flat:** adding 25 more people costs no
+extra reads at all.
+
+**Severity: medium now, high at scale.**
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

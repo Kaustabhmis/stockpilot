@@ -162,6 +162,11 @@ function tenantContext_(session) {
     serviceStopped: (daysLeft !== null && daysLeft <= -7 && normalizePlan(reg ? reg.plan : 'Free') !== 'Free'),
   };
 
+  /* One request, one context. The low-level writers invalidate the per-request
+     cache through this rather than being handed a ctx they have no other use
+     for. */
+  CURRENT_CTX = ctx;
+
   /* Point the scoring engine at this workspace's own priority levels before any
      handler runs. Done once here rather than threaded through every call site:
      a weight that applied in one place and not another would be worse than not

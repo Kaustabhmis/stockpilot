@@ -76,6 +76,12 @@ var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept
  * lock cannot be had, the write does NOT go ahead — the whole point is that
  * racing through is the failure being prevented.
  */
+/* The context of the request being served. Apps Script gives each request its
+   own execution, so there is exactly one at a time — which is what lets a
+   low-level writer invalidate the cache without being handed a ctx it has no
+   other use for. */
+var CURRENT_CTX = null;
+
 function withLock_(fn) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }

@@ -35,15 +35,43 @@ function blankTaskRow_() { return TASK_COLS.map(function () { return ''; }); }
 
 /* ---------- users -------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   PER-REQUEST CACHE
+
+   A handler reads the same sheet many times over: readUsers_ alone is called
+   from a dozen places, and getDataRange() is a round trip to Sheets every time.
+   Apps Script gives each request its own execution, so caching for the life of
+   a request is both safe and the natural scope.
+
+   The rule is invalidation, not cleverness: ANY write drops the whole cache
+   (dropCache_). Reads are cheap and correctness is not, so there is no attempt
+   to work out which key a given write affected — a stale user list read back
+   after an edit is the kind of bug that takes a week to find.
+   ------------------------------------------------------------------------- */
+function cached_(ctx, key, fn) {
+  if (!ctx._cache) ctx._cache = {};
+  if (!(key in ctx._cache)) ctx._cache[key] = fn();
+  return ctx._cache[key];
+}
+
+/* Called with no argument from the low-level writers, which do not carry a ctx:
+   there is only ever one request in flight, so CURRENT_CTX is unambiguous. */
+function dropCache_(ctx) {
+  var c = ctx || CURRENT_CTX;
+  if (c) { c._cache = {}; c._scoreOpts = null; }
+}
+
 function readUsers_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.USERS);
-  var d = sh.getDataRange().getValues();
-  var out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][U['Username']] && !d[i][U['Email']]) continue;
-    out.push(rowToUser_(d[i], i + 1));
-  }
-  return out;
+  return cached_(ctx, 'users', function () {
+    var sh = ctx.ss.getSheetByName(TAB.USERS);
+    var d = sh.getDataRange().getValues();
+    var out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][U['Username']] && !d[i][U['Email']]) continue;
+      out.push(rowToUser_(d[i], i + 1));
+    }
+    return out;
+  });
 }
 
 function rowToUser_(r, rowIndex) {
@@ -84,20 +112,23 @@ function getUserField_(ss, rowIndex, col) {
 }
 function setUserField_(ss, rowIndex, col, value) {
   ss.getSheetByName(TAB.USERS).getRange(rowIndex, U[col] + 1).setValue(value);
+  dropCache_();
 }
 
 /* ---------- tasks -------------------------------------------------------- */
 
 function readTasks_(ctx) {
-  var d = ctx.ss.getSheetByName(TAB.TASKS).getDataRange().getValues();
-  var names = {};
-  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
-  var out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][T['ID']]) continue;
-    out.push(rowToTask_(d[i], i + 1, names));
-  }
-  return out;
+  return cached_(ctx, 'tasks', function () {
+    var d = ctx.ss.getSheetByName(TAB.TASKS).getDataRange().getValues();
+    var names = {};
+    readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+    var out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][T['ID']]) continue;
+      out.push(rowToTask_(d[i], i + 1, names));
+    }
+    return out;
+});
 }
 
 function rowToTask_(r, rowIndex, names) {
@@ -181,6 +212,7 @@ function findTaskRow_(ctx, taskId) {
 
 function writeTaskField_(hit, col, value) {
   hit.sheet.getRange(hit.rowIndex, T[col] + 1).setValue(value);
+  dropCache_();
 }
 
 function appendHistory_(hit, status, actorName, note, extra) {
@@ -195,12 +227,14 @@ function appendHistory_(hit, status, actorName, note, extra) {
 /* ---------- misc tabs ---------------------------------------------------- */
 
 function readCategories_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
-  if (!sh) return DEFAULT_CATEGORIES.slice();
-  var d = sh.getDataRange().getValues();
-  var out = d.map(function (r) { return String(r[0] || '').trim(); })
-             .filter(function (c) { return c; });
-  return out.length ? out : DEFAULT_CATEGORIES.slice();
+  return cached_(ctx, 'cats', function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+    if (!sh) return DEFAULT_CATEGORIES.slice();
+    var d = sh.getDataRange().getValues();
+    var out = d.map(function (r) { return String(r[0] || '').trim(); })
+               .filter(function (c) { return c; });
+    return out.length ? out : DEFAULT_CATEGORIES.slice();
+});
 }
 
 function updateCategories_(ctx, categories) {
@@ -212,6 +246,7 @@ function updateCategories_(ctx, categories) {
      priority levels in B and C with it. */
   clearColumn_(sh, 1);
   if (list.length) sh.getRange(1, 1, list.length, 1).setValues(list.map(function (c) { return [c]; }));
+  dropCache_(ctx);
   return { status: 'success', categories: list };
 }
 
@@ -225,17 +260,19 @@ function clearColumn_(sh, col) {
    categories already in A. Appended rather than given a tab of their own so an
    existing tenant sheet gains them without anything being moved. */
 function readPriorities_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
-  if (!sh || sh.getLastRow() === 0) return DEFAULT_PRIORITIES.slice();
-  var d = sh.getRange(1, 2, sh.getLastRow(), 2).getValues();
-  var out = [];
-  for (var i = 0; i < d.length; i++) {
-    var name = String(d[i][0] || '').trim();
-    if (!name) continue;
-    var w = Number(d[i][1]);
-    out.push({ name: name, weight: (isNaN(w) || w <= 0) ? 2 : w });
-  }
-  return out.length ? out : DEFAULT_PRIORITIES.slice();
+  return cached_(ctx, 'prio', function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+    if (!sh || sh.getLastRow() === 0) return DEFAULT_PRIORITIES.slice();
+    var d = sh.getRange(1, 2, sh.getLastRow(), 2).getValues();
+    var out = [];
+    for (var i = 0; i < d.length; i++) {
+      var name = String(d[i][0] || '').trim();
+      if (!name) continue;
+      var w = Number(d[i][1]);
+      out.push({ name: name, weight: (isNaN(w) || w <= 0) ? 2 : w });
+    }
+    return out.length ? out : DEFAULT_PRIORITIES.slice();
+});
 }
 
 function updatePriorities_(ctx, levels) {
@@ -272,20 +309,23 @@ function updatePriorities_(ctx, levels) {
   clearColumn_(sh, 2); clearColumn_(sh, 3);
   sh.getRange(1, 2, list.length, 2)
     .setValues(list.map(function (l) { return [l.name, l.weight]; }));
+  dropCache_(ctx);
   return { status: 'success', priorities: list,
     message: list.length + ' priority level(s) saved.' };
 }
 
 function readLeave_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.LEAVE);
-  if (!sh) return [];
-  var d = sh.getDataRange().getValues(), out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][0]) continue;
-    out.push({ username: String(d[i][0]).trim(), from: toYmd_(d[i][1]), to: toYmd_(d[i][2]),
-               reason: d[i][3] || '', approved: d[i][4] !== false });
-  }
-  return out;
+  return cached_(ctx, 'leave', function () {
+    var sh = ctx.ss.getSheetByName(TAB.LEAVE);
+    if (!sh) return [];
+    var d = sh.getDataRange().getValues(), out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][0]) continue;
+      out.push({ username: String(d[i][0]).trim(), from: toYmd_(d[i][1]), to: toYmd_(d[i][2]),
+                 reason: d[i][3] || '', approved: d[i][4] !== false });
+    }
+    return out;
+});
 }
 
 function setLeave_(ctx, username, from, to, reason) {
@@ -293,6 +333,7 @@ function setLeave_(ctx, username, from, to, reason) {
   if (!username || !from) throw new Error('Pick a person and a start date.');
   var sh = mkTab_(ctx.ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
   sh.appendRow([String(username).trim(), from, to || from, reason || '', true]);
+  dropCache_(ctx);
   return { status: 'success', message: 'Leave recorded. It will not count against their score.' };
 }
 

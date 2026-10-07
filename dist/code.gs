@@ -78,6 +78,12 @@ var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept
  * lock cannot be had, the write does NOT go ahead — the whole point is that
  * racing through is the failure being prevented.
  */
+/* The context of the request being served. Apps Script gives each request its
+   own execution, so there is exactly one at a time — which is what lets a
+   low-level writer invalidate the cache without being handed a ctx it has no
+   other use for. */
+var CURRENT_CTX = null;
+
 function withLock_(fn) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
@@ -353,6 +359,11 @@ function tenantContext_(session) {
     // rather than vanishing — nobody loses access to their own history.
     serviceStopped: (daysLeft !== null && daysLeft <= -7 && normalizePlan(reg ? reg.plan : 'Free') !== 'Free'),
   };
+
+  /* One request, one context. The low-level writers invalidate the per-request
+     cache through this rather than being handed a ctx they have no other use
+     for. */
+  CURRENT_CTX = ctx;
 
   /* Point the scoring engine at this workspace's own priority levels before any
      handler runs. Done once here rather than threaded through every call site:
@@ -706,15 +717,43 @@ function blankTaskRow_() { return TASK_COLS.map(function () { return ''; }); }
 
 /* ---------- users -------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   PER-REQUEST CACHE
+
+   A handler reads the same sheet many times over: readUsers_ alone is called
+   from a dozen places, and getDataRange() is a round trip to Sheets every time.
+   Apps Script gives each request its own execution, so caching for the life of
+   a request is both safe and the natural scope.
+
+   The rule is invalidation, not cleverness: ANY write drops the whole cache
+   (dropCache_). Reads are cheap and correctness is not, so there is no attempt
+   to work out which key a given write affected — a stale user list read back
+   after an edit is the kind of bug that takes a week to find.
+   ------------------------------------------------------------------------- */
+function cached_(ctx, key, fn) {
+  if (!ctx._cache) ctx._cache = {};
+  if (!(key in ctx._cache)) ctx._cache[key] = fn();
+  return ctx._cache[key];
+}
+
+/* Called with no argument from the low-level writers, which do not carry a ctx:
+   there is only ever one request in flight, so CURRENT_CTX is unambiguous. */
+function dropCache_(ctx) {
+  var c = ctx || CURRENT_CTX;
+  if (c) { c._cache = {}; c._scoreOpts = null; }
+}
+
 function readUsers_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.USERS);
-  var d = sh.getDataRange().getValues();
-  var out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][U['Username']] && !d[i][U['Email']]) continue;
-    out.push(rowToUser_(d[i], i + 1));
-  }
-  return out;
+  return cached_(ctx, 'users', function () {
+    var sh = ctx.ss.getSheetByName(TAB.USERS);
+    var d = sh.getDataRange().getValues();
+    var out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][U['Username']] && !d[i][U['Email']]) continue;
+      out.push(rowToUser_(d[i], i + 1));
+    }
+    return out;
+  });
 }
 
 function rowToUser_(r, rowIndex) {
@@ -755,20 +794,23 @@ function getUserField_(ss, rowIndex, col) {
 }
 function setUserField_(ss, rowIndex, col, value) {
   ss.getSheetByName(TAB.USERS).getRange(rowIndex, U[col] + 1).setValue(value);
+  dropCache_();
 }
 
 /* ---------- tasks -------------------------------------------------------- */
 
 function readTasks_(ctx) {
-  var d = ctx.ss.getSheetByName(TAB.TASKS).getDataRange().getValues();
-  var names = {};
-  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
-  var out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][T['ID']]) continue;
-    out.push(rowToTask_(d[i], i + 1, names));
-  }
-  return out;
+  return cached_(ctx, 'tasks', function () {
+    var d = ctx.ss.getSheetByName(TAB.TASKS).getDataRange().getValues();
+    var names = {};
+    readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+    var out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][T['ID']]) continue;
+      out.push(rowToTask_(d[i], i + 1, names));
+    }
+    return out;
+});
 }
 
 function rowToTask_(r, rowIndex, names) {
@@ -852,6 +894,7 @@ function findTaskRow_(ctx, taskId) {
 
 function writeTaskField_(hit, col, value) {
   hit.sheet.getRange(hit.rowIndex, T[col] + 1).setValue(value);
+  dropCache_();
 }
 
 function appendHistory_(hit, status, actorName, note, extra) {
@@ -866,12 +909,14 @@ function appendHistory_(hit, status, actorName, note, extra) {
 /* ---------- misc tabs ---------------------------------------------------- */
 
 function readCategories_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
-  if (!sh) return DEFAULT_CATEGORIES.slice();
-  var d = sh.getDataRange().getValues();
-  var out = d.map(function (r) { return String(r[0] || '').trim(); })
-             .filter(function (c) { return c; });
-  return out.length ? out : DEFAULT_CATEGORIES.slice();
+  return cached_(ctx, 'cats', function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+    if (!sh) return DEFAULT_CATEGORIES.slice();
+    var d = sh.getDataRange().getValues();
+    var out = d.map(function (r) { return String(r[0] || '').trim(); })
+               .filter(function (c) { return c; });
+    return out.length ? out : DEFAULT_CATEGORIES.slice();
+});
 }
 
 function updateCategories_(ctx, categories) {
@@ -883,6 +928,7 @@ function updateCategories_(ctx, categories) {
      priority levels in B and C with it. */
   clearColumn_(sh, 1);
   if (list.length) sh.getRange(1, 1, list.length, 1).setValues(list.map(function (c) { return [c]; }));
+  dropCache_(ctx);
   return { status: 'success', categories: list };
 }
 
@@ -896,17 +942,19 @@ function clearColumn_(sh, col) {
    categories already in A. Appended rather than given a tab of their own so an
    existing tenant sheet gains them without anything being moved. */
 function readPriorities_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
-  if (!sh || sh.getLastRow() === 0) return DEFAULT_PRIORITIES.slice();
-  var d = sh.getRange(1, 2, sh.getLastRow(), 2).getValues();
-  var out = [];
-  for (var i = 0; i < d.length; i++) {
-    var name = String(d[i][0] || '').trim();
-    if (!name) continue;
-    var w = Number(d[i][1]);
-    out.push({ name: name, weight: (isNaN(w) || w <= 0) ? 2 : w });
-  }
-  return out.length ? out : DEFAULT_PRIORITIES.slice();
+  return cached_(ctx, 'prio', function () {
+    var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+    if (!sh || sh.getLastRow() === 0) return DEFAULT_PRIORITIES.slice();
+    var d = sh.getRange(1, 2, sh.getLastRow(), 2).getValues();
+    var out = [];
+    for (var i = 0; i < d.length; i++) {
+      var name = String(d[i][0] || '').trim();
+      if (!name) continue;
+      var w = Number(d[i][1]);
+      out.push({ name: name, weight: (isNaN(w) || w <= 0) ? 2 : w });
+    }
+    return out.length ? out : DEFAULT_PRIORITIES.slice();
+});
 }
 
 function updatePriorities_(ctx, levels) {
@@ -943,20 +991,23 @@ function updatePriorities_(ctx, levels) {
   clearColumn_(sh, 2); clearColumn_(sh, 3);
   sh.getRange(1, 2, list.length, 2)
     .setValues(list.map(function (l) { return [l.name, l.weight]; }));
+  dropCache_(ctx);
   return { status: 'success', priorities: list,
     message: list.length + ' priority level(s) saved.' };
 }
 
 function readLeave_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.LEAVE);
-  if (!sh) return [];
-  var d = sh.getDataRange().getValues(), out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][0]) continue;
-    out.push({ username: String(d[i][0]).trim(), from: toYmd_(d[i][1]), to: toYmd_(d[i][2]),
-               reason: d[i][3] || '', approved: d[i][4] !== false });
-  }
-  return out;
+  return cached_(ctx, 'leave', function () {
+    var sh = ctx.ss.getSheetByName(TAB.LEAVE);
+    if (!sh) return [];
+    var d = sh.getDataRange().getValues(), out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][0]) continue;
+      out.push({ username: String(d[i][0]).trim(), from: toYmd_(d[i][1]), to: toYmd_(d[i][2]),
+                 reason: d[i][3] || '', approved: d[i][4] !== false });
+    }
+    return out;
+});
 }
 
 function setLeave_(ctx, username, from, to, reason) {
@@ -964,6 +1015,7 @@ function setLeave_(ctx, username, from, to, reason) {
   if (!username || !from) throw new Error('Pick a person and a start date.');
   var sh = mkTab_(ctx.ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
   sh.appendRow([String(username).trim(), from, to || from, reason || '', true]);
+  dropCache_(ctx);
   return { status: 'success', message: 'Leave recorded. It will not count against their score.' };
 }
 
@@ -1076,6 +1128,7 @@ function createTask_locked_(ctx, form) {
     row[T['Subtasks JSON']] = JSON.stringify(parseChecklist_(form.checklist));
     row[T['Delegate To']] = '';
     sheet.appendRow(row);
+    dropCache_(ctx);
     created.push({ id: id, to: username });
     if (route.status === 'Awaiting Approval') routed++;
 
@@ -1231,6 +1284,7 @@ function spawnNextOccurrence_(ctx, hit, t) {
     return { text: s.text, done: false }; }));
   row[T['Delegate To']] = '';
   ctx.ss.getSheetByName(TAB.TASKS).appendRow(row);
+  dropCache_(ctx);
   return due;
 }
 
@@ -1462,12 +1516,14 @@ function addUser_locked_(ctx, form) {
   row[U['KRAs JSON']] = JSON.stringify(form.kras || []);
   row[U['WhatsApp OptIn']] = !!form.waOptIn;
   ctx.ss.getSheetByName(TAB.USERS).appendRow(row);
+  dropCache_(ctx);
 
   // Global registry entry, so this person can sign in.
   try {
     var g = mkTab_(SpreadsheetApp.openById(CFG().masterId), TAB.GLOBAL,
       ['Email','Password','SheetID','Username']);
     g.appendRow([email, hash, ctx.sheetId, username]);
+    dropCache_(ctx);
   } catch (e) { logError_('addUser:global', e.message); }
 
   try { sendWelcomeStaff_(email, form.name, ctx.company, username); } catch (e) {}
@@ -1488,7 +1544,10 @@ function updateUser_(ctx, form) {
   }
 
   var sh = ctx.ss.getSheetByName(TAB.USERS);
-  var set = function (col, val) { sh.getRange(target.rowIndex, U[col] + 1).setValue(val); };
+  var set = function (col, val) {
+    sh.getRange(target.rowIndex, U[col] + 1).setValue(val);
+    dropCache_(ctx);
+  };
 
   if (form.name) set('Name', String(form.name).trim());
   if (form.email) set('Email', String(form.email).trim().toLowerCase());
@@ -1545,6 +1604,7 @@ function deactivateUser_(ctx, target, reassignTo) {
     });
   }
   ctx.ss.getSheetByName(TAB.USERS).getRange(target.rowIndex, U['Active'] + 1).setValue(false);
+  dropCache_(ctx);
   return { status: 'success',
     message: target.name + ' deactivated' + (stranded.length ? '; ' + stranded.length + ' task(s) moved.' : '.') };
 }
@@ -1572,6 +1632,9 @@ function deleteUser_(ctx, username, reassignTo) {
       for (var i = d.length - 1; i > 0; i--) {
         if (String(d[i][0]).trim().toLowerCase() === target.email.toLowerCase() &&
             String(d[i][2]).trim() === String(ctx.sheetId)) { g.deleteRow(i + 1); }
+      /* The global login registry, not this tenant's sheets — but the user row
+         itself has already changed, so the cache goes either way. */
+      dropCache_(ctx);
       }
     }
   } catch (e) { logError_('deleteUser:global', e.message); }
@@ -1747,7 +1810,8 @@ function getAnalytics_(ctx, period, offset, span, person) {
   var count = Number(span || 12);
 
   var range = periodRange(kind, off);
-  var optsFor = function (u) { return scoreOpts_(ctx, u.username); };
+  var opts = scoreOptsMap_(ctx);
+  var optsFor = function (u) { return opts[u.username]; };
   var a = periodAnalytics(tasks, users, range, new Date(), cal, optsFor);
 
   var trend = [];
@@ -1899,6 +1963,7 @@ function submitAppraisal_(ctx, data) {
       result.performance === null ? '' : result.performance,
       result.delegation === null ? '' : result.delegation,
       result.score, new Date()]);
+  dropCache_(ctx);
 
   return { status: 'success', score: result.score, band: performanceBand(result.score),
     performance: result.performance, delegation: result.delegation,
@@ -1920,10 +1985,51 @@ function submitAppraisal_(ctx, data) {
  * in the building.
  */
 function scoreOpts_(ctx, username) {
-  return {
-    expectedTasks: wipLimitFor_(ctx, username),
-    cookies: cookiesFor_(ctx, username, periodRange(PERIOD.MONTH, 0)),
-  };
+  return scoreOptsMap_(ctx)[username] ||
+         { expectedTasks: DEFAULT_WIP_LIMIT, cookies: [] };
+}
+
+/**
+ * Everything the score engine needs about every person, built from ONE read of
+ * each sheet and cached on the request.
+ *
+ * This existed as a per-person function called inside two nested loops: once
+ * per person, per period, on a twelve-period trend. Each call re-read the whole
+ * Users sheet twice and the whole Cookie sheet once, so a twenty-person
+ * workspace spent 780 full-sheet reads building one Reports page, and a
+ * hundred-and-fifty-person one would spend nearly six thousand. It scaled with
+ * headcount, which means the page got slower exactly as a customer became worth
+ * more — and Apps Script kills any execution at six minutes, so the largest
+ * account is the first one that cannot open its own reports.
+ *
+ * None of it varied by period anyway: a WIP limit is a constant and the cookie
+ * window is always the current month.
+ */
+function scoreOptsMap_(ctx) {
+  if (ctx._scoreOpts) return ctx._scoreOpts;
+
+  var range = periodRange(PERIOD.MONTH, 0);
+  var byUser = {};
+  readUsers_(ctx).forEach(function (u) {
+    byUser[u.username] = {
+      expectedTasks: (u.wipLimit != null && !isNaN(u.wipLimit)) ? u.wipLimit : DEFAULT_WIP_LIMIT,
+      cookies: [],
+    };
+  });
+
+  var names = {};
+  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+  readCookies_(ctx).forEach(function (c) {
+    var slot = byUser[c.to];
+    if (!slot) return;
+    var d = new Date(c.date);
+    if (isNaN(d) || !inWindow(d, range)) return;
+    slot.cookies.push({ date: c.date, points: c.points, reason: c.reason,
+                        by: c.by, byName: names[c.by] || c.by });
+  });
+
+  ctx._scoreOpts = byUser;
+  return byUser;
 }
 
 
@@ -2554,6 +2660,7 @@ function writeProfileMaster_(ctx, profile, rows) {
   var d = sh.getDataRange().getValues();
   for (var i = d.length - 1; i > 0; i--) {
     if (String(d[i][0]).trim().toLowerCase() === String(profile).trim().toLowerCase()) sh.deleteRow(i + 1);
+    dropCache_(ctx);
   }
   if (!rows.length) return;
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, KRA_MASTER_COLS.length)
@@ -2756,6 +2863,7 @@ function createProject_locked_(ctx, form) {
     row[T['Stage Count']] = stages.length;
     row[T['Stage Gate']] = gate;
     sheet.appendRow(row);
+    dropCache_(ctx);
 
     created.push({ id: id, stage: s.no, to: s.assignTo });
     if (route.status === 'Awaiting Approval') routed++;
@@ -2843,15 +2951,17 @@ function getProjects_(ctx) {
 var COOKIE_COLS = ['Date', 'To', 'By', 'Points', 'Reason'];
 
 function readCookies_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.COOKIES);
-  if (!sh) return [];
-  var d = sh.getDataRange().getValues(), out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][1]) continue;
-    out.push({ date: toIso_(d[i][0]), to: String(d[i][1]).trim(), by: String(d[i][2]).trim(),
-               points: Number(d[i][3]) || 0, reason: String(d[i][4] || '') });
-  }
-  return out;
+  return cached_(ctx, 'cookies', function () {
+    var sh = ctx.ss.getSheetByName(TAB.COOKIES);
+    if (!sh) return [];
+    var d = sh.getDataRange().getValues(), out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][1]) continue;
+      out.push({ date: toIso_(d[i][0]), to: String(d[i][1]).trim(), by: String(d[i][2]).trim(),
+                 points: Number(d[i][3]) || 0, reason: String(d[i][4] || '') });
+    }
+    return out;
+});
 }
 
 /** This month's cookies for one person, named, ready for the score engine. */
@@ -2902,6 +3012,7 @@ function awardCookie_(ctx, data) {
 
   mkTab_(ctx.ss, TAB.COOKIES, COOKIE_COLS)
     .appendRow([new Date(), who.username, ctx.actor.username, points, reason]);
+    dropCache_(ctx);
 
   try { notifyCookie_(ctx, who, points, reason); }
   catch (e) { logError_('awardCookie:notify', e.message); }

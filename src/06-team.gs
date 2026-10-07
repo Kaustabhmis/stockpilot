@@ -69,12 +69,14 @@ function addUser_locked_(ctx, form) {
   row[U['KRAs JSON']] = JSON.stringify(form.kras || []);
   row[U['WhatsApp OptIn']] = !!form.waOptIn;
   ctx.ss.getSheetByName(TAB.USERS).appendRow(row);
+  dropCache_(ctx);
 
   // Global registry entry, so this person can sign in.
   try {
     var g = mkTab_(SpreadsheetApp.openById(CFG().masterId), TAB.GLOBAL,
       ['Email','Password','SheetID','Username']);
     g.appendRow([email, hash, ctx.sheetId, username]);
+    dropCache_(ctx);
   } catch (e) { logError_('addUser:global', e.message); }
 
   try { sendWelcomeStaff_(email, form.name, ctx.company, username); } catch (e) {}
@@ -95,7 +97,10 @@ function updateUser_(ctx, form) {
   }
 
   var sh = ctx.ss.getSheetByName(TAB.USERS);
-  var set = function (col, val) { sh.getRange(target.rowIndex, U[col] + 1).setValue(val); };
+  var set = function (col, val) {
+    sh.getRange(target.rowIndex, U[col] + 1).setValue(val);
+    dropCache_(ctx);
+  };
 
   if (form.name) set('Name', String(form.name).trim());
   if (form.email) set('Email', String(form.email).trim().toLowerCase());
@@ -152,6 +157,7 @@ function deactivateUser_(ctx, target, reassignTo) {
     });
   }
   ctx.ss.getSheetByName(TAB.USERS).getRange(target.rowIndex, U['Active'] + 1).setValue(false);
+  dropCache_(ctx);
   return { status: 'success',
     message: target.name + ' deactivated' + (stranded.length ? '; ' + stranded.length + ' task(s) moved.' : '.') };
 }
@@ -179,6 +185,9 @@ function deleteUser_(ctx, username, reassignTo) {
       for (var i = d.length - 1; i > 0; i--) {
         if (String(d[i][0]).trim().toLowerCase() === target.email.toLowerCase() &&
             String(d[i][2]).trim() === String(ctx.sheetId)) { g.deleteRow(i + 1); }
+      /* The global login registry, not this tenant's sheets — but the user row
+         itself has already changed, so the cache goes either way. */
+      dropCache_(ctx);
       }
     }
   } catch (e) { logError_('deleteUser:global', e.message); }

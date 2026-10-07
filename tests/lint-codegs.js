@@ -54,6 +54,24 @@ const guarded=new Set([...src.matchAll(/typeof\s+([A-Za-z_$][\w$]*)\s*===?\s*''/
 const missing=[...called].filter(n=>!defined.has(n)&&!KNOWN.has(n)&&!vars[n]&&!guarded.has(n));
 ok('every called function is defined', missing.length===0, missing.join(', '));
 
+/* 3b. a tenant-scoped function that writes must also invalidate the per-request
+   cache. Reads are memoised for the life of a request, so a write without an
+   invalidation hands the NEXT read in the same handler a stale copy — a bug
+   that shows up as "I saved it and it didn't save", intermittently, and takes a
+   week to find. Cheaper to make it impossible. */
+const WRITES=/\.(appendRow|setValue|setValues|deleteRow|clearContent)\s*\(/;
+const unguarded=[];
+[...src.matchAll(/^function ([A-Za-z0-9_]+)\(([^)]*)\)\s*\{/gm)].forEach(m=>{
+  const [name,args]=[m[1],m[2]];
+  if(!/\bctx\b/.test(args)) return;               // not tenant-scoped
+  const start=m.index;
+  const nxt=src.indexOf('\nfunction ',start+1);
+  const body=src.slice(start, nxt>-1?nxt:src.length);
+  if(WRITES.test(body) && !/dropCache_/.test(body)) unguarded.push(name);
+});
+ok('every tenant write invalidates the request cache', unguarded.length===0,
+   unguarded.join(', '));
+
 // 4. no secrets left in source
 const secrets=rawForSecrets.match(/rzp_live_\w+|rzp_test_\w+|AIzaSy[\w-]{20,}|['"][A-Za-z0-9]{32,}['"]/g)||[];
 ok('no hardcoded secrets', secrets.length===0, secrets.slice(0,3).join(', '));

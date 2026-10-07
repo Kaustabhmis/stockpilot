@@ -14,15 +14,17 @@
 var COOKIE_COLS = ['Date', 'To', 'By', 'Points', 'Reason'];
 
 function readCookies_(ctx) {
-  var sh = ctx.ss.getSheetByName(TAB.COOKIES);
-  if (!sh) return [];
-  var d = sh.getDataRange().getValues(), out = [];
-  for (var i = 1; i < d.length; i++) {
-    if (!d[i][1]) continue;
-    out.push({ date: toIso_(d[i][0]), to: String(d[i][1]).trim(), by: String(d[i][2]).trim(),
-               points: Number(d[i][3]) || 0, reason: String(d[i][4] || '') });
-  }
-  return out;
+  return cached_(ctx, 'cookies', function () {
+    var sh = ctx.ss.getSheetByName(TAB.COOKIES);
+    if (!sh) return [];
+    var d = sh.getDataRange().getValues(), out = [];
+    for (var i = 1; i < d.length; i++) {
+      if (!d[i][1]) continue;
+      out.push({ date: toIso_(d[i][0]), to: String(d[i][1]).trim(), by: String(d[i][2]).trim(),
+                 points: Number(d[i][3]) || 0, reason: String(d[i][4] || '') });
+    }
+    return out;
+});
 }
 
 /** This month's cookies for one person, named, ready for the score engine. */
@@ -73,6 +75,7 @@ function awardCookie_(ctx, data) {
 
   mkTab_(ctx.ss, TAB.COOKIES, COOKIE_COLS)
     .appendRow([new Date(), who.username, ctx.actor.username, points, reason]);
+    dropCache_(ctx);
 
   try { notifyCookie_(ctx, who, points, reason); }
   catch (e) { logError_('awardCookie:notify', e.message); }

@@ -67,6 +67,7 @@ function createTask_locked_(ctx, form) {
     row[T['Subtasks JSON']] = JSON.stringify(parseChecklist_(form.checklist));
     row[T['Delegate To']] = '';
     sheet.appendRow(row);
+    dropCache_(ctx);
     created.push({ id: id, to: username });
     if (route.status === 'Awaiting Approval') routed++;
 
@@ -222,6 +223,7 @@ function spawnNextOccurrence_(ctx, hit, t) {
     return { text: s.text, done: false }; }));
   row[T['Delegate To']] = '';
   ctx.ss.getSheetByName(TAB.TASKS).appendRow(row);
+  dropCache_(ctx);
   return due;
 }
 
