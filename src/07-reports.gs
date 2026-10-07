@@ -59,6 +59,7 @@ function getDashboard_(ctx) {
     user: me, company: ctx.company,
     tasks: visible,
     categories: readCategories_(ctx),
+    priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return { name: u.name, username: u.username, role: u.role, email: u.email,
                phone: u.phone, manager: u.manager, dept: u.dept, jobProfile: u.jobProfile,

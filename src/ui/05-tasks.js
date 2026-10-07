@@ -43,12 +43,23 @@ function visibleTasks() {
   });
 }
 
+/* The workspace's own levels, with whatever a given task already carries kept
+   in the list even if the level has since been renamed — otherwise opening an
+   old task would silently change its priority on save. */
+function priorityNames(current) {
+  var names = (STATE.data.priorities || []).map(function (p) { return p.name; });
+  if (!names.length) names = ['Critical', 'High', 'Medium', 'Low'];
+  if (current && names.indexOf(current) < 0) names = names.concat([current]);
+  return names;
+}
+
 function renderTab() {
-  ['tasks','projects','team','reports'].forEach(function (t) {
+  ['tasks','priority','projects','team','reports'].forEach(function (t) {
     $('tab-' + t).classList.toggle('hidden', t !== STATE.tab); });
   document.querySelectorAll('#navTabs button,#navTabsMobile button').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === STATE.tab); });
   if (STATE.tab === 'tasks') renderTasks();
+  if (STATE.tab === 'priority') loadPriority();
   if (STATE.tab === 'projects') loadProjects();
   if (STATE.tab === 'team') loadTeam();
   if (STATE.tab === 'reports') loadReports();
@@ -379,7 +390,8 @@ function openEdit(t) {
     '<div class="grid grid-cols-2 gap-4">' +
       '<div><label class="lb" for="edDue">Due date</label><input id="edDue" type="date" class="in" value="' + esc(t.due) + '"></div>' +
       '<div><label class="lb" for="edPri">Priority</label><select id="edPri" class="in">' +
-        ['High','Medium','Low'].map(function (p) { return '<option' + (p === t.priority ? ' selected' : '') + '>' + p + '</option>'; }).join('') +
+        priorityNames(t.priority).map(function (p) {
+          return '<option' + (p === t.priority ? ' selected' : '') + '>' + esc(p) + '</option>'; }).join('') +
       '</select></div></div>' +
     '<div class="grid grid-cols-2 gap-4">' +
       '<div><label class="lb" for="edCat">Category</label><select id="edCat" class="in">' +
@@ -428,7 +440,9 @@ function openAssign() {
       '<div class="grid grid-cols-2 gap-4">' +
         '<div><label class="lb" for="asDue">Due date</label><input id="asDue" type="date" class="in" required value="' + addDaysYmd(7) + '"></div>' +
         '<div><label class="lb" for="asPri">Priority</label><select id="asPri" class="in">' +
-          '<option>High</option><option selected>Medium</option><option>Low</option></select></div></div>' +
+          priorityNames().map(function (p, i) {
+            return '<option' + (i === Math.min(1, priorityNames().length - 1) ? ' selected' : '') +
+              '>' + esc(p) + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="grid grid-cols-2 gap-4">' +
         '<div><label class="lb" for="asCat">Job category</label><select id="asCat" class="in">' +
           cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</select></div>' +

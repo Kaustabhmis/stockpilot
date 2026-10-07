@@ -211,7 +211,9 @@ function route_(p) {
     case 'getAppraisalForm':    return getAppraisalForm_(ctx, p.username);
     case 'getKraOverview':      return getKraOverview_(ctx);
     case 'getKraFor':           return getKraFor_(ctx, p.username);
-    case 'getCategories':       return { status:'success', categories: readCategories_(ctx) };
+    case 'getCategories':       return { status:'success', categories: readCategories_(ctx),
+                                          priorities: readPriorities_(ctx) };
+    case 'getPriorityList':     return getPriorityList_(ctx, p.username, p.horizon);
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
@@ -230,6 +232,7 @@ function route_(p) {
     case 'updateUser':          return updateUser_(ctx, p.form);
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories);
+    case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
     case 'getLeave':            return { status:'success', leave: readLeave_(ctx) };
 
@@ -271,7 +274,7 @@ function tenantContext_(session) {
   if (!me) throw new Error('Your account is no longer in this workspace.');
   if (me.active === false) throw new Error('This account has been deactivated.');
 
-  return {
+  var ctx = {
     ss: ss, sheetId: session.sheetId, me: me,
     actor: { username: me.username, role: me.role, name: me.name },
     company: reg ? reg.company : '', planName: normalizePlan(reg ? reg.plan : 'Free'),
@@ -280,6 +283,15 @@ function tenantContext_(session) {
     // rather than vanishing — nobody loses access to their own history.
     serviceStopped: (daysLeft !== null && daysLeft <= -7 && normalizePlan(reg ? reg.plan : 'Free') !== 'Free'),
   };
+
+  /* Point the scoring engine at this workspace's own priority levels before any
+     handler runs. Done once here rather than threaded through every call site:
+     a weight that applied in one place and not another would be worse than not
+     having custom levels at all. */
+  try { setPriorityScale(readPriorities_(ctx)); }
+  catch (e) { logError_('tenantContext:priorities', e.message); }
+
+  return ctx;
 }
 
 /** Routes that change the team or the company's settings. */
@@ -775,9 +787,72 @@ function updateCategories_(ctx, categories) {
   var list = (categories || []).map(function (c) { return String(c).trim(); })
                                .filter(function (c) { return c; });
   var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
-  sh.clear();
+  /* Column A only. This used to clear the whole sheet, which would now take the
+     priority levels in B and C with it. */
+  clearColumn_(sh, 1);
   if (list.length) sh.getRange(1, 1, list.length, 1).setValues(list.map(function (c) { return [c]; }));
   return { status: 'success', categories: list };
+}
+
+function clearColumn_(sh, col) {
+  var rows = sh.getLastRow();
+  if (rows > 0) sh.getRange(1, col, rows, 1).clearContent();
+}
+
+/* ---------- priority levels ----------------------------------------------
+   Settings column B holds the level name and C its weight, beside the job
+   categories already in A. Appended rather than given a tab of their own so an
+   existing tenant sheet gains them without anything being moved. */
+function readPriorities_(ctx) {
+  var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+  if (!sh || sh.getLastRow() === 0) return DEFAULT_PRIORITIES.slice();
+  var d = sh.getRange(1, 2, sh.getLastRow(), 2).getValues();
+  var out = [];
+  for (var i = 0; i < d.length; i++) {
+    var name = String(d[i][0] || '').trim();
+    if (!name) continue;
+    var w = Number(d[i][1]);
+    out.push({ name: name, weight: (isNaN(w) || w <= 0) ? 2 : w });
+  }
+  return out.length ? out : DEFAULT_PRIORITIES.slice();
+}
+
+function updatePriorities_(ctx, levels) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  var seen = {}, list = [];
+  (levels || []).forEach(function (l) {
+    var name = String((l && l.name) || '').trim();
+    if (!name) return;
+    if (seen[name.toLowerCase()]) throw new Error('"' + name + '" is listed twice.');
+    seen[name.toLowerCase()] = true;
+    var w = Math.round(Number(l.weight));
+    if (isNaN(w) || w < 1 || w > 10) {
+      throw new Error('Give "' + name + '" a weight between 1 and 10. ' +
+        'The weight is how much more a task at this level counts in a score than one at weight 1.');
+    }
+    list.push({ name: name, weight: w });
+  });
+  if (!list.length) throw new Error('Keep at least one priority level.');
+
+  /* A level still on open work cannot be deleted out from under it: the task
+     would be left pointing at a name nothing recognises, and it would quietly
+     be scored as Medium from then on. */
+  var inUse = {};
+  readTasks_(ctx).forEach(function (t) {
+    if (isOpen(t.status) && t.priority) inUse[t.priority] = (inUse[t.priority] || 0) + 1; });
+  var lost = Object.keys(inUse).filter(function (p) {
+    return !list.some(function (l) { return l.name === p; }); });
+  if (lost.length) {
+    throw new Error('"' + lost[0] + '" is still on ' + inUse[lost[0]] + ' open task(s). ' +
+      'Move that work to another level first, or keep this one.');
+  }
+
+  var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
+  clearColumn_(sh, 2); clearColumn_(sh, 3);
+  sh.getRange(1, 2, list.length, 2)
+    .setValues(list.map(function (l) { return [l.name, l.weight]; }));
+  return { status: 'success', priorities: list,
+    message: list.length + ' priority level(s) saved.' };
 }
 
 function readLeave_(ctx) {
@@ -1191,6 +1266,33 @@ function nameOf_(ctx, username) {
   return u ? u.name : (username || 'someone');
 }
 
+/**
+ * The priority list: what this person should do next, in order, with the
+ * reason each item is where it is.
+ *
+ * A manager may ask for somebody else's list — that is most of the value of it
+ * for them — but a Doer only ever gets their own.
+ */
+function getPriorityList_(ctx, username, horizon) {
+  var who = String(username || '').trim() || ctx.me.username;
+  if (ctx.me.role === ROLE.DOER && who !== ctx.me.username) {
+    throw new Error('You can only see your own list.');
+  }
+  var target = findUser_(ctx.ss, who);
+  if (!target) throw new Error('That person is not in this workspace.');
+
+  var want = String(horizon || 'week');
+  var known = HORIZONS.some(function (h) { return h.key === want; });
+  var q = priorityQueue(readTasks_(ctx), who, new Date(), leaveCalendar_(ctx),
+                        { horizon: known ? want : 'week' });
+  return { status: 'success', employee: { username: target.username, name: target.name },
+    priorities: readPriorities_(ctx), horizons: HORIZONS,
+    horizon: q.horizon, horizonEnd: q.horizonEnd, counts: q.counts,
+    doNow: q.doNow, next: q.next, later: q.later, waiting: q.waiting,
+    decisions: q.decisions, handedIn: q.handedIn,
+    total: q.total, overdue: q.overdue, undated: q.undated };
+}
+
 
 // ===========================================================================
 // TEAM
@@ -1438,6 +1540,7 @@ function getDashboard_(ctx) {
     user: me, company: ctx.company,
     tasks: visible,
     categories: readCategories_(ctx),
+    priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return { name: u.name, username: u.username, role: u.role, email: u.email,
                phone: u.phone, manager: u.manager, dept: u.dept, jobProfile: u.jobProfile,
@@ -3268,10 +3371,48 @@ var ROLE = { ADMIN: 'Admin', MANAGER: 'HOD', DOER: 'Doer' };
 
 // High-priority work counts three times a low-priority one, so one missed
 // critical task cannot be averaged away under a pile of trivial wins.
-var PRIORITY_WEIGHT = { High: 3, Medium: 2, Low: 1 };
+//
+// The levels are the DEFAULT, not the law: a workspace can name its own —
+// "Line Down", "Customer Hold", "Routine" — and give each one a weight. Those
+// are merged in once per request by setPriorityScale, so every scoring call
+// site below keeps working unchanged whether a tenant has customised them or
+// not.
+var DEFAULT_PRIORITIES = [
+  { name: 'Critical', weight: 4 },
+  { name: 'High',     weight: 3 },
+  { name: 'Medium',   weight: 2 },
+  { name: 'Low',      weight: 1 },
+];
+var PRIORITY_WEIGHT = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+var PRIORITY_ORDER = ['Critical', 'High', 'Medium', 'Low'];
+
+/**
+ * Point the engine at this workspace's own priority levels.
+ *
+ * Merged rather than replaced: a task created under a level that has since been
+ * renamed or deleted still has to score, and silently weighting it as Medium is
+ * better than throwing on a row somebody wrote two years ago.
+ */
+function setPriorityScale(levels) {
+  if (!levels || !levels.length) return;
+  PRIORITY_ORDER = [];
+  levels.forEach(function (l) {
+    var name = String((l && l.name) || '').trim();
+    if (!name) return;
+    var w = Number(l.weight);
+    PRIORITY_WEIGHT[name] = (isNaN(w) || w <= 0) ? 2 : w;
+    PRIORITY_ORDER.push(name);
+  });
+}
 
 function priorityWeight(priority) {
-  return PRIORITY_WEIGHT[priority] || PRIORITY_WEIGHT.Medium;
+  return PRIORITY_WEIGHT[priority] || PRIORITY_WEIGHT.Medium || 2;
+}
+
+/** Highest weight first — the order a list should be read in. */
+function priorityRank(priority) {
+  var i = PRIORITY_ORDER.indexOf(priority);
+  return i > -1 ? i : PRIORITY_ORDER.length;
 }
 
 function isOpen(status) { return OPEN_STATUSES.indexOf(status) > -1; }
@@ -3578,6 +3719,231 @@ function dueOccurrences(job, today, state) {
   if (end && parseYmd(out.nextDue) > end) { out.stop = true; out.reason = out.reason || 'past end date'; }
   if (max && created >= max) { out.stop = true; out.reason = out.reason || 'reached occurrence limit'; }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// THE PRIORITY LIST — what to do next, and why
+// ---------------------------------------------------------------------------
+/* A board shows everything at once, which is exactly the wrong shape for the
+   question people actually ask on a Monday morning: what do I do first?
+   Priority alone does not answer it either — a Low task due this afternoon
+   beats a High one due next month, and a task three other people are waiting
+   on beats both.
+   So the order is computed from three things, and every row says which of them
+   put it where it is. A ranking nobody can see the reasoning for is one people
+   quietly ignore and go back to their own notebook. */
+var URGENCY = {
+  overdueBase: 40,      // past its date — nothing outranks this but a bigger overrun
+  overduePerDay: 2,
+  overdueCap: 20,
+  dueToday: 36, dueTomorrow: 28, dueThisWeek: 16, dueSoon: 8,
+  perDependent: 8, dependentCap: 24,
+  inProgress: 6,        // finishing beats starting
+};
+
+/** One task's place in the queue, with the working shown. */
+function taskUrgency(task, allTasks, today, cal) {
+  var now = today || new Date();
+  var reasons = [], score = 0;
+
+  var w = priorityWeight(task.priority);
+  score += w * 10;
+  reasons.push({ kind: 'priority', text: task.priority || 'Medium', points: w * 10 });
+
+  var due = parseYmd(task.due);
+  if (due) {
+    var days = dayDiff(due, now);            // positive = still to come
+    var late = chargeableLateDays(due, now, task.assignee, cal);
+    if (late > 0) {
+      var pts = URGENCY.overdueBase + Math.min(late * URGENCY.overduePerDay, URGENCY.overdueCap);
+      score += pts;
+      reasons.push({ kind: 'overdue', text: late + ' day(s) overdue', points: pts });
+    } else if (days <= 0) {
+      score += URGENCY.dueToday;
+      reasons.push({ kind: 'today', text: 'Due today', points: URGENCY.dueToday });
+    } else if (days === 1) {
+      score += URGENCY.dueTomorrow;
+      reasons.push({ kind: 'soon', text: 'Due tomorrow', points: URGENCY.dueTomorrow });
+    } else if (days <= 7) {
+      score += URGENCY.dueThisWeek;
+      reasons.push({ kind: 'soon', text: 'Due in ' + days + ' days', points: URGENCY.dueThisWeek });
+    } else if (days <= 14) {
+      score += URGENCY.dueSoon;
+      reasons.push({ kind: 'later', text: 'Due in ' + days + ' days', points: URGENCY.dueSoon });
+    }
+  }
+
+  /* Work that other work is waiting on. Finishing it releases somebody else,
+     which is worth more than its own deadline suggests. */
+  var dependents = (allTasks || []).filter(function (t) {
+    return isOpen(t.status) && (t.blockedBy || []).indexOf(task.id) > -1;
+  });
+  if (dependents.length) {
+    var dp = Math.min(dependents.length * URGENCY.perDependent, URGENCY.dependentCap);
+    score += dp;
+    reasons.push({ kind: 'blocking', points: dp,
+      text: dependents.length + ' task(s) waiting on this' });
+  }
+
+  if (task.status === STATUS.IN_PROGRESS) {
+    score += URGENCY.inProgress;
+    reasons.push({ kind: 'started', text: 'Already started', points: URGENCY.inProgress });
+  }
+
+  /* An item sitting on somebody's desk is urgent because of how long it has sat
+     there, which is the same clock the responsiveness score runs on. */
+  if (task.status === STATUS.FOR_REVIEW || task.status === STATUS.AWAITING_APPROVAL ||
+      task.status === STATUS.DELEGATION_PROPOSED) {
+    var spells = queueSpells(task).filter(function (sp) { return sp.open; });
+    if (spells.length) {
+      var held = chargeableLateDays(spells[0].from, now, task.approver || task.raisedBy, cal);
+      if (held > 0) {
+        var hp = Math.min(held * 6, 36);
+        score += hp;
+        reasons.push({ kind: 'held', points: hp,
+          text: 'Waiting on a decision for ' + held + ' working day(s)' });
+      }
+    }
+  }
+
+  var blockers = openBlockers(task, allTasks || []);
+  return {
+    id: task.id, score: Math.round(score), reasons: reasons,
+    blocked: blockers.length > 0,
+    blockedBy: blockers.map(function (b) { return { id: b.id, title: b.title }; }),
+    dependents: dependents.length,
+  };
+}
+
+/* HORIZONS — the same list, asked over a different stretch of time.
+   "What do I do today" and "what has to land this quarter" are different
+   questions with different answers, and a single flat list answers neither
+   well. The windows are cumulative: this week contains today, this month
+   contains this week. Anything overdue appears in every one of them, because
+   work that is already late does not become less late when you widen the
+   lens. */
+var HORIZONS = [
+  { key: 'day',     label: 'Today' },
+  { key: 'week',    label: 'This week' },
+  { key: 'month',   label: 'This month' },
+  { key: 'quarter', label: 'This quarter' },
+  { key: 'year',    label: 'This year' },
+  { key: 'all',     label: 'Everything' },
+];
+
+/** The last date a task may be due on and still count as inside this horizon. */
+function horizonEnd(kind, today) {
+  var d = startOfDay(today || new Date());
+  switch (kind) {
+    case 'day':   return d;
+    case 'week': {
+      /* Monday to Sunday — a factory week, not a calendar library's week. */
+      var dow = d.getDay(), toSunday = dow === 0 ? 0 : 7 - dow;
+      return addDays(d, toSunday);
+    }
+    case 'month':   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    case 'quarter': return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 + 3, 0);
+    case 'year':    return new Date(d.getFullYear(), 11, 31);
+    default:        return null;              // 'all' — no end
+  }
+}
+
+function inHorizon(task, kind, today) {
+  if (kind === 'all' || !kind) return true;
+  var due = parseYmd(task.due);
+  if (!due) return false;                     // no date, no horizon to be in
+  var now = startOfDay(today || new Date());
+  if (due < now) return true;                 // overdue surfaces everywhere
+  var end = horizonEnd(kind, today);
+  return !end || due <= end;
+}
+
+/**
+ * The whole queue, ranked and banded, over one horizon.
+ *
+ * Blocked work is pulled out rather than ranked among the rest: however urgent
+ * it is, nobody can act on it, and leaving it at the top of a to-do list is how
+ * the list stops being read.
+ */
+function priorityQueue(tasks, username, today, cal, opts) {
+  opts = opts || {};
+  var horizon = opts.horizon || 'all';
+  var all = tasks || [];
+  var mine = all.filter(function (t) {
+    if (!isOpen(t.status) || t.isArchived) return false;
+    if (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED) return false;
+    return !username || t.assignee === username;
+  });
+
+  /* Decisions this person owes other people. Their own board does not show
+     these as theirs, but the scoring charges them for sitting on them — so a
+     list that left them out would be telling somebody to do one thing while
+     marking them down for another. */
+  var decisions = username ? all.filter(function (t) {
+    if (!isOpen(t.status) || t.isArchived) return false;
+    if (t.assignee === username) return false;
+    if (t.status === STATUS.FOR_REVIEW) return (t.approver || t.raisedBy) === username;
+    if (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED) {
+      return t.approver === username;
+    }
+    return false;
+  }) : [];
+
+  var rank = function (list) {
+    return list.map(function (t) {
+      var u = taskUrgency(t, all, today, cal);
+      return {
+        id: t.id, title: t.title, due: t.due, priority: t.priority, status: t.status,
+        assignee: t.assignee, projectName: t.projectName || '', stageNo: Number(t.stageNo) || 0,
+        score: u.score, reasons: u.reasons, blocked: u.blocked, blockedBy: u.blockedBy,
+        dependents: u.dependents, kind: u.kind || 'task',
+      };
+    }).sort(function (a, b) {
+      return b.score - a.score ||
+             priorityRank(a.priority) - priorityRank(b.priority) ||
+             String(a.due || '9999').localeCompare(String(b.due || '9999'));
+    });
+  };
+
+  var rows = rank(mine.filter(function (t) { return inHorizon(t, horizon, today); }));
+
+  /* Work already handed in is not this person's to do. It is with whoever has
+     to sign it off, and ranking it among their own jobs would have them chasing
+     something they finished last week. */
+  var handedIn = rows.filter(function (r) { return r.status === STATUS.FOR_REVIEW; });
+  rows = rows.filter(function (r) { return r.status !== STATUS.FOR_REVIEW; });
+
+  var actionable = rows.filter(function (r) { return !r.blocked; });
+  var waiting = rows.filter(function (r) { return r.blocked; });
+
+  /* How much sits in each window, so the horizon buttons can carry a number
+     and nobody has to click through five of them to find the busy one. */
+  var counts = {};
+  HORIZONS.forEach(function (h) {
+    counts[h.key] = mine.filter(function (t) { return inHorizon(t, h.key, today); }).length;
+  });
+
+  /* Bands rather than a bare ranked list: "do these three today" is an
+     instruction, where "here are 40 tasks in order" is still a decision. */
+  var now = Math.max(1, Number(opts.doNow) || 3);
+  return {
+    horizon: horizon,
+    decisions: rank(decisions).map(function (r) {
+      r.kind = r.status === STATUS.FOR_REVIEW ? 'review' : 'approval';
+      return r;
+    }),
+    handedIn: handedIn,
+    horizonEnd: horizonEnd(horizon, today) ? ymd(horizonEnd(horizon, today)) : '',
+    doNow: actionable.slice(0, now),
+    next: actionable.slice(now, now + 5),
+    later: actionable.slice(now + 5),
+    waiting: waiting,
+    counts: counts,
+    total: rows.length,
+    overdue: actionable.filter(function (r) {
+      return r.reasons.some(function (x) { return x.kind === 'overdue'; }); }).length,
+    undated: mine.filter(function (t) { return !parseYmd(t.due); }).length,
+  };
 }
 
 // ---------------------------------------------------------------------------

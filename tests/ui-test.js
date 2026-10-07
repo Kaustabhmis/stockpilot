@@ -138,6 +138,21 @@ const { chromium } = require('playwright');
   await p.click('#btnLogin'); await p.waitForTimeout(1200);
   ok('can sign back in', await p.locator('#view-app').isVisible());
 
+  console.log('--- the priority list ---');
+  await p.click('#navTabs button[data-tab="priority"]'); await p.waitForTimeout(1400);
+  ok('the priority tab opens', await p.locator('#tab-priority').isVisible());
+  const hz = (await p.locator('#prHorizons button').allTextContents())
+    .map(t => t.replace(/\s*\d+\s*$/, '').trim()).join('|');
+  ok('with every horizon offered',
+     hz === 'Today|This week|This month|This quarter|This year|Everything', hz);
+  ok('each carrying a count',
+     /\d/.test((await p.locator('#prHorizons button').first().textContent()) || ''));
+  await p.click('#prHorizons button[data-h="day"]'); await p.waitForTimeout(900);
+  ok('switching horizon reloads the list',
+     (await p.locator('#prHorizons button[data-h="day"]').getAttribute('class')).indexOf('border-blue-600') > -1);
+  ok('and it says what it is ranking by',
+     /not just by the label on it/.test(await p.locator('#tab-priority').textContent()));
+
   console.log('--- responsive ---');
   const of1 = await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
   ok('no overflow at 1500px', of1<=1, String(of1));

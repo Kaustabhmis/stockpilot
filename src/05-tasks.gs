@@ -348,3 +348,30 @@ function nameOf_(ctx, username) {
   var u = findUser_(ctx.ss, username);
   return u ? u.name : (username || 'someone');
 }
+
+/**
+ * The priority list: what this person should do next, in order, with the
+ * reason each item is where it is.
+ *
+ * A manager may ask for somebody else's list — that is most of the value of it
+ * for them — but a Doer only ever gets their own.
+ */
+function getPriorityList_(ctx, username, horizon) {
+  var who = String(username || '').trim() || ctx.me.username;
+  if (ctx.me.role === ROLE.DOER && who !== ctx.me.username) {
+    throw new Error('You can only see your own list.');
+  }
+  var target = findUser_(ctx.ss, who);
+  if (!target) throw new Error('That person is not in this workspace.');
+
+  var want = String(horizon || 'week');
+  var known = HORIZONS.some(function (h) { return h.key === want; });
+  var q = priorityQueue(readTasks_(ctx), who, new Date(), leaveCalendar_(ctx),
+                        { horizon: known ? want : 'week' });
+  return { status: 'success', employee: { username: target.username, name: target.name },
+    priorities: readPriorities_(ctx), horizons: HORIZONS,
+    horizon: q.horizon, horizonEnd: q.horizonEnd, counts: q.counts,
+    doNow: q.doNow, next: q.next, later: q.later, waiting: q.waiting,
+    decisions: q.decisions, handedIn: q.handedIn,
+    total: q.total, overdue: q.overdue, undated: q.undated };
+}

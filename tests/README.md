@@ -19,6 +19,8 @@ node milestone-test.js      # stage-deadline scoring (pure rules engine, no serv
 node project-test.js        # multi-stage projects end to end
 node fairness-test.js       # load-credited scoring: 10 jobs beats 1 easy one
 node recognition-test.js    # cookie points and the org chart
+node priority-test.js       # the ranking and the horizons (pure rules engine)
+node priority-api-test.js   # priority levels and the list, over the API
 
 node server.js &            # then, for the browser tests:
 node ui-test.js
@@ -30,7 +32,8 @@ node seed.js                # prints the seeded owner's email
 node recurring-test.js <that-email>
 ```
 
-`responsiveness-test.js`, `milestone-test.js` and `fairness-test.js` load
+`responsiveness-test.js`, `milestone-test.js`, `fairness-test.js` and
+`priority-test.js` load
 `domebox/domain.gs` straight into a sandbox, so they need no server and no
 browser.
 

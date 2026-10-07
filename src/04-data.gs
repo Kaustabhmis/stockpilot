@@ -191,9 +191,72 @@ function updateCategories_(ctx, categories) {
   var list = (categories || []).map(function (c) { return String(c).trim(); })
                                .filter(function (c) { return c; });
   var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
-  sh.clear();
+  /* Column A only. This used to clear the whole sheet, which would now take the
+     priority levels in B and C with it. */
+  clearColumn_(sh, 1);
   if (list.length) sh.getRange(1, 1, list.length, 1).setValues(list.map(function (c) { return [c]; }));
   return { status: 'success', categories: list };
+}
+
+function clearColumn_(sh, col) {
+  var rows = sh.getLastRow();
+  if (rows > 0) sh.getRange(1, col, rows, 1).clearContent();
+}
+
+/* ---------- priority levels ----------------------------------------------
+   Settings column B holds the level name and C its weight, beside the job
+   categories already in A. Appended rather than given a tab of their own so an
+   existing tenant sheet gains them without anything being moved. */
+function readPriorities_(ctx) {
+  var sh = ctx.ss.getSheetByName(TAB.SETTINGS);
+  if (!sh || sh.getLastRow() === 0) return DEFAULT_PRIORITIES.slice();
+  var d = sh.getRange(1, 2, sh.getLastRow(), 2).getValues();
+  var out = [];
+  for (var i = 0; i < d.length; i++) {
+    var name = String(d[i][0] || '').trim();
+    if (!name) continue;
+    var w = Number(d[i][1]);
+    out.push({ name: name, weight: (isNaN(w) || w <= 0) ? 2 : w });
+  }
+  return out.length ? out : DEFAULT_PRIORITIES.slice();
+}
+
+function updatePriorities_(ctx, levels) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  var seen = {}, list = [];
+  (levels || []).forEach(function (l) {
+    var name = String((l && l.name) || '').trim();
+    if (!name) return;
+    if (seen[name.toLowerCase()]) throw new Error('"' + name + '" is listed twice.');
+    seen[name.toLowerCase()] = true;
+    var w = Math.round(Number(l.weight));
+    if (isNaN(w) || w < 1 || w > 10) {
+      throw new Error('Give "' + name + '" a weight between 1 and 10. ' +
+        'The weight is how much more a task at this level counts in a score than one at weight 1.');
+    }
+    list.push({ name: name, weight: w });
+  });
+  if (!list.length) throw new Error('Keep at least one priority level.');
+
+  /* A level still on open work cannot be deleted out from under it: the task
+     would be left pointing at a name nothing recognises, and it would quietly
+     be scored as Medium from then on. */
+  var inUse = {};
+  readTasks_(ctx).forEach(function (t) {
+    if (isOpen(t.status) && t.priority) inUse[t.priority] = (inUse[t.priority] || 0) + 1; });
+  var lost = Object.keys(inUse).filter(function (p) {
+    return !list.some(function (l) { return l.name === p; }); });
+  if (lost.length) {
+    throw new Error('"' + lost[0] + '" is still on ' + inUse[lost[0]] + ' open task(s). ' +
+      'Move that work to another level first, or keep this one.');
+  }
+
+  var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
+  clearColumn_(sh, 2); clearColumn_(sh, 3);
+  sh.getRange(1, 2, list.length, 2)
+    .setValues(list.map(function (l) { return [l.name, l.weight]; }));
+  return { status: 'success', priorities: list,
+    message: list.length + ' priority level(s) saved.' };
 }
 
 function readLeave_(ctx) {

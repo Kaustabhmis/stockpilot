@@ -219,13 +219,30 @@ function openLeave() {
 
 function openCategories() {
   var cats = (STATE.data.categories || []).slice();
+  var levels = (STATE.data.priorities || []).map(function (p) {
+    return { name: p.name, weight: p.weight }; });
+
   openModal('<div class="p-6 lg:p-7">' +
-    '<h2 class="text-xl font-black mb-1">Job categories</h2>' +
-    '<p class="text-sm text-gray-400 font-semibold mb-5">These appear when assigning a task.</p>' +
-    '<div id="catList" class="space-y-2 max-h-72 overflow-y-auto mb-3"></div>' +
-    '<button type="button" id="catAdd" class="text-blue-600 font-black text-xs mb-5">+ Add category</button>' +
-    '<div class="flex gap-3"><button class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
-    '<button class="btn btn-p flex-1" id="catSave">Save</button></div></div>');
+    '<h2 class="text-xl font-black mb-1">Categories &amp; priorities</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Both appear when assigning a task. The ' +
+      'priority levels also decide how work is ranked on the priority list, and how much each ' +
+      'piece counts towards a score.</p>' +
+
+    '<div class="lb">Job categories</div>' +
+    '<div id="catList" class="space-y-2 max-h-48 overflow-y-auto mb-2"></div>' +
+    '<button type="button" id="catAdd" class="text-blue-600 font-black text-xs mb-6">+ Add category</button>' +
+
+    '<div class="lb">Priority levels</div>' +
+    '<p class="text-xs font-semibold text-gray-400 mb-2">Name them however your floor talks — ' +
+      '"Line Down", "Customer Hold", "Routine". The weight is how much more a task at this level ' +
+      'counts in a score than one at weight 1, and the order here is the order work is ranked in.</p>' +
+    '<div id="priList" class="space-y-2 mb-2"></div>' +
+    '<button type="button" id="priAdd" class="text-blue-600 font-black text-xs">+ Add level</button>' +
+    '<div id="priMsg" class="text-xs font-bold mt-2"></div>' +
+
+    '<div class="flex gap-3 mt-6"><button class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-p flex-1" id="catSave">Save</button></div></div>', 'max-w-xl');
+
   function draw() {
     $('catList').innerHTML = cats.map(function (c, i) {
       return '<div class="flex gap-2"><input class="in cIn" data-i="' + i + '" value="' + esc(c) + '">' +
@@ -237,11 +254,66 @@ function openCategories() {
     $('catList').querySelectorAll('.cDel').forEach(function (el) {
       el.addEventListener('click', function () { cats.splice(+el.dataset.i, 1); draw(); }); });
   }
-  draw();
+
+  function drawPri() {
+    $('priList').innerHTML = levels.map(function (l, i) {
+      return '<div class="flex gap-2 items-center">' +
+        '<span class="w-6 text-center text-xs font-black text-gray-400">' + (i + 1) + '</span>' +
+        '<input class="in pIn flex-1" data-i="' + i + '" placeholder="Level name" value="' + esc(l.name) + '">' +
+        '<input class="in pW" data-i="' + i + '" type="number" min="1" max="10" style="max-width:86px" ' +
+          'aria-label="Weight" value="' + esc(l.weight) + '">' +
+        (levels.length > 1 ? '<button type="button" class="pDel px-2 text-gray-400 hover:text-red-600" ' +
+          'data-i="' + i + '"><span class="material-icons text-base">delete</span></button>'
+         : '<span class="px-2 w-8"></span>') +
+        '</div>';
+    }).join('');
+    var bind = function (cls, fn) {
+      $('priList').querySelectorAll(cls).forEach(function (el) {
+        el.addEventListener('input', function () { fn(levels[+el.dataset.i], el.value); checkPri(); }); });
+    };
+    bind('.pIn', function (l, v) { l.name = v; });
+    bind('.pW', function (l, v) { l.weight = Number(v || 0); });
+    $('priList').querySelectorAll('.pDel').forEach(function (el) {
+      el.addEventListener('click', function () { levels.splice(+el.dataset.i, 1); drawPri(); }); });
+    checkPri();
+  }
+
+  /* Checked here as a courtesy; the server checks it again, and only the server
+     knows which levels are still sitting on open work. */
+  function checkPri() {
+    var m = $('priMsg'), named = levels.filter(function (l) { return String(l.name).trim(); });
+    var dupe = null, seen = {};
+    named.forEach(function (l) {
+      var k = l.name.trim().toLowerCase();
+      if (seen[k]) dupe = l.name;
+      seen[k] = true;
+    });
+    var bad = named.filter(function (l) { return !(l.weight >= 1 && l.weight <= 10); });
+    var msg = !named.length ? 'Keep at least one level.'
+      : dupe ? '"' + dupe + '" is listed twice.'
+      : bad.length ? 'Give "' + bad[0].name + '" a weight between 1 and 10.'
+      : named.map(function (l) { return l.name; }).join(' › ') + ' — most urgent first.';
+    m.textContent = msg;
+    m.className = 'text-xs font-bold mt-2 ' +
+      (!named.length || dupe || bad.length ? 'text-red-700' : 'text-gray-500');
+    return !!named.length && !dupe && !bad.length;
+  }
+
+  draw(); drawPri();
   $('catAdd').addEventListener('click', function () { cats.push(''); draw(); });
+  $('priAdd').addEventListener('click', function () { levels.push({ name: '', weight: 2 }); drawPri(); });
+
   $('catSave').addEventListener('click', function () {
+    if (!checkPri()) { toast($('priMsg').textContent, 'err'); return; }
+    var btn = $('catSave');
+    busy(btn, true, 'Saving…');
     api('updateCategories', { categories: cats.filter(function (c) { return String(c).trim(); }) })
-      .then(function () { toast('Categories saved.', 'ok'); closeModal(); return refresh(); })
-      .catch(function (e) { toast(e.message, 'err'); });
+      .then(function () {
+        return api('updatePriorities', { priorities: levels
+          .filter(function (l) { return String(l.name).trim(); })
+          .map(function (l) { return { name: String(l.name).trim(), weight: Number(l.weight) }; }) });
+      })
+      .then(function () { toast('Categories and priorities saved.', 'ok'); closeModal(); return refresh(); })
+      .catch(function (e) { busy(btn, false); toast(e.message, 'err'); });
   });
 }

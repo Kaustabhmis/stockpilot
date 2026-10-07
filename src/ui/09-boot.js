@@ -79,6 +79,8 @@ $('btnCategories').addEventListener('click', openCategories);
 $('btnKra').addEventListener('click', openKraOverview);
 $('btnNewProject').addEventListener('click', openProjectBuilder);
 $('btnOrg').addEventListener('click', openOrgChart);
+$('prPerson').addEventListener('change', function () {
+  PRIORITY_VIEW.person = this.value; loadPriority(); });
 $('btnCookie').addEventListener('click', function () {
   /* A Doer has nobody to recognise, so the same button shows them what they
      have been given rather than a form they cannot use. */

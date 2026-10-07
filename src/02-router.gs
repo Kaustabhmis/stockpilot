@@ -74,7 +74,9 @@ function route_(p) {
     case 'getAppraisalForm':    return getAppraisalForm_(ctx, p.username);
     case 'getKraOverview':      return getKraOverview_(ctx);
     case 'getKraFor':           return getKraFor_(ctx, p.username);
-    case 'getCategories':       return { status:'success', categories: readCategories_(ctx) };
+    case 'getCategories':       return { status:'success', categories: readCategories_(ctx),
+                                          priorities: readPriorities_(ctx) };
+    case 'getPriorityList':     return getPriorityList_(ctx, p.username, p.horizon);
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
@@ -93,6 +95,7 @@ function route_(p) {
     case 'updateUser':          return updateUser_(ctx, p.form);
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories);
+    case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
     case 'getLeave':            return { status:'success', leave: readLeave_(ctx) };
 
@@ -134,7 +137,7 @@ function tenantContext_(session) {
   if (!me) throw new Error('Your account is no longer in this workspace.');
   if (me.active === false) throw new Error('This account has been deactivated.');
 
-  return {
+  var ctx = {
     ss: ss, sheetId: session.sheetId, me: me,
     actor: { username: me.username, role: me.role, name: me.name },
     company: reg ? reg.company : '', planName: normalizePlan(reg ? reg.plan : 'Free'),
@@ -143,6 +146,15 @@ function tenantContext_(session) {
     // rather than vanishing — nobody loses access to their own history.
     serviceStopped: (daysLeft !== null && daysLeft <= -7 && normalizePlan(reg ? reg.plan : 'Free') !== 'Free'),
   };
+
+  /* Point the scoring engine at this workspace's own priority levels before any
+     handler runs. Done once here rather than threaded through every call site:
+     a weight that applied in one place and not another would be worse than not
+     having custom levels at all. */
+  try { setPriorityScale(readPriorities_(ctx)); }
+  catch (e) { logError_('tenantContext:priorities', e.message); }
+
+  return ctx;
 }
 
 /** Routes that change the team or the company's settings. */

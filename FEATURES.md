@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **560 checks across seventeen suites**, run against the real `code.gs` on an
+Tests: **641 checks across nineteen suites**, run against the real `code.gs` on an
 in-memory Sheets shim, driven by the real `index.html` in a real browser. See
 `tests/README.md`.
 
@@ -165,6 +165,38 @@ person in the workspace is the one person the system cannot measure.
 Every deduction appears in the breakdown naming the item, the working days held
 and the points lost. A number nobody can see the derivation of is a number they
 will dispute, and they would be right to.
+
+## Priority
+
+- [x] **Priority levels a workspace names for itself** (new) — "Line Down",
+      "Customer Hold", "Routine"; each with a weight that feeds the scoring
+- [x] **A ranked list over a chosen horizon** (new) — today, this week, this
+      month, this quarter, this year, everything
+
+The list answers the question a board cannot: *what do I do first?* Priority
+alone does not answer it either — a Low task due this afternoon beats a High one
+due next month, and a task three people are waiting on beats both. So the order
+is computed from the level, the date, and who is held up, and **every row says
+which of those put it where it is**.
+
+| Counts for | Why |
+|---|---|
+| Overdue | Nothing outranks work that is already late |
+| Due today / this week | A near date beats a distant label |
+| Others waiting on it | Finishing it releases somebody else |
+| Already started | Finishing beats starting |
+| Held for a decision | The same clock the responsiveness score runs on |
+
+Three things are deliberately kept **out** of the running order and listed
+separately, because nobody can act on them today: work **blocked** by something
+else (naming what it waits on), work **handed in** and sitting with a reviewer,
+and — at the very top, in its own band — the **decisions this person owes other
+people**. That last one matters: the score charges a manager for sitting on
+approvals, so a list that left them out would tell somebody to do one thing
+while marking them down for another.
+
+Levels are stored beside the job categories and cannot be deleted while open
+work still carries them.
 
 ## Notifications
 - [x] Bell: overdue, awaiting approval, awaiting review, due today, team overdue

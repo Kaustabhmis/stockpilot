@@ -36,6 +36,16 @@ function makeSheet(name, rows) {
           });
           return this;
         },
+        /* Real Apps Script empties the cells and leaves the rows in place;
+           anything else here would hide a bug rather than catch one. */
+        clearContent() {
+          for (let i = 0; i < nr; i++) {
+            const r = data[row - 1 + i];
+            if (!r) continue;
+            for (let j = 0; j < nc; j++) if (r[col - 1 + j] !== undefined) r[col - 1 + j] = '';
+          }
+          return this;
+        },
         getValue() { const r = data[row - 1] || []; return r[col - 1] === undefined ? '' : r[col - 1]; },
         getValues() {
           const out = [];

@@ -12,6 +12,7 @@
 
       <div class="seg md-up flex gap-1 bg-gray-100 p-1 rounded-xl" id="navTabs">
         <button data-tab="tasks" class="on">Tasks</button>
+        <button data-tab="priority">Priority</button>
         <button data-tab="projects">Projects</button>
         <button data-tab="team">Team</button>
         <button data-tab="reports">Reports</button>
@@ -44,11 +45,16 @@
       </div>
     </div>
 
-    <div class="seg md-down flex gap-1 bg-gray-100 p-1 mx-4 mb-3 rounded-xl" id="navTabsMobile">
-      <button data-tab="tasks" class="on flex-1">Tasks</button>
-      <button data-tab="projects" class="flex-1">Projects</button>
-      <button data-tab="team" class="flex-1">Team</button>
-      <button data-tab="reports" class="flex-1">Reports</button>
+    <!-- Five tabs no longer fit across a phone at equal widths, so they scroll
+         rather than squeeze. flex-1 here would push the row past the viewport
+         and give the whole page a horizontal scrollbar. -->
+    <div class="seg md-down flex gap-1 bg-gray-100 p-1 mx-4 mb-3 rounded-xl overflow-x-auto"
+         id="navTabsMobile" style="scrollbar-width:none">
+      <button data-tab="tasks" class="on shrink-0">Tasks</button>
+      <button data-tab="priority" class="shrink-0">Priority</button>
+      <button data-tab="projects" class="shrink-0">Projects</button>
+      <button data-tab="team" class="shrink-0">Team</button>
+      <button data-tab="reports" class="shrink-0">Reports</button>
     </div>
   </nav>
 
@@ -87,6 +93,21 @@
       <div id="board" class="grid gap-4" style="grid-template-columns:repeat(5,minmax(230px,1fr));overflow-x:auto"></div>
       <div id="list" class="hidden bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
       <div id="tasksEmpty" class="hidden text-center py-24 text-gray-400 font-bold"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------- PRIORITY ---------------------------- -->
+  <section id="tab-priority" class="hidden">
+    <div class="max-w-[1100px] mx-auto px-4 lg:px-6 py-6">
+      <div class="flex flex-wrap items-center gap-3 mb-1">
+        <h2 class="text-2xl font-black">What to do next</h2>
+        <span class="flex-1"></span>
+        <select id="prPerson" class="in max-w-[200px] md-up"></select>
+      </div>
+      <p class="text-sm text-gray-400 font-semibold mb-4">Ranked by what is actually most pressing,
+        not just by the label on it. Every row says why it is where it is.</p>
+      <div id="prHorizons" class="flex flex-wrap gap-2 mb-5"></div>
+      <div id="prBody"></div>
     </div>
   </section>
 
