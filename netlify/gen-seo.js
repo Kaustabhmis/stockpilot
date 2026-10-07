@@ -223,19 +223,25 @@ Allow: /
 Sitemap: ${BASE}/sitemap.xml
 `;
 
-/* -------------------------------------------------------------------- write */
-const written = [];
-pages.forEach((p) => {
-  const file = path.join(here, p.slug + '.html');
-  if (!CHECK) fs.writeFileSync(file, render(p));
-  written.push(p.slug + '.html');
-});
-if (!CHECK) {
-  fs.writeFileSync(path.join(here, 'sitemap.xml'), sitemap);
-  fs.writeFileSync(path.join(here, 'robots.txt'), robots);
-}
+/* -------------------------------------------------------------------- write
+   Only when this file is RUN, never when it is required. build.js requires it
+   afterwards to rebuild the sitemap from the pages that actually exist, and a
+   require with side effects would write every page a second time and put the
+   stale sitemap straight back. */
+if (require.main === module) {
+  const written = [];
+  pages.forEach((p) => {
+    const file = path.join(here, p.slug + '.html');
+    if (!CHECK) fs.writeFileSync(file, render(p));
+    written.push(p.slug + '.html');
+  });
+  if (!CHECK) {
+    fs.writeFileSync(path.join(here, 'sitemap.xml'), sitemap);
+    fs.writeFileSync(path.join(here, 'robots.txt'), robots);
+  }
 
-console.log((CHECK ? 'Would write ' : 'Wrote ') + written.length + ' pages:');
-written.forEach((f) => console.log('  ' + f));
-console.log((CHECK ? 'Would list ' : 'Listed ') + urls.length + ' URLs in sitemap.xml');
+  console.log((CHECK ? 'Would write ' : 'Wrote ') + written.length + ' pages:');
+  written.forEach((f) => console.log('  ' + f));
+  console.log((CHECK ? 'Would list ' : 'Listed ') + urls.length + ' URLs in sitemap.xml');
+}
 module.exports = { pages, urls, render, BASE };

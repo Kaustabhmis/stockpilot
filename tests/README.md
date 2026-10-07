@@ -28,6 +28,7 @@ node seo-test.js            # the generated pages, structured data and sitemap
 node invoice-test.js        # GST arithmetic to the paisa, and a gapless number series
 node repeat-test.js         # every cadence, and the two ways a repeat ends by itself
 node leaderboard-test.js    # the ranking, and who it refuses to rank
+node netlify-test.js        # the real deploy build, run into a throwaway folder
 
 node server.js &            # then, for the browser tests:
 node ui-test.js

@@ -1,16 +1,34 @@
 #!/usr/bin/env node
 /**
- * prepare.js — applies the audit fixes to your index.html.
+ * prepare.js — SUPERSEDED. It will not run.
  *
- *   node prepare.js ../path/to/your/index.html
+ * This applied the audit fixes to a hand-written index.html: canonical and
+ * Open Graph tags, real footer links instead of toggleView() calls, the
+ * favicon, and so on. Every one of those now lives in src/ui/01-head.html and
+ * is compiled into dist/index.html by web/_build/build-index.js, which is what
+ * build.js publishes.
  *
- * Writes `index.html` into this folder, leaving your original untouched. Every
- * change is reported, and anything it could not find is reported too — so a
- * pattern that has drifted since the audit shows up as a warning rather than
- * being silently skipped.
- *
- * Idempotent: running it twice produces the same file.
+ * Why it refuses rather than being deleted: it writes to `index.html` in this
+ * folder — the same file build.js now owns — and its patterns match a build
+ * that no longer exists. Run today it would quietly produce a page missing
+ * most of the application. The code below is kept only as the record of what
+ * the audit actually changed.
  */
+console.error(`
+prepare.js is superseded and does nothing.
+
+  The fixes it applied are now in src/ui/01-head.html and are compiled into
+  dist/index.html by web/_build/build-index.js.
+
+  To build the site:      cd netlify && API_URL=... node build.js
+  To rebuild the app:     node web/_build/build-index.js
+`);
+process.exit(1);
+
+/* ---------------------------------------------------------------------------
+   KEPT FOR THE RECORD — unreachable.
+--------------------------------------------------------------------------- */
+
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 
 const src = process.argv[2];
