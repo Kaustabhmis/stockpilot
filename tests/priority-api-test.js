@@ -5,7 +5,9 @@ const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || !x
 const err = (f) => { try { const r = f(); return r.status === 'error' ? r.message : null; } catch (e) { return e.message; } };
 const ymd = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
-const R = Date.now().toString(36);
+/* Time alone is 1ms granular, so two runs started together can share an
+   id and collide on an email the other already registered. */
+const R = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
 const email = 'pr' + R + '@acme.in';
 const A = call({ action: 'register', form: { companyName: 'Acme Engineering',
   name: 'Rohan Mehta', email, password: 'strongpass123' } }).token;

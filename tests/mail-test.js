@@ -14,7 +14,9 @@ let pass = 0, fail = 0;
 const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || !x ? '' : '  [' + String(x).slice(0, 170) + ']')); v ? pass++ : fail++; };
 const FROM = 'info@biscsindia.com';
 
-const R = Date.now().toString(36);
+/* Time alone is 1ms granular, so two runs started together can share an
+   id and collide on an email the other already registered. */
+const R = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
 const U = (u) => u + R;
 const email = 'owner' + R + '@acme.in';
 const since = () => env.mails.length;

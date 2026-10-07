@@ -21,7 +21,7 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   let pass = 0, fail = 0;
   const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || !x ? '' : '  [' + String(x).slice(0, 160) + ']')); v ? pass++ : fail++; };
 
-  const RUN = Date.now().toString(36);
+  const RUN = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
   const email = 'proj+' + RUN + '@acme.in';
   const A = (await post({ action: 'register', form: { companyName: 'Acme Engineering',
     name: 'Rohan Mehta', email, password: 'strongpass123' } })).token;

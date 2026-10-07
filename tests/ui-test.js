@@ -46,7 +46,7 @@ const { chromium } = require('playwright');
   await p.waitForTimeout(200);
   ok('signup form shown', await p.locator('#formSignup').isVisible());
   // unique per run: the harness keeps state in memory between runs
-  const RUN = Date.now().toString(36);
+  const RUN = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
   const EMAIL = 'asha+' + RUN + '@bright.in';
   await p.fill('#suCompany','Bright Metals'); await p.fill('#suName','Asha Rao');
   await p.fill('#suEmail', EMAIL); await p.fill('#suPhone','9811122233');

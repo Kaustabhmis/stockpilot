@@ -15,7 +15,7 @@ const hit = (path) => new Promise((res, rej) =>
 const ymd = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
 (async () => {
-  const RUN = Date.now().toString(36);
+  const RUN = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
   const email = 'rohan+' + RUN + '@acme.in';
   const A = (await post({ action: 'register', form: { companyName: 'Acme Engineering',
     name: 'Rohan Mehta', email, phone: '9876543210', password: 'strongpass123' } })).token;

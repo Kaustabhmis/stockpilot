@@ -3,7 +3,9 @@
 
 [build]
   publish = "."
-  command = ""
+  # Regenerates the content pages and the sitemap on every deploy, so lastmod
+  # is honest and a renamed page cannot leave a dead URL in the XML.
+  command = "node build.js"
 
 # Serve /privacy for privacy.html, /terms for terms.html, and so on.
 # Without this, your policy URLs only work with the .html suffix — and Razorpay's

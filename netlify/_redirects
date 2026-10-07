@@ -7,6 +7,31 @@
 /cancellation /refund.html     200
 /contact      /contact.html    200
 
+# The content pages. Same reasoning: these are the URLs that will be in the
+# sitemap, in ads and in anybody's link, so they must resolve without .html.
+/features                        /features.html                        200
+/pricing                         /pricing.html                         200
+/guides                          /guides.html                          200
+/delegation-score                /delegation-score.html                200
+/kra-kpi-format                  /kra-kpi-format.html                  200
+/employee-performance-management /employee-performance-management.html 200
+/task-management-for-manufacturing /task-management-for-manufacturing.html 200
+/alternatives                    /alternatives.html                    200
+
+# Variants people and old links actually use, pointed at the canonical page
+# rather than left to 404. A 301 passes the link equity on; a 404 throws it away.
+/kra                      /kra-kpi-format.html                  301
+/kra-format               /kra-kpi-format.html                  301
+/kpi-format               /kra-kpi-format.html                  301
+/appraisal                /employee-performance-management.html 301
+/appraisal-format         /employee-performance-management.html 301
+/performance-management   /employee-performance-management.html 301
+/manufacturing            /task-management-for-manufacturing.html 301
+/compare                  /alternatives.html                    301
+/blog                     /guides.html                          301
+/signup                   /?signup=1                            301
+/login                    /?login=1                             301
+
 # Old in-app anchors, in case they are linked anywhere.
 /privacy-policy      /privacy.html   301
 /terms-and-conditions /terms.html    301

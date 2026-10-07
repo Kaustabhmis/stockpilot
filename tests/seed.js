@@ -11,7 +11,7 @@ const post = body => new Promise((res, rej) => {
 });
 
 (async () => {
-  const RUN = Date.now().toString(36);
+  const RUN = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
   const email = 'rohan+' + RUN + '@acme.in';
   const reg = await post({action:'register', form:{companyName:'Acme Engineering',
     name:'Rohan Mehta', email, phone:'9876543210', password:'strongpass123'}});
