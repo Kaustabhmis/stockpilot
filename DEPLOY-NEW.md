@@ -1,5 +1,9 @@
 # Deploying the new build
 
+> **New here? Read [`SETUP.md`](SETUP.md) instead.** It is the whole thing in
+> order — backend, scheduler, payments, site, going live — with what to do when
+> each step fails. This file is the backend detail it links to.
+
 Two files: `dist/code.gs` and `dist/index.html`.
 
 **Do not paste `code.gs` over your live script.** Set this up as a *separate*

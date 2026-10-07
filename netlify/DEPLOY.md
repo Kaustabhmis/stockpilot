@@ -1,5 +1,8 @@
 # Deploying to Netlify
 
+> Part of the full walkthrough in [`../SETUP.md`](../SETUP.md). This file is
+> the site in detail; that one puts it in order with everything else.
+
 Your site is live with paying customers. This deploys **www.domebox.in** — the
 landing page, the application itself, the marketing pages and the policy pages.
 It does not touch your Apps Script backend or any customer's data, and Netlify
