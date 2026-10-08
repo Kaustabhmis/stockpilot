@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **1,245 checks across thirty-four suites**, run against the real
+Tests: **1,313 checks across thirty-five suites**, run against the real
 `dist/code.gs` on an in-memory Sheets shim, driven by the real
 `dist/index.html` in a real browser. See `tests/README.md`.
 

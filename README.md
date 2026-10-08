@@ -13,6 +13,10 @@ a performance score your team can see the working for.
 Backend, scheduler, payments, site, going live, with what to do when each step
 fails.
 
+**→ [`MANUAL.md`](MANUAL.md)** — the user manual, for your customers' teams.
+How the score is calculated, what each tab is for, and what to do when it looks
+wrong. `tests/manual-test.js` checks every number in it against the code.
+
 Everything else here is the detail that guide links to.
 
 ## The two things you deploy
@@ -41,6 +45,7 @@ Everything else here is the detail that guide links to.
 | | |
 |---|---|
 | [`SETUP.md`](SETUP.md) | **Start here.** Zero to live. |
+| [`MANUAL.md`](MANUAL.md) | The user manual — for the people who use it, not deploy it |
 | [`DEPLOY-NEW.md`](DEPLOY-NEW.md) | The backend in detail — webhook, scheduler, mail quota, invoicing |
 | [`netlify/DEPLOY.md`](netlify/DEPLOY.md) | The site in detail |
 | [`netlify/REQUIRED-BEFORE-DEPLOY.md`](netlify/REQUIRED-BEFORE-DEPLOY.md) | The eight legal fields, and why each is required |
