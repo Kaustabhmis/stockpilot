@@ -40,6 +40,7 @@ node billing-ui-test.js     # the invoice details are asked for before the card
 node repeat-ui-test.js      # setting a stop rule the way a person would
 node leaderboard-ui-test.js # the board top to bottom, and what a Doer sees of it
 node demo-ui-test.js        # the demo workspace on screen, tab by tab
+node help-ui-test.js        # the Help Centre: opens where you are, searches, ends at a person
 node manager-ui-test.js     # the held-review screens, end to end
 node kra-ui-test.js         # the KRA/KPI overview and editor
 node project-ui-test.js     # building a project and watching a stage release

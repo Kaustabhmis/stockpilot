@@ -74,6 +74,14 @@ ck('in progress 6', has(`inProgress: 6`));
   ck(n + ' users ' + u, new RegExp(`'${n}':\\s*\\{[^}]*users:\\s*${u}\\b`).test(C));
 });
 
+// claims about the help itself
+ck('? opens help anywhere', UI.indexOf("e.key !== '?'") > -1 && UI.indexOf('openHelp()') > -1);
+ck('? in a text field just types', UI.indexOf("tag === 'INPUT' || tag === 'TEXTAREA'") > -1);
+ck('help opens on the tab you are on', UI.indexOf('HELP.forTab[STATE.tab]') > -1);
+ck('Help is in the account panel for phones', UI.indexOf('closeModal();openHelp()">Help<') > -1);
+ck('every help page ends at Contact support', UI.indexOf('Still stuck?') > -1);
+ck('the in-app help IS this manual', /var HELP = \{"sections":\[/.test(UI));
+
 // claims about behaviour
 /* The guard lives in the UI, and asserting the comment text would pass on a
    comment. Assert the condition that actually withholds the button. */

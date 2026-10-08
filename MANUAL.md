@@ -35,6 +35,12 @@ expires in an hour.
 Your first sign-in may be slower than the rest — your password is being
 upgraded to a secure hash in the background.
 
+### Getting help
+
+Press **?** anywhere (or the **?** in the top bar; on a phone, **Help** in your
+account panel). Help opens on the section for the tab you are on, searches as
+you type, and every page ends with a way to reach a person.
+
 ### The six tabs
 
 | Tab | What it is for |
@@ -562,5 +568,6 @@ it is usually a configuration issue on the account, not on yours.
 
 ---
 
-*Help → the question mark in the top bar, or **Support** from the account menu.
-Everything reaches `info@biscsindia.com`, and we reply within one working day.*
+*Still stuck? Press **?** and choose **Contact support** at the foot of any help
+page. Everything reaches `info@biscsindia.com`, and we reply within one working
+day.*

@@ -385,6 +385,9 @@ function openAccount() {
       '<button type="submit" class="btn btn-p w-full">Change password</button></form>' +
     '<div class="flex gap-3 border-t border-gray-100 pt-5">' +
       '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' +
+      /* The ? button in the top bar is hidden on a phone to save room, so this
+         is the way into help there — and a reasonable second way everywhere. */
+      '<button class="btn btn-g flex-1" onclick="closeModal();openHelp()">Help</button>' +
       '<button class="btn btn-g flex-1" onclick="signOut()">Sign out</button></div></div>');
   $('fPw').addEventListener('submit', function (e) {
     e.preventDefault();

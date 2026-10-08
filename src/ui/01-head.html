@@ -216,6 +216,67 @@
 
   @media(max-width:900px){ .card-12{grid-column:span 12 !important} }
 
+  /* ---- Help Centre ---------------------------------------------------
+     A two-pane reader inside the modal: sections and search on the left, the
+     article on the right. The modal scrolls as a whole on a phone, where the
+     panes stack; on a desktop each pane scrolls on its own, so the list stays
+     put while you read. */
+  #modal.hc-modal{overflow:hidden;padding:0}
+  .hc{display:grid;grid-template-columns:260px 1fr;height:min(84vh,780px)}
+  .hc-side{border-right:1px solid var(--line);background:var(--paper);padding:22px 14px;overflow-y:auto}
+  .hc-main{padding:18px 36px 28px;overflow-y:auto}
+  .hc-searchicon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--muted)}
+  .hc-search{padding-left:36px !important}
+  .hc-nav{display:flex;flex-direction:column;gap:2px}
+  .hc-group{font-size:10px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:12px 10px 4px}
+  .hc-item{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;
+           padding:8px 10px;border-radius:10px;font-size:13px;font-weight:700;color:var(--ink2)}
+  .hc-item:hover{background:#fff}
+  .hc-item.on{background:#fff;color:var(--brand);box-shadow:var(--lift)}
+  .hc-count{font-size:10px;font-weight:900;background:var(--brand);color:#fff;border-radius:99px;padding:1px 7px}
+  .hc-tag{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);
+          background:var(--surface2);border-radius:6px;padding:2px 6px}
+  .hc-body{max-width:68ch;color:var(--ink2);font-size:14.5px;line-height:1.7}
+  .hc-h1{font-size:28px;font-weight:900;color:var(--ink);letter-spacing:-.02em;margin:0 0 14px}
+  .hc-h3{font-size:16px;font-weight:900;color:var(--ink);margin:26px 0 8px}
+  .hc-h4{font-size:14px;font-weight:900;color:var(--ink);margin:20px 0 6px}
+  .hc-body p{margin:0 0 12px}
+  .hc-body strong{color:var(--ink);font-weight:800}
+  .hc-body code{font-size:12.5px;background:var(--surface2);border-radius:5px;padding:1px 5px;color:var(--ink)}
+  .hc-body mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
+  .hc-list{margin:0 0 14px;padding-left:20px}
+  .hc-list li{margin:4px 0}
+  ul.hc-list{list-style:disc} ol.hc-list{list-style:decimal}
+  .hc-pre{background:var(--ink);color:#e9e5f5;border-radius:12px;padding:14px 16px;font-size:12.5px;
+          line-height:1.55;overflow-x:auto;margin:0 0 14px;white-space:pre}
+  .hc-note{border-left:3px solid var(--brand);background:#f4f2ff;border-radius:0 10px 10px 0;
+           padding:10px 14px;margin:0 0 14px;font-size:13.5px}
+  .hc-tablewrap{overflow-x:auto;margin:0 0 16px;border:1px solid var(--line);border-radius:12px}
+  .hc-table{width:100%;border-collapse:collapse;font-size:13px}
+  .hc-table th{text-align:left;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;
+               color:var(--muted);background:var(--paper);padding:9px 12px;border-bottom:1px solid var(--line)}
+  .hc-table td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
+  .hc-table tbody tr:first-child td{border-top:0}
+  .hc-q{font-weight:900;color:var(--ink);margin:18px 0 4px !important}
+  .hc-a{margin-top:0 !important}
+  .hc-link{color:var(--brand);font-weight:800;font-size:13px}
+  .hc-link:hover{text-decoration:underline}
+  .hc-pager{display:flex;justify-content:space-between;gap:12px;margin:28px 0 18px;padding-top:16px;
+            border-top:1px solid var(--line)}
+  .hc-stuck{display:flex;justify-content:space-between;align-items:center;gap:14px;background:var(--paper);
+            border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+  @media(max-width:767px){
+    #modal.hc-modal{overflow-y:auto}
+    .hc{display:block;height:auto}
+    .hc-side{border-right:0;border-bottom:1px solid var(--line);padding:18px 16px}
+    .hc-nav{flex-direction:row;flex-wrap:wrap}
+    .hc-item{padding:6px 10px;font-size:12px;background:#fff;border:1px solid var(--line)}
+    .hc-group{width:100%}
+    .hc-main{padding:18px 16px 24px}
+    .hc-h1{font-size:23px}
+    .hc-stuck{flex-direction:column;align-items:stretch;text-align:left}
+  }
+
   /* Own responsive helpers rather than Tailwind's `hidden md:flex`. The .hidden
      rule above carries !important so a view stays closed even if the stylesheet
      changes under it — but that same !important also beats `md:flex`, which

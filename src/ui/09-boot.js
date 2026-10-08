@@ -101,7 +101,7 @@ $('lbVis').addEventListener('change', function () {
 });
 $('btnHistoryRpt').addEventListener('click', openReviewHistory);
 $('btnAi').addEventListener('click', openAi);
-$('btnHelp').addEventListener('click', function () { openSupport(''); });
+$('btnHelp').addEventListener('click', function () { openHelp(); });
 $('btnAccount').addEventListener('click', openAccount);
 $('btnBell').addEventListener('click', function (e) {
   e.stopPropagation(); $('bellMenu').classList.toggle('hidden'); });

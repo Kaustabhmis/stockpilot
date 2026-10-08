@@ -162,7 +162,7 @@ function renderLeaderboard(r) {
     ? '<div class="mt-5 bg-white rounded-2xl border border-gray-100 p-5">' +
       '<div class="lb">Not ranked this ' + esc(r.period) + '</div>' +
       '<div class="text-xs font-semibold text-gray-400 mb-3">Nothing closed, so there is nothing to rank. ' +
-      'This is not last place.</div>' +
+      'This is not last place. <button class="hc-link" onclick="openHelp(\'the-leaderboard\')">How the board is ranked →</button></div>' +
       '<div class="flex flex-wrap gap-2">' + r.unranked.map(function (u) {
         return '<span class="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">' +
           avatar(u.name, 24) + '<span class="text-xs font-bold">' + esc(u.name) + '</span></span>';

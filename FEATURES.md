@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **1,313 checks across thirty-five suites**, run against the real
+Tests: **1,359 checks across thirty-six suites**, run against the real
 `dist/code.gs` on an in-memory Sheets shim, driven by the real
 `dist/index.html` in a real browser. See `tests/README.md`.
 
@@ -340,6 +340,29 @@ with fifteen times the users, so no informed buyer ever had a reason to pick it.
 live keys with the caps and prices they were sold at, and they gain the full
 feature set, because nobody should lose capability for having bought early. They
 are marked `offered:false` so no new buyer can land on them.
+
+## Help
+- [x] **The user manual, inside the app** (new) — press `?` anywhere
+
+`MANUAL.md` is rendered into the page at build time, so the help a person reads
+in Dome Box is the manual handed to their company, word for word. Every number
+in it is held against the code by `tests/manual-test.js`, so the help cannot
+drift from the product either.
+
+- Opens on the section for the tab you are on — reopened from the same tab, it
+  resumes where you were reading
+- Searches as you type across every section, ranked by how much each mentions
+  it, with the hits highlighted
+- A Doer sees every section, with their own work first and how their managers
+  are measured after it, labelled
+- Every page ends at **Contact support**, with the subject already naming the
+  section they were stuck on
+- Linked from the places the questions get asked: the score breakdown opens on
+  *how scoring works*, the leaderboard on *how the board is ranked*
+- Refuses to open over a form with something typed in it, rather than throwing
+  the half-written task away; `?` typed into a field is just a `?`
+- On a phone, reachable from the account panel, and opening it never scrolls
+  the way out off the screen
 
 ## AI
 - [x] Gemini insight, from **summary figures only** — never staff records

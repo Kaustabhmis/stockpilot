@@ -425,7 +425,11 @@ function openScoreBreakdown() {
       '<button onclick="closeModal()" class="text-gray-400 hover:text-gray-900">' +
       '<span class="material-icons">close</span></button></div>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">Every number here comes from your own task record. ' +
-      'Nothing is estimated.</p>' +
+      'Nothing is estimated. ' +
+      /* The question this screen raises most is "why is it calculated like
+         that" — and the answer, including what will NOT count against you, is
+         one click away rather than in a document nobody opens. */
+      '<button class="hc-link" onclick="closeModal();openHelp(\'scores\')">How scoring works →</button></p>' +
     (sc.formula ? '<p class="text-[13px] font-bold text-gray-700 bg-gray-50 rounded-xl px-3 py-2 mb-5">' +
        esc(sc.formula) + '</p>' : '') +
     loadPanel + cookiePanel + msPanel + respPanel +

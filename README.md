@@ -15,7 +15,9 @@ fails.
 
 **→ [`MANUAL.md`](MANUAL.md)** — the user manual, for your customers' teams.
 How the score is calculated, what each tab is for, and what to do when it looks
-wrong. `tests/manual-test.js` checks every number in it against the code.
+wrong. It is also the **in-app Help Centre** — press `?` anywhere in Dome Box —
+rendered from this same file at build time, so the two cannot disagree.
+`tests/manual-test.js` checks every number in it against the code.
 
 Everything else here is the detail that guide links to.
 

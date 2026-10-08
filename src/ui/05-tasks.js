@@ -492,6 +492,7 @@ function openAssign() {
           'class="in" placeholder="e.g. 12"></div>' +
         '<div class="text-[11px] font-semibold text-gray-400 mt-2" id="asStopNote">' +
           'It will keep repeating until somebody stops it.</div>' +
+
       '</div>' +
       '<div><label class="lb" for="asKra">KRA tag</label><input id="asKra" class="in" placeholder="e.g. Vendor Quality"></div>' +
       '<div><label class="lb">Checklist <span class="normal-case tracking-normal font-semibold">(one per line, optional)</span></label>' +

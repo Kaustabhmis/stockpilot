@@ -20,14 +20,25 @@ const html = ['src/ui/01-head.html','src/ui/00-home.html','src/ui/02-auth-views.
   .map(R).join('');
 const js = ['src/ui/04-core.js','src/ui/05-tasks.js','src/ui/06-team.js',
             'src/ui/07-reports.js','src/ui/08-appraisal.js','src/ui/10-kra.js',
-            'src/ui/11-projects.js','src/ui/12-recognition.js','src/ui/13-priority.js','src/ui/14-billing.js','src/ui/15-leaderboard.js','src/ui/09-boot.js']
+            'src/ui/11-projects.js','src/ui/12-recognition.js','src/ui/13-priority.js','src/ui/14-billing.js','src/ui/15-leaderboard.js','src/ui/16-help.js','src/ui/09-boot.js']
   .map(R).join('\n\n');
+
+/* The Help Centre is MANUAL.md, rendered here rather than in the browser, so
+   the page receives finished HTML and carries no Markdown parser. `</` is
+   escaped because this lands inside a <script>, and a manual that ever
+   mentioned a closing script tag would otherwise end the script early. */
+const help = require('./manual.js').build(R('MANUAL.md'));
+if (help.sections.length < 10) {
+  throw new Error('build-index: MANUAL.md produced ' + help.sections.length +
+                  ' help sections — refusing to ship a Help Centre that has lost most of the manual');
+}
+const helpJs = 'var HELP = ' + JSON.stringify(help).replace(/</g, '\\u003c') + ';';
 
 const CDN = '<script src="https://cdn.tailwindcss.com"></script>';
 const MARK = '<!--TAILWIND-->';
 if (!html.includes(CDN)) throw new Error('build-index: the Tailwind CDN tag moved — check 01-head.html');
 
-const out = html.replace(CDN, MARK) + '\n<script>\n' + js + '\n</script>\n</body>\n</html>\n';
+const out = html.replace(CDN, MARK) + '\n<script>\n' + helpJs + '\n\n' + js + '\n</script>\n</body>\n</html>\n';
 const dest = path.join(root, 'dist/index.html');
 fs.writeFileSync(dest, out);
 
