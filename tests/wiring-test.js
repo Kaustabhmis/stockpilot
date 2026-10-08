@@ -54,7 +54,7 @@ const gs = [C].concat(['reminders', 'backup', 'remediate-sharing'].map((f) =>
   fs.readFileSync('/home/user/stockpilot/domebox/' + f + '.gs', 'utf8'))).join('\n');
 const sigs = {};
 [...gs.matchAll(/^function ([A-Za-z]\w*)\(([^)]*)\)/gm)].forEach((m) => { sigs[m[1]] = m[2].trim(); });
-['DEPLOY-EASY.md', 'SETUP.md'].forEach((doc) => {
+['DEPLOY-EASY.md', 'SETUP.md', 'MIGRATING-CUSTOMERS.md'].forEach((doc) => {
   const md = fs.readFileSync('/home/user/stockpilot/' + doc, 'utf8');
   const told = [...new Set([...md.matchAll(/[Rr]un\s+\**`([A-Za-z]\w*)(\([^)`]*\))?`/g)].map((m) => m[1] + (m[2] || '')))];
   const bad = told.filter((t) => {

@@ -22,12 +22,118 @@ function ensureTenantTabs_(ss) {
   return ss;
 }
 
+/* ---------------------------------------------------------------------------
+   UPGRADING AN EXISTING CUSTOMER'S SHEET
+
+   ensureTenantTabs_ used to run only when a company signed up, so a customer
+   who joined before a column existed never got it. The docs said existing
+   sheets "widen in place"; nothing actually widened them.
+
+   The schema is positional — column 16 IS "Spawned By" because it is the
+   16th — so widening is only safe if the columns that are already there are
+   the ones we think they are. A customer who once added their own "Notes"
+   column after column 15 would have it treated as Spawned By, and the first
+   task update would write over their notes. So the header row is compared
+   first, and a sheet that does not match is left exactly as it is and
+   reported, never adjusted. A workspace that will not open until support
+   looks at it is a bad day; one that silently overwrites a customer's column
+   is a lost customer.
+
+   It runs at most once per sheet per schema version, remembered in Script
+   Properties, so the cost on a normal request is one property read.
+--------------------------------------------------------------------------- */
+var SCHEMA_VERSION = '2026-10';
+
+/** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
+function colLetter_(n) {
+  var s = '';
+  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+/**
+ * Compares row 1 with what the code expects, without changing anything.
+ *
+ * Within the columns this code uses (1 .. cols.length), each heading must be
+ * the expected one, or blank — and a blank one only if the whole column under
+ * it is empty, because a blank heading over somebody's data is still
+ * somebody's data. Past the last column this code uses, anything goes: those
+ * are the customer's own, and nothing here ever writes there.
+ */
+function schemaCheck_(sheet, cols) {
+  if (!sheet) return { ok: true, missing: true, add: cols.length };
+  var last = sheet.getLastColumn(), rows = sheet.getLastRow();
+  if (last === 0) return { ok: true, add: cols.length };
+  var head = sheet.getRange(1, 1, 1, last).getValues()[0].map(function (h) { return String(h).trim(); });
+  var add = 0;
+  for (var i = 0; i < cols.length; i++) {
+    var h = head[i] || '';
+    if (h === cols[i]) continue;
+    if (h) return { ok: false, at: colLetter_(i + 1), found: h, expected: cols[i] };
+    if (i < last && rows > 1) {
+      var below = sheet.getRange(2, i + 1, rows - 1, 1).getValues();
+      for (var r = 0; r < below.length; r++) {
+        if (String(below[r][0]).trim()) return { ok: false, at: colLetter_(i + 1), found: '(no heading, but has data)', expected: cols[i] };
+      }
+    }
+    add++;
+  }
+  return { ok: true, add: add, extra: Math.max(0, last - cols.length) };
+}
+
+/**
+ * Brings one tenant up to the current schema, or explains why it will not.
+ * @return {{ok:boolean, changed:boolean, problems:string[], added:string[]}}
+ */
+function upgradeTenantSchema_(ss, dryRun) {
+  var problems = [], added = [];
+  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS]];
+  checks.forEach(function (c) {
+    var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
+    if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Dome Box needs "' + r.expected + '"');
+    else if (r.add) added.push(c[0] + ' +' + r.add + ' column' + (r.add === 1 ? '' : 's'));
+  });
+  ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings'].forEach(function (n) {
+    if (!ss.getSheetByName(n)) added.push('new ' + n + ' tab');
+  });
+  if (problems.length) return { ok: false, changed: false, problems: problems, added: [] };
+  if (dryRun || !added.length) return { ok: true, changed: false, problems: [], added: added };
+  ensureTenantTabs_(ss);
+  return { ok: true, changed: true, problems: [], added: added };
+}
+
+/** Lazy, once-per-sheet upgrade on the request path. Never throws on success. */
+function ensureTenantSchema_(ss, sheetId) {
+  var p = PropertiesService.getScriptProperties(), key = 'SCHEMA_' + sheetId;
+  if (p.getProperty(key) === SCHEMA_VERSION) return;
+  var r = withLock_(function () {
+    if (p.getProperty(key) === SCHEMA_VERSION) return { ok: true };
+    var res = upgradeTenantSchema_(ss, false);
+    if (res.ok) p.setProperty(key, SCHEMA_VERSION);
+    return res;
+  });
+  if (!r.ok) {
+    logError_('schema:' + sheetId, r.problems.join('; '));
+    try { sendOpsMail_(CFG().mailFrom, 'A workspace needs a column check before it can open',
+      'Sheet ' + sheetId + ' was not upgraded, so that nothing in it is overwritten:\n\n  ' +
+      r.problems.join('\n  ') + '\n\nRun previewMigration() for the full picture.'); } catch (e) {}
+    throw new Error('Your workspace needs a quick check by our team before it can open. ' +
+                    'Nothing has been changed or lost — we have been told and will be in touch.');
+  }
+}
+
+/* Writes each MISSING heading into its own column. It used to append from the
+   last used column, which was right only while nothing existed past the old
+   schema: a customer's own column at, say, AD would have had our headings
+   written after it, at the wrong positions. Only call this after schemaCheck_
+   has passed. */
 function widen_(sheet, cols) {
   if (!sheet) return;
   var last = sheet.getLastColumn();
-  if (last >= cols.length) return;
-  sheet.getRange(1, last + 1, 1, cols.length - last)
-       .setValues([cols.slice(last)]);
+  var head = last ? sheet.getRange(1, 1, 1, Math.min(last, cols.length)).getValues()[0] : [];
+  for (var i = 0; i < cols.length; i++) {
+    if (String(head[i] == null ? '' : head[i]).trim() === '') sheet.getRange(1, i + 1).setValue(cols[i]);
+  }
 }
 
 function blankUserRow_() { return USER_COLS.map(function () { return ''; }); }
@@ -80,8 +186,14 @@ function rowToUser_(r, rowIndex) {
     email: String(r[U['Email']] || '').trim(), role: r[U['Role']] || 'Doer',
     jobProfile: r[U['Job Profile']] || '', dept: r[U['Dept']] || '',
     phone: r[U['Phone']] || '', manager: String(r[U['Manager']] || '').trim(),
-    active: r[U['Active']] === '' || r[U['Active']] === true || String(r[U['Active']]).toLowerCase() === 'true',
-    wipLimit: r[U['WIP Limit']] === '' ? null : Number(r[U['WIP Limit']]),
+    /* Active unless something explicitly says otherwise. The old schema had
+       nine user columns and no Active column at all, so on every existing
+       customer's sheet this cell does not exist — it reads as undefined, not
+       as ''. Testing for '' or true read every one of those people as
+       deactivated, which would have locked out every existing user at every
+       existing company on the day of the switch. */
+    active: !/^(false|no|inactive|0)$/i.test(String(r[U['Active']] == null ? '' : r[U['Active']]).trim()),
+    wipLimit: (r[U['WIP Limit']] == null || r[U['WIP Limit']] === '') ? null : Number(r[U['WIP Limit']]),
     kras: safeJson_(r[U['KRAs JSON']], []),
     waOptIn: r[U['WhatsApp OptIn']] === true || String(r[U['WhatsApp OptIn']]).toLowerCase() === 'true',
     rowIndex: rowIndex,

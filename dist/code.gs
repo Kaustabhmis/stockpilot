@@ -489,6 +489,10 @@ function tenantContext_(session) {
   var ss;
   try { ss = SpreadsheetApp.openById(session.sheetId); }
   catch (e) { throw new Error('Your workspace could not be opened. Contact support.'); }
+  /* A session from before the switch never passed through login on the new
+     build, so the upgrade is checked here as well. One property read once it
+     has run. */
+  ensureTenantSchema_(ss, session.sheetId);
 
   var reg = registryRow_(session.sheetId);
   var plan = planLimits(reg ? reg.plan : 'Free');
@@ -674,6 +678,8 @@ function login_(emailOrUsername, password) {
   var ss;
   try { ss = SpreadsheetApp.openById(sheetId); }
   catch (e) { throw new Error('Your workspace could not be opened. Contact support.'); }
+  // Sign-in is the first thing an existing customer does on the new build.
+  ensureTenantSchema_(ss, sheetId);
 
   var me = findUserByEmailOrName_(ss, key);
   if (!me) throw new Error('Your account is not in this workspace. Contact your administrator.');
@@ -854,12 +860,118 @@ function ensureTenantTabs_(ss) {
   return ss;
 }
 
+/* ---------------------------------------------------------------------------
+   UPGRADING AN EXISTING CUSTOMER'S SHEET
+
+   ensureTenantTabs_ used to run only when a company signed up, so a customer
+   who joined before a column existed never got it. The docs said existing
+   sheets "widen in place"; nothing actually widened them.
+
+   The schema is positional — column 16 IS "Spawned By" because it is the
+   16th — so widening is only safe if the columns that are already there are
+   the ones we think they are. A customer who once added their own "Notes"
+   column after column 15 would have it treated as Spawned By, and the first
+   task update would write over their notes. So the header row is compared
+   first, and a sheet that does not match is left exactly as it is and
+   reported, never adjusted. A workspace that will not open until support
+   looks at it is a bad day; one that silently overwrites a customer's column
+   is a lost customer.
+
+   It runs at most once per sheet per schema version, remembered in Script
+   Properties, so the cost on a normal request is one property read.
+--------------------------------------------------------------------------- */
+var SCHEMA_VERSION = '2026-10';
+
+/** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
+function colLetter_(n) {
+  var s = '';
+  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+/**
+ * Compares row 1 with what the code expects, without changing anything.
+ *
+ * Within the columns this code uses (1 .. cols.length), each heading must be
+ * the expected one, or blank — and a blank one only if the whole column under
+ * it is empty, because a blank heading over somebody's data is still
+ * somebody's data. Past the last column this code uses, anything goes: those
+ * are the customer's own, and nothing here ever writes there.
+ */
+function schemaCheck_(sheet, cols) {
+  if (!sheet) return { ok: true, missing: true, add: cols.length };
+  var last = sheet.getLastColumn(), rows = sheet.getLastRow();
+  if (last === 0) return { ok: true, add: cols.length };
+  var head = sheet.getRange(1, 1, 1, last).getValues()[0].map(function (h) { return String(h).trim(); });
+  var add = 0;
+  for (var i = 0; i < cols.length; i++) {
+    var h = head[i] || '';
+    if (h === cols[i]) continue;
+    if (h) return { ok: false, at: colLetter_(i + 1), found: h, expected: cols[i] };
+    if (i < last && rows > 1) {
+      var below = sheet.getRange(2, i + 1, rows - 1, 1).getValues();
+      for (var r = 0; r < below.length; r++) {
+        if (String(below[r][0]).trim()) return { ok: false, at: colLetter_(i + 1), found: '(no heading, but has data)', expected: cols[i] };
+      }
+    }
+    add++;
+  }
+  return { ok: true, add: add, extra: Math.max(0, last - cols.length) };
+}
+
+/**
+ * Brings one tenant up to the current schema, or explains why it will not.
+ * @return {{ok:boolean, changed:boolean, problems:string[], added:string[]}}
+ */
+function upgradeTenantSchema_(ss, dryRun) {
+  var problems = [], added = [];
+  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS]];
+  checks.forEach(function (c) {
+    var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
+    if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Dome Box needs "' + r.expected + '"');
+    else if (r.add) added.push(c[0] + ' +' + r.add + ' column' + (r.add === 1 ? '' : 's'));
+  });
+  ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings'].forEach(function (n) {
+    if (!ss.getSheetByName(n)) added.push('new ' + n + ' tab');
+  });
+  if (problems.length) return { ok: false, changed: false, problems: problems, added: [] };
+  if (dryRun || !added.length) return { ok: true, changed: false, problems: [], added: added };
+  ensureTenantTabs_(ss);
+  return { ok: true, changed: true, problems: [], added: added };
+}
+
+/** Lazy, once-per-sheet upgrade on the request path. Never throws on success. */
+function ensureTenantSchema_(ss, sheetId) {
+  var p = PropertiesService.getScriptProperties(), key = 'SCHEMA_' + sheetId;
+  if (p.getProperty(key) === SCHEMA_VERSION) return;
+  var r = withLock_(function () {
+    if (p.getProperty(key) === SCHEMA_VERSION) return { ok: true };
+    var res = upgradeTenantSchema_(ss, false);
+    if (res.ok) p.setProperty(key, SCHEMA_VERSION);
+    return res;
+  });
+  if (!r.ok) {
+    logError_('schema:' + sheetId, r.problems.join('; '));
+    try { sendOpsMail_(CFG().mailFrom, 'A workspace needs a column check before it can open',
+      'Sheet ' + sheetId + ' was not upgraded, so that nothing in it is overwritten:\n\n  ' +
+      r.problems.join('\n  ') + '\n\nRun previewMigration() for the full picture.'); } catch (e) {}
+    throw new Error('Your workspace needs a quick check by our team before it can open. ' +
+                    'Nothing has been changed or lost — we have been told and will be in touch.');
+  }
+}
+
+/* Writes each MISSING heading into its own column. It used to append from the
+   last used column, which was right only while nothing existed past the old
+   schema: a customer's own column at, say, AD would have had our headings
+   written after it, at the wrong positions. Only call this after schemaCheck_
+   has passed. */
 function widen_(sheet, cols) {
   if (!sheet) return;
   var last = sheet.getLastColumn();
-  if (last >= cols.length) return;
-  sheet.getRange(1, last + 1, 1, cols.length - last)
-       .setValues([cols.slice(last)]);
+  var head = last ? sheet.getRange(1, 1, 1, Math.min(last, cols.length)).getValues()[0] : [];
+  for (var i = 0; i < cols.length; i++) {
+    if (String(head[i] == null ? '' : head[i]).trim() === '') sheet.getRange(1, i + 1).setValue(cols[i]);
+  }
 }
 
 function blankUserRow_() { return USER_COLS.map(function () { return ''; }); }
@@ -912,8 +1024,14 @@ function rowToUser_(r, rowIndex) {
     email: String(r[U['Email']] || '').trim(), role: r[U['Role']] || 'Doer',
     jobProfile: r[U['Job Profile']] || '', dept: r[U['Dept']] || '',
     phone: r[U['Phone']] || '', manager: String(r[U['Manager']] || '').trim(),
-    active: r[U['Active']] === '' || r[U['Active']] === true || String(r[U['Active']]).toLowerCase() === 'true',
-    wipLimit: r[U['WIP Limit']] === '' ? null : Number(r[U['WIP Limit']]),
+    /* Active unless something explicitly says otherwise. The old schema had
+       nine user columns and no Active column at all, so on every existing
+       customer's sheet this cell does not exist — it reads as undefined, not
+       as ''. Testing for '' or true read every one of those people as
+       deactivated, which would have locked out every existing user at every
+       existing company on the day of the switch. */
+    active: !/^(false|no|inactive|0)$/i.test(String(r[U['Active']] == null ? '' : r[U['Active']]).trim()),
+    wipLimit: (r[U['WIP Limit']] == null || r[U['WIP Limit']] === '') ? null : Number(r[U['WIP Limit']]),
     kras: safeJson_(r[U['KRAs JSON']], []),
     waOptIn: r[U['WhatsApp OptIn']] === true || String(r[U['WhatsApp OptIn']]).toLowerCase() === 'true',
     rowIndex: rowIndex,
@@ -4564,6 +4682,136 @@ function deleteDemoAccount(reallyDoIt, email) {
   Logger.log(out.join('\n'));
   return out.join('\n');
 }
+
+
+// ===========================================================================
+// MIGRATING EXISTING CUSTOMERS
+// ===========================================================================
+/**
+ * DOME BOX — MOVING EXISTING CUSTOMERS ONTO THE NEW BUILD
+ * =============================================================================
+ * Two functions, both runnable from the editor's Run button:
+ *
+ *   previewMigration()     reads every customer, changes nothing, reports
+ *   migrateAllTenants()    does it, under the lock, and reports the same way
+ *
+ * NOTHING IS COPIED OR MOVED. Each customer keeps the spreadsheet they already
+ * have. The new code reads it where it is; the upgrade only ADDS — new column
+ * headers after the old ones, and any tab that did not exist yet. No existing
+ * row, cell or tab is rewritten, renamed, reordered or deleted.
+ *
+ * What it checks, per customer, before it touches anything:
+ *
+ *   · the sheet opens at all — a deleted or unshared file is reported, not
+ *     guessed around
+ *   · the existing header row is the one this code expects, column for column.
+ *     The schema is positional, so a customer who once added their own column
+ *     would have it overwritten by the first new field written there. Those
+ *     sheets are reported and LEFT ALONE.
+ *   · everyone in the Users tab can actually sign in. Sign-in looks people up
+ *     in Global_Users; the old code wrote them there, but anybody added to a
+ *     sheet by hand was not, and would be locked out after the switch. They
+ *     are added to Global_Users with the password already in their row, so
+ *     they sign in exactly as before.
+ *
+ * Run previewMigration() first and read it. A customer listed under NEEDS A
+ * LOOK will not open on the new build until their sheet is sorted out — on
+ * purpose, because the alternative is writing over their data.
+ * =============================================================================
+ */
+
+function previewMigration() { return runMigration_(true); }
+function migrateAllTenants() { return runMigration_(false); }
+
+function runMigration_(dryRun) {
+  var out = ['', dryRun ? '=== MIGRATION PREVIEW — nothing is changed ===' : '=== MIGRATING CUSTOMERS ===', ''];
+  var c = CFG();
+  if (!c.masterId) { out.push('MASTER_DB_ID is not set. Run setupDomeBox().'); return say_(out); }
+
+  var master = SpreadsheetApp.openById(c.masterId);
+  var global = master.getSheetByName(TAB.GLOBAL);
+  var known = {};
+  if (global) global.getDataRange().getValues().slice(1).forEach(function (r) {
+    known[String(r[0]).trim().toLowerCase() + '|' + String(r[2]).trim()] = true;
+  });
+
+  var tenants = allTenants_();
+  var ready = [], fine = [], trouble = [], backfilled = 0;
+  var p = PropertiesService.getScriptProperties();
+
+  tenants.forEach(function (t) {
+    var ss;
+    try { ss = SpreadsheetApp.openById(t.sheetId); }
+    catch (e) { trouble.push(t.company + ' — the sheet cannot be opened (' + e.message + ')'); return; }
+
+    var r = upgradeTenantSchema_(ss, dryRun);
+    if (!r.ok) { trouble.push(t.company + ' — ' + r.problems.join('; ')); return; }
+
+    var tasks = Math.max(0, (ss.getSheetByName(TAB.TASKS) ? ss.getSheetByName(TAB.TASKS).getLastRow() : 1) - 1);
+    var urs = ss.getSheetByName(TAB.USERS);
+    var rows = urs ? urs.getDataRange().getValues().slice(1) : [];
+
+    /* People who would be locked out: in the Users tab, not in Global_Users. */
+    var missing = rows.filter(function (u) {
+      var em = String(u[U['Email']] || '').trim().toLowerCase();
+      return em && !known[em + '|' + t.sheetId];
+    });
+    if (!dryRun && missing.length) {
+      withLock_(function () {
+        missing.forEach(function (u) {
+          var em = String(u[U['Email']]).trim().toLowerCase();
+          global.appendRow([em, u[U['Password']], t.sheetId, String(u[U['Username']] || '').trim()]);
+          known[em + '|' + t.sheetId] = true;
+          backfilled++;
+        });
+      });
+    }
+
+    if (!dryRun) p.setProperty('SCHEMA_' + t.sheetId, SCHEMA_VERSION);
+    var line = t.company + ' — ' + rows.length + (rows.length === 1 ? ' person, ' : ' people, ') +
+      tasks + (tasks === 1 ? ' task' : ' tasks') +
+      (r.added.length ? '; ' + (dryRun ? 'will add ' : 'added ') + r.added.join(', ') : '; already current') +
+      (missing.length ? '; ' + missing.length + ' person' + (missing.length === 1 ? '' : 's') +
+        (dryRun ? ' would be locked out — will be fixed' : ' given sign-in access') : '');
+    (r.added.length || missing.length ? ready : fine).push(line);
+  });
+
+  out.push(tenants.length + ' customer' + (tenants.length === 1 ? '' : 's') + ' in the registry.');
+  out.push('');
+  if (ready.length) {
+    out.push(dryRun ? '--- WILL BE UPGRADED (' + ready.length + ') ---' : '--- UPGRADED (' + ready.length + ') ---');
+    ready.forEach(function (l) { out.push('  ' + l); });
+    out.push('');
+  }
+  if (fine.length) {
+    out.push('--- ALREADY CURRENT (' + fine.length + ') ---');
+    fine.forEach(function (l) { out.push('  ' + l); });
+    out.push('');
+  }
+  if (trouble.length) {
+    out.push('--- NEEDS A LOOK (' + trouble.length + ') — LEFT EXACTLY AS THEY ARE ---');
+    trouble.forEach(function (l) { out.push('  ' + l); });
+    out.push('');
+    out.push('  These will not open on the new build until fixed, so nothing in them is');
+    out.push('  overwritten. It is almost always a column somebody added by hand. Move it');
+    out.push('  past the last column Dome Box uses — Tasks: ' + colLetter_(TASK_COLS.length + 1) +
+             ' or later; Users: ' + colLetter_(USER_COLS.length + 1) + ' or later —');
+    out.push('  then run previewMigration() again.');
+    out.push('');
+  }
+  out.push('Nothing is copied, moved or deleted. Old columns, rows and tabs are never');
+  out.push('rewritten — new columns go after them, new tabs beside them.');
+  if (dryRun) {
+    out.push('');
+    out.push(trouble.length ? 'Sort out NEEDS A LOOK, then run migrateAllTenants().'
+                            : 'Looks good. Back up, then run migrateAllTenants().');
+  } else if (backfilled) {
+    out.push(backfilled + ' person' + (backfilled === 1 ? '' : 's') + ' who could not have signed in now can, with the password they already had.');
+  }
+  return say_(out);
+}
+
+function say_(lines) { var t = lines.join('\n'); Logger.log(t); return t; }
 
 
 // =========================================================================

@@ -52,6 +52,7 @@ Everything else here is the detail that guide links to.
 |---|---|
 | [`DEPLOY-EASY.md`](DEPLOY-EASY.md) | **Start here.** Twelve steps, plain words. |
 | [`SETUP.md`](SETUP.md) | The same, with the reasons and a fix-it table |
+| [`MIGRATING-CUSTOMERS.md`](MIGRATING-CUSTOMERS.md) | How existing customers move over without losing anything — and the email to send them |
 | [`MANUAL.md`](MANUAL.md) | The user manual — for the people who use it, not deploy it |
 | [`DEPLOY-NEW.md`](DEPLOY-NEW.md) | The backend in detail — webhook, scheduler, mail quota, invoicing |
 | [`netlify/DEPLOY.md`](netlify/DEPLOY.md) | The site in detail |

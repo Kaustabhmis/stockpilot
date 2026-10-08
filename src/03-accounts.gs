@@ -121,6 +121,8 @@ function login_(emailOrUsername, password) {
   var ss;
   try { ss = SpreadsheetApp.openById(sheetId); }
   catch (e) { throw new Error('Your workspace could not be opened. Contact support.'); }
+  // Sign-in is the first thing an existing customer does on the new build.
+  ensureTenantSchema_(ss, sheetId);
 
   var me = findUserByEmailOrName_(ss, key);
   if (!me) throw new Error('Your account is not in this workspace. Contact your administrator.');

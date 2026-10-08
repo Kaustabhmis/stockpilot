@@ -188,17 +188,34 @@ log in.
 
 Only when step 10 works properly:
 
+Your customers keep **their own spreadsheets** — nothing is copied or moved.
+The new code reads them where they are and only *adds* new columns and tabs.
+[`MIGRATING-CUSTOMERS.md`](MIGRATING-CUSTOMERS.md) explains it in full.
+
 1. **Back up first.** Add `domebox/backup.gs` as another file in Apps Script,
    run `backupAllTenants`, then `verifyLatestBackup`.
 2. In Script Properties, change `MASTER_DB_ID` to your **current live
    registry** ID. Change `SHEET_ID` in `reminders` to the same. Run
    `ensureRegistry`.
-3. In Netlify: **Domain management → Add domain** → `domebox.in` and
+3. Run **`previewMigration`** (it's already inside `code.gs`) and read the log. It changes nothing. It lists every
+   customer and what will happen to each.
+
+   If anything appears under **NEEDS A LOOK**, it's almost always a column
+   somebody added to their sheet by hand. The log says which column and where
+   to move it. Fix those, then run `previewMigration` again until that section
+   is gone.
+4. Run **`migrateAllTenants`**.
+5. In Netlify: **Domain management → Add domain** → `domebox.in` and
    `www.domebox.in` → follow Netlify's DNS instructions. Wait until it shows a
    🔒 certificate.
 
-✅ www.domebox.in opens your new site, and you can sign in with your existing
-account and password.
+✅ `migrateAllTenants` lists every customer under **UPGRADED** or **ALREADY
+CURRENT**, none under **NEEDS A LOOK**. www.domebox.in opens your new site, and
+you can sign in with your existing account and password.
+
+Your customers and their staff sign in with the **same email and the same
+password** as before. Nothing for them to do. A ready-to-send email telling
+them about the change is in `MIGRATING-CUSTOMERS.md`.
 
 Keep your **old** Apps Script deployed (but unused) for a week — if anything
 goes wrong, just put its URL back into Netlify's `API_URL`.

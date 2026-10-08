@@ -180,9 +180,12 @@ Only once the sandbox behaves:
 6. Keep the old script deployed but unused for a week, so rollback is just
    re-pointing `API_URL`.
 
-Existing tenant sheets widen in place: the first 15 task columns and 9 user
-columns are unchanged, and the new ones are appended. That is the only shape of
-schema change that cannot corrupt old rows.
+Then run `previewMigration()`, and `migrateAllTenants()` once it shows nothing
+under NEEDS A LOOK. Existing tenant sheets widen in place: the first 15 task
+columns and 9 user columns are unchanged, and the new ones are written into
+empty columns after them — only after the existing header row has been checked
+column for column, because the schema is positional and a customer's own
+column there would otherwise be written over. See `MIGRATING-CUSTOMERS.md`.
 
 ## 3. The one thing to do regardless
 

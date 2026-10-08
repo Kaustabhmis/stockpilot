@@ -359,10 +359,24 @@ going further. This is the step you will be glad of exactly once.
 Change `MASTER_DB_ID` (and `REG.SHEET_ID` in `reminders.gs`) to your **live**
 registry id. Run `ensureRegistry()`.
 
-It only adds missing tabs and never rewrites a row. Existing tenant sheets
-widen in place: the first 15 task columns and 9 user columns are untouched and
-new ones are appended, which is the only shape of schema change that cannot
-corrupt old rows.
+It only adds missing tabs to the registry and never rewrites a row.
+
+Then run **`previewMigration`**. It reads every customer's sheet and changes
+nothing: it reports what will be added to each, anyone who would not be able
+to sign in, and — under **NEEDS A LOOK** — any sheet whose columns are not
+where Dome Box expects them. That is almost always a column somebody added by
+hand; the report names it and says where to move it. A sheet that does not
+match is never adjusted, because the schema is positional and a customer's own
+column would be written over.
+
+When NEEDS A LOOK is empty, run **`migrateAllTenants`**. The first 15 task
+columns and 9 user columns are untouched; new headings are written into empty
+columns after them, and missing tabs are added beside the existing ones.
+
+If a customer is somehow missed — added to the registry after the run — their
+first sign-in performs the same upgrade, with the same check.
+
+Full detail, and an email to send customers: [`MIGRATING-CUSTOMERS.md`](MIGRATING-CUSTOMERS.md).
 
 ### 5.3 Sign in as yourself
 

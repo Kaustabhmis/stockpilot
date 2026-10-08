@@ -157,6 +157,10 @@ function tenantContext_(session) {
   var ss;
   try { ss = SpreadsheetApp.openById(session.sheetId); }
   catch (e) { throw new Error('Your workspace could not be opened. Contact support.'); }
+  /* A session from before the switch never passed through login on the new
+     build, so the upgrade is checked here as well. One property read once it
+     has run. */
+  ensureTenantSchema_(ss, session.sheetId);
 
   var reg = registryRow_(session.sheetId);
   var plan = planLimits(reg ? reg.plan : 'Free');
