@@ -83,7 +83,7 @@ function createDemoAccount(email, password) {
     out.push('A workspace already exists on ' + email + ':');
     out.push('  ' + existing.company + ' — ' + existing.plan + ', valid to ' + existing.until);
     out.push('');
-    out.push('Sign in with it, or run deleteDemoAccount(true) first and then this again.');
+    out.push('Sign in with it, or run removeDemoAccount first and then this again.');
     return say(out);
   }
 
@@ -204,7 +204,7 @@ function createDemoAccount(email, password) {
   out.push('No email was sent to anyone: the addresses are @demo.domebox.in,');
   out.push('which does not exist, so nothing can reach a real inbox by accident.');
   out.push('');
-  out.push('To remove it:  deleteDemoAccount(true)');
+  out.push('To remove it:  run removeDemoAccount');
   return say(out);
 }
 
@@ -420,6 +420,17 @@ function demoBackdate_(ctx, taskId, dueOffset, late) {
   }
 }
 
+/**
+ * deleteDemoAccount(true), for the Apps Script editor.
+ *
+ * The editor's Run button calls a function with no arguments, so
+ * deleteDemoAccount(true) cannot be run from it — choosing deleteDemoAccount
+ * there only ever does the dry run. Every guide that said "run
+ * deleteDemoAccount(true)" was describing a thing nobody could do without
+ * writing code. This is the button.
+ */
+function removeDemoAccount() { return deleteDemoAccount(true); }
+
 function demoFindTask_(ctx, title) {
   var all = readTasks_(ctx);
   for (var i = all.length - 1; i >= 0; i--) if (all[i].title === title) return all[i];
@@ -449,7 +460,7 @@ function deleteDemoAccount(reallyDoIt, email) {
   hits.forEach(function (h) { out.push('  ' + h.company + '  (' + h.sheetId + ')'); });
   if (!reallyDoIt) {
     out.push('');
-    out.push('Nothing removed. Run deleteDemoAccount(true) to go ahead.');
+    out.push('Nothing removed. Run removeDemoAccount to go ahead.');
     Logger.log(out.join('\n'));
     return out.join('\n');
   }

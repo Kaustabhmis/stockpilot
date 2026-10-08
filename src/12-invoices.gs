@@ -318,8 +318,8 @@ function issueInvoice_locked_(sheetId, planName, paid, company, until) {
       sendOpsMail_(CFG().mailFrom, 'Invoice ' + inv.number + ' needs a place of supply',
         'Invoice ' + inv.number + ' was issued to ' + inv.legalName + ' for ' +
         '₹' + rupees_(split.gross) + ', charged as ' + (interState ? 'IGST' : 'CGST+SGST') +
-        ' with no state on file. Ask them for their state or GSTIN, then run ' +
-        'reissueInvoice("' + inv.number + '").');
+        ' with no state on file. Ask them to fill in Plans > Invoice details, then run ' +
+        'reissueFlaggedInvoices in the Apps Script editor.');
     }
     logPayment_('INVOICE', sheetId, inv.number + ' ₹' + rupees_(split.gross));
     return inv;
@@ -437,6 +437,40 @@ function reissueInvoice(number) {
     Logger.log('No invoice numbered ' + number);
     return null;
   });
+}
+
+/**
+ * Reissues every invoice that was flagged for review and can now be fixed.
+ *
+ * The only reason an invoice is flagged is an unknown place of supply — the
+ * customer paid before giving a state or GSTIN. Once they have, this
+ * supersedes each such invoice with one taxed correctly. No arguments, so it
+ * can be run from the editor's Run button: the alert used to say "run
+ * reissueInvoice("BISCS/26-27/0007")", which nobody can do from that button.
+ *
+ * Invoices whose customer still has no state on file are left alone and
+ * listed, since reissuing them would only produce a second wrong one.
+ */
+function reissueFlaggedInvoices() {
+  var out = ['', '=== REISSUE FLAGGED INVOICES ===', ''];
+  var d = invoiceSheet_().getDataRange().getValues(), todo = [], waiting = [];
+  for (var i = 1; i < d.length; i++) {
+    if (String(d[i][19]).indexOf('Review') !== 0) continue;
+    var bill = billingFor_(String(d[i][3]).trim());
+    if (bill && bill.stateCode) todo.push(String(d[i][0])); else waiting.push(String(d[i][0]) + ' (' + d[i][5] + ')');
+  }
+  todo.forEach(function (n) {
+    var inv = reissueInvoice(n);
+    out.push(inv ? '  reissued ' + n + ' as ' + inv.number : '  could not reissue ' + n);
+  });
+  if (!todo.length) out.push('  Nothing ready to reissue.');
+  if (waiting.length) {
+    out.push('');
+    out.push('Still waiting on the customer for a state or GSTIN:');
+    waiting.forEach(function (w) { out.push('  ' + w); });
+  }
+  Logger.log(out.join('\n'));
+  return out.join('\n');
 }
 
 /** Print what the next invoice would look like, without sending anything. */

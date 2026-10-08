@@ -85,6 +85,18 @@ ok('a replayed webhook issues no second invoice', inv.length === 1, inv.length);
 ok('and sends no second invoice email',
    !env.mails.slice(before).some((m) => /invoice/i.test(m.subject) && m.to === email));
 
+console.log('\n=== a flagged invoice can be fixed from the Run button ===');
+/* The first invoice above went out with no state on file, so it is flagged.
+   The alert used to say "run reissueInvoice(\"…\")", which the Apps Script
+   editor cannot do: its Run button passes no arguments. */
+const opsAlert = env.mails.filter((m) => /needs a place of supply/.test(m.subject)).pop();
+ok('the alert names a function the editor can run', /run reissueFlaggedInvoices/.test(opsAlert.body || opsAlert.html || ''),
+   (opsAlert.body || '').slice(0, 160));
+ok('and asks the customer to fill in their details, not the operator', /Invoice details/.test(opsAlert.body || opsAlert.html || ''));
+const notYet = APP.reissueFlaggedInvoices();
+ok('with nothing on file yet it reissues nothing', /Nothing ready to reissue/.test(notYet), notYet);
+ok('and says who it is still waiting on', /Still waiting on the customer/.test(notYet));
+
 console.log('\n=== place of supply decides the split ===');
 call({ action: 'saveBilling', token: A, form: { legalName: 'Acme Engineering Pvt Ltd',
   gstin: '27AACCA1111A1Z5', address: '4 MIDC Road', city: 'Pune', pin: '411001' } });
@@ -95,6 +107,14 @@ ok('IGST is the whole tax', Math.round(i2.igst * 100) === Math.round((i2.total -
 ok('the buyer GSTIN is recorded', i2.gstin === '27AACCA1111A1Z5', i2.gstin);
 ok('the state came from the GSTIN, not from a typed name',
    /Maharashtra/.test(env.mails[env.mails.length - 1].html));
+
+const fixed = APP.reissueFlaggedInvoices();
+ok('once the customer has a state, the flagged invoice is reissued', /reissued BISCS\/[\d-]+\/0001 as/.test(fixed), fixed);
+const after = call({ action: 'getInvoices', token: A }).invoices;
+ok('the original is superseded, not edited', !after.some((x) => x.number === i1.number), after.map((x) => x.number).join(','));
+ok('and its replacement is taxed for the right place', after.some((x) => x.igst > 0 && x.total === 7078.82),
+   JSON.stringify(after.map((x) => [x.number, x.total, x.igst])));
+ok('running it again finds nothing more to do', /Nothing ready to reissue/.test(APP.reissueFlaggedInvoices()));
 
 /* A buyer in the seller's own state is the other half of the rule, and the one
    that is easy to get wrong because it is the default. */

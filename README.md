@@ -9,7 +9,11 @@ a performance score your team can see the working for.
 
 ## Setting it up
 
-**→ [`SETUP.md`](SETUP.md)** — the whole thing in order, start to finish.
+**→ [`DEPLOY-EASY.md`](DEPLOY-EASY.md)** — twelve numbered steps, plain words,
+each ending with how you know it worked. **Start here.**
+
+**→ [`SETUP.md`](SETUP.md)** — the same steps with the reasons behind them,
+and a fix-it table for when something goes wrong.
 Backend, scheduler, payments, site, going live, with what to do when each step
 fails.
 
@@ -46,7 +50,8 @@ Everything else here is the detail that guide links to.
 
 | | |
 |---|---|
-| [`SETUP.md`](SETUP.md) | **Start here.** Zero to live. |
+| [`DEPLOY-EASY.md`](DEPLOY-EASY.md) | **Start here.** Twelve steps, plain words. |
+| [`SETUP.md`](SETUP.md) | The same, with the reasons and a fix-it table |
 | [`MANUAL.md`](MANUAL.md) | The user manual — for the people who use it, not deploy it |
 | [`DEPLOY-NEW.md`](DEPLOY-NEW.md) | The backend in detail — webhook, scheduler, mail quota, invoicing |
 | [`netlify/DEPLOY.md`](netlify/DEPLOY.md) | The site in detail |

@@ -6,7 +6,7 @@ const env = build();
 const src = fs.readFileSync('/home/user/stockpilot/dist/code.gs', 'utf8');
 const names = Object.keys(env.G);
 const APP = new Function(...names, src + '\n;return { doPost: doPost, doGet: doGet, setupDomeBox: setupDomeBox, '
-        + 'ensureRegistry: ensureRegistry, createDemoAccount: createDemoAccount, __env: 1, '
+        + 'ensureRegistry: ensureRegistry, createDemoAccount: createDemoAccount, reissueFlaggedInvoices: reissueFlaggedInvoices, __env: 1, '
         /* HARNESS ONLY. In Apps Script every request is a fresh execution, so the
            alias lookup is cached for the life of one. Here the whole suite runs in
            a single execution, so a test that changes the aliases needs a way to say

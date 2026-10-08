@@ -25,7 +25,7 @@ tpl.getSheetByName('Settings').appendRow(['General']);
 
 const names = Object.keys(env.G);
 const APP = new Function(...names, SRC + '\n;return { doPost, ensureRegistry, ' +
-  'createDemoAccount, deleteDemoAccount };')(...names.map((n) => env.G[n]));
+  'createDemoAccount, deleteDemoAccount, removeDemoAccount };')(...names.map((n) => env.G[n]));
 APP.ensureRegistry();
 
 const call = (body) => JSON.parse(APP.doPost({ postData: { contents: JSON.stringify(body) },
@@ -38,7 +38,7 @@ ok('it prints a login', /=== SIGN IN ===/.test(report));
 ok('with the email and the password', /demo@biscsindia\.com/.test(report) && /DomeBoxDemo2026/.test(report));
 ok('and the staff login pattern', /@demo\.domebox\.in/.test(report));
 ok('it suggests an order to open things in', /Worth opening in this order/.test(report));
-ok('and says how to remove it', /deleteDemoAccount\(true\)/.test(report));
+ok('and says how to remove it, by a name the Run button can actually call', /run removeDemoAccount/.test(report));
 /* Every optional step reports its own failure as an indented "label: message"
    line and carries on, which is right — one broken step should not cost the
    whole demo. But it also means a silently half-built workspace looks like a
@@ -154,7 +154,7 @@ ok('no email can reach a real person — the staff domain does not exist',
 console.log('\n=== running it twice ===');
 const second = APP.createDemoAccount();
 ok('it refuses rather than building a second one', /already exists/.test(second), second.slice(0, 160));
-ok('and says what to do instead', /deleteDemoAccount\(true\)/.test(second));
+ok('and says what to do instead', /removeDemoAccount/.test(second));
 ok('the first one still works',
    call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' }).status === 'success');
 
@@ -162,7 +162,7 @@ console.log('\n=== removing it ===');
 APP.deleteDemoAccount();   // no argument: a dry run
 ok('a dry run leaves the account alone',
    call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' }).status === 'success');
-APP.deleteDemoAccount(true);
+APP.removeDemoAccount();     // the zero-argument one the editor's Run button can call
 ok('and then it is gone',
    call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' }).status === 'error');
 ok('so the address can be used again',

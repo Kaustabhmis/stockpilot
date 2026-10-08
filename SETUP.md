@@ -4,6 +4,9 @@ www.domebox.in · BISCS India
 
 One guide, in order. Roughly 90 minutes end to end, most of it waiting for DNS.
 
+> **Just want the steps?** [`DEPLOY-EASY.md`](DEPLOY-EASY.md) is the same thing
+> as twelve short numbered steps. This file has the reasons behind each one.
+
 Your current site is **live with paying customers**. Nothing here touches it
 until Part 5, and that step is a one-click rollback.
 
@@ -274,7 +277,8 @@ intra-state.
 
 The number series is `BISCS/26-27/0001`, restarting each April, derived under a
 lock from the rows already written so it cannot collide or leave a gap. Nothing
-is ever edited: `reissueInvoice("BISCS/26-27/0007")` supersedes and renumbers.
+is ever edited: a flagged invoice is superseded and renumbered by running
+`reissueFlaggedInvoices`.
 
 ---
 
@@ -426,7 +430,7 @@ Email     demo@biscsindia.com      Password  DomeBoxDemo2026
 Team      <username>@demo.domebox.in / DemoStaff2026
 ```
 
-It prints an order to open things in. `deleteDemoAccount(true)` removes it; the
+It prints an order to open things in. `removeDemoAccount` removes it; the
 spreadsheet is trashed rather than deleted, so a mistake is recoverable from
 Drive's bin for thirty days.
 

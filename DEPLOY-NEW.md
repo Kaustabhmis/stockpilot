@@ -60,7 +60,7 @@ Your current customers keep running on the old one until you decide otherwise.
    reworked, a project mid-flight, cookie points, leave and measurable KRAs.
    It prints the login. An empty workspace demonstrates nothing: the score,
    the leaderboard and the priority list all need history to say anything.
-   `deleteDemoAccount(true)` removes it.
+   `removeDemoAccount` removes it.
 
 ### 1a. The Razorpay webhook — without it, some paid customers stay on Free
 
@@ -113,7 +113,7 @@ without sending anything. Run it again after any change.
 **The number series** is `BISCS/26-27/0001`, restarting at 0001 each financial
 year (April to March). It is derived under the registry lock from the rows
 already in the `Invoices` tab, so it cannot collide and cannot leave a gap.
-Nothing is ever edited in place: `reissueInvoice("BISCS/26-27/0007")` marks the
+Nothing is ever edited in place: running `reissueFlaggedInvoices` marks the
 original **Superseded** and issues a fresh number from the corrected details.
 
 **What customers do:** Plans → *Invoice details* captures the registered name,
@@ -124,7 +124,7 @@ rewritten afterwards. Past invoices are listed under Plans → *Invoices*.
 If a payment arrives with no state on file, the invoice is still issued — the
 customer has paid and is owed it — marked `Review — place of supply unknown`
 in the ledger, and `info@biscsindia.com` gets an email naming the invoice and
-the `reissueInvoice()` call to run once the customer answers.
+to run `reissueFlaggedInvoices` once the customer answers.
 
 ### 1b. The scheduler — add it, or nothing gets chased
 
