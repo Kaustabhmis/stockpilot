@@ -192,4 +192,4 @@ appraisal.
 
 ---
 
-Tested: 393 unit checks on the rules, 119 browser checks on the interface.
+Tested: 1,688 checks across forty-one suites — 1,383 on the server rules, 305 driving the real page in a browser. See `tests/README.md`.
