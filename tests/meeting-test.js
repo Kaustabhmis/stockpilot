@@ -171,6 +171,13 @@ const before = env.mails.length;
 ok('an attendee cannot end it', call({ action: 'endMeeting', token: P, id }).status === 'error');
 const end = call({ action: 'endMeeting', token: A, id });
 ok('the chair ends it', end.status === 'success', end.message);
+ok('once it has ended, its points are fixed — even for whoever wrote them',
+   /ended/.test(call({ action: 'updateMeetingItem', token: V, itemId: upd.id, form: { text: 'rewritten later' } }).message || ''));
+const later = mt.roadblocks.find((r) => /Second shift/.test(r.text));
+ok('but an open roadblock carries over and can still be moved on',
+   call({ action: 'updateMeetingItem', token: H, itemId: later.id, form: { horizon: 'now' } }).status === 'success');
+const nr = call({ action: 'updateMeetingItem', token: N, itemId: later.id, form: { horizon: 'later' } });
+ok('and not by a Doer who did not raise it', nr.status === 'error', nr.message);
 ok('the summary counts what happened', end.summary.present === 4 && end.summary.actionsCreated === 4 &&
    end.summary.roadblocksCleared === 1 && end.summary.roadblocksOpen === 1 && end.summary.goalsAtRisk === 1 &&
    end.summary.numbersMissed === 1 && end.summary.wins === 1 && end.summary.stories === 1, JSON.stringify(end.summary));
@@ -179,6 +186,10 @@ ok('everyone present gets the summary', sent.length === 4, sent.map((m) => m.to)
 ok('from info@biscsindia.com', sent.every((m) => m.from === 'info@biscsindia.com'));
 ok('with their own actions at the top', /Line up a second motor supplier/.test((sent.find((m) => m.to === U('sruti') + '@acme.in') || {}).html || ''));
 ok('and the minutes', sent.every((m) => /Supplier call Monday/.test(m.html)));
+call({ action: 'addUser', token: A, form: { name: 'Imran Q', username: U('imran'), email: U('imran') + '@acme.in', role: 'HOD',
+  manager: '', jobProfile: 'Executive', password: 'staffpass123' } });
+const ir = call({ action: 'updateMeetingItem', token: tok('imran'), itemId: later.id, form: { horizon: 'later' } });
+ok('nor by a manager who was not in that room', ir.status === 'error' && /not from a meeting you are in/.test(ir.message), ir.message);
 ok('nothing can be added after it ends', call({ action: 'addMeetingItem', token: P, id, form: { kind: 'win', text: 'late' } }).status === 'error');
 
 console.log('\n=== next week ===');

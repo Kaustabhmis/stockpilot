@@ -5666,8 +5666,17 @@ function addMeetingItem_(ctx, id, form) {
 function updateMeetingItem_(ctx, itemId, form) {
   blockIfStopped_(ctx);
   form = form || {};
+  requireMeetings_(ctx);
   var it = readItems_(ctx).filter(function (x) { return x.id === itemId; })[0];
   if (!it) throw new Error('That item no longer exists.');
+  /* A point belongs to its meeting: only people who were in that room touch
+     it, and once the meeting has ended its record is fixed. Roadblocks are the
+     exception on both counts — they carry over until somebody clears them. */
+  if (it.meeting) {
+    var home = meetingById_(ctx, it.meeting);
+    if (!home || !canSeeMeeting_(ctx, home)) throw new Error('That item is not from a meeting you are in.');
+    if (home.status !== 'live' && it.kind !== 'roadblock') throw new Error('That meeting has ended; its record stays as it was.');
+  }
   var live = liveMeeting_(ctx);
   var mine = it.by === ctx.actor.username;
   if (!mine && ctx.actor.role === ROLE.DOER) throw new Error('Only whoever raised it, or a manager, can change it.');

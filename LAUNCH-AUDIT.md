@@ -2,7 +2,7 @@
 
 Audited the whole system against the question: *what breaks, leaks or embarrasses
 us in the first month?* Three things were found open in the finished product and
-are now closed. Four things remain, and three of them are yours, not the code's.
+are now closed, and three more in the Goals and Meetings release (4c–4e). Four things remain, and three of them are yours, not the code's.
 
 Every finding below is pinned by a test in `tests/audit-test.js`, so none of them
 can quietly come back during a refactor.
@@ -94,6 +94,33 @@ without invalidating. **824 → 5, and flat:** adding 25 more people costs no
 extra reads at all.
 
 **Severity: medium now, high at scale.**
+
+### 4c. Submit, Send back and Verify from the task panel saved nothing (live today)
+
+The status dialog's form and the Tasks status filter shared one element id.
+`$('fStatus')` found the filter first, so the dialog's submit was never
+intercepted: the browser did a plain form submit, reloaded the page, and the
+status change was lost. Anyone who used the task panel for review steps saw
+"nothing happened". The form has its own id now, `tests/task-dialog-ui-test.js`
+drives it end to end, and `tests/wiring-test.js` fails the build on any
+duplicate id in the page — it has since caught another clash while meeting
+delegation was being added.
+
+### 4d. A row cleared by hand in a sheet could redirect an edit
+
+The Goals, Key numbers, Meetings and meeting-points readers skipped blank rows
+*before* counting rows, so one row cleared by hand in Google Sheets made every
+later record point one row too high; the next status change landed on its
+neighbour. Rows are now numbered first. Pinned in `tests/goals-test.js`.
+
+### 4e. Meeting points could be edited from outside the meeting
+
+`updateMeetingItem` checked who raised a point but not whether the caller was
+in that meeting, or whether the meeting had ended. A manager who knew an item's
+id could rewrite another team's record. Now only people in that meeting touch
+its points, an ended meeting's record is fixed, and open roadblocks — which
+carry over by design — stay editable by the people who were there. Pinned in
+`tests/meeting-test.js`.
 
 ## Open — and three of them are not the code
 
