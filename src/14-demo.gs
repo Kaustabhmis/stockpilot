@@ -316,8 +316,9 @@ function seedDemoDirection_(ctx, out) {
     text: 'All five Mahindra despatches left on the promised day.' });
   addMeetingItem_(ctx, m, { kind: 'story', person: 'rafiq', value: 'FIT', cookies: 2,
     text: 'Rafiq stopped CNC-3 when the bore drifted, before a single bad part reached inspection.' });
-  addMeetingItem_(ctx, m, { kind: 'update', person: 'imran', goal: qAudit,
+  var up = addMeetingItem_(ctx, m, { kind: 'update', person: 'imran', goal: qAudit,
     text: 'Internal audit checklist is ready; two clauses still need evidence from Stores.' });
+  var upId = ((up.updates || [])[0] || {}).id;
   var rb = addMeetingItem_(ctx, m, { kind: 'roadblock', goal: qAudit,
     text: 'Calibration certificates for the torque wrenches are missing from the file.' });
   var rbId = '';
@@ -326,6 +327,8 @@ function seedDemoDirection_(ctx, out) {
     goal: qAudit, fromItem: rbId, clearItem: true });
   addMeetingAction_(ctx, m, { title: 'Call Krishna Castings about short shipments', assignTo: 'meera',
     goal: qDespatch });
+  if (upId) addMeetingAction_(ctx, m, { title: 'Send Imran the Stores evidence for the two open clauses',
+    assignTo: 'meera', goal: qAudit, fromItem: upId, priority: 'Critical' });
   saveMinutes_(ctx, m, 'Despatch on track. Audit at risk on calibration evidence — Rafiq owns it. ' +
     'Meera to escalate Krishna Castings before the next review.');
   rateMeeting_(ctx, m, 8);
@@ -335,7 +338,7 @@ function seedDemoDirection_(ctx, out) {
   var end = new Date(ago.getTime() + 55 * 60000);
   writeMeeting_(ctx, meetingById_(ctx, m), { 'Date': ymd(ago), 'Started': ago, 'Ended': end });
   dropCache_(ctx);
-  out.push('Meetings: last week’s review — a win, a values story, two actions — and one roadblock waiting.');
+  out.push('Meetings: last week’s review — a win, a values story, three actions (one delegated from an update) — and one roadblock waiting.');
 }
 
 function seedDemoWork_(ctx) {

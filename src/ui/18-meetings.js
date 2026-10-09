@@ -241,7 +241,20 @@ function itemCard(i, extra) {
       (i.personName ? '<span>' + esc(i.personName) + '</span>' : '') +
       (i.value ? '<span class="chip t-plum">' + esc(i.value) + '</span>' : '') +
       (i.goal ? '<span class="chip t-sky">◎ ' + esc(goalTitle(i.goal)) + '</span>' : '') +
-      '<span>· ' + esc(i.byName) + '</span></div></div>' + (extra || '') + '</div>';
+      '<span>· ' + esc(i.byName) + '</span></div>' + delegatedChips(i.tasks) + '</div>' + (extra || '') + '</div>';
+}
+
+/* Every task made from a point, on the point — so the room can see it has
+   already been handed out instead of handing it out twice. */
+function delegatedChips(tasks) {
+  if (!tasks || !tasks.length) return '';
+  return '<div class="flex flex-wrap gap-1.5 mt-2">' + tasks.map(function (t) {
+    return '<button class="chip t-sky dTask" onclick="openTask(\'' + esc(t.id) + '\')" title="' + esc(t.title) + '">→ ' +
+      esc(t.toName) + ' · ' + esc(t.status) + '</button>'; }).join('') + '</div>';
+}
+
+function delegateBtn(cls, id) {
+  return '<button class="btn btn-g text-xs py-1.5 shrink-0 ' + cls + '" data-id="' + esc(id) + '" title="Hand this to someone as a task">Delegate</button>';
 }
 
 /* ---------- segments: the fixed part ------------------------------------ */
@@ -309,6 +322,7 @@ function segmentLive(key, v) {
     return arr.length ? '<div class="space-y-2">' + arr.map(function (i) { return itemCard(i, extra ? extra(i) : ''); }).join('') + '</div>'
                       : '<div class="text-sm font-semibold text-gray-400 py-4">' + esc(empty) + '</div>';
   };
+  var delItem = function (i) { return delegateBtn('mDel', i.id); };
 
   if (key === 'wins') {
     return '<div class="lb">Who is here — ' + m.attendees.filter(function (a) { return a.present; }).length + ' of ' + m.attendees.length + '</div>' +
@@ -318,10 +332,10 @@ function segmentLive(key, v) {
           '" data-p="' + (a.present ? 1 : 0) + '"' + (m.iAmChair ? '' : ' disabled') + '>' + avatar(a.name, 24) + esc(a.name) +
           (a.present ? ' ✓' : '') + '</button>'; }).join('') +
         (m.iAmChair ? '<select id="attAdd" class="in max-w-[200px] py-1.5 text-xs">' + personOptions(v, '', '+ Someone walked in') + '</select>' : '') +
-      '</div><div class="lb">Wins</div>' + list(v.wins, 'Nobody has shared one yet.');
+      '</div><div class="lb">Wins</div>' + list(v.wins, 'Nobody has shared one yet.', delItem);
   }
-  if (key === 'values') return '<div class="lb">Stories</div>' + list(v.stories, 'No stories yet.');
-  if (key === 'updates') return '<div class="lb">Updates</div>' + list(v.updates, 'Nothing shared yet.');
+  if (key === 'values') return '<div class="lb">Stories</div>' + list(v.stories, 'No stories yet.', delItem);
+  if (key === 'updates') return '<div class="lb">Updates</div>' + list(v.updates, 'Nothing shared yet.', delItem);
 
   if (key === 'goals') {
     if (!v.goals.length) return '<div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-sm font-bold text-gray-400">' +
@@ -335,7 +349,7 @@ function segmentLive(key, v) {
         progressBar(g.progress) +
         (can ? '<select class="in max-w-[130px] text-xs py-1.5 mGoal" data-id="' + esc(g.id) + '">' +
             ['On course', 'At risk', 'Done', 'Dropped'].map(function (s) { return '<option' + (s === g.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>'
-             : '<span class="chip ' + GOAL_TONE[g.status] + '">' + esc(g.status) + '</span>') + '</div>'; }).join('') + '</div>';
+             : '<span class="chip ' + GOAL_TONE[g.status] + '">' + esc(g.status) + '</span>') + delegateBtn('mDelGoal', g.id) + '</div>'; }).join('') + '</div>';
   }
 
   if (key === 'numbers') {
@@ -348,7 +362,9 @@ function segmentLive(key, v) {
       n.list.map(function (x) {
         var cur = x.weeks[x.weeks.length - 1], prev = x.weeks[x.weeks.length - 2] || {};
         var can = isManager() || x.owner === STATE.user.username;
-        return '<tr class="border-t border-gray-100"><td class="py-2.5 pl-4 font-black">' + esc(x.name) + '</td>' +
+        return '<tr class="border-t border-gray-100"><td class="py-2.5 pl-4 font-black">' + esc(x.name) +
+          (cur.hit === false || prev.hit === false ? ' <button class="text-[11px] font-black underline ml-1 mDelNum" style="color:var(--brand)" data-id="' +
+            esc(x.id) + '">Delegate</button>' : '') + '</td>' +
           '<td class="text-xs font-semibold text-gray-500">' + esc(x.ownerName) + '</td>' +
           '<td class="text-xs font-bold">' + (x.target === null ? '—' : (x.direction === 'at most' ? '≤ ' : '≥ ') + esc(x.target) + ' ' + esc(x.unit)) + '</td>' +
           '<td class="text-center text-xs font-black ' + (prev.hit === false ? 'text-red-600' : prev.hit ? 'text-teal-700' : 'text-gray-300') + '">' +
@@ -368,7 +384,7 @@ function segmentLive(key, v) {
       if (r.status === 'cleared') return '<span class="chip t-teal shrink-0">Cleared</span>';
       var mine = isManager() || r.mine;
       return '<div class="flex gap-1 shrink-0">' +
-        '<button class="btn btn-g text-xs py-1.5 rbAct" data-id="' + esc(r.id) + '" title="Turn into an action">→ Action</button>' +
+        delegateBtn('mDel', r.id) +
         (mine ? '<button class="btn btn-g text-xs py-1.5 rbClear" data-id="' + esc(r.id) + '">Clear</button>' +
           '<button class="btn btn-g text-xs py-1.5 rbMove" data-id="' + esc(r.id) + '" data-h="' + (r.horizon === 'later' ? 'now' : 'later') + '">' +
             (r.horizon === 'later' ? 'Now' : 'Later') + '</button>' : '') + '</div>';
@@ -425,28 +441,69 @@ function bindLive(key, v) {
   all('.rbTab', ['click', function (el) { MEET.rbTab = el.dataset.k; drawLive(MEET.v); }]);
   all('.rbClear', ['click', function (el) { act('updateMeetingItem', { id: undefined, itemId: el.dataset.id, form: { clear: true } }, 'Cleared.'); }]);
   all('.rbMove', ['click', function (el) { act('updateMeetingItem', { itemId: el.dataset.id, form: { horizon: el.dataset.h } }, false); }]);
-  all('.rbAct', ['click', function (el) { openActionFromRoadblock(el.dataset.id); }]);
+  all('.mDel', ['click', function (el) { delegateItem(el.dataset.id); }]);
+  all('.mDelGoal', ['click', function (el) {
+    var g = MEET.v.goals.filter(function (x) { return x.id === el.dataset.id; })[0];
+    openDelegate({ text: 'Goal: ' + g.title + ' (' + g.status + ')', title: '', person: g.owner, goal: g.id }); }]);
+  all('.mDelNum', ['click', function (el) {
+    var x = MEET.v.numbers.list.filter(function (n) { return n.id === el.dataset.id; })[0];
+    var miss = x.weeks.slice().reverse().filter(function (w) { return w.hit === false; })[0] || {};
+    openDelegate({ text: x.name + ': ' + miss.value + ' ' + (x.unit || '') + ' against ' + (x.direction === 'at most' ? '≤ ' : '≥ ') + x.target,
+      title: 'Bring ' + x.name.toLowerCase() + ' back on target', person: x.owner, goal: x.goal }); }]);
   all('.rate', ['click', function (el) { act('rateMeeting', { score: Number(el.dataset.n) }, 'Rated ' + el.dataset.n + '.'); }]);
 }
 
-function openActionFromRoadblock(itemId) {
-  var r = MEET.v.roadblocks.filter(function (x) { return x.id === itemId; })[0];
-  openModal('<form id="fRbAct" class="p-6 lg:p-7">' +
-    '<h2 class="text-xl font-black mb-1">Turn into an action</h2>' +
-    '<p class="text-sm text-gray-400 font-semibold mb-4">' + esc(r.text) + '</p>' +
-    '<label class="lb" for="raTitle">Action</label><input id="raTitle" class="in mb-4" required value="' + esc(r.text.slice(0, 120)) + '">' +
-    '<div class="grid grid-cols-2 gap-3 mb-4"><div><label class="lb" for="raWho">Who</label><select id="raWho" class="in" required>' +
-      personOptions(MEET.v, r.person, 'Who?') + '</select></div>' +
-      '<div><label class="lb" for="raDue">Due</label><input id="raDue" type="date" class="in" value="' + addDaysYmd(7) + '"></div></div>' +
-    '<label class="lb" for="raGoal">Serves goal</label><select id="raGoal" class="in mb-4">' + goalOptions(r.goal, 'None') + '</select>' +
-    '<label class="flex items-center gap-2 text-sm font-semibold mb-6"><input type="checkbox" id="raClear" class="w-4 h-4" checked> ' +
-      'This clears the roadblock</label>' +
+function delegateItem(itemId) {
+  var v = MEET.v, kinds = { wins: 'win', stories: 'story', updates: 'update', roadblocks: 'roadblock' }, found = null, kind = '';
+  Object.keys(kinds).forEach(function (k) {
+    (v[k] || []).forEach(function (i) { if (i.id === itemId) { found = i; kind = kinds[k]; } });
+  });
+  if (!found) return toast('That point is no longer on the list.', 'err');
+  openDelegate({ itemId: itemId, text: found.text, title: found.text.split('\n')[0].slice(0, 120),
+    person: found.person, goal: found.goal, roadblock: kind === 'roadblock' && found.status !== 'cleared',
+    done: found.tasks || [] });
+}
+
+/**
+ * Delegate a meeting point as a task. One form for every kind of point, so a
+ * roadblock, a win worth repeating, an update that needs following up, a goal
+ * off course or a number that missed all end up the same way: on somebody's
+ * board, with a due date, counted toward the goal it serves.
+ */
+function openDelegate(o) {
+  var staff = ((STATE.data && STATE.data.staff) || []).filter(function (u) { return u.active !== false; });
+  var here = {}; (MEET.v.meeting.attendees || []).forEach(function (a) { here[a.u] = a.present; });
+  staff.sort(function (a, b) { return (here[b.username] ? 1 : 0) - (here[a.username] ? 1 : 0) || a.name.localeCompare(b.name); });
+  openModal('<form id="fDelegate" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Delegate as a task</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-3 whitespace-pre-wrap">' + esc(o.text) + '</p>' +
+    (o.done && o.done.length ? '<div class="text-xs font-bold text-amber-700 mb-3">Already delegated: ' +
+      o.done.map(function (t) { return esc(t.toName) + ' (' + esc(t.status) + ')'; }).join(', ') + '</div>' : '') +
+    '<label class="lb" for="dlTitle">Task</label><input id="dlTitle" class="in mb-4" required maxlength="200" value="' + esc(o.title || '') +
+      '" placeholder="What, specifically, will be done?">' +
+    '<div class="lb">To</div><div class="grid sm:grid-cols-2 gap-1.5 mb-4 max-h-40 overflow-y-auto">' + staff.map(function (u) {
+      return '<label class="flex items-center gap-2 text-sm font-semibold rounded-lg px-2 py-1.5 hover:bg-gray-50">' +
+        '<input type="checkbox" class="dlWho w-4 h-4" value="' + esc(u.username) + '"' + (u.username === o.person ? ' checked' : '') + '> ' +
+        esc(u.name) + (here[u.username] ? '' : ' <span class="text-[10px] text-gray-400">not here</span>') + '</label>'; }).join('') + '</div>' +
+    '<div class="grid grid-cols-2 gap-3 mb-4"><div><label class="lb" for="dlDue">Due</label><input id="dlDue" type="date" class="in" value="' + addDaysYmd(7) + '"></div>' +
+      '<div><label class="lb" for="dlPri">Priority</label><select id="dlPri" class="in">' + ['Low', 'Medium', 'High', 'Critical'].map(function (p) {
+        return '<option' + (p === 'High' ? ' selected' : '') + '>' + p + '</option>'; }).join('') + '</select></div></div>' +
+    '<label class="lb" for="dlGoal">Serves goal</label><select id="dlGoal" class="in mb-4">' + goalOptions(o.goal || '', 'None') + '</select>' +
+    (o.roadblock ? '<label class="flex items-center gap-2 text-sm font-semibold mb-4"><input type="checkbox" id="dlClear" class="w-4 h-4" checked> ' +
+      'This clears the roadblock</label>' : '') +
+    '<div class="text-[11px] font-semibold text-gray-400 mb-5">Lands on their board like any other task, chased by the same reminders, and listed under Actions.</div>' +
     '<div class="flex gap-3"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
-    '<button type="submit" class="btn btn-p flex-1">Create action</button></div></form>', 'max-w-lg');
-  $('fRbAct').addEventListener('submit', function (e) {
+    '<button type="submit" class="btn btn-p flex-1">Delegate</button></div></form>', 'max-w-lg');
+  $('fDelegate').addEventListener('submit', function (e) {
     e.preventDefault();
-    act('addMeetingAction', { form: { title: $('raTitle').value, assignTo: $('raWho').value, dueDate: $('raDue').value,
-      goal: $('raGoal').value, fromItem: itemId, clearItem: $('raClear').checked } }).then(function () { closeModal(); });
+    var who = Array.prototype.filter.call(document.querySelectorAll('.dlWho'), function (c) { return c.checked; })
+      .map(function (c) { return c.value; });
+    if (!who.length) return toast('Pick who it goes to.', 'err');
+    var btn = e.target.querySelector('button[type=submit]'); busy(btn, true);
+    act('addMeetingAction', { form: { title: $('dlTitle').value, assignTo: who.join(','), dueDate: $('dlDue').value,
+      priority: $('dlPri').value, goal: $('dlGoal').value, fromItem: o.itemId || '', context: o.itemId ? '' : o.text,
+      clearItem: !!($('dlClear') && $('dlClear').checked) } })
+      .then(function () { closeModal(); }).catch(function () { busy(btn, false); });
   });
 }
 

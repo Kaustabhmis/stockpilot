@@ -467,13 +467,28 @@ A roadblock stays on the list — **Now** or **Later** — until somebody clears
 from one meeting to the next. You can raise one between meetings too:
 **Meetings → Raise a roadblock**.
 
-### Actions are real tasks
+### Delegate any point as a task
 
-**→ Action** on a roadblock, or **Add action** in Actions, creates a Dome Box
-task: on the person's board, chased by the daily reminders, counted in their
-score, due in seven days unless you say otherwise, and tied to the goal and the
-meeting it came from. Next week's meeting opens Actions with every one still
-open — which is the whole point of meeting weekly.
+Every point raised in the meeting has a **Delegate** button — a win, a story,
+an update, a roadblock, a goal in the goal check, and any key number that
+missed its target. It opens one form: what will be done, **who** (tick one
+person or several — each gets their own task), the due date, the priority, and
+the goal it serves. The goal and the person are filled in from the point.
+**Add action** in Actions does the same for something nobody raised as a point.
+
+Each one is a Dome Box task: on the person's board, chased by the daily
+reminders, counted in their score, due in seven days unless you say otherwise,
+and tied to the goal and the meeting it came from. The task's description says
+which point it came from.
+
+The point then shows who it went to and where it stands — **→ Payel · In
+Progress** — and clicking that opens the task, so nobody hands the same thing
+out twice. Delegating a roadblock clears it, unless you untick **This clears
+the roadblock**. The usual assignment rules apply: a Doer can raise work to
+their manager, not hand it to a peer.
+
+Next week's meeting opens Actions with every one still open — which is the
+whole point of meeting weekly.
 
 ### Close
 

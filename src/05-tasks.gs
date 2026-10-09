@@ -95,7 +95,8 @@ function createTask_locked_(ctx, form) {
     throw new Error(refused.length ? refused[0].reason
       : 'None of those people are active in this workspace.');
   }
-  return { status: 'success', created: created.length, routedForApproval: routed,
+  return { status: 'success', created: created.length, ids: created.map(function (c) { return c.id; }),
+    routedForApproval: routed,
     refused: refused,
     message: created.length + ' task(s) created' +
       (routed ? ', ' + routed + ' sent for approval' : '') + '.' +

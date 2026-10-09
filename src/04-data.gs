@@ -26,6 +26,7 @@ function ensureTenantTabs_(ss) {
   widen_(ss.getSheetByName(TAB.TASKS), TASK_COLS);
   widen_(ss.getSheetByName(TAB.USERS), USER_COLS);
   widen_(ss.getSheetByName(TAB.COOKIES), COOKIE_COLS);
+  widen_(ss.getSheetByName(TAB.MEETING_ITEMS), MEETING_ITEM_COLS);
   return ss;
 }
 

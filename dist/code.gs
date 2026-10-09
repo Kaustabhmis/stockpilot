@@ -63,7 +63,7 @@ var NUMBER_LOG_COLS = ['Number','Week','Value','By','At'];
 var MEETING_COLS = ['ID','Title','Date','Status','Chair','Started','Ended','Attendees JSON',
                     'Agenda JSON','Segment','Minutes','Ratings JSON','Summary JSON'];
 var MEETING_ITEM_COLS = ['ID','Meeting','Kind','Text','Person','Value','Goal','Status','Horizon',
-                         'By','At','Cleared In'];
+                         'By','At','Cleared In','Tasks'];
 
 /* Column layout. The first 15 task columns and first 9 user columns match the
    old schema exactly, so an existing tenant sheet keeps working; new fields are
@@ -904,6 +904,7 @@ function ensureTenantTabs_(ss) {
   widen_(ss.getSheetByName(TAB.TASKS), TASK_COLS);
   widen_(ss.getSheetByName(TAB.USERS), USER_COLS);
   widen_(ss.getSheetByName(TAB.COOKIES), COOKIE_COLS);
+  widen_(ss.getSheetByName(TAB.MEETING_ITEMS), MEETING_ITEM_COLS);
   return ss;
 }
 
@@ -1520,7 +1521,8 @@ function createTask_locked_(ctx, form) {
     throw new Error(refused.length ? refused[0].reason
       : 'None of those people are active in this workspace.');
   }
-  return { status: 'success', created: created.length, routedForApproval: routed,
+  return { status: 'success', created: created.length, ids: created.map(function (c) { return c.id; }),
+    routedForApproval: routed,
     refused: refused,
     message: created.length + ' task(s) created' +
       (routed ? ', ' + routed + ' sent for approval' : '') + '.' +
@@ -4596,8 +4598,9 @@ function seedDemoDirection_(ctx, out) {
     text: 'All five Mahindra despatches left on the promised day.' });
   addMeetingItem_(ctx, m, { kind: 'story', person: 'rafiq', value: 'FIT', cookies: 2,
     text: 'Rafiq stopped CNC-3 when the bore drifted, before a single bad part reached inspection.' });
-  addMeetingItem_(ctx, m, { kind: 'update', person: 'imran', goal: qAudit,
+  var up = addMeetingItem_(ctx, m, { kind: 'update', person: 'imran', goal: qAudit,
     text: 'Internal audit checklist is ready; two clauses still need evidence from Stores.' });
+  var upId = ((up.updates || [])[0] || {}).id;
   var rb = addMeetingItem_(ctx, m, { kind: 'roadblock', goal: qAudit,
     text: 'Calibration certificates for the torque wrenches are missing from the file.' });
   var rbId = '';
@@ -4606,6 +4609,8 @@ function seedDemoDirection_(ctx, out) {
     goal: qAudit, fromItem: rbId, clearItem: true });
   addMeetingAction_(ctx, m, { title: 'Call Krishna Castings about short shipments', assignTo: 'meera',
     goal: qDespatch });
+  if (upId) addMeetingAction_(ctx, m, { title: 'Send Imran the Stores evidence for the two open clauses',
+    assignTo: 'meera', goal: qAudit, fromItem: upId, priority: 'Critical' });
   saveMinutes_(ctx, m, 'Despatch on track. Audit at risk on calibration evidence — Rafiq owns it. ' +
     'Meera to escalate Krishna Castings before the next review.');
   rateMeeting_(ctx, m, 8);
@@ -4615,7 +4620,7 @@ function seedDemoDirection_(ctx, out) {
   var end = new Date(ago.getTime() + 55 * 60000);
   writeMeeting_(ctx, meetingById_(ctx, m), { 'Date': ymd(ago), 'Started': ago, 'Ended': end });
   dropCache_(ctx);
-  out.push('Meetings: last week’s review — a win, a values story, two actions — and one roadblock waiting.');
+  out.push('Meetings: last week’s review — a win, a values story, three actions (one delegated from an update) — and one roadblock waiting.');
 }
 
 function seedDemoWork_(ctx) {
@@ -5471,7 +5476,8 @@ function readItems_(ctx) {
       return { id: String(r[0]), meeting: String(r[1] || ''), kind: String(r[2] || ''), text: String(r[3] || ''),
                person: String(r[4] || ''), value: String(r[5] || ''), goal: String(r[6] || ''),
                status: String(r[7] || 'open'), horizon: String(r[8] || 'now'),
-               by: String(r[9] || ''), at: toIso_(r[10]), clearedIn: String(r[11] || ''), row: r.row_ };
+               by: String(r[9] || ''), at: toIso_(r[10]), clearedIn: String(r[11] || ''),
+               tasks: String(r[12] || '').split(',').filter(function (x) { return x; }), row: r.row_ };
     });
   });
 }
@@ -5642,7 +5648,7 @@ function addMeetingItem_(ctx, id, form) {
   var horizon = form.horizon === 'later' ? 'later' : 'now';
 
   var row = ['I-' + Utilities.getUuid().slice(0, 8), m ? m.id : '', kind, text.slice(0, 2000), person, val, goal,
-             'open', horizon, ctx.actor.username, new Date(), ''];
+             'open', horizon, ctx.actor.username, new Date(), '', ''];
   tab_(ctx, TAB.MEETING_ITEMS, MEETING_ITEM_COLS).appendRow(row);
   dropCache_(ctx);
 
@@ -5688,24 +5694,51 @@ function updateMeetingItem_(ctx, itemId, form) {
 }
 
 /**
- * Turns a roadblock — or anything said in the room — into a real task.
- * Through createTask_, so it is assigned, routed and capped exactly like any
- * other work; tagged with the meeting it came from and, if given, the goal.
+ * Delegates a meeting point as a task — any of them: a roadblock, a win, a
+ * story, an update, a goal off course, a number that missed. Through
+ * createTask_, so it is assigned, routed and capped exactly like any other
+ * work; tagged with the meeting it came from and, if given, the goal. The
+ * point keeps a link to every task made from it, so the room can see it has
+ * already been handed out instead of handing it out twice.
  */
 function addMeetingAction_(ctx, id, form) {
   form = form || {};
   var m = liveFor_(ctx, id);
+  var item = null;
+  if (form.fromItem) {
+    item = readItems_(ctx).filter(function (x) { return x.id === String(form.fromItem); })[0];
+    if (!item || (item.meeting !== m.id && !(item.kind === 'roadblock' && (item.status === 'open' || item.clearedIn === m.id)))) {
+      throw new Error('That point is not part of this meeting.');
+    }
+  }
   var due = String(form.dueDate || '').trim();
   if (!due) { var d = new Date(); d.setDate(d.getDate() + 7); due = ymd(d); }
-  var r = createTask_(ctx, { title: form.title, desc: form.desc || ('Agreed in ' + m.title + ', ' + m.date + '.'),
-    assignTo: form.assignTo, dueDate: due, priority: form.priority || 'High',
+  var KIND = { win: 'Win', story: 'Values story', update: 'Update', roadblock: 'Roadblock' };
+  var context = item ? KIND[item.kind] + ': ' + item.text : String(form.context || '').trim().slice(0, 500);
+  var desc = String(form.desc || '').trim() || ('Agreed in ' + m.title + ', ' + m.date + '.' + (context ? '\n' + context : ''));
+  var priority = ['Low', 'Medium', 'High', 'Critical'].indexOf(form.priority) > -1 ? form.priority : 'High';
+  var r = createTask_(ctx, { title: form.title, desc: desc,
+    assignTo: form.assignTo, dueDate: due, priority: priority,
     goal: form.goal || '', raisedIn: m.id, jobCategory: form.jobCategory || 'General' });
-  if (form.fromItem) {
-    try { updateMeetingItem_(ctx, form.fromItem, { clear: !!form.clearItem }); } catch (e) {}
+
+  if (item) {
+    withLock_(function () {
+      var fresh = readItems_(ctx).filter(function (x) { return x.id === item.id; })[0];
+      if (!fresh) return;
+      tab_(ctx, TAB.MEETING_ITEMS, MEETING_ITEM_COLS).getRange(fresh.row, 13)
+        .setValue(fresh.tasks.concat(r.ids || []).join(','));
+      dropCache_(ctx);
+    });
+    if (item.kind === 'roadblock' && form.clearItem) {
+      try { updateMeetingItem_(ctx, item.id, { clear: true }); } catch (e) {}
+    }
   }
   var out = getMeeting_(ctx, m.id);
-  var who = findUser_(ctx.ss, String(form.assignTo || '').split(',')[0].trim());
-  out.message = 'Action added to ' + (who ? who.name + '\u2019s' : 'their') + ' board, due ' + due + '.';
+  var names = String(form.assignTo || '').split(',').map(function (u) {
+    var who = findUser_(ctx.ss, u.trim()); return who ? who.name : ''; }).filter(function (n) { return n; });
+  var sent = names.filter(function (n) { return !(r.refused || []).some(function (x) { return x.name === n; }); });
+  out.message = 'Delegated to ' + (sent.join(', ') || 'them') + ', due ' + due + '.' +
+    ((r.refused || []).length ? ' Not sent to ' + r.refused.map(function (x) { return x.name + ' (' + x.reason + ')'; }).join(', ') + '.' : '');
   return out;
 }
 
@@ -5736,6 +5769,7 @@ function getMeeting_(ctx, id) {
   users.forEach(function (u) { names[u.username] = u.name; });
   var items = readItems_(ctx);
   var tasks = readTasks_(ctx);
+  var taskById = {}; tasks.forEach(function (t) { taskById[t.id] = t; });
   var dir = readDirection_(ctx);
   var goals = readGoals_(ctx);
   var sm = fyStartMonth_(ctx), q = fyPeriod_(m.date ? parseYmd(m.date) : new Date(), sm);
@@ -5766,7 +5800,9 @@ function getMeeting_(ctx, id) {
   var ratings = m.ratings || {}, rk = Object.keys(ratings);
   var label = function (i) { return { id: i.id, text: i.text, person: i.person, personName: names[i.person] || '',
     value: i.value, goal: i.goal, status: i.status, horizon: i.horizon, by: i.by,
-    byName: names[i.by] || i.by, at: i.at, mine: i.by === ctx.actor.username }; };
+    byName: names[i.by] || i.by, at: i.at, mine: i.by === ctx.actor.username,
+    tasks: i.tasks.map(function (tid) { return taskById[tid]; }).filter(function (t) { return t; }).map(function (t) {
+      return { id: t.id, title: t.title, to: t.assignee, toName: names[t.assignee] || t.assignee, status: t.status, due: t.due }; }) }; };
 
   return { status: 'success', meeting: {
       id: m.id, title: m.title, date: m.date, status: m.status, chair: m.chair, chairName: names[m.chair] || m.chair,

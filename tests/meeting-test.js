@@ -11,6 +11,7 @@ const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || !x
 
 const R = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
 const U = (u) => u + R;
+const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); return d.toISOString().slice(0, 10); };
 const email = 'meet' + R + '@acme.in';
 const ME = email.split('@')[0];
 const A = call({ action: 'register', form: { companyName: 'Acme Engineering', name: 'Rohan Mehta', email, password: 'strongpass123' } }).token;
@@ -122,6 +123,33 @@ ok('the action shows in the Actions segment, marked new', mt.actions.some((a) =>
 ok('an action for someone outside the company is refused', call({ action: 'addMeetingAction', token: A, id,
    form: { title: 'x', assignTo: 'nobody' } }).status === 'error');
 
+console.log('\n=== any meeting point can be delegated as a task ===');
+mt = call({ action: 'getMeeting', token: A, id });
+const upd = mt.updates.find((u) => /New lathe/.test(u.text));
+const d1 = call({ action: 'addMeetingAction', token: A, id, form: { title: 'Book the riggers for the lathe',
+  assignTo: [U('vikram'), U('payel')].join(','), fromItem: upd.id, priority: 'Medium', dueDate: ymd(3) } });
+ok('an update is delegated to two people at once', d1.status === 'success' && /Vikram/.test(d1.message) && /Payel/.test(d1.message), d1.message);
+const d1u = d1.updates.find((u) => u.id === upd.id);
+ok('the update now shows both tasks made from it, with who and where they stand',
+   d1u.tasks.length === 2 && d1u.tasks.every((x) => x.toName && x.status), JSON.stringify(d1u.tasks));
+const bt = call({ action: 'getDashboard', token: A }).tasks.filter((x) => x.title === 'Book the riggers for the lathe');
+ok('they are real tasks, with the priority and due date picked', bt.length === 2 &&
+   bt.every((x) => x.priority === 'Medium' && x.due === ymd(3) && x.raisedIn === id), JSON.stringify(bt.map((x) => [x.priority, x.due])));
+ok('and the task says which point it came from', bt.every((x) => /Update: New lathe arrives Thursday/.test(x.desc || x.description || '')),
+   bt[0] && (bt[0].desc || bt[0].description));
+ok('an update is not "cleared" by delegating it — only roadblocks clear',
+   call({ action: 'getMeeting', token: A, id }).updates.find((u) => u.id === upd.id).status === 'open');
+const gd = call({ action: 'addMeetingAction', token: A, id, form: { title: 'Weekly call with the motor vendor',
+  assignTo: U('sruti'), goal: goal.id, context: 'Goal: ' + goal.title } });
+const gt = call({ action: 'getDashboard', token: A }).tasks.find((x) => x.title === 'Weekly call with the motor vendor');
+ok('a goal off course is delegated straight from the goal check', gd.status === 'success' && gt && gt.goal === goal.id &&
+   /Goal: /.test(gt.desc || gt.description || ''), gt && (gt.desc || gt.description));
+ok('a point from another meeting cannot be delegated from this one', call({ action: 'addMeetingAction', token: A, id,
+   form: { title: 'x', assignTo: U('sruti'), fromItem: 'I-nonsense' } }).status === 'error');
+const doerUp = call({ action: 'addMeetingAction', token: V, id, form: { title: 'Need a second fixture', assignTo: U('payel'),
+  fromItem: upd.id } });
+ok('a Doer cannot hand work sideways to a peer — the usual assignment rules hold', doerUp.status === 'error', doerUp.message);
+
 console.log('\n=== close ===');
 ok('a rating must be 1 to 10', call({ action: 'rateMeeting', token: P, id, score: 11 }).status === 'error');
 call({ action: 'rateMeeting', token: P, id, score: 9 });
@@ -143,7 +171,7 @@ const before = env.mails.length;
 ok('an attendee cannot end it', call({ action: 'endMeeting', token: P, id }).status === 'error');
 const end = call({ action: 'endMeeting', token: A, id });
 ok('the chair ends it', end.status === 'success', end.message);
-ok('the summary counts what happened', end.summary.present === 4 && end.summary.actionsCreated === 1 &&
+ok('the summary counts what happened', end.summary.present === 4 && end.summary.actionsCreated === 4 &&
    end.summary.roadblocksCleared === 1 && end.summary.roadblocksOpen === 1 && end.summary.goalsAtRisk === 1 &&
    end.summary.numbersMissed === 1 && end.summary.wins === 1 && end.summary.stories === 1, JSON.stringify(end.summary));
 const sent = env.mails.slice(before);

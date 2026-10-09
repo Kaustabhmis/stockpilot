@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **1,666 checks across forty-one suites**, run against the real
+Tests: **1,684 checks across forty-one suites**, run against the real
 `dist/code.gs` on an in-memory Sheets shim, driven by the real
 `dist/index.html` in a real browser. See `tests/README.md`.
 
@@ -357,7 +357,10 @@ that has actually been verified; a year goal counts the work under its quarter
 goals. Cancelled work drops out rather than counting as undone. A goal with
 work on it can be dropped, never deleted, so its history still reads true.
 
-**A meeting action is a task.** It lands on the person's board, is chased by
+**Any meeting point can be delegated as a task** — a win, a story, an update, a
+roadblock, a goal in the goal check or a key number that missed — to one person
+or several, with due date, priority and goal; the point then shows who has it
+and its status. A meeting action is a task. It lands on the person's board, is chased by
 the daily reminders, counts in their score and moves the goal it serves. Next
 week's review opens Actions with every one still open. Roadblocks persist the
 same way — open until somebody clears them — and can be raised between

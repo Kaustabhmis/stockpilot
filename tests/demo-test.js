@@ -157,7 +157,9 @@ const mid = ((mlist.past || [])[0] || {}).id;
 const mv = call({ action: 'getMeeting', token: A.token, id: mid });
 ok('held last week, not today', mv.meeting && mv.meeting.date < new Date().toISOString().slice(0, 10), mv.meeting && mv.meeting.date);
 ok('with a win, a values story and an update', mv.wins.length === 1 && mv.stories.length === 1 && mv.updates.length === 1);
-ok('two actions, on people’s boards', mv.actions.length === 2 && mv.actions.every((a) => a.to), JSON.stringify(mv.actions));
+ok('three actions, on people’s boards', mv.actions.length === 3 && mv.actions.every((a) => a.to), JSON.stringify(mv.actions));
+ok('one delegated from an update, which shows who has it', mv.updates[0].tasks.length === 1 && /Meera/.test(mv.updates[0].tasks[0].toName),
+   JSON.stringify(mv.updates[0].tasks));
 ok('minutes and a rating', !!mv.meeting.minutes && mv.meeting.ratings.count === 1);
 ok('a roadblock is waiting for the next review',
    mv.roadblocks.some((r) => r.status === 'open' && /Krishna/.test(r.text)), JSON.stringify(mv.roadblocks));

@@ -130,13 +130,37 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   await p.selectOption('.mGoal', 'At risk'); await p.waitForTimeout(400);
   await p.fill('#riskNote', 'Motor supplier slipped'); await p.click('#fRisk button[type=submit]'); await p.waitForTimeout(1800);
   ok('marking it at risk asks why, and shows it', /Motor supplier slipped/.test(await p.locator('#segLive').textContent()));
+  await p.click('#segLive .mDelGoal'); await p.waitForTimeout(400);
+  ok('a goal can be delegated from the goal check, already tied to that goal',
+     /16-inch fan/.test(await p.locator('#dlGoal option:checked').textContent()) &&
+     /Motor supplier slipped|At risk/.test(await p.locator('#fDelegate').textContent()));
+  await p.click('#fDelegate button:has-text("Cancel")'); await p.waitForTimeout(300);
   await p.click('button:has-text("Next →")'); await p.waitForTimeout(1500);
   await p.fill('.mNum', '870'); await p.press('.mNum', 'Tab'); await p.waitForTimeout(1800);
   ok('a figure under target is flagged', await p.locator('.mNum.text-red-700').count() === 1 ||
      /Below target/.test(await p.locator('#toasts').textContent()));
+  ok('a missed number offers Delegate', await p.locator('#segLive .mDelNum').count() === 1);
+  await p.click('#segLive .mDelNum'); await p.waitForTimeout(400);
+  ok('pre-filled to bring it back on target', /back on target/.test(await p.inputValue('#dlTitle')) &&
+     /870/.test(await p.locator('#fDelegate').textContent()));
+  await p.click('#fDelegate button:has-text("Cancel")'); await p.waitForTimeout(300);
 
   console.log('\n--- Updates, Roadblocks, Actions ---');
   await p.click('button:has-text("Next →")'); await p.waitForTimeout(1300);
+  await p.fill('#fUpd textarea', 'Customer wants a sample of the 16-inch fan by Friday');
+  await p.click('#fUpd button[type=submit]'); await p.waitForTimeout(1500);
+  ok('an update has a Delegate button', await p.locator('#segLive .mDel').count() === 1);
+  await p.click('#segLive .mDel'); await p.waitForTimeout(400);
+  ok('the delegate form starts from the point itself', /sample of the 16-inch fan/.test(await p.inputValue('#dlTitle')));
+  ok('and does not offer to "clear" an update', await p.locator('#dlClear').count() === 0);
+  await p.check('.dlWho[value="' + U('payel') + '"]');
+  await p.selectOption('#dlPri', 'Critical');
+  await p.click('#fDelegate button[type=submit]'); await p.waitForTimeout(1800);
+  ok('the update shows who it was delegated to', /→ Payel[^·]*·/.test(await p.locator('#segLive').textContent()),
+     (await p.locator('#segLive').textContent()).slice(0, 300));
+  ok('and the task is on Vikram’s board, Critical', await p.evaluate((u) => {
+    return api('getDashboard', {}).then((d) => d.tasks.some((t) => /sample of the 16-inch fan/.test(t.title) &&
+      t.assignee === u && t.priority === 'Critical')); }, U('payel')));
   await p.click('button:has-text("Next →")'); await p.waitForTimeout(1500);
   await p.fill('#fRoad textarea', 'Motor supplier late by two weeks');
   const ropts = await p.locator('#fRoad [name=goal] option').allTextContents();
@@ -144,10 +168,11 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   await p.click('#fRoad button[type=submit]'); await p.waitForTimeout(1500);
   ok('the roadblock shows the goal it threatens', /late by two weeks[\s\S]*◎ Launch the 16-inch fan/.test(await p.locator('#segLive').textContent()));
   ok('a roadblock is raised', /late by two weeks/.test(await p.locator('#segLive').textContent()));
-  await p.click('.rbAct'); await p.waitForTimeout(400);
-  ok('the action form inherits the roadblock\u2019s goal', /16-inch fan/.test(await p.locator('#raGoal option:checked').textContent()));
-  await p.selectOption('#raWho', U('sruti'));
-  await p.click('#fRbAct button[type=submit]'); await p.waitForTimeout(1800);
+  await p.click('#segLive .mDel'); await p.waitForTimeout(400);
+  ok('the delegate form inherits the roadblock\u2019s goal', /16-inch fan/.test(await p.locator('#dlGoal option:checked').textContent()));
+  ok('and offers to clear the roadblock', await p.locator('#dlClear:checked').count() === 1);
+  await p.check('.dlWho[value="' + U('sruti') + '"]');
+  await p.click('#fDelegate button[type=submit]'); await p.waitForTimeout(1800);
   ok('turning it into an action clears it', /Now 0/.test(await p.locator('#segLive').textContent()));
   await p.screenshot({ path: 'shot-43-meeting-roadblocks.png' });
   await p.click('button:has-text("Next →")'); await p.waitForTimeout(1500);

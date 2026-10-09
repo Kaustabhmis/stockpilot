@@ -61,7 +61,7 @@ var NUMBER_LOG_COLS = ['Number','Week','Value','By','At'];
 var MEETING_COLS = ['ID','Title','Date','Status','Chair','Started','Ended','Attendees JSON',
                     'Agenda JSON','Segment','Minutes','Ratings JSON','Summary JSON'];
 var MEETING_ITEM_COLS = ['ID','Meeting','Kind','Text','Person','Value','Goal','Status','Horizon',
-                         'By','At','Cleared In'];
+                         'By','At','Cleared In','Tasks'];
 
 /* Column layout. The first 15 task columns and first 9 user columns match the
    old schema exactly, so an existing tenant sheet keeps working; new fields are
