@@ -64,6 +64,7 @@ $('fSearch').addEventListener('input', function () { FILTER.q = this.value; rend
 $('fAssignee').addEventListener('change', function () { FILTER.assignee = this.value; renderTasks(); });
 $('fStatus').addEventListener('change', function () { FILTER.status = this.value; renderTasks(); });
 $('fCategory').addEventListener('change', function () { FILTER.category = this.value; renderTasks(); });
+$('fGoal').addEventListener('change', function () { FILTER.goal = this.value; renderTasks(); });
 $('fOverdue').addEventListener('change', function () { FILTER.overdue = this.checked; renderTasks(); });
 
 $('btnHistory').addEventListener('click', function () {

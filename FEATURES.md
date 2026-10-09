@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **1,452 checks across thirty-eight suites**, run against the real
+Tests: **1,666 checks across forty-one suites**, run against the real
 `dist/code.gs` on an in-memory Sheets shim, driven by the real
 `dist/index.html` in a real browser. See `tests/README.md`.
 
@@ -55,7 +55,7 @@ closed in the app or generated at 6am.
 - [x] Edit task
 - [x] Full audit trail with notes and deadline changes
 - [x] Archive after 7 days closed; archive view
-- [x] Search, filter by assignee, status, category, overdue
+- [x] Search, filter by assignee, status, category, goal, overdue
 - [x] Checklists, dependencies (circular refused), delegation, WIP limits
 
 ## Team
@@ -340,6 +340,34 @@ with fifteen times the users, so no informed buyer ever had a reason to pick it.
 live keys with the caps and prices they were sold at, and they gain the full
 feature set, because nobody should lose capability for having bought early. They
 are marked `offered:false` so no new buyer can land on them.
+
+## Goals, values and the weekly review
+- [x] **Purpose and values**, set once by an Admin, each value with a short code (new)
+- [x] **Year goals and quarter goals** on the Indian financial year, owner and status each (new)
+- [x] **Key numbers** — weekly figures against a target, hit or miss (new)
+- [x] **Weekly review** — an eight-segment meeting run from one screen (new)
+- [x] **Tagging everywhere** — task, project, roadblock and key number → goal; story and cookie award → value (new)
+
+The terms are Dome Box's own: Purpose, Values, Year and Quarter goals, Key
+numbers, and a Weekly review in eight segments — Wins, Values in action, Goal
+check, Key numbers, Updates, Roadblocks, Actions, Close.
+
+**A goal's progress is not a guess.** It is the share of the work linked to it
+that has actually been verified; a year goal counts the work under its quarter
+goals. Cancelled work drops out rather than counting as undone. A goal with
+work on it can be dropped, never deleted, so its history still reads true.
+
+**A meeting action is a task.** It lands on the person's board, is chased by
+the daily reminders, counts in their score and moves the goal it serves. Next
+week's review opens Actions with every one still open. Roadblocks persist the
+same way — open until somebody clears them — and can be raised between
+meetings.
+
+**One screen, everyone on it.** The chair moves the meeting on; everyone else
+follows within five seconds. A refresh never touches a box somebody is typing
+in. Ratings are anonymous — a count and an average, never a name next to a
+score — and rating again replaces rather than adds. Ending it emails everyone
+who was there, from `info@biscsindia.com`, with their own actions at the top.
 
 ## Help
 - [x] **The user manual, inside the app** (new) — press `?` anywhere

@@ -106,6 +106,9 @@ function route_(p) {
     case 'getBilling':          return getBilling_(ctx);
     case 'getInvoices':         return getInvoices_(ctx);
     case 'getLeaderboard':      return getLeaderboard_(ctx, p.period, p.offset);
+    case 'getDirection':        return getDirection_(ctx);
+    case 'getMeetings':         return getMeetings_(ctx);
+    case 'getMeeting':          return getMeeting_(ctx, p.id);
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
@@ -141,6 +144,26 @@ function route_(p) {
     case 'paymentSuccess':      return handleVerifiedPayment_(ctx, p);
     case 'saveBilling':         return saveBilling_(ctx, p.form);
     case 'setLeaderboardVisibility': return setLeaderboardVisibility_(ctx, p.visibility);
+
+    /* --- goals, values, key numbers -------------------------------------- */
+    case 'saveDirection':       return saveDirection_(ctx, p.form);
+    case 'saveGoal':            return saveGoal_(ctx, p.form);
+    case 'setGoalStatus':       return setGoalStatus_(ctx, p.id, p.goalStatus, p.note);
+    case 'deleteGoal':          return deleteGoal_(ctx, p.id);
+    case 'saveNumber':          return saveNumber_(ctx, p.form);
+    case 'recordNumber':        return recordNumber_(ctx, p.id, p.value, p.week);
+
+    /* --- meetings -------------------------------------------------------- */
+    case 'startMeeting':        return startMeeting_(ctx, p.form);
+    case 'meetingGo':           return meetingGo_(ctx, p.id, p.segment);
+    case 'setAttendance':       return setAttendance_(ctx, p.id, p.username, p.present);
+    case 'saveMinutes':         return saveMinutes_(ctx, p.id, p.text);
+    case 'addMeetingItem':      return addMeetingItem_(ctx, p.id, p.form);
+    case 'updateMeetingItem':   return updateMeetingItem_(ctx, p.itemId, p.form);
+    case 'addMeetingAction':    return addMeetingAction_(ctx, p.id, p.form);
+    case 'rateMeeting':         return rateMeeting_(ctx, p.id, p.score);
+    case 'endMeeting':          return endMeeting_(ctx, p.id, false);
+    case 'cancelMeeting':       return endMeeting_(ctx, p.id, true);
     case 'contactSupport':      return contactSupport_(ctx, p.form);
     case 'aiInsight':           return aiInsight_(ctx, p.question);
     case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);

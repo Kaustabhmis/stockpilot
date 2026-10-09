@@ -16,6 +16,8 @@
         <button data-tab="projects">Projects</button>
         <button data-tab="team">Team</button>
         <button data-tab="reports">Reports</button>
+        <button data-tab="goals">Goals</button>
+        <button data-tab="meetings">Meetings</button>
         <button data-tab="board">Board</button>
       </div>
 
@@ -56,6 +58,8 @@
       <button data-tab="projects" class="shrink-0">Projects</button>
       <button data-tab="team" class="shrink-0">Team</button>
       <button data-tab="reports" class="shrink-0">Reports</button>
+        <button data-tab="goals" class="shrink-0">Goals</button>
+        <button data-tab="meetings" class="shrink-0">Meetings</button>
         <button data-tab="board" class="shrink-0">Board</button>
     </div>
   </nav>
@@ -74,6 +78,7 @@
         <select id="fAssignee" class="in max-w-[160px]"></select>
         <select id="fStatus" class="in max-w-[150px]"></select>
         <select id="fCategory" class="in max-w-[150px]"></select>
+        <select id="fGoal" class="in max-w-[190px] hidden" aria-label="Filter by goal"></select>
         <label class="flex items-center gap-2 text-xs font-bold text-gray-600 px-1 whitespace-nowrap">
           <input type="checkbox" id="fOverdue" class="w-4 h-4 accent-red-600"> Overdue
         </label>
@@ -148,6 +153,14 @@
   </section>
 
   <!-- --------------------------- REPORTS --------------------------- -->
+  <section id="tab-goals" class="hidden">
+    <div class="max-w-[1100px] mx-auto px-4 lg:px-6 py-6" id="goalsBody"></div>
+  </section>
+
+  <section id="tab-meetings" class="hidden">
+    <div id="meetBody"></div>
+  </section>
+
   <section id="tab-board" class="hidden">
     <div class="bg-white border-b border-gray-100">
       <div class="max-w-[1100px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center gap-2">

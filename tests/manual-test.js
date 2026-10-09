@@ -74,6 +74,40 @@ ck('in progress 6', has(`inProgress: 6`));
   ck(n + ' users ' + u, new RegExp(`'${n}':\\s*\\{[^}]*users:\\s*${u}\\b`).test(C));
 });
 
+// goals, values, key numbers
+ck('four goal statuses, exactly these', has(`GOAL_STATUSES = \\['On course', 'At risk', 'Done', 'Dropped'\\]`));
+ck('At risk needs a reason', C.indexOf("status === 'At risk' && !String(note || '').trim()") > -1);
+ck('quarters follow the Indian FY by default', C.indexOf("readSetting_(ctx, 'fyStartMonth', 4)") > -1);
+ck('up to twelve values', C.indexOf('values.length > 12') > -1);
+ck('value codes are one to three letters', has('VALUE_CODE_MAX = 3'));
+ck('progress leaves out cancelled and rejected work', C.indexOf("t.status !== 'Cancelled' && t.status !== 'Rejected'") > -1);
+ck('a year goal counts its quarter goals', C.indexOf("if (g.parent === goal.id) ids.push(g.id)") > -1);
+ck('a goal with linked work is dropped, not deleted', C.indexOf('Mark it Dropped instead') > -1);
+ck('project stages inherit the goal', C.indexOf("row[T['Goal']] = goalId;                 // every stage") > -1);
+ck('repeats keep their goal', C.indexOf("row[T['Goal']] = t.goal || '';") > -1);
+ck('figures are filed by the Monday of their week', C.indexOf('var dow = (x.getDay() + 6) % 7;') > -1);
+
+// meetings
+const segs = (C.match(/var MEETING_SEGMENTS = \[([\s\S]*?)\];/) || [])[1] || '';
+const segTitles = [...segs.matchAll(/title: '([^']+)'/g)].map((m) => m[1]);
+ck('the eight segments, in the order the manual gives',
+   segTitles.join('|') === 'Wins|Values in action|Goal check|Key numbers|Updates|Roadblocks|Actions|Close', segTitles.join('|'));
+ck('every segment is in the manual table', segTitles.every((t) => M.indexOf('| **' + t + '** |') > -1));
+ck('meetings are a paid-plan feature', C.indexOf('Meetings are included in every paid plan.') > -1);
+ck('only one meeting runs at a time', C.indexOf('A meeting is already running.') > -1);
+ck('segments can be dropped, never reordered, Close kept', C.indexOf("return keep[s.key] || s.key === 'close';") > -1);
+ck('a story must name a value', C.indexOf('a story without one is just a nice story') > -1);
+ck('actions are due in seven days by default', C.indexOf('d.setDate(d.getDate() + 7); due = ymd(d);') > -1);
+ck('actions go through createTask_', C.indexOf('var r = createTask_(ctx, { title: form.title') > -1);
+ck('ratings: one per person, replaced not added', C.indexOf("r[ctx.actor.username] = s;") > -1);
+ck('the summary goes to everyone present', C.indexOf('.filter(function (a) { return a.present; }).forEach(function (a) {') > -1);
+ck('cancelling sends nothing', C.indexOf("return { status: 'success', message: 'Meeting cancelled. Nothing was sent.' };") > -1);
+ck('the screen follows the chair within a few seconds', UI.indexOf('var POLL_MS = 5000;') > -1);
+ck('a refresh never touches a field being typed in',
+   UI.indexOf("box.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)") > -1);
+ck('Goals and Meetings are tabs', UI.indexOf('data-tab="goals"') > -1 && UI.indexOf('data-tab="meetings"') > -1);
+ck('the manual says eight tabs', /### The eight tabs/.test(M));
+
 // claims about the help itself
 ck('? opens help anywhere', UI.indexOf("e.key !== '?'") > -1 && UI.indexOf('openHelp()') > -1);
 ck('? in a text field just types', UI.indexOf("tag === 'INPUT' || tag === 'TEXTAREA'") > -1);

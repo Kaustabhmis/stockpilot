@@ -32,6 +32,11 @@ function openCookie(preset) {
         'font-black ' + (n === 2 ? 'border-blue-600 bg-blue-50 text-blue-700 on'
                                  : 'border-gray-200 text-gray-500') + '">' + n + '</button>';
     }).join('') + '</div>' +
+    /* Which value it recognised, when the company has set them. Recognition
+       that names the value teaches it; recognition that does not just rewards. */
+    (STATE.dir && STATE.dir.values && STATE.dir.values.length
+      ? '<label class="lb" for="ckValue">Lived which value</label><select id="ckValue" class="in mb-4">' +
+        valueOptions('', 'None in particular') + '</select>' : '') +
     '<label class="lb" for="ckWhy">What it is for</label>' +
     '<textarea id="ckWhy" class="in" rows="3" required minlength="5" ' +
       'placeholder="e.g. Stayed back to clear the audit list before the visit"></textarea>' +
@@ -58,7 +63,7 @@ function openCookie(preset) {
     var btn = e.target.querySelector('button[type=submit]');
     busy(btn, true, 'Awarding…');
     api('awardCookie', { data: { employee: $('ckWho').value, points: points,
-      reason: $('ckWhy').value } })
+      reason: $('ckWhy').value, value: $('ckValue') ? $('ckValue').value : '' } })
       .then(function (r) { toast('\uD83C\uDF6A ' + r.message, 'win'); closeModal(); return refresh(); })
       .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
   });
@@ -87,7 +92,8 @@ function openCookieFeed() {
         return '<div class="border-b border-gray-100 py-3">' +
           '<div class="text-sm font-bold text-gray-800">' + esc(c.toName) +
             ' <span class="chip bg-emerald-50 text-emerald-700 ml-1">+' + c.points + '</span></div>' +
-          '<div class="text-[13px] text-gray-600 font-semibold mt-0.5">' + esc(c.reason) + '</div>' +
+          '<div class="text-[13px] text-gray-600 font-semibold mt-0.5">' + esc(c.reason) +
+            (c.value ? ' <span class="chip t-plum">' + esc(c.value) + '</span>' : '') + '</div>' +
           '<div class="text-[11px] text-gray-400 font-semibold mt-0.5">' +
             esc('from ' + c.byName) + ' · ' + fmtDate(String(c.date).slice(0, 10)) + '</div></div>';
       }).join('') : '<p class="text-sm text-gray-400 font-semibold">Nothing awarded this month yet.</p>');

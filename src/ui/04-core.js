@@ -15,7 +15,7 @@ var STATE = { token:null, user:null, company:'', plan:'Free', data:null,
               tab:'tasks', mode:'board', archive:false, usage:null,
               period:'month', offset:0, person:'', analytics:null };
 
-var FILTER = { q:'', assignee:'', status:'', category:'', overdue:false };
+var FILTER = { q:'', assignee:'', status:'', category:'', goal:'', overdue:false };
 
 /* ---------- API ----------------------------------------------------------
    Apps Script does not answer CORS preflight, so the request has to stay
@@ -211,6 +211,7 @@ function enterApp() {
   $('navRole').textContent = STATE.user.role;
   $('navCompany').textContent = STATE.company;
   refresh();
+  loadDirection().then(function () { if (STATE.data) { syncFilters(); if (STATE.tab === 'tasks') renderTasks(); } });
 }
 
 function refresh() {

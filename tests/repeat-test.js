@@ -48,8 +48,12 @@ CADENCES.forEach((c) => {
 ok('Daily is one day on', gaps.Daily === 1, gaps.Daily);
 ok('Weekly is seven', gaps.Weekly === 7, gaps.Weekly);
 ok('Fortnightly is fourteen', gaps.Fortnightly === 14, gaps.Fortnightly);
+/* The gap depends on the day the first one fell on: 1 (Mon–Thu), 3 (from a
+   Friday) or 2 (from a Saturday, which is what "due tomorrow" is when the
+   suite runs on a Friday). This used to accept only 1 or 3, so it failed every
+   Friday. The real assertion is the second half: never a weekend. */
 ok('Weekdays never lands on a weekend',
-   [1, 3].indexOf(gaps.Weekdays) > -1 &&
+   [1, 2, 3].indexOf(gaps.Weekdays) > -1 &&
    [0, 6].indexOf(new Date(find('Cadence Weekdays')[1].due).getDay()) < 0, gaps.Weekdays);
 ok('Monthly is a month, not thirty days', gaps.Monthly >= 28 && gaps.Monthly <= 31, gaps.Monthly);
 ok('Quarterly is three months', gaps.Quarterly >= 89 && gaps.Quarterly <= 92, gaps.Quarterly);
@@ -159,8 +163,10 @@ const cols = cfg.match(/var TASK_COLS = \[([\s\S]*?)\];/)[1]
   .replace(/\/\*[\s\S]*?\*\//g, '').match(/'[^']+'/g).map((x) => x.slice(1, -1));
 ok('the first 19 columns are untouched', cols[18] === 'Delegate To', cols[18]);
 ok('the project columns stayed where they were', cols[23] === 'Stage Gate', cols[23]);
-ok('the repeat columns are last',
-   cols.slice(-3).join(',') === 'Repeat Until,Repeat Count,Repeat Made', cols.slice(-3).join(','));
+const ri = cols.indexOf('Repeat Until');
+ok('the repeat columns come after the project columns, together and in order',
+   ri > cols.indexOf('Stage Gate') && cols.slice(ri, ri + 3).join(',') === 'Repeat Until,Repeat Count,Repeat Made',
+   cols.slice(ri, ri + 3).join(','));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

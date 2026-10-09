@@ -8,7 +8,13 @@ function ensureTenantTabs_(ss) {
   mkTab_(ss, TAB.KRA, ['Job Profile','KRA Title','Description','Weight','Grid/KPI']);
   mkTab_(ss, TAB.REVIEWS, ['Month','Employee','Performance Score','Delegation Score','Final Score','Date']);
   mkTab_(ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
-  mkTab_(ss, TAB.COOKIES, ['Date','To','By','Points','Reason']);
+  mkTab_(ss, TAB.COOKIES, COOKIE_COLS);
+  mkTab_(ss, TAB.DIRECTION, DIRECTION_COLS);
+  mkTab_(ss, TAB.GOALS, GOAL_COLS);
+  mkTab_(ss, TAB.NUMBERS, NUMBER_COLS);
+  mkTab_(ss, TAB.NUMBER_LOG, NUMBER_LOG_COLS);
+  mkTab_(ss, TAB.MEETINGS, MEETING_COLS);
+  mkTab_(ss, TAB.MEETING_ITEMS, MEETING_ITEM_COLS);
   var set = ss.getSheetByName(TAB.SETTINGS);
   if (!set) {
     set = ss.insertSheet(TAB.SETTINGS);
@@ -19,6 +25,7 @@ function ensureTenantTabs_(ss) {
      rebuilt, so adding a feature never costs anyone their data. */
   widen_(ss.getSheetByName(TAB.TASKS), TASK_COLS);
   widen_(ss.getSheetByName(TAB.USERS), USER_COLS);
+  widen_(ss.getSheetByName(TAB.COOKIES), COOKIE_COLS);
   return ss;
 }
 
@@ -42,7 +49,9 @@ function ensureTenantTabs_(ss) {
    It runs at most once per sheet per schema version, remembered in Script
    Properties, so the cost on a normal request is one property read.
 --------------------------------------------------------------------------- */
-var SCHEMA_VERSION = '2026-10';
+/* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
+   upgraded under the previous version is checked and widened again. */
+var SCHEMA_VERSION = '2026-10b';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -87,13 +96,14 @@ function schemaCheck_(sheet, cols) {
  */
 function upgradeTenantSchema_(ss, dryRun) {
   var problems = [], added = [];
-  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS]];
+  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS]];
   checks.forEach(function (c) {
     var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
     if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Dome Box needs "' + r.expected + '"');
     else if (r.add) added.push(c[0] + ' +' + r.add + ' column' + (r.add === 1 ? '' : 's'));
   });
-  ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings'].forEach(function (n) {
+  ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings',
+   TAB.DIRECTION, TAB.GOALS, TAB.NUMBERS, TAB.NUMBER_LOG, TAB.MEETINGS, TAB.MEETING_ITEMS].forEach(function (n) {
     if (!ss.getSheetByName(n)) added.push('new ' + n + ' tab');
   });
   if (problems.length) return { ok: false, changed: false, problems: problems, added: [] };
@@ -276,6 +286,8 @@ function rowToTask_(r, rowIndex, names) {
     repeatUntil: toYmd_(r[T['Repeat Until']]),
     repeatCount: Number(r[T['Repeat Count']] || 0),
     repeatMade: Number(r[T['Repeat Made']] || 0),
+    goal: String(r[T['Goal']] || '').trim(),
+    raisedIn: String(r[T['Raised In']] || '').trim(),
     isArchived: isArchived_(status, r[T['Date Created']], history),
     toName: names[String(r[T['Assigned To']] || '').trim()] || r[T['Assigned To']] || '',
     byName: names[String(r[T['Assigned By']] || '').trim()] || r[T['Assigned By']] || '',

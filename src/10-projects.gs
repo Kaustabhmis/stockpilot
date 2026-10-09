@@ -26,6 +26,8 @@ function createProject_locked_(ctx, form) {
   if (!name) throw new Error('Give the project a name.');
 
   var gate = String(form.gate || 'sequential').toLowerCase() === 'parallel' ? 'parallel' : 'sequential';
+  var goalId = String(form.goal || '').trim();
+  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
   var stages = (form.stages || []).map(function (s, i) {
     return {
       no: i + 1,
@@ -111,6 +113,7 @@ function createProject_locked_(ctx, form) {
     row[T['Stage No']] = s.no;
     row[T['Stage Count']] = stages.length;
     row[T['Stage Gate']] = gate;
+    row[T['Goal']] = goalId;                 // every stage serves the project's goal
     sheet.appendRow(row);
     dropCache_(ctx);
 

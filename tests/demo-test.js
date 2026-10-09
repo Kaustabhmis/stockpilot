@@ -44,7 +44,7 @@ ok('and says how to remove it, by a name the Run button can actually call', /run
    whole demo. But it also means a silently half-built workspace looks like a
    success, so the report is checked for any of them. This caught the project
    step failing on a renamed field while everything else passed. */
-const hiccups = (report.match(/^ {2}(could not|project|cookies|leave|KRAs): .+$/gm) || []);
+const hiccups = (report.match(/^ {2}(could not|project|cookies|leave|KRAs|goals): .+$/gm) || []);
 ok('no step failed quietly', hiccups.length === 0, hiccups.join(' | '));
 
 console.log('\n=== the account signs in ===');
@@ -110,8 +110,11 @@ ok('one of them already released, the rest waiting on it',
    (pr.stageList || []).filter((s) => s.status === 'Pending' || s.status === 'In Progress').length >= 1,
    (pr.stageList || []).map((s) => s.status).join(', '));
 
-ok('cookie points are on the record',
-   (call({ action: 'getCookies', token: A.token }).cookies || []).length === 2);
+const ck = call({ action: 'getCookies', token: A.token }).cookies || [];
+ok('cookie points are on the record — two awards and one from a values story',
+   ck.length === 3, ck.length);
+ok('the story award carries the value it was given for', ck.some((c) => c.value === 'FIT'),
+   JSON.stringify(ck.map((c) => c.value)));
 ok('the org chart draws', call({ action: 'getOrgChart', token: A.token }).status === 'success');
 const kra = call({ action: 'getKraFor', token: A.token, username: 'payel' });
 ok('KRAs are set, so an appraisal has numbers in it',
@@ -121,6 +124,46 @@ ok('and they are measurable rather than aspirational',
    JSON.stringify((kra.kras || []).map((k) => [k.item, k.measured, k.target])));
 ok('the appraisal form builds on them',
    call({ action: 'getAppraisalForm', token: A.token, username: 'payel' }).status === 'success');
+
+console.log('\n=== goals, values and the weekly review ===');
+const dir = call({ action: 'getDirection', token: A.token });
+ok('a purpose is written down', dir.status === 'success' && dir.purpose.length > 10, dir.message || dir.purpose);
+ok('four values, each with a short code to tag by',
+   (dir.values || []).length === 4 && dir.values.every((v) => v.code), JSON.stringify(dir.values));
+const years = (dir.goals || []).filter((g) => g.level === 'year');
+const quarters = (dir.goals || []).filter((g) => g.level === 'quarter');
+ok('one goal for the year', years.length === 1, years.length);
+ok('three for the quarter, two of them under the year goal',
+   quarters.length === 3 && quarters.filter((g) => g.parent === years[0].id).length === 2,
+   JSON.stringify(quarters.map((g) => [g.title, g.parent])));
+ok('one is at risk, with the reason written down',
+   quarters.some((g) => g.status === 'At risk' && g.note), JSON.stringify(quarters.map((g) => [g.status, g.note])));
+const linkedGoals = new Set(tasks.filter((t) => t.goal).map((t) => t.goal));
+ok('real work is linked to the goals', tasks.filter((t) => t.goal).length >= 8 && linkedGoals.size === 2,
+   tasks.filter((t) => t.goal).length);
+ok('so the year goal shows progress from its quarters',
+   years[0] && years[0].progress && years[0].progress.total >= 8, JSON.stringify(years[0] && years[0].progress));
+ok('three key numbers, six weeks of figures each',
+   dir.numbers && dir.numbers.list.length === 3 &&
+   dir.numbers.list.every((n) => n.weeks.filter((w) => w.value !== null).length === 6),
+   JSON.stringify(dir.numbers && dir.numbers.list.map((n) => n.weeks.map((w) => w.value))));
+ok('with misses among them — a page of green is not believable',
+   dir.numbers && dir.numbers.list.some((n) => n.weeks.some((w) => w.hit === false)));
+const mlist = call({ action: 'getMeetings', token: A.token });
+ok('one finished weekly review, and nothing left running',
+   mlist.status === 'success' && (mlist.past || []).length === 1 && !mlist.live,
+   JSON.stringify(mlist).slice(0, 200));
+const mid = ((mlist.past || [])[0] || {}).id;
+const mv = call({ action: 'getMeeting', token: A.token, id: mid });
+ok('held last week, not today', mv.meeting && mv.meeting.date < new Date().toISOString().slice(0, 10), mv.meeting && mv.meeting.date);
+ok('with a win, a values story and an update', mv.wins.length === 1 && mv.stories.length === 1 && mv.updates.length === 1);
+ok('two actions, on people’s boards', mv.actions.length === 2 && mv.actions.every((a) => a.to), JSON.stringify(mv.actions));
+ok('minutes and a rating', !!mv.meeting.minutes && mv.meeting.ratings.count === 1);
+ok('a roadblock is waiting for the next review',
+   mv.roadblocks.some((r) => r.status === 'open' && /Krishna/.test(r.text)), JSON.stringify(mv.roadblocks));
+ok('and the one it dealt with is cleared', mv.roadblocks.some((r) => r.status === 'cleared' && /torque/.test(r.text)), JSON.stringify(mv.roadblocks.map((r) => [r.text.slice(0, 20), r.status])));
+ok('ending it sent no summary to the real Admin inbox',
+   !env.mails.some((m) => /Weekly review/.test(m.subject)), env.mails.map((m) => m.to + ' ' + m.subject).join(' | '));
 
 console.log('\n=== the score says something, which needs imperfect history ===');
 const scores = (dash.stats && dash.stats.scores) || {};

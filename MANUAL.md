@@ -15,6 +15,8 @@ This is for the people who *use* Dome Box. If you are setting it up, you want
 | [Scores](#scores) | **how the score is calculated** — read this before you use it |
 | [Recognition](#recognition) | cookie points |
 | [The leaderboard](#the-leaderboard) | top of the month to bottom |
+| [Goals and values](#goals-and-values) | purpose, values, year and quarter goals, key numbers |
+| [Meetings](#meetings) | the weekly review, and actions that become real work |
 | [Team](#team) | adding people, managers, WIP limits, leave |
 | [KRAs and appraisals](#kras-and-appraisals) | the formal review |
 | [Reports](#reports) | what the numbers mean |
@@ -41,7 +43,7 @@ Press **?** anywhere (or the **?** in the top bar; on a phone, **Help** in your
 account panel). Help opens on the section for the tab you are on, searches as
 you type, and every page ends with a way to reach a person.
 
-### The six tabs
+### The eight tabs
 
 | Tab | What it is for |
 |---|---|
@@ -50,6 +52,8 @@ you type, and every page ends with a way to reach a person.
 | **Projects** | Multi-stage work where each stage releases the next. |
 | **Team** | People, managers, leave, job categories. *(managers)* |
 | **Reports** | Scores, trends, accountability, appraisals. *(managers)* |
+| **Goals** | Purpose, values, year and quarter goals, key numbers. |
+| **Meetings** | The weekly review. |
 | **Board** | The leaderboard. |
 
 ### The three roles
@@ -367,6 +371,119 @@ or **managers only**. You always see your own row and your real position,
 whatever the setting.
 
 ---
+
+## Goals and values
+
+**Goals** — where the company is going, and the values it gets there by. Set
+up once, then used every week.
+
+### Purpose and values
+
+An Admin sets them: **Goals → Edit purpose & values**.
+
+- **Purpose** — one sentence: why the company exists.
+- **Values** — up to twelve, each with a short code (one to three letters,
+  the one people say out loud), its name, and what it looks like in practice.
+
+Values are what a story in a weekly review is tagged to, and what a cookie
+award can name — so they get used, not just printed.
+
+### Year goals and quarter goals
+
+| | |
+|---|---|
+| **Year goal** | What the company will achieve this financial year |
+| **Quarter goal** | One of the three to seven things this quarter that moves a year goal |
+
+Quarters follow the **Indian financial year**: Q1 is April to June, Q4 is
+January to March. Each goal has an owner and a status:
+
+| Status | Means |
+|---|---|
+| **On course** | Will be done by the end of the period |
+| **At risk** | Might not be — and you must say why, in one line |
+| **Done** | Done |
+| **Dropped** | No longer being pursued |
+
+The owner can change the status as well as managers — the person closest to a
+goal is the one who knows it is at risk first.
+
+### How progress is worked out
+
+Not somebody's guess. A goal's progress is **the share of the work linked to
+it that has been verified**. A year goal counts the work under its quarter
+goals too. Cancelled and rejected work is left out, so dropping a task does not
+make a goal look closer to done.
+
+To link work, pick the goal under **Serves goal** when you assign a task or
+build a project. Every stage of a project serves the project's goal, and every
+repeat of a repeating job keeps its goal.
+
+A goal with work linked to it cannot be deleted — mark it **Dropped** instead,
+so the history still makes sense.
+
+### Key numbers
+
+The handful of weekly figures that say whether the week went well — despatches,
+rejections, collections. Each has an owner, a target, and whether **at least**
+or **at most** is good. Figures are filed by week (from Monday); entering this
+week's again replaces it. A miss shows in red, and belongs in Roadblocks.
+
+## Meetings
+
+**Meetings → Start a weekly review.** Included in every paid plan. Any manager
+can start one; only one can run at a time.
+
+### The eight segments
+
+| | |
+|---|---|
+| **Wins** | Who is here, and one good thing each |
+| **Values in action** | A story of someone living one of the values — it must name the value |
+| **Goal check** | Each quarter goal: on course, at risk or done. No discussion here |
+| **Key numbers** | This week's figures against their targets |
+| **Updates** | Anything everyone needs to know, one line each |
+| **Roadblocks** | Problems and opportunities, worked one at a time |
+| **Actions** | Last week's, done or not. This week's: who, what, by when |
+| **Close** | Everyone rates the meeting from 1 to 10 |
+
+When you start, you can drop segments or change their minutes. You cannot
+reorder them: the order is the method. Close is always kept.
+
+### Running it
+
+The person who started it **chairs**: they take attendance, move from segment to
+segment, keep the minutes, and end it. Everyone else in the meeting has the same
+screen open and follows the chair within a few seconds. Each segment shows a
+clock against its planned minutes, and turns red when it runs over.
+
+Anyone in the room can share a win, a story, an update or a roadblock. A
+manager telling a story about someone who reports to them can award cookie
+points with it.
+
+### Roadblocks carry over
+
+A roadblock stays on the list — **Now** or **Later** — until somebody clears it,
+from one meeting to the next. You can raise one between meetings too:
+**Meetings → Raise a roadblock**.
+
+### Actions are real tasks
+
+**→ Action** on a roadblock, or **Add action** in Actions, creates a Dome Box
+task: on the person's board, chased by the daily reminders, counted in their
+score, due in seven days unless you say otherwise, and tied to the goal and the
+meeting it came from. Next week's meeting opens Actions with every one still
+open — which is the whole point of meeting weekly.
+
+### Close
+
+Ratings are **anonymous**: everyone sees how many have rated, nobody sees who
+gave what. Rating again replaces your rating rather than adding a second.
+
+**End meeting** emails a summary from `info@biscsindia.com` to everyone who was
+there, with **their own actions at the top**, then the numbers and the
+minutes. **Cancel** sends nothing and keeps nothing in the history; any actions
+already created stay on people's boards.
 
 ## Team
 

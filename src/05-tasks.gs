@@ -34,6 +34,13 @@ function createTask_locked_(ctx, form) {
      whole assignment rather than leaving half the team with a runaway repeat. */
   var stop = parseRepeatStop_(form);
 
+  /* The goal this work serves. Checked here rather than trusted, because a
+     task tagged to a goal that does not exist would count toward nothing and
+     still look as if it did. */
+  var goalId = String(form.goal || '').trim();
+  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
+  var raisedIn = String(form.raisedIn || '').trim();
+
   var sheet = ctx.ss.getSheetByName(TAB.TASKS);
   var created = [], routed = 0;
 
@@ -63,6 +70,8 @@ function createTask_locked_(ctx, form) {
     row[T['Repeat Until']] = stop.until;
     row[T['Repeat Count']] = stop.count;
     row[T['Repeat Made']] = stop.count || stop.until ? 1 : 0;
+    row[T['Goal']] = goalId;
+    row[T['Raised In']] = raisedIn;
     row[T['Reworks']] = 0;
     row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(),
       status: route.status, user: ctx.actor.name, note: route.note }]);
@@ -268,6 +277,7 @@ function spawnNextOccurrence_(ctx, hit, t) {
   row[T['Repeat Until']] = t.repeatUntil || '';
   row[T['Repeat Count']] = t.repeatCount || 0;
   row[T['Repeat Made']] = made + 1;
+  row[T['Goal']] = t.goal || '';            // a repeating job keeps serving the same goal
   row[T['Reworks']] = 0;
   row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(), status: 'Pending',
     user: 'System', note: 'Recurring occurrence of ' + t.id }]);
@@ -419,6 +429,12 @@ function editTask_(ctx, form) {
     if (!Number(t.repeatMade) && freq !== 'One Time') writeTaskField_(hit, 'Repeat Made', 1);
     if (String(stop.until) !== String(t.repeatUntil || '') ||
         Number(stop.count) !== Number(t.repeatCount || 0)) changes.push('Repeat rule');
+  }
+
+  if (form.goal !== undefined && String(form.goal) !== String(t.goal || '')) {
+    if (form.goal && !goalById_(ctx, form.goal)) throw new Error('That goal no longer exists.');
+    writeTaskField_(hit, 'Goal', String(form.goal || ''));
+    changes.push('Goal');
   }
 
   if (form.status && form.status !== t.status && ctx.actor.role === 'Admin') {

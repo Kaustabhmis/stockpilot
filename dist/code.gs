@@ -49,7 +49,21 @@ var MAIL_FROM_NAME = 'Dome Box';
 
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
-            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points' };
+            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points',
+            DIRECTION:'Direction', GOALS:'Goals', NUMBERS:'Key_Numbers', NUMBER_LOG:'Number_Log',
+            MEETINGS:'Meetings', MEETING_ITEMS:'Meeting_Items' };
+
+/* The cookie ledger, with the value an award was given for appended last. */
+var COOKIE_COLS = ['Date','To','By','Points','Reason','Value'];
+
+var DIRECTION_COLS = ['Kind','Code','Title','Detail','Order'];
+var GOAL_COLS = ['ID','Level','Period','Title','Detail','Owner','Parent','Status','Note','Created','Updated'];
+var NUMBER_COLS = ['ID','Name','Owner','Unit','Target','Direction','Goal','Active','Created'];
+var NUMBER_LOG_COLS = ['Number','Week','Value','By','At'];
+var MEETING_COLS = ['ID','Title','Date','Status','Chair','Started','Ended','Attendees JSON',
+                    'Agenda JSON','Segment','Minutes','Ratings JSON','Summary JSON'];
+var MEETING_ITEM_COLS = ['ID','Meeting','Kind','Text','Person','Value','Goal','Status','Horizon',
+                         'By','At','Cleared In'];
 
 /* Column layout. The first 15 task columns and first 9 user columns match the
    old schema exactly, so an existing tenant sheet keeps working; new fields are
@@ -63,7 +77,10 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   /* When a repeat stops on its own. Until these existed a recurring job ran
      until a manager remembered to go and stop it by hand, which is not a
      schedule — it is a standing instruction nobody owns. */
-  'Repeat Until','Repeat Count','Repeat Made'];
+  'Repeat Until','Repeat Count','Repeat Made',
+  /* Which goal this work serves, and which meeting raised it. Appended, as
+     always — an existing customer's sheet gains them without a cell moving. */
+  'Goal','Raised In'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
@@ -438,6 +455,9 @@ function route_(p) {
     case 'getBilling':          return getBilling_(ctx);
     case 'getInvoices':         return getInvoices_(ctx);
     case 'getLeaderboard':      return getLeaderboard_(ctx, p.period, p.offset);
+    case 'getDirection':        return getDirection_(ctx);
+    case 'getMeetings':         return getMeetings_(ctx);
+    case 'getMeeting':          return getMeeting_(ctx, p.id);
 
     /* --- tasks ----------------------------------------------------------- */
     case 'createTask':          return createTask_(ctx, p.form);
@@ -473,6 +493,26 @@ function route_(p) {
     case 'paymentSuccess':      return handleVerifiedPayment_(ctx, p);
     case 'saveBilling':         return saveBilling_(ctx, p.form);
     case 'setLeaderboardVisibility': return setLeaderboardVisibility_(ctx, p.visibility);
+
+    /* --- goals, values, key numbers -------------------------------------- */
+    case 'saveDirection':       return saveDirection_(ctx, p.form);
+    case 'saveGoal':            return saveGoal_(ctx, p.form);
+    case 'setGoalStatus':       return setGoalStatus_(ctx, p.id, p.goalStatus, p.note);
+    case 'deleteGoal':          return deleteGoal_(ctx, p.id);
+    case 'saveNumber':          return saveNumber_(ctx, p.form);
+    case 'recordNumber':        return recordNumber_(ctx, p.id, p.value, p.week);
+
+    /* --- meetings -------------------------------------------------------- */
+    case 'startMeeting':        return startMeeting_(ctx, p.form);
+    case 'meetingGo':           return meetingGo_(ctx, p.id, p.segment);
+    case 'setAttendance':       return setAttendance_(ctx, p.id, p.username, p.present);
+    case 'saveMinutes':         return saveMinutes_(ctx, p.id, p.text);
+    case 'addMeetingItem':      return addMeetingItem_(ctx, p.id, p.form);
+    case 'updateMeetingItem':   return updateMeetingItem_(ctx, p.itemId, p.form);
+    case 'addMeetingAction':    return addMeetingAction_(ctx, p.id, p.form);
+    case 'rateMeeting':         return rateMeeting_(ctx, p.id, p.score);
+    case 'endMeeting':          return endMeeting_(ctx, p.id, false);
+    case 'cancelMeeting':       return endMeeting_(ctx, p.id, true);
     case 'contactSupport':      return contactSupport_(ctx, p.form);
     case 'aiInsight':           return aiInsight_(ctx, p.question);
     case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);
@@ -846,7 +886,13 @@ function ensureTenantTabs_(ss) {
   mkTab_(ss, TAB.KRA, ['Job Profile','KRA Title','Description','Weight','Grid/KPI']);
   mkTab_(ss, TAB.REVIEWS, ['Month','Employee','Performance Score','Delegation Score','Final Score','Date']);
   mkTab_(ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
-  mkTab_(ss, TAB.COOKIES, ['Date','To','By','Points','Reason']);
+  mkTab_(ss, TAB.COOKIES, COOKIE_COLS);
+  mkTab_(ss, TAB.DIRECTION, DIRECTION_COLS);
+  mkTab_(ss, TAB.GOALS, GOAL_COLS);
+  mkTab_(ss, TAB.NUMBERS, NUMBER_COLS);
+  mkTab_(ss, TAB.NUMBER_LOG, NUMBER_LOG_COLS);
+  mkTab_(ss, TAB.MEETINGS, MEETING_COLS);
+  mkTab_(ss, TAB.MEETING_ITEMS, MEETING_ITEM_COLS);
   var set = ss.getSheetByName(TAB.SETTINGS);
   if (!set) {
     set = ss.insertSheet(TAB.SETTINGS);
@@ -857,6 +903,7 @@ function ensureTenantTabs_(ss) {
      rebuilt, so adding a feature never costs anyone their data. */
   widen_(ss.getSheetByName(TAB.TASKS), TASK_COLS);
   widen_(ss.getSheetByName(TAB.USERS), USER_COLS);
+  widen_(ss.getSheetByName(TAB.COOKIES), COOKIE_COLS);
   return ss;
 }
 
@@ -880,7 +927,9 @@ function ensureTenantTabs_(ss) {
    It runs at most once per sheet per schema version, remembered in Script
    Properties, so the cost on a normal request is one property read.
 --------------------------------------------------------------------------- */
-var SCHEMA_VERSION = '2026-10';
+/* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
+   upgraded under the previous version is checked and widened again. */
+var SCHEMA_VERSION = '2026-10b';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -925,13 +974,14 @@ function schemaCheck_(sheet, cols) {
  */
 function upgradeTenantSchema_(ss, dryRun) {
   var problems = [], added = [];
-  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS]];
+  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS]];
   checks.forEach(function (c) {
     var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
     if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Dome Box needs "' + r.expected + '"');
     else if (r.add) added.push(c[0] + ' +' + r.add + ' column' + (r.add === 1 ? '' : 's'));
   });
-  ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings'].forEach(function (n) {
+  ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings',
+   TAB.DIRECTION, TAB.GOALS, TAB.NUMBERS, TAB.NUMBER_LOG, TAB.MEETINGS, TAB.MEETING_ITEMS].forEach(function (n) {
     if (!ss.getSheetByName(n)) added.push('new ' + n + ' tab');
   });
   if (problems.length) return { ok: false, changed: false, problems: problems, added: [] };
@@ -1114,6 +1164,8 @@ function rowToTask_(r, rowIndex, names) {
     repeatUntil: toYmd_(r[T['Repeat Until']]),
     repeatCount: Number(r[T['Repeat Count']] || 0),
     repeatMade: Number(r[T['Repeat Made']] || 0),
+    goal: String(r[T['Goal']] || '').trim(),
+    raisedIn: String(r[T['Raised In']] || '').trim(),
     isArchived: isArchived_(status, r[T['Date Created']], history),
     toName: names[String(r[T['Assigned To']] || '').trim()] || r[T['Assigned To']] || '',
     byName: names[String(r[T['Assigned By']] || '').trim()] || r[T['Assigned By']] || '',
@@ -1407,6 +1459,13 @@ function createTask_locked_(ctx, form) {
      whole assignment rather than leaving half the team with a runaway repeat. */
   var stop = parseRepeatStop_(form);
 
+  /* The goal this work serves. Checked here rather than trusted, because a
+     task tagged to a goal that does not exist would count toward nothing and
+     still look as if it did. */
+  var goalId = String(form.goal || '').trim();
+  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
+  var raisedIn = String(form.raisedIn || '').trim();
+
   var sheet = ctx.ss.getSheetByName(TAB.TASKS);
   var created = [], routed = 0;
 
@@ -1436,6 +1495,8 @@ function createTask_locked_(ctx, form) {
     row[T['Repeat Until']] = stop.until;
     row[T['Repeat Count']] = stop.count;
     row[T['Repeat Made']] = stop.count || stop.until ? 1 : 0;
+    row[T['Goal']] = goalId;
+    row[T['Raised In']] = raisedIn;
     row[T['Reworks']] = 0;
     row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(),
       status: route.status, user: ctx.actor.name, note: route.note }]);
@@ -1641,6 +1702,7 @@ function spawnNextOccurrence_(ctx, hit, t) {
   row[T['Repeat Until']] = t.repeatUntil || '';
   row[T['Repeat Count']] = t.repeatCount || 0;
   row[T['Repeat Made']] = made + 1;
+  row[T['Goal']] = t.goal || '';            // a repeating job keeps serving the same goal
   row[T['Reworks']] = 0;
   row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(), status: 'Pending',
     user: 'System', note: 'Recurring occurrence of ' + t.id }]);
@@ -1792,6 +1854,12 @@ function editTask_(ctx, form) {
     if (!Number(t.repeatMade) && freq !== 'One Time') writeTaskField_(hit, 'Repeat Made', 1);
     if (String(stop.until) !== String(t.repeatUntil || '') ||
         Number(stop.count) !== Number(t.repeatCount || 0)) changes.push('Repeat rule');
+  }
+
+  if (form.goal !== undefined && String(form.goal) !== String(t.goal || '')) {
+    if (form.goal && !goalById_(ctx, form.goal)) throw new Error('That goal no longer exists.');
+    writeTaskField_(hit, 'Goal', String(form.goal || ''));
+    changes.push('Goal');
   }
 
   if (form.status && form.status !== t.status && ctx.actor.role === 'Admin') {
@@ -3191,6 +3259,8 @@ function createProject_locked_(ctx, form) {
   if (!name) throw new Error('Give the project a name.');
 
   var gate = String(form.gate || 'sequential').toLowerCase() === 'parallel' ? 'parallel' : 'sequential';
+  var goalId = String(form.goal || '').trim();
+  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
   var stages = (form.stages || []).map(function (s, i) {
     return {
       no: i + 1,
@@ -3276,6 +3346,7 @@ function createProject_locked_(ctx, form) {
     row[T['Stage No']] = s.no;
     row[T['Stage Count']] = stages.length;
     row[T['Stage Gate']] = gate;
+    row[T['Goal']] = goalId;                 // every stage serves the project's goal
     sheet.appendRow(row);
     dropCache_(ctx);
 
@@ -3362,7 +3433,8 @@ function getProjects_(ctx) {
 // a back door to a score nobody earned on the work.
 // ===========================================================================
 
-var COOKIE_COLS = ['Date', 'To', 'By', 'Points', 'Reason'];
+/* COOKIE_COLS lives in 01-config.gs with the other column layouts. Defined in
+   two files, Apps Script would keep whichever loaded last — silently. */
 
 function readCookies_(ctx) {
   return cached_(ctx, 'cookies', function () {
@@ -3372,7 +3444,8 @@ function readCookies_(ctx) {
     for (var i = 1; i < d.length; i++) {
       if (!d[i][1]) continue;
       out.push({ date: toIso_(d[i][0]), to: String(d[i][1]).trim(), by: String(d[i][2]).trim(),
-                 points: Number(d[i][3]) || 0, reason: String(d[i][4] || '') });
+                 points: Number(d[i][3]) || 0, reason: String(d[i][4] || ''),
+                 value: String(d[i][5] == null ? '' : d[i][5]) });
     }
     return out;
 });
@@ -3388,7 +3461,7 @@ function cookiesFor_(ctx, username, range) {
     var d = new Date(c.date);
     return !isNaN(d) && inWindow(d, range);
   }).map(function (c) {
-    return { date: c.date, points: c.points, reason: c.reason,
+    return { date: c.date, points: c.points, reason: c.reason, value: c.value,
              by: c.by, byName: names[c.by] || c.by };
   });
 }
@@ -3418,6 +3491,15 @@ function awardCookie_(ctx, data) {
     throw new Error('Award between 1 and ' + COOKIE_MAX_PER_AWARD + ' cookie points.');
   }
 
+  /* Optionally, which value this recognised. Recognition that names the value
+     it rewards teaches the value; recognition that does not just rewards. */
+  var valueCode = '';
+  if (data.value) {
+    var val = valueByTag_(ctx, data.value);
+    if (!val) throw new Error('That value is not one of this company\'s values.');
+    valueCode = val.code || val.title;
+  }
+
   var reason = String(data.reason || '').trim();
   if (reason.length < 5) {
     throw new Error('Say what this is for. The reason is shown to them and counts ' +
@@ -3425,7 +3507,7 @@ function awardCookie_(ctx, data) {
   }
 
   mkTab_(ctx.ss, TAB.COOKIES, COOKIE_COLS)
-    .appendRow([new Date(), who.username, ctx.actor.username, points, reason]);
+    .appendRow([new Date(), who.username, ctx.actor.username, points, reason, valueCode]);
     dropCache_(ctx);
 
   try { notifyCookie_(ctx, who, points, reason); }
@@ -3452,7 +3534,7 @@ function getCookies_(ctx) {
     if (isNaN(d) || !inWindow(d, range)) return false;
     return !mine || c.to === ctx.me.username;
   }).map(function (c) {
-    return { date: c.date, points: c.points, reason: c.reason,
+    return { date: c.date, points: c.points, reason: c.reason, value: c.value,
              to: c.to, toName: names[c.to] || c.to,
              by: c.by, byName: names[c.by] || c.by };
   }).reverse();
@@ -4344,6 +4426,9 @@ function createDemoAccount(email, password) {
     out.push('Recognition: two cookie awards on the record.');
   } catch (e) { out.push('  cookies: ' + e.message); }
 
+  /* ---- purpose, values, goals, numbers, one weekly review --------------- */
+  try { seedDemoDirection_(ctx, out); } catch (e) { out.push('  goals: ' + e.message); }
+
   try {
     setLeave_(ctx, 'meera', demoYmd_(-3), demoYmd_(-1), 'Family function');
     out.push('Leave: one entry, so the demo shows deadlines that respect it.');
@@ -4398,6 +4483,8 @@ function createDemoAccount(email, password) {
   out.push('  3. Board     — the leaderboard, top to bottom, for the month');
   out.push('  4. Reports   — the score, then "see why" for the full working');
   out.push('  5. Projects  — a stage releasing the next one automatically');
+  out.push('  6. Goals     — purpose, values, goals with the work behind them');
+  out.push('  7. Meetings  — last week\'s review: wins, roadblocks, actions');
   out.push('');
   out.push('No email was sent to anyone: the addresses are @demo.domebox.in,');
   out.push('which does not exist, so nothing can reach a real inbox by accident.');
@@ -4440,6 +4527,97 @@ function grantDemoPlan_(sheetId, planName, days) {
  * would. The spread is deliberate: without late deliveries and rework loops
  * every score is 100 and the whole argument of the product is invisible.
  */
+/**
+ * The direction a demo is worth showing: a purpose, four values, a year goal
+ * with two quarter goals under it and real work linked to them, three key
+ * numbers with six weeks of history, and one finished weekly review.
+ *
+ * The review is ended QUIETLY. Ending a meeting emails its summary to everyone
+ * who was there, and the demo's Admin address is a real inbox.
+ */
+function seedDemoDirection_(ctx, out) {
+  saveDirection_(ctx, { purpose: 'Parts that fit first time, delivered on the day we promised.',
+    values: [
+      { code: 'OWN', title: 'Own it', detail: 'If it is yours, it is finished or it is flagged — never left.' },
+      { code: 'FIT', title: 'Right first time', detail: 'Check before it leaves the bench, not after it leaves the gate.' },
+      { code: 'DAY', title: 'Keep the date', detail: 'A promised date is a promise. Say early if it will slip.' },
+      { code: 'TEA', title: 'Help the next desk', detail: 'Your output is someone else’s input. Hand it over clean.' },
+    ] });
+
+  var fy = fyPeriod_(new Date(), fyStartMonth_(ctx));
+  var year = saveGoal_(ctx, { level: 'year', period: fy.year, owner: ctx.actor.username,
+    title: 'Win two new OEM accounts without a single repeat NC',
+    detail: 'Growth only counts if the audit stays clean while it happens.' }).id;
+  var qDespatch = saveGoal_(ctx, { level: 'quarter', period: fy.quarter, parent: year, owner: 'sruti',
+    title: 'On-time despatch at 95% or better',
+    detail: 'Measured weekly on the Key numbers. Every miss gets a roadblock.' }).id;
+  var qAudit = saveGoal_(ctx, { level: 'quarter', period: fy.quarter, parent: year, owner: 'imran',
+    title: 'Pass the ISO surveillance audit with zero repeat NCs' }).id;
+  saveGoal_(ctx, { level: 'quarter', period: fy.quarter, owner: 'meera',
+    title: 'Cut inventory variance below 1%' });
+  setGoalStatus_(ctx, qAudit, 'At risk', 'CC-19 needed a second pass; internal audit round is due this week.');
+
+  var linked = 0;
+  readTasks_(ctx).forEach(function (t) {
+    var g = /^Despatch /.test(t.title) ? qDespatch
+          : /NC-|CC-19|PPAP|control plan|ISO|internal audit|Gauge R&R|calibration/i.test(t.title) ? qAudit : '';
+    if (!g) return;
+    var hit = findTaskRow_(ctx, t.id);
+    if (hit) { writeTaskField_(hit, 'Goal', g); linked++; }
+  });
+  dropCache_(ctx);
+  out.push('Goals: one year goal, three for the quarter (one at risk), ' + linked + ' tasks linked.');
+
+  var NUMS = [
+    { name: 'On-time despatch', owner: 'payel', unit: '%', target: 95, direction: 'at least', goal: qDespatch,
+      weeks: [92, 96, 94, 97, 91, 96] },
+    { name: 'Customer rejections', owner: 'nita', unit: 'parts', target: 5, direction: 'at most', goal: qAudit,
+      weeks: [7, 4, 3, 6, 2, 3] },
+    { name: 'Open roadblocks', owner: 'sruti', unit: '', target: 3, direction: 'at most', goal: '',
+      weeks: [5, 4, 4, 2, 3, 2] },
+  ];
+  NUMS.forEach(function (n) {
+    var id = saveNumber_(ctx, n).id;
+    n.weeks.forEach(function (v, i) {
+      var d = new Date(); d.setDate(d.getDate() - 7 * (n.weeks.length - 1 - i));
+      recordNumber_(ctx, id, v, ymd(d));
+    });
+  });
+  out.push('Key numbers: three, six weeks of figures each, misses included.');
+
+  /* One open roadblock waiting for the next review, raised outside a meeting. */
+  addMeetingItem_(ctx, '', { kind: 'roadblock', goal: qDespatch,
+    text: 'Krishna Castings keep shipping short — two despatches waited on them this month.' });
+
+  var m = startMeeting_(ctx, { title: 'Weekly review',
+    attendees: ['sruti', 'imran', 'payel', 'nita', 'meera'] }).id;
+  ['sruti', 'imran', 'payel', 'nita'].forEach(function (u) { setAttendance_(ctx, m, u, true); });
+  addMeetingItem_(ctx, m, { kind: 'win', person: 'payel',
+    text: 'All five Mahindra despatches left on the promised day.' });
+  addMeetingItem_(ctx, m, { kind: 'story', person: 'rafiq', value: 'FIT', cookies: 2,
+    text: 'Rafiq stopped CNC-3 when the bore drifted, before a single bad part reached inspection.' });
+  addMeetingItem_(ctx, m, { kind: 'update', person: 'imran', goal: qAudit,
+    text: 'Internal audit checklist is ready; two clauses still need evidence from Stores.' });
+  var rb = addMeetingItem_(ctx, m, { kind: 'roadblock', goal: qAudit,
+    text: 'Calibration certificates for the torque wrenches are missing from the file.' });
+  var rbId = '';
+  (rb.roadblocks || []).forEach(function (it) { if (/torque wrenches/.test(it.text)) rbId = it.id; });
+  addMeetingAction_(ctx, m, { title: 'Get the torque wrench certificates from the lab', assignTo: 'rafiq',
+    goal: qAudit, fromItem: rbId, clearItem: true });
+  addMeetingAction_(ctx, m, { title: 'Call Krishna Castings about short shipments', assignTo: 'meera',
+    goal: qDespatch });
+  saveMinutes_(ctx, m, 'Despatch on track. Audit at risk on calibration evidence — Rafiq owns it. ' +
+    'Meera to escalate Krishna Castings before the next review.');
+  rateMeeting_(ctx, m, 8);
+  endMeeting_(ctx, m, false, true);
+  /* Held three days ago, so it reads as last week's review, not a test run. */
+  var ago = new Date(); ago.setDate(ago.getDate() - 3); ago.setHours(10, 0, 0, 0);
+  var end = new Date(ago.getTime() + 55 * 60000);
+  writeMeeting_(ctx, meetingById_(ctx, m), { 'Date': ymd(ago), 'Started': ago, 'Ended': end });
+  dropCache_(ctx);
+  out.push('Meetings: last week’s review — a win, a values story, two actions — and one roadblock waiting.');
+}
+
 function seedDemoWork_(ctx) {
   var JOBS = [
     // [title, who, dueOffset, priority, category, outcome]
@@ -4812,6 +4990,878 @@ function runMigration_(dryRun) {
 }
 
 function say_(lines) { var t = lines.join('\n'); Logger.log(t); return t; }
+
+
+// ===========================================================================
+// GOALS, VALUES AND KEY NUMBERS
+// ===========================================================================
+/**
+ * DOME BOX — WHERE THE COMPANY IS GOING
+ * =============================================================================
+ * Four things, set up once and then lived with every week:
+ *
+ *   Purpose      why the company exists. One sentence.
+ *   Values       how people here behave, each with a short code — the letter
+ *                a team shouts in a meeting — and what it looks like in practice.
+ *   Goals        what the company will achieve: Year goals for the financial
+ *                year, and Quarter goals underneath them. Each has an owner and
+ *                a status: On course, At risk, Done, Dropped.
+ *   Key numbers  the few weekly figures that say whether the week went well,
+ *                each with a target and whether higher or lower is better.
+ *
+ * THE PART THAT MAKES IT MORE THAN A WALL POSTER
+ *
+ * Everything else in Dome Box can point at these. A task or a whole project
+ * says which goal it serves; a cookie award says which value it recognised; a
+ * roadblock or a key number says which goal it threatens. So a goal's progress
+ * is not somebody's optimistic percentage — it is the share of the work linked
+ * to it that has actually been verified.
+ *
+ * Quarters follow the Indian financial year by default (April to March, Q1 =
+ * Apr–Jun), because that is how an MSME's accountant, bank and GST returns
+ * count. A company on the calendar year sets fyStartMonth to 1.
+ * =============================================================================
+ */
+
+var GOAL_STATUSES = ['On course', 'At risk', 'Done', 'Dropped'];
+var GOAL_LEVELS = ['year', 'quarter'];
+var VALUE_CODE_MAX = 3;
+
+/* ---------- the financial calendar -------------------------------------- */
+
+function fyStartMonth_(ctx) {
+  var m = Number(readSetting_(ctx, 'fyStartMonth', 4));
+  return (m >= 1 && m <= 12) ? m : 4;
+}
+
+/**
+ * The financial year and quarter a date falls in.
+ *   fyPeriod_(2026-10-09, 4) -> { year: 'FY26-27', quarter: 'FY26-27 Q3', q: 3, ... }
+ *   fyPeriod_(2027-02-01, 4) -> Q4 of FY26-27, not Q1 of 2027.
+ */
+function fyPeriod_(date, startMonth) {
+  var d = date ? new Date(date) : new Date();
+  var sm = (Number(startMonth) || 4) - 1;                // 0-based
+  var y = d.getFullYear(), m = d.getMonth();
+  var fy = m >= sm ? y : y - 1;
+  var q = Math.floor(((m - sm + 12) % 12) / 3) + 1;
+  var two = function (n) { return String(n).slice(-2); };
+  var label = sm === 0 ? 'FY' + fy : 'FY' + two(fy) + '-' + two(fy + 1);
+  var qFrom = new Date(fy, sm + (q - 1) * 3, 1);
+  var qTo = new Date(fy, sm + q * 3, 0);
+  return { year: label, quarter: label + ' Q' + q, q: q, fyStart: fy,
+           from: ymd(qFrom), to: ymd(qTo),
+           yearFrom: ymd(new Date(fy, sm, 1)), yearTo: ymd(new Date(fy + 1, sm, 0)) };
+}
+
+/** The quarters worth offering in a picker: this year's four and next Q1. */
+function quarterChoices_(ctx) {
+  var sm = fyStartMonth_(ctx), now = fyPeriod_(new Date(), sm), out = [];
+  for (var i = 0; i < 5; i++) {
+    var d = new Date(now.fyStart, sm - 1 + i * 3, 15);
+    out.push(fyPeriod_(d, sm).quarter);
+  }
+  return out;
+}
+
+/* ---------- reading ------------------------------------------------------ */
+
+function tab_(ctx, name, cols) {
+  return ctx.ss.getSheetByName(name) || mkTab_(ctx.ss, name, cols);
+}
+
+function readDirection_(ctx) {
+  return cached_(ctx, 'direction', function () {
+    var sh = ctx.ss.getSheetByName(TAB.DIRECTION);
+    var out = { purpose: '', values: [] };
+    if (!sh) return out;
+    sh.getDataRange().getValues().slice(1).forEach(function (r, i) {
+      var kind = String(r[0] || '').trim();
+      if (kind === 'purpose') out.purpose = String(r[2] || '');
+      else if (kind === 'value' && String(r[2] || '').trim()) {
+        out.values.push({ code: String(r[1] || '').trim(), title: String(r[2]).trim(),
+                          detail: String(r[3] || ''), order: Number(r[4]) || i, row: i + 2 });
+      }
+    });
+    out.values.sort(function (a, b) { return a.order - b.order; });
+    return out;
+  });
+}
+
+function readGoals_(ctx) {
+  return cached_(ctx, 'goals', function () {
+    var sh = ctx.ss.getSheetByName(TAB.GOALS);
+    if (!sh) return [];
+    return sh.getDataRange().getValues().slice(1).map(function (r, i) { r.row_ = i + 2; return r; })
+      .filter(function (r) { return r[0]; })
+      .map(function (r) {
+        return { id: String(r[0]), level: String(r[1] || 'quarter'), period: String(r[2] || ''),
+                 title: String(r[3] || ''), detail: String(r[4] || ''),
+                 owner: String(r[5] || '').trim(), parent: String(r[6] || '').trim(),
+                 status: GOAL_STATUSES.indexOf(String(r[7])) > -1 ? String(r[7]) : 'On course',
+                 note: String(r[8] || ''), created: toIso_(r[9]), updated: toIso_(r[10]), row: r.row_ };
+      });
+  });
+}
+
+function goalById_(ctx, id) {
+  id = String(id || '').trim();
+  if (!id) return null;
+  return readGoals_(ctx).filter(function (g) { return g.id === id; })[0] || null;
+}
+
+/**
+ * How far along a goal really is: the share of the work linked to it that has
+ * been verified. Cancelled and rejected work is not counted either way —
+ * dropping a task should not make a goal look closer to done.
+ * A Year goal counts the work linked to it and to every Quarter goal under it.
+ */
+function goalProgress_(goal, goals, tasks) {
+  var ids = [goal.id];
+  if (goal.level === 'year') {
+    goals.forEach(function (g) { if (g.parent === goal.id) ids.push(g.id); });
+  }
+  var linked = tasks.filter(function (t) {
+    return t.goal && ids.indexOf(t.goal) > -1 && t.status !== 'Cancelled' && t.status !== 'Rejected';
+  });
+  var done = linked.filter(function (t) { return t.status === 'Verified'; }).length;
+  var overdue = linked.filter(function (t) {
+    return isOpen(t.status) && t.due && dayDiff(new Date(), parseYmd(t.due)) > 0; }).length;
+  return { total: linked.length, done: done, overdue: overdue,
+           percent: linked.length ? Math.round(done / linked.length * 100) : null };
+}
+
+/* ---------- the page ----------------------------------------------------- */
+
+function getDirection_(ctx) {
+  var dir = readDirection_(ctx), goals = readGoals_(ctx), tasks = readTasks_(ctx);
+  var names = {};
+  readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+  var sm = fyStartMonth_(ctx), now = fyPeriod_(new Date(), sm);
+
+  var withProgress = goals.map(function (g) {
+    var p = goalProgress_(g, goals, tasks);
+    return { id: g.id, level: g.level, period: g.period, title: g.title, detail: g.detail,
+             owner: g.owner, ownerName: names[g.owner] || g.owner, parent: g.parent,
+             status: g.status, note: g.note, updated: g.updated, progress: p };
+  });
+
+  return { status: 'success', purpose: dir.purpose, values: dir.values.map(function (v) {
+      return { code: v.code, title: v.title, detail: v.detail }; }),
+    goals: withProgress, statuses: GOAL_STATUSES,
+    now: { year: now.year, quarter: now.quarter, from: now.from, to: now.to },
+    quarters: quarterChoices_(ctx), fyStartMonth: sm,
+    numbers: readNumbersWithLog_(ctx, names),
+    canEdit: ctx.actor.role !== ROLE.DOER, canEditValues: ctx.actor.role === ROLE.ADMIN };
+}
+
+/* ---------- purpose and values (Admin) ----------------------------------- */
+
+function saveDirection_(ctx, form) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  form = form || {};
+  var purpose = String(form.purpose || '').trim();
+  var values = (form.values || []).map(function (v) {
+    return { code: String(v.code || '').trim().toUpperCase().slice(0, VALUE_CODE_MAX),
+             title: String(v.title || '').trim(), detail: String(v.detail || '').trim() };
+  }).filter(function (v) { return v.title; });
+
+  if (values.length > 12) throw new Error('Twelve values at most. A list nobody can remember is not a set of values.');
+  var seen = {};
+  values.forEach(function (v) {
+    var k = v.title.toLowerCase();
+    if (seen[k]) throw new Error('"' + v.title + '" is listed twice.');
+    seen[k] = true;
+    if (v.code && seen['#' + v.code]) throw new Error('Two values share the code "' + v.code + '".');
+    if (v.code) seen['#' + v.code] = true;
+  });
+
+  return withLock_(function () {
+    var sh = tab_(ctx, TAB.DIRECTION, DIRECTION_COLS);
+    var last = sh.getLastRow();
+    if (last > 1) sh.getRange(2, 1, last - 1, DIRECTION_COLS.length).clearContent();
+    var rows = [['purpose', '', purpose, '', 0]].concat(values.map(function (v, i) {
+      return ['value', v.code, v.title, v.detail, i + 1]; }));
+    sh.getRange(2, 1, rows.length, DIRECTION_COLS.length).setValues(rows);
+    dropCache_(ctx);
+    return { status: 'success', message: 'Saved. ' + values.length + ' value' + (values.length === 1 ? '' : 's') + '.' };
+  });
+}
+
+/** A value by its code or its title — what a tag can be written as. */
+function valueByTag_(ctx, tag) {
+  tag = String(tag || '').trim();
+  if (!tag) return null;
+  var t = tag.toLowerCase();
+  return readDirection_(ctx).values.filter(function (v) {
+    return v.code.toLowerCase() === t || v.title.toLowerCase() === t; })[0] || null;
+}
+
+/* ---------- goals -------------------------------------------------------- */
+
+function saveGoal_(ctx, form) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  form = form || {};
+  var title = String(form.title || '').trim();
+  if (!title) throw new Error('Give the goal a title.');
+  if (title.length > 140) throw new Error('Keep the title under 140 characters — the detail goes below it.');
+  var level = GOAL_LEVELS.indexOf(form.level) > -1 ? form.level : 'quarter';
+  var period = String(form.period || '').trim();
+  var sm = fyStartMonth_(ctx), now = fyPeriod_(new Date(), sm);
+  if (!period) period = level === 'year' ? now.year : now.quarter;
+  if (level === 'quarter' && !/ Q[1-4]$/.test(period)) throw new Error('Pick the quarter this goal belongs to.');
+  if (level === 'year' && / Q[1-4]$/.test(period)) period = period.replace(/ Q[1-4]$/, '');
+
+  var owner = String(form.owner || ctx.actor.username).trim();
+  if (!findUser_(ctx.ss, owner)) throw new Error('The owner is not in this workspace.');
+  var parent = String(form.parent || '').trim();
+  if (parent) {
+    var pg = goalById_(ctx, parent);
+    if (!pg || pg.level !== 'year') throw new Error('A quarter goal can only sit under a year goal.');
+    if (level === 'year') parent = '';
+  }
+  var status = GOAL_STATUSES.indexOf(form.status) > -1 ? form.status : 'On course';
+
+  return withLock_(function () {
+    var sh = tab_(ctx, TAB.GOALS, GOAL_COLS);
+    var now2 = new Date();
+    if (form.id) {
+      var g = goalById_(ctx, form.id);
+      if (!g) throw new Error('That goal no longer exists.');
+      sh.getRange(g.row, 2, 1, 10).setValues([[level, period, title, String(form.detail || ''),
+        owner, parent, status, String(form.note || g.note || ''), g.created ? new Date(g.created) : now2, now2]]);
+      dropCache_(ctx);
+      return { status: 'success', id: g.id, message: 'Goal updated.' };
+    }
+    var id = 'G-' + Utilities.getUuid().slice(0, 8);
+    sh.appendRow([id, level, period, title, String(form.detail || ''), owner, parent, status, '', now2, now2]);
+    dropCache_(ctx);
+    return { status: 'success', id: id, message: (level === 'year' ? 'Year' : 'Quarter') + ' goal added.' };
+  });
+}
+
+/**
+ * Just the status, and a line on why. Open to the goal's owner as well as
+ * managers — the person closest to the goal is the one who knows it is at risk,
+ * and making them ask somebody else to say so is how bad news arrives late.
+ */
+function setGoalStatus_(ctx, id, status, note) {
+  blockIfStopped_(ctx);
+  var g = goalById_(ctx, id);
+  if (!g) throw new Error('That goal no longer exists.');
+  if (ctx.actor.role === ROLE.DOER && g.owner !== ctx.actor.username) {
+    throw new Error('Only the goal\'s owner or a manager can change its status.');
+  }
+  if (GOAL_STATUSES.indexOf(status) < 0) throw new Error('Status must be one of: ' + GOAL_STATUSES.join(', ') + '.');
+  if (status === 'At risk' && !String(note || '').trim()) {
+    throw new Error('Say what is putting it at risk — one line is enough. "At risk" with no reason starts the wrong conversation.');
+  }
+  return withLock_(function () {
+    var sh = tab_(ctx, TAB.GOALS, GOAL_COLS);
+    sh.getRange(g.row, 8, 1, 4).setValues([[status, String(note || g.note || ''), g.created ? new Date(g.created) : new Date(), new Date()]]);
+    dropCache_(ctx);
+    return { status: 'success', message: g.title + ': ' + status + '.' };
+  });
+}
+
+function deleteGoal_(ctx, id) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  var g = goalById_(ctx, id);
+  if (!g) throw new Error('That goal no longer exists.');
+  /* A goal with work pointing at it is dropped, not deleted: deleting it would
+     leave tasks tagged to nothing and quietly rewrite what they were for. */
+  var linked = readTasks_(ctx).some(function (t) { return t.goal === g.id; }) ||
+               readGoals_(ctx).some(function (x) { return x.parent === g.id; });
+  if (linked) throw new Error('Work is linked to this goal. Mark it Dropped instead, so that history still makes sense.');
+  return withLock_(function () {
+    tab_(ctx, TAB.GOALS, GOAL_COLS).deleteRow(g.row);
+    dropCache_(ctx);
+    return { status: 'success', message: 'Goal removed.' };
+  });
+}
+
+/* ---------- key numbers -------------------------------------------------- */
+
+/** The Monday a date's week starts on — the key a weekly figure is filed under. */
+function weekOf_(d) {
+  var x = d ? new Date(d) : new Date();
+  x.setHours(0, 0, 0, 0);
+  var dow = (x.getDay() + 6) % 7;                // Monday = 0
+  x.setDate(x.getDate() - dow);
+  return ymd(x);
+}
+
+function readNumbers_(ctx) {
+  return cached_(ctx, 'numbers', function () {
+    var sh = ctx.ss.getSheetByName(TAB.NUMBERS);
+    if (!sh) return [];
+    return sh.getDataRange().getValues().slice(1).map(function (r, i) { r.row_ = i + 2; return r; })
+      .filter(function (r) { return r[0]; }).map(function (r) {
+      return { id: String(r[0]), name: String(r[1] || ''), owner: String(r[2] || '').trim(),
+               unit: String(r[3] || ''), target: r[4] === '' ? null : Number(r[4]),
+               direction: String(r[5]) === 'at most' ? 'at most' : 'at least',
+               goal: String(r[6] || '').trim(), active: String(r[7]) !== 'false', row: r.row_ };
+    });
+  });
+}
+
+/** Whether a figure met its target. Null when there is no figure or no target. */
+function numberHit_(n, value) {
+  if (value === null || value === '' || value === undefined || n.target === null || isNaN(n.target)) return null;
+  var v = Number(value);
+  if (isNaN(v)) return null;
+  return n.direction === 'at most' ? v <= n.target : v >= n.target;
+}
+
+function readNumbersWithLog_(ctx, names) {
+  var nums = readNumbers_(ctx).filter(function (n) { return n.active; });
+  var log = {};
+  var sh = ctx.ss.getSheetByName(TAB.NUMBER_LOG);
+  if (sh) sh.getDataRange().getValues().slice(1).forEach(function (r) {
+    var k = String(r[0]); (log[k] = log[k] || {})[toYmd_(r[1])] = r[2] === '' ? null : Number(r[2]);
+  });
+  var weeks = [];
+  for (var i = 5; i >= 0; i--) { var d = new Date(); d.setDate(d.getDate() - i * 7); weeks.push(weekOf_(d)); }
+  return { weeks: weeks, thisWeek: weekOf_(new Date()), list: nums.map(function (n) {
+    var vals = weeks.map(function (w) {
+      var v = (log[n.id] || {})[w];
+      return { week: w, value: v === undefined ? null : v, hit: numberHit_(n, v) };
+    });
+    return { id: n.id, name: n.name, owner: n.owner, ownerName: (names || {})[n.owner] || n.owner,
+             unit: n.unit, target: n.target, direction: n.direction, goal: n.goal, weeks: vals };
+  }) };
+}
+
+function saveNumber_(ctx, form) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  form = form || {};
+  var name = String(form.name || '').trim();
+  if (!name) throw new Error('Name the number.');
+  var target = form.target === '' || form.target == null ? '' : Number(form.target);
+  if (target !== '' && isNaN(target)) throw new Error('The target has to be a number.');
+  var owner = String(form.owner || ctx.actor.username).trim();
+  if (!findUser_(ctx.ss, owner)) throw new Error('The owner is not in this workspace.');
+  if (form.goal && !goalById_(ctx, form.goal)) throw new Error('That goal no longer exists.');
+  var dir = form.direction === 'at most' ? 'at most' : 'at least';
+
+  return withLock_(function () {
+    var sh = tab_(ctx, TAB.NUMBERS, NUMBER_COLS);
+    if (form.id) {
+      var n = readNumbers_(ctx).filter(function (x) { return x.id === form.id; })[0];
+      if (!n) throw new Error('That number no longer exists.');
+      sh.getRange(n.row, 2, 1, 7).setValues([[name, owner, String(form.unit || ''), target, dir,
+        String(form.goal || ''), form.active === false ? 'false' : 'true']]);
+      dropCache_(ctx);
+      return { status: 'success', id: n.id, message: 'Number updated.' };
+    }
+    var id = 'N-' + Utilities.getUuid().slice(0, 8);
+    sh.appendRow([id, name, owner, String(form.unit || ''), target, dir, String(form.goal || ''), 'true', new Date()]);
+    dropCache_(ctx);
+    return { status: 'success', id: id, message: 'Number added.' };
+  });
+}
+
+/** This week's figure for a number. Owner, or any manager. Overwrites the week. */
+function recordNumber_(ctx, id, value, week) {
+  blockIfStopped_(ctx);
+  var n = readNumbers_(ctx).filter(function (x) { return x.id === id; })[0];
+  if (!n) throw new Error('That number no longer exists.');
+  if (ctx.actor.role === ROLE.DOER && n.owner !== ctx.actor.username) {
+    throw new Error('Only the number\'s owner or a manager can enter it.');
+  }
+  var v = value === '' || value == null ? '' : Number(value);
+  if (v !== '' && isNaN(v)) throw new Error('Enter a number.');
+  var wk = weekOf_(week ? parseYmd(week) : new Date());
+  return withLock_(function () {
+    var sh = tab_(ctx, TAB.NUMBER_LOG, NUMBER_LOG_COLS);
+    var d = sh.getDataRange().getValues();
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][0]) === id && toYmd_(d[i][1]) === wk) {
+        sh.getRange(i + 1, 3, 1, 3).setValues([[v, ctx.actor.username, new Date()]]);
+        dropCache_(ctx);
+        return { status: 'success', hit: numberHit_(n, v) };
+      }
+    }
+    sh.appendRow([id, wk, v, ctx.actor.username, new Date()]);
+    dropCache_(ctx);
+    return { status: 'success', hit: numberHit_(n, v) };
+  });
+}
+
+
+// ===========================================================================
+// MEETINGS
+// ===========================================================================
+/**
+ * DOME BOX — THE WEEKLY REVIEW
+ * =============================================================================
+ * A meeting with a fixed shape, run from one screen, that leaves work behind
+ * rather than minutes nobody reads.
+ *
+ *   Wins              who is here, and one good thing from each
+ *   Values in action  a story of somebody living one of the company's values
+ *   Goal check        each quarter goal: on course, at risk, done
+ *   Key numbers       this week's figures against their targets
+ *   Updates           anything everyone needs to know
+ *   Roadblocks        problems and opportunities, worked one at a time
+ *   Actions           what was agreed, by whom, by when
+ *   Close             everyone rates the meeting 1–10
+ *
+ * WHAT IS DIFFERENT HERE
+ *
+ * An action agreed in the meeting is not a line in a list. It is a Dome Box
+ * task: it lands on the person's board, it is chased by the daily digest, it
+ * counts toward their score, and if it is tagged to a goal it moves that goal's
+ * progress. The next meeting opens with last week's actions, done or not —
+ * which is the whole point of having the meeting weekly.
+ *
+ * Roadblocks are not per meeting either. One raised and not cleared is still
+ * there next week, until somebody clears it.
+ *
+ * Ratings are anonymous: the sheet keeps who rated so each person rates once,
+ * but nothing the app returns ever pairs a name with a score.
+ *
+ * The screen polls every few seconds rather than holding a connection, because
+ * Apps Script has no sockets. A chair moving to the next segment reaches
+ * everyone within one poll.
+ * =============================================================================
+ */
+
+var MEETING_SEGMENTS = [
+  { key: 'wins',       title: 'Wins',             minutes: 5,  hint: 'Who is here today — and one good thing each, from work or home.' },
+  { key: 'values',     title: 'Values in action', minutes: 5,  hint: 'Who lived one of our values this week? Tell the story.' },
+  { key: 'goals',      title: 'Goal check',       minutes: 5,  hint: 'Each quarter goal: on course, at risk, or done. No discussion here — raise a roadblock.' },
+  { key: 'numbers',    title: 'Key numbers',      minutes: 5,  hint: 'This week’s figures against their targets. A miss becomes a roadblock.' },
+  { key: 'updates',    title: 'Updates',          minutes: 5,  hint: 'Anything everybody needs to know. One line each.' },
+  { key: 'roadblocks', title: 'Roadblocks',       minutes: 60, hint: 'Work them one at a time, most important first, until each is cleared or becomes an action.' },
+  { key: 'actions',    title: 'Actions',          minutes: 5,  hint: 'Last week’s actions: done or not. This week’s: who, what, by when.' },
+  { key: 'close',      title: 'Close',            minutes: 5,  hint: 'Rate the meeting from 1 to 10. Anything under 8, say why.' },
+];
+var ITEM_KINDS = ['win', 'story', 'update', 'roadblock'];
+
+function requireMeetings_(ctx) {
+  if (!ctx.plan.analytics) {
+    var e = new Error('Meetings are included in every paid plan.'); e.upgrade = true; throw e;
+  }
+}
+
+/* ---------- reading ------------------------------------------------------ */
+
+function readMeetings_(ctx) {
+  return cached_(ctx, 'meetings', function () {
+    var sh = ctx.ss.getSheetByName(TAB.MEETINGS);
+    if (!sh) return [];
+    return sh.getDataRange().getValues().slice(1).map(function (r, i) { r.row_ = i + 2; return r; })
+      .filter(function (r) { return r[0]; }).map(function (r) {
+      return { id: String(r[0]), title: String(r[1] || ''), date: toYmd_(r[2]), status: String(r[3] || 'ended'),
+               chair: String(r[4] || ''), started: toIso_(r[5]), ended: toIso_(r[6]),
+               attendees: safeJson_(r[7], []), agenda: safeJson_(r[8], []),
+               segment: Number(r[9]) || 0, minutes: String(r[10] || ''),
+               ratings: safeJson_(r[11], {}), summary: safeJson_(r[12], null), row: r.row_ };
+    });
+  });
+}
+
+function readItems_(ctx) {
+  return cached_(ctx, 'meetingItems', function () {
+    var sh = ctx.ss.getSheetByName(TAB.MEETING_ITEMS);
+    if (!sh) return [];
+    return sh.getDataRange().getValues().slice(1).map(function (r, i) { r.row_ = i + 2; return r; })
+      .filter(function (r) { return r[0]; }).map(function (r) {
+      return { id: String(r[0]), meeting: String(r[1] || ''), kind: String(r[2] || ''), text: String(r[3] || ''),
+               person: String(r[4] || ''), value: String(r[5] || ''), goal: String(r[6] || ''),
+               status: String(r[7] || 'open'), horizon: String(r[8] || 'now'),
+               by: String(r[9] || ''), at: toIso_(r[10]), clearedIn: String(r[11] || ''), row: r.row_ };
+    });
+  });
+}
+
+function meetingById_(ctx, id) {
+  return readMeetings_(ctx).filter(function (m) { return m.id === String(id || ''); })[0] || null;
+}
+
+function liveMeeting_(ctx) {
+  return readMeetings_(ctx).filter(function (m) { return m.status === 'live'; })[0] || null;
+}
+
+/* Who may see a meeting: its attendees, its chair, and any Admin. A Doer who
+   was not in the room does not read the room's roadblocks. */
+function canSeeMeeting_(ctx, m) {
+  var me = ctx.actor.username;
+  return ctx.actor.role === ROLE.ADMIN || m.chair === me || m.attendees.some(function (a) { return a.u === me; });
+}
+function canChair_(ctx, m) { return ctx.actor.role === ROLE.ADMIN || m.chair === ctx.actor.username; }
+
+/* ---------- the list ---------------------------------------------------- */
+
+function getMeetings_(ctx) {
+  requireMeetings_(ctx);
+  var mine = readMeetings_(ctx).filter(function (m) { return canSeeMeeting_(ctx, m) && m.status !== 'cancelled'; });
+  var live = mine.filter(function (m) { return m.status === 'live'; })[0] || null;
+  return { status: 'success',
+    live: live ? { id: live.id, title: live.title, chair: live.chair, started: live.started,
+                   segment: live.agenda[live.segment] ? live.agenda[live.segment].title : '' } : null,
+    past: mine.filter(function (m) { return m.status === 'ended'; }).reverse().slice(0, 40).map(function (m) {
+      return { id: m.id, title: m.title, date: m.date, attendees: m.attendees.length,
+               present: m.attendees.filter(function (a) { return a.p; }).length,
+               rating: m.summary ? m.summary.rating : null,
+               actions: m.summary ? m.summary.actionsCreated : 0 };
+    }),
+    segments: MEETING_SEGMENTS, agenda: defaultAgenda_(ctx),
+    canStart: ctx.actor.role !== ROLE.DOER };
+}
+
+function defaultAgenda_(ctx) {
+  var saved = safeJson_(readSetting_(ctx, 'meetingAgenda', ''), null);
+  if (saved && saved.length) return saved;
+  return MEETING_SEGMENTS.map(function (s) { return { key: s.key, title: s.title, minutes: s.minutes }; });
+}
+
+/* ---------- starting, moving, ending ------------------------------------- */
+
+function startMeeting_(ctx, form) {
+  requireMeetings_(ctx); requireManager_(ctx); blockIfStopped_(ctx);
+  form = form || {};
+  if (liveMeeting_(ctx)) throw new Error('A meeting is already running. Join it, or end it first.');
+
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  var byName = {}; users.forEach(function (u) { byName[u.username] = u; });
+  var invited = (form.attendees || []).map(String).filter(function (u) { return byName[u]; });
+  if (invited.indexOf(ctx.actor.username) < 0) invited.unshift(ctx.actor.username);
+  if (invited.length < 2) throw new Error('A meeting needs at least two people. Pick who is attending.');
+
+  /* The agenda is chosen per meeting from the fixed segment list, in its fixed
+     order. Segments can be dropped and their minutes changed, never reordered:
+     the order is the method — numbers before roadblocks, so misses are on the
+     table when the hard conversation starts. Close is always last and kept. */
+  var picked = form.agenda && form.agenda.length ? form.agenda : defaultAgenda_(ctx);
+  var keep = {}; picked.forEach(function (a) { keep[a.key] = a; });
+  var agenda = MEETING_SEGMENTS.filter(function (s) { return keep[s.key] || s.key === 'close'; }).map(function (s) {
+    var m = Number((keep[s.key] || {}).minutes);
+    return { key: s.key, title: s.title, minutes: (m > 0 && m <= 180) ? Math.round(m) : s.minutes };
+  });
+  if (form.saveAgenda) writeSetting_(ctx, 'meetingAgenda', JSON.stringify(agenda));
+
+  return withLock_(function () {
+    if (liveMeeting_(ctx)) throw new Error('A meeting is already running.');
+    var id = 'M-' + Utilities.getUuid().slice(0, 8), now = new Date();
+    var title = String(form.title || 'Weekly review').trim().slice(0, 80);
+    tab_(ctx, TAB.MEETINGS, MEETING_COLS).appendRow([id, title, ymd(now), 'live', ctx.actor.username, now, '',
+      JSON.stringify(invited.map(function (u) { return { u: u, p: u === ctx.actor.username }; })),
+      JSON.stringify(agenda), 0, '', '{}', '']);
+    dropCache_(ctx);
+    return { status: 'success', id: id, message: title + ' started.' };
+  });
+}
+
+function writeMeeting_(ctx, m, fields) {
+  var sh = tab_(ctx, TAB.MEETINGS, MEETING_COLS);
+  Object.keys(fields).forEach(function (k) {
+    var col = MEETING_COLS.indexOf(k) + 1;
+    if (col > 0) sh.getRange(m.row, col).setValue(fields[k]);
+  });
+  dropCache_(ctx);
+}
+
+function liveFor_(ctx, id) {
+  requireMeetings_(ctx);
+  var m = meetingById_(ctx, id);
+  if (!m || !canSeeMeeting_(ctx, m)) throw new Error('That meeting is not one you are in.');
+  if (m.status !== 'live') throw new Error('That meeting has ended.');
+  return m;
+}
+
+function meetingGo_(ctx, id, segment) {
+  blockIfStopped_(ctx);
+  var m = liveFor_(ctx, id);
+  if (!canChair_(ctx, m)) throw new Error('Only the person chairing can move the meeting on.');
+  var n = Math.max(0, Math.min(m.agenda.length - 1, Number(segment) || 0));
+  return withLock_(function () {
+    writeMeeting_(ctx, m, { 'Segment': n });
+    return getMeeting_(ctx, id);
+  });
+}
+
+function setAttendance_(ctx, id, username, present) {
+  blockIfStopped_(ctx);
+  var m = liveFor_(ctx, id);
+  if (!canChair_(ctx, m)) throw new Error('Only the person chairing takes attendance.');
+  return withLock_(function () {
+    var m2 = meetingById_(ctx, id), found = false;
+    var list = m2.attendees.map(function (a) {
+      if (a.u === username) { found = true; return { u: a.u, p: !!present }; }
+      return a;
+    });
+    if (!found) {
+      if (!findUser_(ctx.ss, username)) throw new Error('That person is not in this workspace.');
+      list.push({ u: username, p: !!present });            // somebody who walked in late
+    }
+    writeMeeting_(ctx, m2, { 'Attendees JSON': JSON.stringify(list) });
+    return getMeeting_(ctx, id);
+  });
+}
+
+function saveMinutes_(ctx, id, text) {
+  blockIfStopped_(ctx);
+  var m = liveFor_(ctx, id);
+  if (!canChair_(ctx, m)) throw new Error('Only the person chairing keeps the minutes.');
+  return withLock_(function () {
+    writeMeeting_(ctx, m, { 'Minutes': String(text || '').slice(0, 40000) });
+    return { status: 'success', message: 'Minutes saved.' };
+  });
+}
+
+/* ---------- items: wins, stories, updates, roadblocks ------------------- */
+
+function addMeetingItem_(ctx, id, form) {
+  blockIfStopped_(ctx);
+  form = form || {};
+  var kind = String(form.kind || '');
+  if (ITEM_KINDS.indexOf(kind) < 0) throw new Error('Unknown item.');
+  var text = String(form.text || '').trim();
+  if (text.length < 2) throw new Error('Write something first.');
+
+  /* A roadblock can be raised outside a meeting, into the list the next
+     meeting will work through. Everything else belongs to a live meeting. */
+  var m = null;
+  if (id) m = liveFor_(ctx, id);
+  else if (kind !== 'roadblock') throw new Error('Wins, stories and updates are shared in a meeting.');
+  else requireMeetings_(ctx);
+
+  var person = String(form.person || '').trim();
+  if (person && !findUser_(ctx.ss, person)) throw new Error('That person is not in this workspace.');
+  var val = '';
+  if (form.value) {
+    var v = valueByTag_(ctx, form.value);
+    if (!v) throw new Error('That value is not one of this company’s values.');
+    val = v.code || v.title;
+  }
+  if (kind === 'story' && !val) throw new Error('Which value did they live? Pick one — a story without one is just a nice story.');
+  var goal = String(form.goal || '').trim();
+  if (goal && !goalById_(ctx, goal)) throw new Error('That goal no longer exists.');
+  var horizon = form.horizon === 'later' ? 'later' : 'now';
+
+  var row = ['I-' + Utilities.getUuid().slice(0, 8), m ? m.id : '', kind, text.slice(0, 2000), person, val, goal,
+             'open', horizon, ctx.actor.username, new Date(), ''];
+  tab_(ctx, TAB.MEETING_ITEMS, MEETING_ITEM_COLS).appendRow(row);
+  dropCache_(ctx);
+
+  /* A story can carry cookie points with it. Through awardCookie_, so the same
+     rules hold: a manager, for someone who reports to them, with a reason. */
+  var cookie = null;
+  if (kind === 'story' && person && Number(form.cookies) > 0) {
+    cookie = awardCookie_(ctx, { employee: person, points: Number(form.cookies), reason: text, value: val });
+  }
+  var out = m ? getMeeting_(ctx, m.id) : { status: 'success' };
+  out.message = cookie ? cookie.message : 'Added.';
+  return out;
+}
+
+function updateMeetingItem_(ctx, itemId, form) {
+  blockIfStopped_(ctx);
+  form = form || {};
+  var it = readItems_(ctx).filter(function (x) { return x.id === itemId; })[0];
+  if (!it) throw new Error('That item no longer exists.');
+  var live = liveMeeting_(ctx);
+  var mine = it.by === ctx.actor.username;
+  if (!mine && ctx.actor.role === ROLE.DOER) throw new Error('Only whoever raised it, or a manager, can change it.');
+  return withLock_(function () {
+    var sh = tab_(ctx, TAB.MEETING_ITEMS, MEETING_ITEM_COLS);
+    if (form.remove) {
+      if (it.kind === 'roadblock' && it.status !== 'open') throw new Error('A cleared roadblock stays on the record.');
+      sh.deleteRow(it.row);
+    } else {
+      if (form.text !== undefined) sh.getRange(it.row, 4).setValue(String(form.text).slice(0, 2000));
+      if (form.horizon) sh.getRange(it.row, 9).setValue(form.horizon === 'later' ? 'later' : 'now');
+      if (form.goal !== undefined) {
+        if (form.goal && !goalById_(ctx, form.goal)) throw new Error('That goal no longer exists.');
+        sh.getRange(it.row, 7).setValue(String(form.goal || ''));
+      }
+      if (form.clear !== undefined) {
+        sh.getRange(it.row, 8).setValue(form.clear ? 'cleared' : 'open');
+        sh.getRange(it.row, 12).setValue(form.clear ? (live ? live.id : 'outside a meeting') : '');
+      }
+    }
+    dropCache_(ctx);
+    return live && canSeeMeeting_(ctx, live) ? getMeeting_(ctx, live.id) : { status: 'success' };
+  });
+}
+
+/**
+ * Turns a roadblock — or anything said in the room — into a real task.
+ * Through createTask_, so it is assigned, routed and capped exactly like any
+ * other work; tagged with the meeting it came from and, if given, the goal.
+ */
+function addMeetingAction_(ctx, id, form) {
+  form = form || {};
+  var m = liveFor_(ctx, id);
+  var due = String(form.dueDate || '').trim();
+  if (!due) { var d = new Date(); d.setDate(d.getDate() + 7); due = ymd(d); }
+  var r = createTask_(ctx, { title: form.title, desc: form.desc || ('Agreed in ' + m.title + ', ' + m.date + '.'),
+    assignTo: form.assignTo, dueDate: due, priority: form.priority || 'High',
+    goal: form.goal || '', raisedIn: m.id, jobCategory: form.jobCategory || 'General' });
+  if (form.fromItem) {
+    try { updateMeetingItem_(ctx, form.fromItem, { clear: !!form.clearItem }); } catch (e) {}
+  }
+  var out = getMeeting_(ctx, m.id);
+  var who = findUser_(ctx.ss, String(form.assignTo || '').split(',')[0].trim());
+  out.message = 'Action added to ' + (who ? who.name + '\u2019s' : 'their') + ' board, due ' + due + '.';
+  return out;
+}
+
+function rateMeeting_(ctx, id, score) {
+  blockIfStopped_(ctx);
+  var m = liveFor_(ctx, id);
+  var s = Math.round(Number(score));
+  if (!(s >= 1 && s <= 10)) throw new Error('Rate it from 1 to 10.');
+  if (!m.attendees.some(function (a) { return a.u === ctx.actor.username; })) {
+    throw new Error('Only people in the meeting rate it.');
+  }
+  return withLock_(function () {
+    var m2 = meetingById_(ctx, id);
+    var r = m2.ratings || {};
+    r[ctx.actor.username] = s;                       // re-rating replaces, never adds a second vote
+    writeMeeting_(ctx, m2, { 'Ratings JSON': JSON.stringify(r) });
+    return getMeeting_(ctx, id);
+  });
+}
+
+/* ---------- the live view ------------------------------------------------ */
+
+function getMeeting_(ctx, id) {
+  requireMeetings_(ctx);
+  var m = meetingById_(ctx, id);
+  if (!m || !canSeeMeeting_(ctx, m)) throw new Error('That meeting is not one you are in.');
+  var users = readUsers_(ctx), names = {};
+  users.forEach(function (u) { names[u.username] = u.name; });
+  var items = readItems_(ctx);
+  var tasks = readTasks_(ctx);
+  var dir = readDirection_(ctx);
+  var goals = readGoals_(ctx);
+  var sm = fyStartMonth_(ctx), q = fyPeriod_(m.date ? parseYmd(m.date) : new Date(), sm);
+
+  var here = items.filter(function (i) { return i.meeting === m.id; });
+  var road = items.filter(function (i) {
+    return i.kind === 'roadblock' && (i.status === 'open' || i.clearedIn === m.id);
+  });
+
+  /* Actions: everything raised in a meeting that is still open, plus whatever
+     closed since the previous meeting — last week's, done or not. */
+  var prev = readMeetings_(ctx).filter(function (x) {
+    return x.status === 'ended' && x.id !== m.id && x.started && x.started < (m.started || '9'); }).pop();
+  var since = prev ? prev.started : '';
+  var meetingIds = {}; readMeetings_(ctx).forEach(function (x) { meetingIds[x.id] = x; });
+  var actions = tasks.filter(function (t) {
+    if (!t.raisedIn || !meetingIds[t.raisedIn]) return false;
+    if (t.raisedIn === m.id) return true;
+    if (isOpen(t.status)) return true;
+    var closed = closedAt(t);
+    return closed && since && closed.toISOString() >= since;
+  }).map(function (t) {
+    return { id: t.id, title: t.title, to: t.assignee, toName: names[t.assignee] || t.assignee,
+             due: t.due, status: t.status, goal: t.goal, newHere: t.raisedIn === m.id,
+             late: isOpen(t.status) && t.due && dayDiff(new Date(), parseYmd(t.due)) > 0 };
+  });
+
+  var ratings = m.ratings || {}, rk = Object.keys(ratings);
+  var label = function (i) { return { id: i.id, text: i.text, person: i.person, personName: names[i.person] || '',
+    value: i.value, goal: i.goal, status: i.status, horizon: i.horizon, by: i.by,
+    byName: names[i.by] || i.by, at: i.at, mine: i.by === ctx.actor.username }; };
+
+  return { status: 'success', meeting: {
+      id: m.id, title: m.title, date: m.date, status: m.status, chair: m.chair, chairName: names[m.chair] || m.chair,
+      started: m.started, ended: m.ended, segment: m.segment, agenda: m.agenda,
+      attendees: m.attendees.map(function (a) { return { u: a.u, name: names[a.u] || a.u, present: !!a.p }; }),
+      minutes: m.minutes, summary: m.summary,
+      iAmChair: canChair_(ctx, m), iRated: ratings.hasOwnProperty(ctx.actor.username),
+      myRating: ratings[ctx.actor.username] || null,
+      /* Anonymous: a count and an average, never a name next to a number. */
+      ratings: { count: rk.length, average: rk.length ? Math.round(rk.reduce(function (s, k) { return s + ratings[k]; }, 0) / rk.length * 10) / 10 : null,
+                 expected: m.attendees.filter(function (a) { return a.p; }).length } },
+    wins: here.filter(function (i) { return i.kind === 'win'; }).map(label),
+    stories: here.filter(function (i) { return i.kind === 'story'; }).map(label),
+    updates: here.filter(function (i) { return i.kind === 'update'; }).map(label),
+    roadblocks: road.map(label),
+    actions: actions,
+    goals: goals.filter(function (g) { return g.level === 'quarter' && g.period === q.quarter && g.status !== 'Dropped'; })
+      .map(function (g) { return { id: g.id, title: g.title, owner: g.owner, ownerName: names[g.owner] || g.owner,
+        status: g.status, note: g.note, progress: goalProgress_(g, goals, tasks) }; }),
+    quarter: q.quarter,
+    numbers: readNumbersWithLog_(ctx, names),
+    values: dir.values.map(function (v) { return { code: v.code, title: v.title }; }), purpose: dir.purpose,
+    segments: MEETING_SEGMENTS };
+}
+
+/* ---------- ending ------------------------------------------------------- */
+
+/**
+ * @param quiet  skip the summary email. Not reachable from the API — the router
+ *               always passes false. Only the demo builder sets it, because its
+ *               sample meeting is "attended" by an Admin whose address is real.
+ */
+function endMeeting_(ctx, id, cancel, quiet) {
+  blockIfStopped_(ctx);
+  var m = liveFor_(ctx, id);
+  if (!canChair_(ctx, m)) throw new Error('Only the person chairing can end the meeting.');
+  if (cancel) {
+    return withLock_(function () {
+      writeMeeting_(ctx, m, { 'Status': 'cancelled', 'Ended': new Date() });
+      return { status: 'success', message: 'Meeting cancelled. Nothing was sent.' };
+    });
+  }
+
+  var view = getMeeting_(ctx, id);
+  var r = view.meeting.ratings;
+  var summary = {
+    present: view.meeting.attendees.filter(function (a) { return a.present; }).length,
+    invited: view.meeting.attendees.length,
+    wins: view.wins.length, stories: view.stories.length, updates: view.updates.length,
+    roadblocksCleared: view.roadblocks.filter(function (x) { return x.status === 'cleared'; }).length,
+    roadblocksOpen: view.roadblocks.filter(function (x) { return x.status === 'open'; }).length,
+    actionsCreated: view.actions.filter(function (a) { return a.newHere; }).length,
+    actionsCarried: view.actions.filter(function (a) { return !a.newHere && isOpen(a.status); }).length,
+    goalsAtRisk: view.goals.filter(function (g) { return g.status === 'At risk'; }).length,
+    numbersMissed: view.numbers.list.filter(function (n) {
+      var w = n.weeks[n.weeks.length - 1]; return w && w.hit === false; }).length,
+    rating: r.average, ratingCount: r.count,
+  };
+
+  withLock_(function () {
+    writeMeeting_(ctx, meetingById_(ctx, id), { 'Status': 'ended', 'Ended': new Date(),
+      'Summary JSON': JSON.stringify(summary) });
+  });
+
+  /* The summary goes to everyone who was there, from the company address, with
+     their own actions at the top — the thing they actually need on Monday. */
+  if (!quiet) try {
+    var users = readUsers_(ctx);
+    view.meeting.attendees.filter(function (a) { return a.present; }).forEach(function (a) {
+      var u = users.filter(function (x) { return x.username === a.u; })[0];
+      if (!u || !u.email) return;
+      var mineList = view.actions.filter(function (x) { return x.to === a.u && isOpen(x.status); });
+      sendEmail_(u.email, view.meeting.title + ' — ' + view.meeting.date, meetingSummaryHtml_(view, summary, mineList));
+    });
+  } catch (e) { logError_('endMeeting:mail', e.message); }
+
+  return { status: 'success', summary: summary,
+    message: 'Meeting ended. The summary has gone to everyone who was there.' };
+}
+
+function meetingSummaryHtml_(v, s, mine) {
+  var row = function (a) {
+    return '<li style="margin:4px 0"><strong>' + esc_(a.title) + '</strong> — ' + esc_(a.toName) +
+      ', due ' + esc_(a.due || 'no date') + '</li>'; };
+  return mailShell_(v.meeting.title + ' — ' + v.meeting.date,
+    (mine.length ? '<p><strong>Your actions</strong></p><ul style="padding-left:18px">' + mine.map(row).join('') + '</ul>'
+                 : '<p>You have no open actions from this meeting.</p>') +
+    infoTable_([['Present', s.present + ' of ' + s.invited],
+      ['Roadblocks cleared', String(s.roadblocksCleared)], ['Still open', String(s.roadblocksOpen)],
+      ['New actions', String(s.actionsCreated)], ['Goals at risk', String(s.goalsAtRisk)],
+      ['Key numbers missed', String(s.numbersMissed)],
+      ['Rating', s.rating === null ? 'not rated' : s.rating + ' / 10 (' + s.ratingCount + ')']]) +
+    (v.meeting.minutes ? '<p><strong>Minutes</strong></p><p style="white-space:pre-wrap">' + esc_(v.meeting.minutes) + '</p>' : '') +
+    btn_('Open Dome Box', CFG().siteUrl));
+}
 
 
 // =========================================================================

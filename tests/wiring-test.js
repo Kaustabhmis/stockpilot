@@ -39,6 +39,18 @@ ok('there are inline handlers to check', handlers.length > 5, handlers.length);
 const missing = handlers.filter((f) => !defined.has(f));
 ok('none of them is undefined', missing.length === 0, missing.join(', '));
 
+console.log('\n=== no two elements share an id ===');
+/* $(id) returns the FIRST element with that id. Two of them, and every
+   handler meant for the second lands on the first. This happened twice: the
+   task status dialog and the goal editor were both named after a filter on
+   the Tasks bar, so pressing Submit in either did a native form submit,
+   reloaded the page and saved nothing. */
+const idCount = {};
+for (const mm of UI.matchAll(/id=\\?"([A-Za-z][\w-]*)\\?"/g)) idCount[mm[1]] = (idCount[mm[1]] || 0) + 1;
+const dupIds = Object.keys(idCount).filter((k) => idCount[k] > 1);
+ok('every id in the page is declared once', dupIds.length === 0, dupIds.map((k) => k + '×' + idCount[k]).join(', '));
+ok('and there are enough of them for that to mean something', Object.keys(idCount).length > 200, Object.keys(idCount).length);
+
 console.log('\n=== the scheduler and setup agree on names ===');
 const rem = fs.readFileSync('/home/user/stockpilot/domebox/reminders.gs', 'utf8');
 ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders'].forEach((h) => {

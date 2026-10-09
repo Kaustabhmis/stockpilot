@@ -11,7 +11,8 @@
 // a back door to a score nobody earned on the work.
 // ===========================================================================
 
-var COOKIE_COLS = ['Date', 'To', 'By', 'Points', 'Reason'];
+/* COOKIE_COLS lives in 01-config.gs with the other column layouts. Defined in
+   two files, Apps Script would keep whichever loaded last — silently. */
 
 function readCookies_(ctx) {
   return cached_(ctx, 'cookies', function () {
@@ -21,7 +22,8 @@ function readCookies_(ctx) {
     for (var i = 1; i < d.length; i++) {
       if (!d[i][1]) continue;
       out.push({ date: toIso_(d[i][0]), to: String(d[i][1]).trim(), by: String(d[i][2]).trim(),
-                 points: Number(d[i][3]) || 0, reason: String(d[i][4] || '') });
+                 points: Number(d[i][3]) || 0, reason: String(d[i][4] || ''),
+                 value: String(d[i][5] == null ? '' : d[i][5]) });
     }
     return out;
 });
@@ -37,7 +39,7 @@ function cookiesFor_(ctx, username, range) {
     var d = new Date(c.date);
     return !isNaN(d) && inWindow(d, range);
   }).map(function (c) {
-    return { date: c.date, points: c.points, reason: c.reason,
+    return { date: c.date, points: c.points, reason: c.reason, value: c.value,
              by: c.by, byName: names[c.by] || c.by };
   });
 }
@@ -67,6 +69,15 @@ function awardCookie_(ctx, data) {
     throw new Error('Award between 1 and ' + COOKIE_MAX_PER_AWARD + ' cookie points.');
   }
 
+  /* Optionally, which value this recognised. Recognition that names the value
+     it rewards teaches the value; recognition that does not just rewards. */
+  var valueCode = '';
+  if (data.value) {
+    var val = valueByTag_(ctx, data.value);
+    if (!val) throw new Error('That value is not one of this company\'s values.');
+    valueCode = val.code || val.title;
+  }
+
   var reason = String(data.reason || '').trim();
   if (reason.length < 5) {
     throw new Error('Say what this is for. The reason is shown to them and counts ' +
@@ -74,7 +85,7 @@ function awardCookie_(ctx, data) {
   }
 
   mkTab_(ctx.ss, TAB.COOKIES, COOKIE_COLS)
-    .appendRow([new Date(), who.username, ctx.actor.username, points, reason]);
+    .appendRow([new Date(), who.username, ctx.actor.username, points, reason, valueCode]);
     dropCache_(ctx);
 
   try { notifyCookie_(ctx, who, points, reason); }
@@ -101,7 +112,7 @@ function getCookies_(ctx) {
     if (isNaN(d) || !inWindow(d, range)) return false;
     return !mine || c.to === ctx.me.username;
   }).map(function (c) {
-    return { date: c.date, points: c.points, reason: c.reason,
+    return { date: c.date, points: c.points, reason: c.reason, value: c.value,
              to: c.to, toName: names[c.to] || c.to,
              by: c.by, byName: names[c.by] || c.by };
   }).reverse();

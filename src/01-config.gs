@@ -47,7 +47,21 @@ var MAIL_FROM_NAME = 'Dome Box';
 
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
-            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points' };
+            GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points',
+            DIRECTION:'Direction', GOALS:'Goals', NUMBERS:'Key_Numbers', NUMBER_LOG:'Number_Log',
+            MEETINGS:'Meetings', MEETING_ITEMS:'Meeting_Items' };
+
+/* The cookie ledger, with the value an award was given for appended last. */
+var COOKIE_COLS = ['Date','To','By','Points','Reason','Value'];
+
+var DIRECTION_COLS = ['Kind','Code','Title','Detail','Order'];
+var GOAL_COLS = ['ID','Level','Period','Title','Detail','Owner','Parent','Status','Note','Created','Updated'];
+var NUMBER_COLS = ['ID','Name','Owner','Unit','Target','Direction','Goal','Active','Created'];
+var NUMBER_LOG_COLS = ['Number','Week','Value','By','At'];
+var MEETING_COLS = ['ID','Title','Date','Status','Chair','Started','Ended','Attendees JSON',
+                    'Agenda JSON','Segment','Minutes','Ratings JSON','Summary JSON'];
+var MEETING_ITEM_COLS = ['ID','Meeting','Kind','Text','Person','Value','Goal','Status','Horizon',
+                         'By','At','Cleared In'];
 
 /* Column layout. The first 15 task columns and first 9 user columns match the
    old schema exactly, so an existing tenant sheet keeps working; new fields are
@@ -61,7 +75,10 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   /* When a repeat stops on its own. Until these existed a recurring job ran
      until a manager remembered to go and stop it by hand, which is not a
      schedule — it is a standing instruction nobody owns. */
-  'Repeat Until','Repeat Count','Repeat Made'];
+  'Repeat Until','Repeat Count','Repeat Made',
+  /* Which goal this work serves, and which meeting raised it. Appended, as
+     always — an existing customer's sheet gains them without a cell moving. */
+  'Goal','Raised In'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];

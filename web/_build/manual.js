@@ -30,7 +30,8 @@ const MANAGER_ONLY = ['team', 'reports', 'kras-and-appraisals', 'for-managers'];
    Help that opens on its own table of contents makes you find your place
    twice. */
 const FOR_TAB = { tasks: 'tasks', priority: 'priority', projects: 'projects',
-  team: 'team', reports: 'reports', board: 'the-leaderboard' };
+  team: 'team', reports: 'reports', board: 'the-leaderboard',
+  goals: 'goals-and-values', meetings: 'meetings' };
 
 function inline(s) {
   let out = esc(s);

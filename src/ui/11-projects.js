@@ -88,6 +88,9 @@ function openProjectBuilder() {
       '<div><label class="lb" for="pCat">Category</label><select id="pCat" class="in">' +
         cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
     '</div>' +
+    /* Every stage inherits the goal, so the whole project counts toward it. */
+    '<div class="mb-4"><label class="lb" for="pGoal">Serves goal</label><select id="pGoal" class="in">' +
+      goalOptions('', 'None') + '</select></div>' +
     '<div class="mb-5"><span class="lb">How the stages run</span>' +
       '<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">' +
         gateOption('sequential', 'One after another', 'A stage opens only when the one before it is ' +
@@ -184,7 +187,7 @@ function openProjectBuilder() {
     var btn = e.target.querySelector('button[type=submit]');
     busy(btn, true, 'Creating…');
     api('createProject', { form: { name: $('pName').value, jobCategory: $('pCat').value,
-      gate: gate(), stages: stages } })
+      goal: $('pGoal') ? $('pGoal').value : '', gate: gate(), stages: stages } })
       .then(function (r) {
         toast(r.message, 'ok'); closeModal();
         STATE.tab = 'projects'; renderTab();

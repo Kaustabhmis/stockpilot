@@ -437,7 +437,13 @@ createDemoAccount()
 Builds a real workspace on the Enterprise plan with a month of plausible work
 already in it, and prints the login. An empty workspace demonstrates nothing —
 the score, the leaderboard and the priority list all need history to say
-anything at all.
+anything at all. It also writes a purpose and four values, goals for the year
+and the quarter with work linked to them, three key numbers with six weeks of
+figures, and one finished weekly review with its actions.
+
+If the demo account was made before Goals and Meetings existed, run
+`removeDemoAccount`, then `createDemoAccount` again to get the new pages
+filled in.
 
 ```
 Email     demo@biscsindia.com      Password  DomeBoxDemo2026

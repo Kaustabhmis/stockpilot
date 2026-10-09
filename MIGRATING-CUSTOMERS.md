@@ -51,7 +51,7 @@ sheet that doesn't match is **left exactly as it is**, and:
   can open. Nothing has been changed or lost"*;
 - you get an email naming the exact column;
 - `previewMigration` lists it under **NEEDS A LOOK** and tells you where to
-  move the column (for Tasks: column **AB** or later — past the last column
+  move the column (for Tasks: column **AD** or later — past the last column
   Dome Box uses).
 
 Move the column, run `previewMigration` again, and they're through. A workspace
@@ -80,9 +80,9 @@ This is step 11 of [`DEPLOY-EASY.md`](DEPLOY-EASY.md), in more detail.
    3 customers in the registry.
 
    --- WILL BE UPGRADED (2) ---
-     Ghosh Fabricators — 3 people, 6 tasks; will add Tasks +12 columns,
-       Users +4 columns, new Cookie_Points tab; 1 person would be locked
-       out — will be fixed
+     Ghosh Fabricators — 3 people, 6 tasks; will add Tasks +14 columns,
+       Users +4 columns, new Cookie_Points tab, new Goals tab, …; 1 person
+       would be locked out — will be fixed
      Another Customer — 1 person, 1 task; will add …
 
    --- NEEDS A LOOK (1) — LEFT EXACTLY AS THEY ARE ---

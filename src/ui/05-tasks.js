@@ -23,6 +23,13 @@ function syncFilters() {
     staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
   $('fCategory').innerHTML = '<option value="">Any category</option>' +
     cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  /* The goal filter appears only once there are goals to filter by, so a
+     company that never sets any never sees an empty control. */
+  if ($('fGoal')) {
+    var hasGoals = STATE.dir && STATE.dir.goals && STATE.dir.goals.length;
+    $('fGoal').classList.toggle('hidden', !hasGoals);
+    if (hasGoals) $('fGoal').innerHTML = goalOptions(FILTER.goal, 'Any goal');
+  }
   $('rPerson').innerHTML = '<option value="">Team only</option>' +
     staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
 }
@@ -33,6 +40,7 @@ function visibleTasks() {
     if (FILTER.assignee && t.assignee !== FILTER.assignee) return false;
     if (FILTER.status && t.status !== FILTER.status) return false;
     if (FILTER.category && t.jobCategory !== FILTER.category) return false;
+    if (FILTER.goal && t.goal !== FILTER.goal) return false;
     if (FILTER.overdue && !daysLate(t)) return false;
     if (FILTER.q) {
       var q = FILTER.q.toLowerCase();
@@ -54,7 +62,7 @@ function priorityNames(current) {
 }
 
 function renderTab() {
-  ['tasks','priority','projects','team','reports','board'].forEach(function (t) {
+  ['tasks','priority','projects','team','reports','board','goals','meetings'].forEach(function (t) {
     $('tab-' + t).classList.toggle('hidden', t !== STATE.tab); });
   document.querySelectorAll('#navTabs button,#navTabsMobile button').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === STATE.tab); });
@@ -64,6 +72,10 @@ function renderTab() {
   if (STATE.tab === 'team') loadTeam();
   if (STATE.tab === 'reports') loadReports();
   if (STATE.tab === 'board') loadLeaderboard();
+  if (STATE.tab === 'goals') loadGoals();
+  if (STATE.tab === 'meetings') loadMeetings();
+  /* Leaving a running meeting's screen stops its polling; coming back resumes. */
+  if (STATE.tab !== 'meetings') stopMeetingPoll();
 }
 
 function renderTasks() {
@@ -100,6 +112,7 @@ function taskCard(t) {
       (sub.length ? '<span class="chip t-slate">' + done + '/' + sub.length + '</span>' : '') +
       (t.reworkCount ? '<span class="chip t-rust">Rework ' + t.reworkCount + '</span>' : '') +
       (t.frequency && t.frequency !== 'One Time' ? '<span class="chip t-plum">' + esc(repeatLabel(t)) + '</span>' : '') +
+      (t.goal && goalTitle(t.goal) ? '<span class="chip t-sky" title="Serves this goal">◎ ' + esc(goalTitle(t.goal)) + '</span>' : '') +
       (t.jobCategory && t.jobCategory !== 'General'
         ? tintChip(t.jobCategory, t.jobCategory) : '') +
     '</div></div>';
@@ -242,7 +255,8 @@ function openTask(id) {
     '<div class="grid grid-cols-2 gap-4 mb-5 text-sm">' +
       [['Owner', t.toName], ['Raised by', t.byName], ['Approver', nameOf(t.approver)],
        ['Due', fmtDate(t.due)], ['Priority', t.priority], ['Category', t.jobCategory || '—'],
-       ['KRA', t.kra || '—'], ['Repeats', repeatLabel(t)], ['Rework loops', String(t.reworkCount || 0)]]
+       ['KRA', t.kra || '—'], ['Repeats', repeatLabel(t)], ['Rework loops', String(t.reworkCount || 0)],
+       ['Serves goal', t.goal ? (goalTitle(t.goal) || '—') : '—']]
       .map(function (p) { return '<div><div class="lb">' + esc(p[0]) + '</div>' +
         '<div class="font-bold text-gray-800">' + esc(p[1]) + '</div></div>'; }).join('') + '</div>' +
 
@@ -344,7 +358,12 @@ function repeatLabel(t) {
 
 function openStatus(id, status) {
   var rework = status === 'In Progress';
-  openModal('<form id="fStatus" class="p-6 lg:p-7">' +
+  /* "fStatusChange", not "fStatus": the status FILTER on the Tasks bar is
+     #fStatus and sits earlier in the page, so $('fStatus') used to find the
+     filter, the submit handler landed on a <select>, and pressing Submit here
+     did a native form submit — reloading the page and saving nothing. Every
+     Submit for review, Verify and Send back from this dialog was lost. */
+  openModal('<form id="fStatusChange" class="p-6 lg:p-7">' +
     '<h2 class="text-xl font-black mb-1">' +
       (rework ? 'Send back for rework' : status === 'Verified' ? 'Verify and close' : 'Submit for review') + '</h2>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">' +
@@ -357,7 +376,7 @@ function openStatus(id, status) {
     '<div class="flex gap-3"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
     '<button type="submit" class="btn btn-p flex-1">' + (rework ? 'Send back' : 'Confirm') + '</button></div></form>');
 
-  $('fStatus').addEventListener('submit', function (e) {
+  $('fStatusChange').addEventListener('submit', function (e) {
     e.preventDefault();
     var note = $('stNote').value.trim();
     var due = rework ? $('stDate').value : null;
@@ -494,7 +513,11 @@ function openAssign() {
           'It will keep repeating until somebody stops it.</div>' +
 
       '</div>' +
-      '<div><label class="lb" for="asKra">KRA tag</label><input id="asKra" class="in" placeholder="e.g. Vendor Quality"></div>' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div><label class="lb" for="asKra">KRA tag</label><input id="asKra" class="in" placeholder="e.g. Vendor Quality"></div>' +
+        /* Which goal this serves. Optional — most daily work serves no goal in
+           particular, and pretending otherwise inflates every goal's count. */
+        '<div><label class="lb" for="asGoal">Serves goal</label><select id="asGoal" class="in">' + goalOptions('', 'None') + '</select></div></div>' +
       '<div><label class="lb">Checklist <span class="normal-case tracking-normal font-semibold">(one per line, optional)</span></label>' +
         '<textarea id="asChk" rows="2" class="in" placeholder="Collect quotes&#10;Compare rates"></textarea></div>' +
     '</div>' +
@@ -553,6 +576,7 @@ function openAssign() {
     api('createTask', { form: { title: $('asTitle').value, desc: $('asDesc').value,
       assignTo: who.join(','), dueDate: $('asDue').value, priority: $('asPri').value,
       jobCategory: $('asCat').value, frequency: $('asFreq').value, kra: $('asKra').value,
+      goal: $('asGoal') ? $('asGoal').value : '',
       repeatUntil: stopMode === 'date' ? $('asUntil').value : '',
       repeatCount: stopMode === 'count' ? Number($('asTimes').value || 0) : 0,
       checklist: $('asChk').value } })

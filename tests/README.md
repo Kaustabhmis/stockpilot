@@ -12,6 +12,8 @@ node setup-test.js          # setupDomeBox() in every state a real deployment hi
 node manual-test.js         # every number MANUAL.md asserts, against the code
 node wiring-test.js         # the joins: UI->route, help links, handlers, runnable guide steps
 node migration-test.js      # an old-format customer moved over: nothing lost, nobody locked out
+node goals-test.js          # purpose, values, goals, key numbers, and tagging work to them
+node meeting-test.js        # a weekly review end to end: actions are tasks, ratings anonymous
 node api-test.js            # 89 end-to-end API checks
 node extra-test.js          # roles, tenant isolation, plan vocabulary
 node auth-test.js           # hashing, migration, token forgery, throttle
@@ -43,6 +45,8 @@ node repeat-ui-test.js      # setting a stop rule the way a person would
 node leaderboard-ui-test.js # the board top to bottom, and what a Doer sees of it
 node demo-ui-test.js        # the demo workspace on screen, tab by tab
 node help-ui-test.js        # the Help Centre: opens where you are, searches, ends at a person
+node task-dialog-ui-test.js # Submit for review / Send back / Verify actually save
+node meeting-ui-test.js     # Goals set up and a weekly review run, chair and attendee
 node manager-ui-test.js     # the held-review screens, end to end
 node kra-ui-test.js         # the KRA/KPI overview and editor
 node project-ui-test.js     # building a project and watching a stage release

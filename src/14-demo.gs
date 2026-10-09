@@ -146,6 +146,9 @@ function createDemoAccount(email, password) {
     out.push('Recognition: two cookie awards on the record.');
   } catch (e) { out.push('  cookies: ' + e.message); }
 
+  /* ---- purpose, values, goals, numbers, one weekly review --------------- */
+  try { seedDemoDirection_(ctx, out); } catch (e) { out.push('  goals: ' + e.message); }
+
   try {
     setLeave_(ctx, 'meera', demoYmd_(-3), demoYmd_(-1), 'Family function');
     out.push('Leave: one entry, so the demo shows deadlines that respect it.');
@@ -200,6 +203,8 @@ function createDemoAccount(email, password) {
   out.push('  3. Board     — the leaderboard, top to bottom, for the month');
   out.push('  4. Reports   — the score, then "see why" for the full working');
   out.push('  5. Projects  — a stage releasing the next one automatically');
+  out.push('  6. Goals     — purpose, values, goals with the work behind them');
+  out.push('  7. Meetings  — last week\'s review: wins, roadblocks, actions');
   out.push('');
   out.push('No email was sent to anyone: the addresses are @demo.domebox.in,');
   out.push('which does not exist, so nothing can reach a real inbox by accident.');
@@ -242,6 +247,97 @@ function grantDemoPlan_(sheetId, planName, days) {
  * would. The spread is deliberate: without late deliveries and rework loops
  * every score is 100 and the whole argument of the product is invisible.
  */
+/**
+ * The direction a demo is worth showing: a purpose, four values, a year goal
+ * with two quarter goals under it and real work linked to them, three key
+ * numbers with six weeks of history, and one finished weekly review.
+ *
+ * The review is ended QUIETLY. Ending a meeting emails its summary to everyone
+ * who was there, and the demo's Admin address is a real inbox.
+ */
+function seedDemoDirection_(ctx, out) {
+  saveDirection_(ctx, { purpose: 'Parts that fit first time, delivered on the day we promised.',
+    values: [
+      { code: 'OWN', title: 'Own it', detail: 'If it is yours, it is finished or it is flagged — never left.' },
+      { code: 'FIT', title: 'Right first time', detail: 'Check before it leaves the bench, not after it leaves the gate.' },
+      { code: 'DAY', title: 'Keep the date', detail: 'A promised date is a promise. Say early if it will slip.' },
+      { code: 'TEA', title: 'Help the next desk', detail: 'Your output is someone else’s input. Hand it over clean.' },
+    ] });
+
+  var fy = fyPeriod_(new Date(), fyStartMonth_(ctx));
+  var year = saveGoal_(ctx, { level: 'year', period: fy.year, owner: ctx.actor.username,
+    title: 'Win two new OEM accounts without a single repeat NC',
+    detail: 'Growth only counts if the audit stays clean while it happens.' }).id;
+  var qDespatch = saveGoal_(ctx, { level: 'quarter', period: fy.quarter, parent: year, owner: 'sruti',
+    title: 'On-time despatch at 95% or better',
+    detail: 'Measured weekly on the Key numbers. Every miss gets a roadblock.' }).id;
+  var qAudit = saveGoal_(ctx, { level: 'quarter', period: fy.quarter, parent: year, owner: 'imran',
+    title: 'Pass the ISO surveillance audit with zero repeat NCs' }).id;
+  saveGoal_(ctx, { level: 'quarter', period: fy.quarter, owner: 'meera',
+    title: 'Cut inventory variance below 1%' });
+  setGoalStatus_(ctx, qAudit, 'At risk', 'CC-19 needed a second pass; internal audit round is due this week.');
+
+  var linked = 0;
+  readTasks_(ctx).forEach(function (t) {
+    var g = /^Despatch /.test(t.title) ? qDespatch
+          : /NC-|CC-19|PPAP|control plan|ISO|internal audit|Gauge R&R|calibration/i.test(t.title) ? qAudit : '';
+    if (!g) return;
+    var hit = findTaskRow_(ctx, t.id);
+    if (hit) { writeTaskField_(hit, 'Goal', g); linked++; }
+  });
+  dropCache_(ctx);
+  out.push('Goals: one year goal, three for the quarter (one at risk), ' + linked + ' tasks linked.');
+
+  var NUMS = [
+    { name: 'On-time despatch', owner: 'payel', unit: '%', target: 95, direction: 'at least', goal: qDespatch,
+      weeks: [92, 96, 94, 97, 91, 96] },
+    { name: 'Customer rejections', owner: 'nita', unit: 'parts', target: 5, direction: 'at most', goal: qAudit,
+      weeks: [7, 4, 3, 6, 2, 3] },
+    { name: 'Open roadblocks', owner: 'sruti', unit: '', target: 3, direction: 'at most', goal: '',
+      weeks: [5, 4, 4, 2, 3, 2] },
+  ];
+  NUMS.forEach(function (n) {
+    var id = saveNumber_(ctx, n).id;
+    n.weeks.forEach(function (v, i) {
+      var d = new Date(); d.setDate(d.getDate() - 7 * (n.weeks.length - 1 - i));
+      recordNumber_(ctx, id, v, ymd(d));
+    });
+  });
+  out.push('Key numbers: three, six weeks of figures each, misses included.');
+
+  /* One open roadblock waiting for the next review, raised outside a meeting. */
+  addMeetingItem_(ctx, '', { kind: 'roadblock', goal: qDespatch,
+    text: 'Krishna Castings keep shipping short — two despatches waited on them this month.' });
+
+  var m = startMeeting_(ctx, { title: 'Weekly review',
+    attendees: ['sruti', 'imran', 'payel', 'nita', 'meera'] }).id;
+  ['sruti', 'imran', 'payel', 'nita'].forEach(function (u) { setAttendance_(ctx, m, u, true); });
+  addMeetingItem_(ctx, m, { kind: 'win', person: 'payel',
+    text: 'All five Mahindra despatches left on the promised day.' });
+  addMeetingItem_(ctx, m, { kind: 'story', person: 'rafiq', value: 'FIT', cookies: 2,
+    text: 'Rafiq stopped CNC-3 when the bore drifted, before a single bad part reached inspection.' });
+  addMeetingItem_(ctx, m, { kind: 'update', person: 'imran', goal: qAudit,
+    text: 'Internal audit checklist is ready; two clauses still need evidence from Stores.' });
+  var rb = addMeetingItem_(ctx, m, { kind: 'roadblock', goal: qAudit,
+    text: 'Calibration certificates for the torque wrenches are missing from the file.' });
+  var rbId = '';
+  (rb.roadblocks || []).forEach(function (it) { if (/torque wrenches/.test(it.text)) rbId = it.id; });
+  addMeetingAction_(ctx, m, { title: 'Get the torque wrench certificates from the lab', assignTo: 'rafiq',
+    goal: qAudit, fromItem: rbId, clearItem: true });
+  addMeetingAction_(ctx, m, { title: 'Call Krishna Castings about short shipments', assignTo: 'meera',
+    goal: qDespatch });
+  saveMinutes_(ctx, m, 'Despatch on track. Audit at risk on calibration evidence — Rafiq owns it. ' +
+    'Meera to escalate Krishna Castings before the next review.');
+  rateMeeting_(ctx, m, 8);
+  endMeeting_(ctx, m, false, true);
+  /* Held three days ago, so it reads as last week's review, not a test run. */
+  var ago = new Date(); ago.setDate(ago.getDate() - 3); ago.setHours(10, 0, 0, 0);
+  var end = new Date(ago.getTime() + 55 * 60000);
+  writeMeeting_(ctx, meetingById_(ctx, m), { 'Date': ymd(ago), 'Started': ago, 'Ended': end });
+  dropCache_(ctx);
+  out.push('Meetings: last week’s review — a win, a values story, two actions — and one roadblock waiting.');
+}
+
 function seedDemoWork_(ctx) {
   var JOBS = [
     // [title, who, dueOffset, priority, category, outcome]
