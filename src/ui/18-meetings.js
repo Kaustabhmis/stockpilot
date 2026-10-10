@@ -273,7 +273,7 @@ function segmentFixed(key, v) {
     form('fStory', 'Who lived one of our values this week? What did they do?',
       '<select class="in max-w-[200px]" name="person">' + personOptions(v, '', 'Who (optional)') + '</select>' +
       '<select class="in max-w-[230px]" name="value" required>' + valueOptions('', 'Which value?') + '</select>' +
-      (isManager() ? '<select class="in max-w-[150px]" name="cookies"><option value="0">No cookie points</option>' +
+      (isManager() ? '<select class="in max-w-[210px]" name="cookies"><option value="0">No cookie points</option>' +
         [1, 2, 3, 4, 5].map(function (n) { return '<option value="' + n + '">+' + n + ' cookie points</option>'; }).join('') + '</select>' : ''),
       'Add story');
   if (key === 'updates') return form('fUpd', 'What does everybody need to know?', '', 'Add update');

@@ -84,8 +84,8 @@ function renderGoals(d) {
       (d.values.length ? '<div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">' +
         d.values.map(function (v) {
           return '<div class="rounded-xl border border-gray-100 p-4 flex gap-3">' +
-            (v.code ? '<div class="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center font-black text-white" ' +
-              'style="background:#5b4bdb">' + esc(v.code) + '</div>' : '') +
+            (v.code ? '<div class="h-9 px-2 rounded-xl shrink-0 flex items-center justify-center font-black text-white text-xs tracking-wide" ' +
+              'style="background:#5b4bdb;min-width:36px">' + esc(v.code) + '</div>' : '') +
             '<div class="min-w-0"><div class="font-black text-sm">' + esc(v.title) + '</div>' +
             (v.detail ? '<div class="text-xs font-semibold text-gray-500 mt-0.5">' + esc(v.detail) + '</div>' : '') +
             '</div></div>'; }).join('') + '</div>'
