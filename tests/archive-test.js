@@ -21,7 +21,7 @@ const tpl = env.newFile('TEMPLATE', 'Template');
 tpl.getSheetByName('Settings').appendRow(['General']);
 const names = Object.keys(env.G);
 const APP = new Function(...names, SRC + '\n;return { doPost, ensureRegistry, previewTaskArchive, archiveOldTasks, ' +
-  'installTaskArchiveSchedule, TASK_COLS };')(...names.map((n) => env.G[n]));
+  'installTaskArchiveSchedule, TASK_COLS, findTaskRow_, writeTaskField_ };')(...names.map((n) => env.G[n]));
 APP.ensureRegistry();
 const call = (b) => JSON.parse(APP.doPost({ postData: { contents: JSON.stringify(b) }, parameter: {} }).getContent());
 
@@ -165,6 +165,27 @@ bTasks.appendRow(row({ id: 'BOLD', closedAgo: 500 }));
 const runB = APP.archiveOldTasks();
 ok('it is skipped with a reason, and nothing is removed', /Beta Tools: STOPPED — the Tasks tab is not on the current layout/.test(runB) &&
    ids(bTasks).indexOf('BOLD') > -1, runB);
+
+console.log('\n=== an edit in flight while rows move lands on the right task ===');
+{
+  /* A user's request found P2S2's row; then the archive removed a row above
+     it before the write. Writing by the old row number would hit a neighbour. */
+  const hit = APP.findTaskRow_({ ss: book }, 'P2S2');
+  const rowsBefore = tasks.getDataRange().getValues().map((r) => JSON.stringify(r));
+  const at = tasks.getDataRange().getValues().findIndex((r) => r[0] === 'P2S2') + 1;
+  ok('(the task is not on the first data row, so a row above it can move)', at > 3, at);
+  tasks.deleteRow(2);                                  // a row above it goes; everything shifts up
+  APP.writeTaskField_(hit, 'Title', 'Project Q stage 2 (renamed)');
+  const now = tasks.getDataRange().getValues();
+  const target = now.find((r) => r[0] === 'P2S2');
+  ok('the write lands on the task it was meant for', target && target[C['Title']] === 'Project Q stage 2 (renamed)');
+  ok('and no other task was overwritten', now.filter((r) => r[0] !== 'P2S2').every((r) => rowsBefore.indexOf(JSON.stringify(r)) > -1));
+  const gone = APP.findTaskRow_({ ss: book }, 'BLOCKER');
+  tasks.getDataRange().getValues().forEach((r, i) => { if (r[0] === 'BLOCKER') tasks.deleteRow(i + 1); });
+  let msg = '';
+  try { APP.writeTaskField_(gone, 'Title', 'x'); } catch (e) { msg = e.message; }
+  ok('a task moved away mid-edit is refused with a reason, not written somewhere else', /moved to the archive/.test(msg), msg);
+}
 
 console.log('\n=== the monthly schedule ===');
 APP.installTaskArchiveSchedule();

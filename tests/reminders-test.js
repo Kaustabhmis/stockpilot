@@ -60,6 +60,12 @@ ok('overdue first, the longest late at the top', list[0] === 'Late 5 days' && li
 ok('then by priority, Critical before High before Low', list.indexOf('New, critical') < list.indexOf('Due soon, high') &&
    list.indexOf('Due soon, high') < list.indexOf('New, low'), list.join(' > '));
 ok('only that person’s own work', list.indexOf('Someone else’s') < 0 && list.length === 5);
+const custom = R.rmTaskReminders_([
+  task({ title: 'Routine thing', priority: 'Routine', created: R.ymd(WED) }),
+  task({ title: 'Line is down', priority: 'Line Down', created: R.ymd(WED) }),
+  task({ title: 'Customer waiting', priority: 'Customer Hold', created: R.ymd(WED) }),
+], 'payel', WED, { 'Line Down': 5, 'Customer Hold': 4, 'Routine': 1 }).map((x) => x.task.title);
+ok('a workspace’s own priority names rank by their own weights', custom.join('|') === 'Line is down|Customer waiting|Routine thing', custom.join(' > '));
 
 console.log('\n=== the three slots ===');
 const at = (h, m) => R.rmSlot_(new Date(2026, 9, 14, h, m || 0));

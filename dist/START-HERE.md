@@ -192,4 +192,4 @@ appraisal.
 
 ---
 
-Tested: 1,786 checks across forty-four suites — 1,460 on the server rules, 326 driving the real page in a browser. See `tests/README.md`.
+Tested: 1,791 checks across forty-four suites — 1,465 on the server rules, 326 driving the real page in a browser. See `tests/README.md`.

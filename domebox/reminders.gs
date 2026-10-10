@@ -270,8 +270,9 @@ function rmReminderReason_(t, today) {
 }
 
 /** One person's reminder list, most urgent first: late, then priority, then date. */
-function rmTaskReminders_(tasks, username, today) {
+function rmTaskReminders_(tasks, username, today, weights) {
   var rank = { overdue: 0, dueSoon: 1, assigned: 2 };
+  var weight = function (p) { return (weights && weights[p]) || priorityWeight(p); };
   return tasks.filter(function (t) { return t.assignee === username; }).map(function (t) {
     return { task: t, why: rmReminderReason_(t, today) };
   }).filter(function (x) { return x.why; }).sort(function (a, b) {
@@ -280,7 +281,7 @@ function rmTaskReminders_(tasks, username, today) {
       if (ra !== rb) return ra - rb;
       if (a.why.since !== b.why.since) return a.why.since < b.why.since ? -1 : 1;
     }
-    var pw = priorityWeight(b.task.priority) - priorityWeight(a.task.priority);
+    var pw = weight(b.task.priority) - weight(a.task.priority);
     if (pw) return pw;
     var da = rmYmd_(a.task.due) || '9999', db = rmYmd_(b.task.due) || '9999';
     if (da !== db) return da < db ? -1 : 1;
@@ -312,7 +313,7 @@ function sendTaskReminders() {
     for (var u = 0; u < data.users.length; u++) {
       var user = data.users[u];
       if (!user.email || sent >= SCHED.MAX_EMAILS_PER_RUN) continue;
-      var list = rmTaskReminders_(data.tasks, user.username, now);
+      var list = rmTaskReminders_(data.tasks, user.username, now, data.weights);
       if (!list.length) continue;
       if (rmOnLeave_(data.leave, user.username, now)) { away++; continue; }
       var key = 'remind-' + ymd(now) + '-' + slot;
@@ -808,7 +809,18 @@ function rmReadTenant_(sheetId) {
     });
   }
 
-  return { users: users, tasks: tasks, plan: plan, leave: leave };
+  /* The workspace's own priority levels ("Line Down", "Customer Hold"...) and
+     their weights, from Settings columns B and C — so "most urgent first"
+     ranks by what this company calls urgent, not by four default names. */
+  var weights = {};
+  var settings = ss.getSheetByName('Settings');
+  if (settings && settings.getLastRow() > 0) {
+    settings.getRange(1, 2, settings.getLastRow(), 2).getValues().forEach(function (r) {
+      var n = String(r[0] || '').trim(), w = Number(r[1]);
+      if (n && !isNaN(w) && w > 0) weights[n] = w;
+    });
+  }
+  return { users: users, tasks: tasks, plan: plan, leave: leave, weights: weights };
 }
 
 // ============================================================
@@ -827,19 +839,30 @@ function rmReminderLog_(sheetId) {
   return sheet;
 }
 
+/* The log is read ONCE per run into a set, not once per person: with three
+   reminder slots a day it grows by thousands of rows a month, and re-reading
+   it before every email would push a run past Apps Script's six minutes. */
+var RM_SENT = null;
+
+function rmSentSet_() {
+  if (RM_SENT) return RM_SENT;
+  RM_SENT = {};
+  var sheet = rmReminderLog_('');
+  if (!sheet) return RM_SENT;
+  sheet.getDataRange().getValues().slice(1).forEach(function (r) {
+    RM_SENT[String(r[0]) + '|' + String(r[1]) + '|' + String(r[2])] = true;
+  });
+  return RM_SENT;
+}
+
 function rmAlreadySent_(sheetId, username, key) {
-  var sheet = rmReminderLog_(sheetId);
-  if (!sheet) return false;
-  var rows = sheet.getDataRange().getValues();
-  for (var i = rows.length - 1; i > 0; i--) {
-    if (String(rows[i][0]) === sheetId && String(rows[i][1]) === username && String(rows[i][2]) === key) return true;
-  }
-  return false;
+  return !!rmSentSet_()[sheetId + '|' + username + '|' + key];
 }
 
 function rmMarkSent_(sheetId, username, key) {
   var sheet = rmReminderLog_(sheetId);
   if (sheet) sheet.appendRow([sheetId, username, key, new Date().toISOString()]);
+  rmSentSet_()[sheetId + '|' + username + '|' + key] = true;
 }
 
 // ============================================================

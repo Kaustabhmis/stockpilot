@@ -2,7 +2,7 @@
 
 Audited the whole system against the question: *what breaks, leaks or embarrasses
 us in the first month?* Three things were found open in the finished product and
-are now closed, and three more in the Goals and Meetings release (4c–4e). Four things remain, and three of them are yours, not the code's.
+are now closed, three more in the Goals and Meetings release (4c–4e), and three in the archive and reminders release (4f–4h). Four things remain, and three of them are yours, not the code's.
 
 Every finding below is pinned by a test in `tests/audit-test.js`, so none of them
 can quietly come back during a refactor.
@@ -121,6 +121,28 @@ id could rewrite another team's record. Now only people in that meeting touch
 its points, an ended meeting's record is fixed, and open roadblocks — which
 carry over by design — stay editable by the people who were there. Pinned in
 `tests/meeting-test.js`.
+
+### 4f. An edit during the monthly archive could land on the wrong task
+
+Task edits find a row and write to it by row number, without the script lock.
+The archive removes rows under the lock — so an edit in flight while it ran
+would write into whichever task had shifted into that row. Every task write now
+checks the row still holds the same task ID and finds it again if not; a task
+that moved away mid-edit is refused with a reason. Pinned in
+`tests/archive-test.js` (fails on the old code).
+
+### 4g. The scheduler re-read its whole send log before every email
+
+With three reminder slots a day the log grows by thousands of rows a month, and
+it was read once per person per run — a run would eventually pass Apps Script's
+six-minute limit and silently stop. It is now read once per run. The archive run
+also stops cleanly between customers before the limit and says how to carry on.
+
+### 4h. Reminders ranked a workspace's own priority names as "Medium"
+
+"Line Down" and "Customer Hold" are the workspace's own levels with their own
+weights; the reminder email only knew Critical/High/Medium/Low. It now reads the
+workspace's weights. Pinned in `tests/reminders-test.js`.
 
 ## Open — and three of them are not the code
 

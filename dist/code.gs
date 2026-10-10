@@ -1229,6 +1229,17 @@ function findTaskRow_(ctx, taskId) {
 }
 
 function writeTaskField_(hit, col, value) {
+  /* The row number was read earlier in this request. If rows moved since —
+     the monthly archive removes closed rows — writing by number would land on
+     a different task. Check the ID is still there, and find it again if not. */
+  var id = String(hit.task.id);
+  if (String(hit.sheet.getRange(hit.rowIndex, T['ID'] + 1).getValue()) !== id) {
+    var ids = hit.sheet.getRange(1, T['ID'] + 1, hit.sheet.getLastRow(), 1).getValues();
+    var at = -1;
+    for (var i = 1; i < ids.length; i++) if (String(ids[i][0]) === id) { at = i + 1; break; }
+    if (at < 0) throw new Error('That task has just moved to the archive. Refresh and try again.');
+    hit.rowIndex = at;
+  }
   hit.sheet.getRange(hit.rowIndex, T[col] + 1).setValue(value);
   dropCache_();
 }
@@ -6007,6 +6018,7 @@ function meetingSummaryHtml_(v, s, mine) {
 // month at about 2 am.
 
 var ARCHIVE_AFTER_DAYS = 365;
+var ARCHIVE_TIME_BUDGET_MS = 4.5 * 60 * 1000;
 var CLOSED_FOR_ARCHIVE = ['Verified', 'Completed', 'Rejected', 'Cancelled'];
 
 function previewTaskArchive() { return runTaskArchive_(true); }
@@ -6025,11 +6037,19 @@ function runTaskArchive_(dryRun) {
              'Moves work closed more than ' + ARCHIVE_AFTER_DAYS + ' days ago to the Tasks_Archive tab, in the same file.', ''];
   var tenants = allTenants_();
   if (!tenants.length) { out.push('No customers found. Is MASTER_DB_ID set?'); return say_(out); }
-  var total = 0;
-  tenants.forEach(function (t) {
+  var total = 0, started = Date.now();
+  for (var i = 0; i < tenants.length; i++) {
+    var t = tenants[i];
+    /* Apps Script stops a run at six minutes. Stop between customers, well
+       before that, rather than be cut off half way through one. */
+    if (Date.now() - started > ARCHIVE_TIME_BUDGET_MS) {
+      out.push('  Time limit near — stopped before ' + t.company + ' (' + (tenants.length - i) +
+               ' customer(s) left). Run archiveOldTasks again to carry on; finished ones are skipped quickly.');
+      break;
+    }
     var ss;
     try { ss = SpreadsheetApp.openById(t.sheetId); }
-    catch (e) { out.push('  ' + t.company + ': cannot be opened (' + e.message + ') — skipped'); return; }
+    catch (e) { out.push('  ' + t.company + ': cannot be opened (' + e.message + ') — skipped'); continue; }
     try {
       var r = moveToColdStore_(ss, dryRun, new Date());
       total += r.moved;
@@ -6037,7 +6057,7 @@ function runTaskArchive_(dryRun) {
     } catch (e) {
       out.push('  ' + t.company + ': STOPPED — ' + e.message + ' (nothing was removed from Tasks)');
     }
-  });
+  }
   out.push('');
   out.push((dryRun ? 'Would move ' : 'Moved ') + total + ' task(s) in all.');
   if (dryRun) out.push('Looks right? Back up the spreadsheets, then run archiveOldTasks.');

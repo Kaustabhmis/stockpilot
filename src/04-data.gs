@@ -346,6 +346,17 @@ function findTaskRow_(ctx, taskId) {
 }
 
 function writeTaskField_(hit, col, value) {
+  /* The row number was read earlier in this request. If rows moved since —
+     the monthly archive removes closed rows — writing by number would land on
+     a different task. Check the ID is still there, and find it again if not. */
+  var id = String(hit.task.id);
+  if (String(hit.sheet.getRange(hit.rowIndex, T['ID'] + 1).getValue()) !== id) {
+    var ids = hit.sheet.getRange(1, T['ID'] + 1, hit.sheet.getLastRow(), 1).getValues();
+    var at = -1;
+    for (var i = 1; i < ids.length; i++) if (String(ids[i][0]) === id) { at = i + 1; break; }
+    if (at < 0) throw new Error('That task has just moved to the archive. Refresh and try again.');
+    hit.rowIndex = at;
+  }
   hit.sheet.getRange(hit.rowIndex, T[col] + 1).setValue(value);
   dropCache_();
 }

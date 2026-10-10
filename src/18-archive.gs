@@ -30,6 +30,7 @@
 // month at about 2 am.
 
 var ARCHIVE_AFTER_DAYS = 365;
+var ARCHIVE_TIME_BUDGET_MS = 4.5 * 60 * 1000;
 var CLOSED_FOR_ARCHIVE = ['Verified', 'Completed', 'Rejected', 'Cancelled'];
 
 function previewTaskArchive() { return runTaskArchive_(true); }
@@ -48,11 +49,19 @@ function runTaskArchive_(dryRun) {
              'Moves work closed more than ' + ARCHIVE_AFTER_DAYS + ' days ago to the Tasks_Archive tab, in the same file.', ''];
   var tenants = allTenants_();
   if (!tenants.length) { out.push('No customers found. Is MASTER_DB_ID set?'); return say_(out); }
-  var total = 0;
-  tenants.forEach(function (t) {
+  var total = 0, started = Date.now();
+  for (var i = 0; i < tenants.length; i++) {
+    var t = tenants[i];
+    /* Apps Script stops a run at six minutes. Stop between customers, well
+       before that, rather than be cut off half way through one. */
+    if (Date.now() - started > ARCHIVE_TIME_BUDGET_MS) {
+      out.push('  Time limit near — stopped before ' + t.company + ' (' + (tenants.length - i) +
+               ' customer(s) left). Run archiveOldTasks again to carry on; finished ones are skipped quickly.');
+      break;
+    }
     var ss;
     try { ss = SpreadsheetApp.openById(t.sheetId); }
-    catch (e) { out.push('  ' + t.company + ': cannot be opened (' + e.message + ') — skipped'); return; }
+    catch (e) { out.push('  ' + t.company + ': cannot be opened (' + e.message + ') — skipped'); continue; }
     try {
       var r = moveToColdStore_(ss, dryRun, new Date());
       total += r.moved;
@@ -60,7 +69,7 @@ function runTaskArchive_(dryRun) {
     } catch (e) {
       out.push('  ' + t.company + ': STOPPED — ' + e.message + ' (nothing was removed from Tasks)');
     }
-  });
+  }
   out.push('');
   out.push((dryRun ? 'Would move ' : 'Moved ') + total + ' task(s) in all.');
   if (dryRun) out.push('Looks right? Back up the spreadsheets, then run archiveOldTasks.');
