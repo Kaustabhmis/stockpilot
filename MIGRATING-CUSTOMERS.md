@@ -115,6 +115,13 @@ This is step 11 of [`DEPLOY-EASY.md`](DEPLOY-EASY.md), in more detail.
 If you forget step 5 for someone — a customer added after the run, say — their
 first sign-in does the same upgrade, with the same column check.
 
+11. **Later, once a month: move year-old work aside.** After a week on the new
+    system, back up again, run `previewTaskArchive`, then `archiveOldTasks`.
+    Tasks closed over a year ago move to a new *Tasks_Archive* tab in the same
+    customer file — copied and read back before anything is removed, and no
+    report, score or appraisal changes. `installTaskArchiveSchedule` repeats it
+    monthly. See SETUP.md §2.6.
+
 ---
 
 ## Email to send your customers

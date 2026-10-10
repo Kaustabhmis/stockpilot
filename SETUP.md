@@ -185,16 +185,38 @@ Change `DRY_RUN: true` to `DRY_RUN: false`, save, then run:
 installDomeBoxSchedules()
 ```
 
-Three daily triggers are installed:
+Six triggers are installed:
 
 | Job | When | What it does |
 |---|---|---|
 | `generateRecurringJobs` | ~06:00 | creates occurrences that are due |
-| `sendDailyReminders` | ~08:00 | the digest, escalations, overdue chasing |
+| `sendDailyReminders` | ~08:00 | for people who owe a decision: approvals, reviews, their team's late work |
+| `sendTaskReminders` | ~09:00, ~15:00, ~17:00 | each person's open tasks, most urgent first (below) |
 | `sendRenewalReminders` | ~09:00 | 14, 7, 3, 1, 0 and 3 days past expiry |
 
-Run `domeBoxScheduleStatus()` to confirm all three, and `setupDomeBox()` to see
-them reported there too.
+**Set the time zone first.** Apps Script → **Project Settings** → **Time zone**
+→ *(GMT+05:30) India Standard Time*. The hours above are in the project's time
+zone; left on the default, "9 am" arrives in the middle of the night. Apps
+Script fires an hourly trigger somewhere inside that hour, so 9 am means between
+9 and 10.
+
+**What `sendTaskReminders` sends.** One email per person per slot, listing only
+work that is with them — To do or In progress — most urgent first:
+
+- on the **day a task is assigned**,
+- **2 days before it is due** (moved to the Friday before when that falls on a
+  weekend),
+- and **every working day while it is overdue**.
+
+Nothing is sent about work that has been handed in, is waiting for approval, or
+is closed; nothing to someone on approved leave; nothing at all on a clear day;
+and at weekends only newly assigned work. To change the times or the two days,
+edit `REMIND` at the top of `reminders.gs` and run `installDomeBoxSchedules()`
+again. To stop chasing overdue work, set `INCLUDE_OVERDUE: false`.
+
+Run `domeBoxScheduleStatus()` to confirm them, and `setupDomeBox()` to see them
+reported there too. Before going live, `previewTaskReminders()` logs exactly who
+would get what in the current slot and sends nothing.
 
 ### 2.5 The mail quota, which is shared
 
@@ -202,8 +224,39 @@ A consumer Google account sends **100 emails a day**. A Workspace account sends
 1,500. That is the limit across *every* customer, not per customer. The
 scheduler caps itself at 80 per run for this reason.
 
-If you have more than about a dozen active companies, you need Workspace. When
-the quota runs out, mail silently stops — including password resets.
+Task reminders go out three times a day, so each person with open work can
+receive up to **3 emails a day**. Forty busy people across your customers is
+already 120 — more than a consumer account allows. **Run the scheduler on a
+Workspace account.** When the quota runs out, mail silently stops — including
+password resets.
+
+---
+
+### 2.6 Moving year-old work to the archive tab
+
+Every request reads a customer's whole Tasks tab. After a year or two that is
+thousands of closed rows read for nothing. `archiveOldTasks` moves tasks
+**closed more than 365 days ago** into a **Tasks_Archive** tab in the same
+customer spreadsheet — the data never leaves their file.
+
+1. **Back up** the customer spreadsheets (File → Make a copy, or `backup.gs`).
+2. Run **`previewTaskArchive`**. It changes nothing and prints, per customer,
+   how many tasks would move.
+3. Run **`archiveOldTasks`**. Each row is copied, read back, and only then
+   removed from Tasks.
+4. Run **`installTaskArchiveSchedule`** once: it repeats on the 1st of every
+   month at about 2 am.
+
+What never moves, however old: open work; the newest occurrence of a repeating
+task (the next one is copied from it); anything an open task is blocked by; and
+any project with a stage still open — a project moves whole or not at all.
+
+Nothing anybody sees changes. Reports for past periods, the leaderboard,
+appraisals, goal progress, projects and Archive search read both tabs; only the
+everyday screens (the board, Priority, assigning and updating) read the smaller
+one. A moved task opens from Archive but can no longer be edited. A customer
+whose Tasks tab is on an old layout is skipped with a message — run
+`migrateAllTenants` first.
 
 ---
 

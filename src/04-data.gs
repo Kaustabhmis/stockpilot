@@ -335,6 +335,13 @@ function findTaskRow_(ctx, taskId) {
       return { sheet: sh, rowIndex: i + 1, raw: d[i], task: rowToTask_(d[i], i + 1, names) };
     }
   }
+  /* Closed more than a year ago and moved to Tasks_Archive: say so, rather
+     than "no longer exists", which reads as lost data. */
+  var cold = ctx.ss.getSheetByName(TAB.TASKS_ARCHIVE);
+  if (cold && cold.getLastRow() > 1 && cold.getRange(2, 1, cold.getLastRow() - 1, 1).getValues()
+        .some(function (r) { return String(r[0]) === String(taskId); })) {
+    throw new Error('This task was closed over a year ago and is kept in the archive. It can be read, not changed.');
+  }
   return null;
 }
 

@@ -14,6 +14,7 @@ function makeSheet(name, rows) {
     clear() { data.length = 0; return api; },
     appendRow(row) { data.push(row.slice()); return api; },
     deleteRow(i) { data.splice(i - 1, 1); return api; },
+    deleteRows(i, n) { data.splice(i - 1, n); return api; },
     getDataRange() {
       const w = api.getLastColumn();
       return { getValues: () => data.map(r => {
@@ -186,12 +187,15 @@ function build() {
      triggers installed", "two of three", "not deployed yet". Those are the
      states setupDomeBox exists to find. */
   const triggers = [];
+  const triggerHours = [];
   let execUrl = '';
   G.ScriptApp = {
     getProjectTriggers: () => triggers.map((fn) => ({
       getHandlerFunction: () => fn, getEventType: () => 'CLOCK' })),
-    newTrigger: (fn) => ({ timeBased: () => ({ atHour: () => ({
-      everyDays: () => ({ create() { triggers.push(fn); } }) }) }) }),
+    newTrigger: (fn) => ({ timeBased: () => ({
+      atHour: (h) => ({ everyDays: () => ({ create() { triggers.push(fn); triggerHours.push([fn, h]); } }) }),
+      onMonthDay: (d) => ({ atHour: (h) => ({ create() { triggers.push(fn); triggerHours.push([fn, h, d]); } }) }),
+    }) }),
     deleteTrigger(t) {
       const i = triggers.indexOf(t.getHandlerFunction());
       if (i > -1) triggers.splice(i, 1);
@@ -200,7 +204,7 @@ function build() {
   };
 
   return { G, FILES, META, props, mails, logs,
-    triggers,
+    triggers, triggerHours,
     setExecUrl(u) { execUrl = u || ''; },
     makeSpreadsheet, makeSheet,
     newFile(id, name) { FILES[id] = makeSpreadsheet(id, name); META[id] = { sharing: 'PRIVATE' }; return FILES[id]; } };

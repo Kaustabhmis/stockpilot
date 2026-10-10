@@ -64,7 +64,7 @@ function getLeaderboard_(ctx, period, offset) {
       message: 'The leaderboard is only shown to managers in this workspace.' };
   }
 
-  var tasks = readTasks_(ctx);
+  var tasks = readAllTasks_(ctx);
   var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
   var cal = leaveCalendar_(ctx);
   var opts = scoreOptsMap_(ctx);

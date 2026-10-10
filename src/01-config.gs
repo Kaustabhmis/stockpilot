@@ -49,7 +49,7 @@ var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
             GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points',
             DIRECTION:'Direction', GOALS:'Goals', NUMBERS:'Key_Numbers', NUMBER_LOG:'Number_Log',
-            MEETINGS:'Meetings', MEETING_ITEMS:'Meeting_Items' };
+            MEETINGS:'Meetings', MEETING_ITEMS:'Meeting_Items', TASKS_ARCHIVE:'Tasks_Archive' };
 
 /* The cookie ledger, with the value an award was given for appended last. */
 var COOKIE_COLS = ['Date','To','By','Points','Reason','Value'];
@@ -245,19 +245,23 @@ function setupDomeBox() {
      nothing chased for a month before anyone notices. */
   out.push('');
   out.push('--- SCHEDULER ---');
-  var WANT = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders'];
+  var WANT = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders'];
+  /* sendTaskReminders runs three times a day — 9 am, 3 pm, 5 pm — so it needs
+     three triggers, and one of three is a partial install, not a complete one. */
+  var NEED = { sendTaskReminders: 3 };
   var schedulerTodo = '';
   try {
     var have = {};
-    ScriptApp.getProjectTriggers().forEach(function (t) { have[t.getHandlerFunction()] = true; });
-    var lacking = WANT.filter(function (fn) { return !have[fn]; });
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+      var fn = t.getHandlerFunction(); have[fn] = (have[fn] || 0) + 1; });
+    var lacking = WANT.filter(function (fn) { return (have[fn] || 0) < (NEED[fn] || 1); });
     if (lacking.length) {
       schedulerTodo = 'Add domebox/reminders.gs to this project and run installDomeBoxSchedules()' +
-        (lacking.length === WANT.length ? '' : ' — only ' + (WANT.length - lacking.length) + ' of 3 are installed') +
+        (lacking.length === WANT.length ? '' : ' — only ' + (WANT.length - lacking.length) + ' of ' + WANT.length + ' are installed') +
         '. Until then nothing is chased and no recurring task is created.';
     }
     if (!lacking.length) {
-      out.push('  ok      all three daily jobs are installed');
+      out.push('  ok      all scheduled jobs are installed (task reminders at 9, 15 and 17)');
     } else if (lacking.length === WANT.length) {
       out.push('  MISSING no scheduled jobs at all. Nothing will be chased, no recurring');
       out.push('          task will be created, and no renewal notice will go out.');
@@ -266,7 +270,7 @@ function setupDomeBox() {
     } else {
       out.push('  PARTIAL missing ' + lacking.join(', ') + '. A half-installed schedule');
       out.push('          looks fine and quietly does half the job. Run');
-      out.push('          installDomeBoxSchedules() to reinstall all three.');
+      out.push('          installDomeBoxSchedules() to reinstall them all.');
     }
   } catch (e) {
     out.push('  Could not read the project triggers: ' + e.message);

@@ -670,11 +670,22 @@ a room's trust is by scoring employees on a clock their manager controls.
 - Open **See why** before a performance conversation. The whole design assumes
   the number will be challenged.
 
-### What the daily digest sends
+### Reminders
 
-Every morning, each person gets what is due and what is overdue. A report's
-task **3 days** overdue also reaches their manager. Managers get a month-end
-nudge about appraisals on the 25th.
+Dome Box emails you about your **open** tasks — To do or In progress — at
+**9 am, 3 pm and 5 pm**, most urgent first:
+
+- on the **day a task is assigned** to you,
+- **2 days before it is due** (the Friday before, if that is a weekend),
+- and **every working day while it is overdue**.
+
+Hand it in and the reminders stop. Nothing is sent about work you have
+submitted for review, work waiting for approval, or closed work; nothing while
+you are on approved leave; and on a day with nothing to say, nothing at all.
+
+People who owe others a decision also get **one morning digest**: what is
+waiting for their approval or review, and — for managers — a report's task
+**3 days** overdue. Managers get a month-end nudge about appraisals on the 25th.
 
 ---
 

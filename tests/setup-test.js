@@ -115,16 +115,23 @@ const r6 = half.run();
 ok('a partial install is distinguished from none', /PARTIAL/.test(r6));
 ok('and the missing ones are named',
    /generateRecurringJobs/.test(r6) && /sendRenewalReminders/.test(r6));
-ok('it does not claim all three are fine', !/all three daily jobs are installed/.test(r6));
-ok('and the closing list says how many are actually in', /only 1 of 3 are installed/.test(r6),
-   (r6.match(/.*of 3 are installed.*/) || [])[0]);
+ok('it does not claim they are all fine', !/all scheduled jobs are installed/.test(r6));
+ok('and the closing list says how many are actually in', /only 1 of 4 are installed/.test(r6),
+   (r6.match(/.*of 4 are installed.*/) || [])[0]);
 
 const full = project({ MASTER_DB_ID: 'MASTER' }, (env) => {
   env.newFile('MASTER', 'R');
-  ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders']
+  ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders', 'sendTaskReminders', 'sendTaskReminders']
     .forEach((f) => env.triggers.push(f));
 });
-ok('a complete install is confirmed', /all three daily jobs are installed/.test(full.run()));
+ok('a complete install is confirmed', /all scheduled jobs are installed/.test(full.run()));
+const oneSlot = project({ MASTER_DB_ID: 'MASTER' }, (env) => {
+  env.newFile('MASTER', 'R');
+  ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders']
+    .forEach((f) => env.triggers.push(f));
+});
+ok('one task-reminder trigger instead of three is a partial install, not a complete one',
+   /PARTIAL missing sendTaskReminders/.test(oneSlot.run()));
 
 console.log('\n=== the web app, and the URL the site needs ===');
 const undeployed = project({ MASTER_DB_ID: 'MASTER' }, (env) => env.newFile('MASTER', 'R'));
@@ -184,7 +191,7 @@ const done = project({ MASTER_DB_ID: 'MASTER', TEMPLATE_ID: 'TEMPLATE',
   env.newFile('MASTER', 'R');
   const t = env.newFile('TEMPLATE', 'T');
   ['Users', 'Tasks', 'Settings'].forEach((n) => t.insertSheet(n));
-  ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders']
+  ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders', 'sendTaskReminders', 'sendTaskReminders']
     .forEach((f) => env.triggers.push(f));
   env.setExecUrl(EXEC);
 });

@@ -160,7 +160,7 @@ function getAnalytics_(ctx, period, offset, span, person) {
     return { status: 'error', upgrade: true,
       message: 'Reports are included from the Pro plan up.' };
   }
-  var tasks = readTasks_(ctx);
+  var tasks = readAllTasks_(ctx);
   var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
   var cal = leaveCalendar_(ctx);
 
@@ -205,7 +205,7 @@ function getAnalytics_(ctx, period, offset, span, person) {
 function getAccountability_(ctx) {
   if (!ctx.plan.analytics) return { status: 'error', upgrade: true,
     message: 'Reports are included from the Pro plan up.' };
-  var tasks = readTasks_(ctx);
+  var tasks = readAllTasks_(ctx);
   var byUser = {};
   tasks.forEach(function (t) {
     if (!t.assignee) return;
@@ -265,7 +265,7 @@ function getAppraisalForm_(ctx, username) {
   var u = findUser_(ctx.ss, username);
   if (!u) throw new Error('That person is not in this workspace.');
 
-  var tasks = readTasks_(ctx);
+  var tasks = readAllTasks_(ctx);
   var cal = leaveCalendar_(ctx);
   var del = delegationScore(tasks, username, new Date(), cal, scoreOpts_(ctx, username));
 
@@ -301,7 +301,7 @@ function submitAppraisal_(ctx, data) {
   /* The delegation half is re-measured here rather than taken from the request:
      the browser sent it, and a score an employee can edit in devtools is not a
      score. */
-  var tasks = readTasks_(ctx);
+  var tasks = readAllTasks_(ctx);
   var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx),
     scoreOpts_(ctx, data.employee));
 

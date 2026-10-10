@@ -140,7 +140,7 @@ function createProject_locked_(ctx, form) {
 
 /** Every project in the workspace, with where each one has got to. */
 function getProjects_(ctx) {
-  var tasks = readTasks_(ctx);
+  var tasks = readAllTasks_(ctx);
   var names = {};
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
 

@@ -90,7 +90,7 @@ function route_(p) {
     case 'getDashboard':        return getDashboard_(ctx);
     case 'getArchive':          return getArchive_(ctx, p);
     case 'getTasks':            return { status:'success',
-                                        tasks: visibleTasks_(ctx, readTasks_(ctx)) };
+                                        tasks: visibleTasks_(ctx, readAllTasks_(ctx)) };
     case 'getUsers':            return getUsers_(ctx);
     case 'getProjects':         return getProjects_(ctx);
     case 'getOrgChart':         return getOrgChart_(ctx);

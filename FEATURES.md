@@ -1,7 +1,7 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **1,716 checks across forty-two suites**, run against the real
+Tests: **1,786 checks across forty-four suites**, run against the real
 `dist/code.gs` on an in-memory Sheets shim, driven by the real
 `dist/index.html` in a real browser. See `tests/README.md`.
 
@@ -267,7 +267,23 @@ while marking them down for another.
 Levels are stored beside the job categories and cannot be deleted while open
 work still carries them.
 
+## Data that grows
+- [x] **Board shows active work only**; columns stop at 20 most-urgent cards
+      with Show all; Archive pages 50 at a time from the server (new)
+- [x] **Year-old work moves to a Tasks_Archive tab** in the customer's own
+      file (new) — copied, read back, then removed; never open work, the
+      template of a repeating job, a blocker, or part of an open project.
+      Reports, appraisals, the leaderboard, goals and projects read both tabs,
+      so no number changes. Preview first; monthly schedule.
+
 ## Notifications
+- [x] **Open-task reminders at 9 am, 3 pm and 5 pm** (new) — only To do / In
+      progress work, most urgent first; on the day it is assigned, 2 days
+      before it is due (the Friday before at a weekend) and every working day
+      while overdue. None about handed-in or closed work, none on leave, none
+      on a clear day. One email per person per slot, deduped.
+- [x] Morning digest for people who owe a decision: approvals, reviews,
+      team escalations (their own tasks moved to the reminders above)
 - [x] Bell: overdue, awaiting approval, awaiting review, due today, team overdue
 - [x] Email on assignment, approval request, review, send-back, verify
 - [x] Email on signup, staff invite, password reset, payment receipt

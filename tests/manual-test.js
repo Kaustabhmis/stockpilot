@@ -43,6 +43,15 @@ ck('20 total cap', has(`MAX_RESPONSIVENESS_PENALTY = 20`));
 ck('bands 85 / 60', has(`score >= 85`) && has(`score >= 60`));
 ck('archive after 7 days', has(`86400000\\) > 7`));
 ck('escalate after 3 days', /ESCALATE_AFTER_DAYS: 3/.test(fs.readFileSync('/home/user/stockpilot/domebox/reminders.gs','utf8')));
+{
+  const rem = fs.readFileSync('/home/user/stockpilot/domebox/reminders.gs', 'utf8');
+  ck('reminders at 9 am, 3 pm and 5 pm, as the manual says', /9 am, 3 pm and 5 pm/.test(M) && /HOURS: \[9, 15, 17\]/.test(rem));
+  ck('2 days before the due date, as the manual says', /\*\*2 days before it is due\*\*/.test(M) && /DAYS_BEFORE_DUE: 2,/.test(rem));
+  ck('overdue chased every working day, as the manual says', /every working day while it is overdue/.test(M) && /INCLUDE_OVERDUE: true/.test(rem));
+  ck('only open work: To do or In progress', /status !== STATUS\.PENDING && t\.status !== STATUS\.IN_PROGRESS\) return null/.test(rem));
+  ck('nothing while on approved leave', /rmOnLeave_\(data\.leave, user\.username, now\)/.test(rem));
+  ck('the digest no longer repeats a person\u2019s own tasks', /DIGEST_OWN_TASKS: false/.test(rem));
+}
 ck('appraisal day 25', /APPRAISAL_REMINDER_DAY: 25/.test(fs.readFileSync('/home/user/stockpilot/domebox/reminders.gs','utf8')));
 ck('appraisal 75/20/5', has(`KRA 75% \\+ Behaviour 20%`));
 ck('lapse grace 7 days', has(`daysLeft <= -7`));

@@ -497,7 +497,7 @@ function getArchive_(ctx, p) {
     var d = h.length ? new Date(h[h.length - 1].date) : new Date(t.createdDate);
     return isNaN(d) ? 0 : d.getTime();
   };
-  var rows = visibleTasks_(ctx, readTasks_(ctx)).filter(function (t) {
+  var rows = visibleTasks_(ctx, readAllTasks_(ctx)).filter(function (t) {
     if (!t.isArchived) return false;
     if (p.assignee && t.assignee !== p.assignee) return false;
     if (p.status && t.status !== p.status) return false;

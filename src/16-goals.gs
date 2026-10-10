@@ -140,7 +140,7 @@ function goalProgress_(goal, goals, tasks) {
 /* ---------- the page ----------------------------------------------------- */
 
 function getDirection_(ctx) {
-  var dir = readDirection_(ctx), goals = readGoals_(ctx), tasks = readTasks_(ctx);
+  var dir = readDirection_(ctx), goals = readGoals_(ctx), tasks = readAllTasks_(ctx);
   var names = {};
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
   var sm = fyStartMonth_(ctx), now = fyPeriod_(new Date(), sm);
@@ -276,7 +276,7 @@ function deleteGoal_(ctx, id) {
   if (!g) throw new Error('That goal no longer exists.');
   /* A goal with work pointing at it is dropped, not deleted: deleting it would
      leave tasks tagged to nothing and quietly rewrite what they were for. */
-  var linked = readTasks_(ctx).some(function (t) { return t.goal === g.id; }) ||
+  var linked = readAllTasks_(ctx).some(function (t) { return t.goal === g.id; }) ||
                readGoals_(ctx).some(function (x) { return x.parent === g.id; });
   if (linked) throw new Error('Work is linked to this goal. Mark it Dropped instead, so that history still makes sense.');
   return withLock_(function () {

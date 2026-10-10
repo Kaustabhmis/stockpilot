@@ -81,12 +81,12 @@ console.log('\n=== the scheduler is the one that must coexist ===');
 /* reminders.gs is not optional in practice — nothing is chased without it — so
    its isolation matters more than the others'. */
 const rem = loaded['domebox/reminders.gs'];
-ok('it defines the three trigger handlers setupDomeBox looks for',
-   ['sendDailyReminders', 'generateRecurringJobs', 'sendRenewalReminders']
+ok('it defines the trigger handlers setupDomeBox looks for',
+   ['sendDailyReminders', 'generateRecurringJobs', 'sendRenewalReminders', 'sendTaskReminders']
      .every((h) => rem.fns.has(h)),
    [...rem.fns].filter((f) => /^send|^generate/.test(f)).join(', '));
-ok('setupDomeBox looks for exactly those three',
-   ['sendDailyReminders', 'generateRecurringJobs', 'sendRenewalReminders']
+ok('setupDomeBox looks for all of them',
+   ['sendDailyReminders', 'generateRecurringJobs', 'sendRenewalReminders', 'sendTaskReminders']
      .every((h) => code.indexOf("'" + h + "'") > -1));
 ok('and it reuses the rules engine rather than carrying its own copy',
    /dueOccurrences\(/.test(read('domebox/reminders.gs')));

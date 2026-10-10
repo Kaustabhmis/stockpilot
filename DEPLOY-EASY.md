@@ -106,11 +106,22 @@ SHEET_ID: 'paste your Registry ID here',
 DRY_RUN: false,
 ```
 
+Before running it: **Project Settings** (the gear on the left) → **Time zone** →
+*(GMT+05:30) India Standard Time*. Otherwise the 9 am reminders arrive at night.
+
 Save. Pick **`installDomeBoxSchedules`** in the dropdown and press **Run**.
 
-✅ Run `setupDomeBox` — it says `ok      all three daily jobs are installed`
+✅ Run `setupDomeBox` — it says `ok      all scheduled jobs are installed (task reminders at 9, 15 and 17)`
 
 > Without this, nobody gets reminders and repeating tasks never appear.
+> Each person with open work gets up to 3 reminder emails a day — use a Google
+> **Workspace** account for this project, not a free Gmail one (100 emails a day
+> is not enough).
+
+**Once a month, old work moves out of the way** (optional, do it after your
+customers are migrated): back up, run **`previewTaskArchive`**, then
+**`archiveOldTasks`**, then **`installTaskArchiveSchedule`** once. Tasks closed
+more than a year ago move to a *Tasks_Archive* tab in the same file.
 
 ---
 
