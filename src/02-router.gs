@@ -88,6 +88,7 @@ function route_(p) {
   switch (action) {
     /* --- read ------------------------------------------------------------ */
     case 'getDashboard':        return getDashboard_(ctx);
+    case 'getArchive':          return getArchive_(ctx, p);
     case 'getTasks':            return { status:'success',
                                         tasks: visibleTasks_(ctx, readTasks_(ctx)) };
     case 'getUsers':            return getUsers_(ctx);

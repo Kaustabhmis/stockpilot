@@ -44,6 +44,7 @@ node billing-ui-test.js     # the invoice details are asked for before the card
 node repeat-ui-test.js      # setting a stop rule the way a person would
 node leaderboard-ui-test.js # the board top to bottom, and what a Doer sees of it
 node demo-ui-test.js        # the demo workspace on screen, tab by tab
+node board-scale-ui-test.js  # a board that keeps filling: column limit, archive paging (after demo-ui)
 node help-ui-test.js        # the Help Centre: opens where you are, searches, ends at a person
 node task-dialog-ui-test.js # Submit for review / Send back / Verify actually save
 node meeting-ui-test.js     # Goals set up and a weekly review run, chair and attendee

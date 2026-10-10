@@ -60,17 +60,18 @@ document.querySelectorAll('#periodSeg button').forEach(function (b) {
 $('rOffset').addEventListener('change', function () { STATE.offset = Number(this.value); loadReports(); });
 $('rPerson').addEventListener('change', function () { STATE.person = this.value; loadReports(); });
 
-$('fSearch').addEventListener('input', function () { FILTER.q = this.value; renderTasks(); });
-$('fAssignee').addEventListener('change', function () { FILTER.assignee = this.value; renderTasks(); });
-$('fStatus').addEventListener('change', function () { FILTER.status = this.value; renderTasks(); });
-$('fCategory').addEventListener('change', function () { FILTER.category = this.value; renderTasks(); });
-$('fGoal').addEventListener('change', function () { FILTER.goal = this.value; renderTasks(); });
+$('fSearch').addEventListener('input', function () { FILTER.q = this.value; filtersChanged(true); });
+$('fAssignee').addEventListener('change', function () { FILTER.assignee = this.value; filtersChanged(); });
+$('fStatus').addEventListener('change', function () { FILTER.status = this.value; filtersChanged(); });
+$('fCategory').addEventListener('change', function () { FILTER.category = this.value; filtersChanged(); });
+$('fGoal').addEventListener('change', function () { FILTER.goal = this.value; filtersChanged(); });
 $('fOverdue').addEventListener('change', function () { FILTER.overdue = this.checked; renderTasks(); });
 
 $('btnHistory').addEventListener('click', function () {
   STATE.archive = !STATE.archive;
   this.classList.toggle('btn-p', STATE.archive);
   this.classList.toggle('btn-g', !STATE.archive);
+  STATE.arch = null;            // always fresh: closed work may have moved since
   renderTasks();
 });
 $('btnNewTask').addEventListener('click', openAssign);

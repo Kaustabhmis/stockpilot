@@ -437,6 +437,7 @@ function route_(p) {
   switch (action) {
     /* --- read ------------------------------------------------------------ */
     case 'getDashboard':        return getDashboard_(ctx);
+    case 'getArchive':          return getArchive_(ctx, p);
     case 'getTasks':            return { status:'success',
                                         tasks: visibleTasks_(ctx, readTasks_(ctx)) };
     case 'getUsers':            return getUsers_(ctx);
@@ -1909,6 +1910,35 @@ function getPriorityList_(ctx, username, horizon) {
     total: q.total, overdue: q.overdue, undated: q.undated };
 }
 
+/**
+ * Closed work, a page at a time, newest first. Filtered and searched here,
+ * on the server, so the browser never holds a company's whole history.
+ */
+function getArchive_(ctx, p) {
+  p = p || {};
+  var size = Math.min(100, Math.max(10, Math.floor(Number(p.pageSize)) || 50));
+  var page = Math.max(0, Math.floor(Number(p.page)) || 0);
+  var q = String(p.q || '').toLowerCase().trim();
+  var closedAt = function (t) {
+    var h = t.history || [];
+    var d = h.length ? new Date(h[h.length - 1].date) : new Date(t.createdDate);
+    return isNaN(d) ? 0 : d.getTime();
+  };
+  var rows = visibleTasks_(ctx, readTasks_(ctx)).filter(function (t) {
+    if (!t.isArchived) return false;
+    if (p.assignee && t.assignee !== p.assignee) return false;
+    if (p.status && t.status !== p.status) return false;
+    if (p.category && t.jobCategory !== p.category) return false;
+    if (p.goal && t.goal !== p.goal) return false;
+    if (q && (t.title + ' ' + t.desc + ' ' + t.kra + ' ' + t.jobCategory + ' ' + t.id)
+          .toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+  rows.sort(function (a, b) { return closedAt(b) - closedAt(a); });
+  return { status: 'success', tasks: rows.slice(page * size, (page + 1) * size),
+           total: rows.length, page: page, pageSize: size };
+}
+
 
 // ===========================================================================
 // TEAM
@@ -2164,7 +2194,12 @@ function getDashboard_(ctx) {
   return {
     status: 'success', serviceStopped: false,
     user: me, company: ctx.company,
-    tasks: visible,
+    /* Active work only. Closed work older than a week is fetched a page at a
+       time from Archive (getArchive) — sending every task a person has ever
+       seen, on every 30-second poll, grows without limit and in a year is
+       megabytes per request. */
+    tasks: active,
+    archivedCount: visible.length - active.length,
     categories: readCategories_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
@@ -4495,6 +4530,20 @@ function createDemoAccount(email, password) {
   return say(out);
 }
 
+/** Calendar offset of the date N working days (Mon–Fri) before today. */
+function demoWorkdaysBack_(n) {
+  var d = new Date(), back = 0;
+  while (n > 0) { d.setDate(d.getDate() - 1); back++; if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+  return back;
+}
+
+/** The offset moved back, if it lands on a weekend, to the Friday before. */
+function demoWeekdayOnOrBefore_(offset) {
+  var d = new Date(); d.setDate(d.getDate() + offset);
+  while (d.getDay() === 0 || d.getDay() === 6) { d.setDate(d.getDate() - 1); offset--; }
+  return offset;
+}
+
 /** ymd this many days from today. Negative is the past. */
 function demoYmd_(offset) {
   var d = new Date();
@@ -4653,7 +4702,7 @@ function seedDemoWork_(ctx) {
     ['Preventive maintenance — CNC-1 and 2',     'rafiq',   -3, 'High',     'Maintenance','ontime'],
     ['Issue the revised control plan',           'imran',   -3, 'High',     'Quality',    'ontime'],
     ['Cycle count — bin A to F',                 'meera',   -2, 'Medium',   'Stores',     'ontime'],
-    ['Despatch 95 covers to Mahindra',           'payel',   -1, 'Critical', 'Despatch',   'ontime'],
+    ['Despatch 95 covers to Mahindra',           'payel',   -1, 'Critical', 'Despatch',   'late'],
 
     // still open, so the board and the priority list have something on them
     ['Despatch 180 flanges to Bharat Forge',     'payel',    2, 'Critical', 'Despatch',   'progress'],
@@ -4708,6 +4757,12 @@ function seedDemoWork_(ctx) {
       j = [String(j[0]).split('|')[1], ctx.me.username, j[1], j[2], j[3], j[4]];
     }
     var offset = squeeze(j[2]);
+    /* Lateness is counted in working days, never weekends or leave — so a past
+       date has to be a weekday, and an "overdue" job needs enough working days
+       behind it to still be late when the demo is built on a Saturday or a
+       Monday. Built on a Saturday before this, the demo had nothing overdue. */
+    if (j[5] === 'overdue') offset = -demoWorkdaysBack_(Math.max(2, Math.round(Math.abs(j[2]) * 1.5)));
+    else if (offset < 0) offset = demoWeekdayOnOrBefore_(offset);
     var title = j[0], who = j[1], due = demoYmd_(offset), priority = j[3],
         cat = j[4], outcome = j[5];
     try {
@@ -6895,8 +6950,12 @@ function horizonEnd(kind, today) {
   switch (kind) {
     case 'day':   return d;
     case 'week': {
-      /* Monday to Sunday — a factory week, not a calendar library's week. */
+      /* Monday to Sunday — a factory week, not a calendar library's week. On a
+         Saturday or Sunday the week left is the weekend itself, so "this week"
+         means the working week ahead; otherwise Monday's work vanishes from
+         the list exactly when someone sits down to plan it. */
       var dow = d.getDay(), toSunday = dow === 0 ? 0 : 7 - dow;
+      if (dow === 0 || dow === 6) toSunday += 7;
       return addDays(d, toSunday);
     }
     case 'month':   return new Date(d.getFullYear(), d.getMonth() + 1, 0);

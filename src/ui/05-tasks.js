@@ -35,7 +35,10 @@ function syncFilters() {
 }
 
 function visibleTasks() {
-  return (STATE.data.tasks || []).filter(function (t) {
+  /* Archive rows come from the server already filtered and paged; the active
+     board is filtered here. */
+  var src = STATE.archive ? (STATE.arch && STATE.arch.rows) || [] : (STATE.data.tasks || []);
+  return src.filter(function (t) {
     if (!!t.isArchived !== STATE.archive) return false;
     if (FILTER.assignee && t.assignee !== FILTER.assignee) return false;
     if (FILTER.status && t.status !== FILTER.status) return false;
@@ -78,17 +81,61 @@ function renderTab() {
   if (STATE.tab !== 'meetings') stopMeetingPoll();
 }
 
+/* Closed work is fetched a page at a time, newest first, searched on the
+   server — never the whole history at once. */
+function loadArchive(reset) {
+  if (reset || !STATE.arch) STATE.arch = { rows: [], total: 0, page: -1, loading: false };
+  var a = STATE.arch;
+  if (a.loading) return;
+  a.loading = true;
+  return api('getArchive', { page: a.page + 1, q: FILTER.q, assignee: FILTER.assignee,
+      status: FILTER.status, category: FILTER.category, goal: FILTER.goal })
+    .then(function (r) {
+      if (STATE.arch !== a) return;
+      a.rows = a.rows.concat(r.tasks || []); a.total = r.total; a.page = r.page; a.loading = false;
+      renderTasks();
+    }).catch(function (e) { a.loading = false; toast(e.message, 'err'); });
+}
+
+/* Filters re-query the archive (it lives on the server) but only re-draw the
+   board. Typing waits a moment so a search is one request, not one per key. */
+var archiveTimer = null;
+function filtersChanged(typing) {
+  if (!STATE.archive) return renderTasks();
+  clearTimeout(archiveTimer);
+  archiveTimer = setTimeout(function () { loadArchive(true); }, typing ? 350 : 0);
+}
+
 function renderTasks() {
   var rows = visibleTasks();
+  var more = $('archiveMore');
+  if (more) {
+    var a = STATE.arch;
+    var left = STATE.archive && a ? a.total - a.rows.length : 0;
+    more.classList.toggle('hidden', !(STATE.archive && a && a.rows.length));
+    if (STATE.archive && a) more.innerHTML = '<span class="text-xs font-bold text-gray-400">Showing ' + a.rows.length +
+      ' of ' + a.total + ' closed tasks, newest first</span>' +
+      (left > 0 ? '<button class="btn btn-g text-xs py-2" id="btnArchiveMore">Load ' + Math.min(50, left) + ' more</button>' : '');
+    if ($('btnArchiveMore')) $('btnArchiveMore').onclick = function () { loadArchive(false); };
+  }
+  if (STATE.archive && (!STATE.arch || STATE.arch.page < 0)) {
+    $('tasksEmpty').classList.remove('hidden'); $('tasksEmpty').textContent = 'Loading closed work…';
+    $('board').classList.add('hidden'); $('list').classList.add('hidden');
+    if (!STATE.arch || !STATE.arch.loading) loadArchive(true);
+    return;
+  }
   $('tasksEmpty').classList.toggle('hidden', rows.length > 0);
   $('tasksEmpty').textContent = STATE.archive
-    ? 'Nothing archived yet. Closed work moves here after a week.'
+    ? (STATE.arch && STATE.arch.total === 0 && !FILTER.q && !FILTER.assignee
+        ? 'Nothing archived yet. Closed work moves here after a week.' : 'No closed tasks match these filters.')
     : (STATE.data.tasks || []).length ? 'No tasks match these filters.'
       : 'No tasks yet. Assign the first one.';
-  $('board').classList.toggle('hidden', STATE.mode !== 'board' || !rows.length);
-  $('list').classList.toggle('hidden', STATE.mode !== 'list' || !rows.length);
+  /* The archive is always a list: a board of closed work has one column. */
+  var mode = STATE.archive ? 'list' : STATE.mode;
+  $('board').classList.toggle('hidden', mode !== 'board' || !rows.length);
+  $('list').classList.toggle('hidden', mode !== 'list' || !rows.length);
   if (!rows.length) return;
-  if (STATE.mode === 'board') renderBoard(rows); else renderList(rows);
+  if (mode === 'board') renderBoard(rows); else renderList(rows);
 }
 
 function taskCard(t) {
@@ -118,9 +165,27 @@ function taskCard(t) {
     '</div></div>';
 }
 
+/* A column shows its most urgent cards first and stops at COL_LIMIT, with a
+   button for the rest — a team of fifty would otherwise scroll a To do column
+   for minutes. Late work first (latest first), then by due date; Verified by
+   the most recently closed. */
+var COL_LIMIT = 20;
+function columnOrder(key, items) {
+  var lastAt = function (t) { var h = t.history || []; return h.length ? String(h[h.length - 1].date) : ''; };
+  return items.slice().sort(function (a, b) {
+    if (key === 'done') return lastAt(b) < lastAt(a) ? -1 : lastAt(b) > lastAt(a) ? 1 : 0;
+    var la = daysLate(a), lb = daysLate(b);
+    if (la !== lb) return lb - la;
+    return String(a.due || '9') < String(b.due || '9') ? -1 : String(a.due || '9') > String(b.due || '9') ? 1 : 0;
+  });
+}
+
 function renderBoard(rows) {
+  STATE.colOpen = STATE.colOpen || {};
   $('board').innerHTML = COLUMNS.map(function (c) {
-    var items = rows.filter(function (t) { return c.statuses.indexOf(t.status) > -1; });
+    var all = columnOrder(c.key, rows.filter(function (t) { return c.statuses.indexOf(t.status) > -1; }));
+    var open = STATE.colOpen[c.key] || all.length <= COL_LIMIT + 5;
+    var items = open ? all : all.slice(0, COL_LIMIT);
     var tone = stateTone(c.title).tone;
     /* The column carries the colour of the state it holds, so the eye learns
        the flow left to right. The heading still says the word — the colour is
@@ -129,12 +194,19 @@ function renderBoard(rows) {
       '<span class="colhead"><span class="coldot" style="background:' + tone + '"></span>' +
       '<span class="text-[10px] font-black uppercase tracking-widest text-gray-600">' +
         esc(c.title) + '</span></span>' +
-      '<span class="text-[10px] font-black text-gray-400">' + items.length + '</span></div>' +
+      '<span class="text-[10px] font-black text-gray-400">' + all.length + '</span></div>' +
       '<div class="col" data-col="' + c.key + '" style="--col-tone:' + tone + '">' +
       (items.map(taskCard).join('') ||
         '<div class="text-[11px] text-gray-400 font-semibold px-1 py-3">Nothing here</div>') +
+      (all.length > items.length ? '<button class="colMore w-full text-xs font-black py-2 rounded-lg hover:bg-white" ' +
+        'style="color:var(--brand)" data-col="' + c.key + '">Show all ' + all.length + '</button>'
+        : (STATE.colOpen[c.key] && all.length > COL_LIMIT + 5 ? '<button class="colMore w-full text-xs font-black py-2 rounded-lg hover:bg-white" ' +
+          'style="color:var(--brand)" data-col="' + c.key + '">Show fewer</button>' : '')) +
       '</div></div>';
   }).join('');
+  $('board').querySelectorAll('.colMore').forEach(function (b) {
+    b.addEventListener('click', function () { STATE.colOpen[b.dataset.col] = !STATE.colOpen[b.dataset.col]; renderTasks(); });
+  });
   wireBoard();
 }
 
@@ -190,7 +262,7 @@ function wireBoard() {
 }
 
 function taskById(id) {
-  var list = STATE.data.tasks || [];
+  var list = (STATE.data.tasks || []).concat((STATE.arch && STATE.arch.rows) || []);
   for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i];
   return null;
 }
@@ -204,7 +276,20 @@ function doTransition(id, status, note, newDue) {
 /* ---------- detail drawer ------------------------------------------------ */
 function openTask(id) {
   var t = taskById(id);
-  if (!t) { toast('That task is not in your current view.', 'err'); return; }
+  /* Closed work is not on the board any more; fetch it by its id rather than
+     claiming it does not exist — a meeting's actions link to closed tasks. */
+  if (!t && !openTask.fetching) {
+    openTask.fetching = true;
+    return api('getArchive', { q: id, pageSize: 10 }).then(function (r) {
+      openTask.fetching = false;
+      var hit = (r.tasks || []).filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!hit) return toast('That task is not one you can see.', 'err');
+      STATE.arch = STATE.arch || { rows: [], total: 0, page: -1 };
+      STATE.arch.rows.push(hit);
+      openTask(id);
+    }).catch(function (e) { openTask.fetching = false; toast(e.message, 'err'); });
+  }
+  if (!t) return;
   var me = STATE.user;
   var late = daysLate(t);
   var subs = t.subtasks || [];

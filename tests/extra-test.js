@@ -34,8 +34,11 @@ const tasksSheet = sheet.getSheetByName('Tasks');
 const row = tasksSheet._data.find(r=>r[3]==='Weekly line check');
 const old = new Date(); old.setDate(old.getDate()-20);
 row[12] = JSON.stringify([{date: old.toISOString(), status:'Verified', user:'Ravi K', note:''}]);
-const after = call({action:'getDashboard', token:A}).tasks.find(t=>t.title==='Weekly line check');
-ok('work closed 20 days ago is archived', after.isArchived===true);
+const dashAfter = call({action:'getDashboard', token:A});
+ok('work closed 20 days ago leaves the board — the dashboard no longer carries it',
+   !dashAfter.tasks.some(t=>t.title==='Weekly line check') && dashAfter.archivedCount>=1);
+const after = call({action:'getArchive', token:A, q:'Weekly line check'}).tasks.find(t=>t.title==='Weekly line check');
+ok('work closed 20 days ago is archived, and found in Archive', !!after && after.isArchived===true);
 ok('and leaves the active counts alone',
    call({action:'getDashboard', token:A}).stats.completed===0);
 

@@ -193,6 +193,17 @@ console.log('\n=== daily, weekly, monthly, quarterly, yearly ===');
      week.counts.day === 2 && week.counts.month === 4 && week.counts.all === 6,
      JSON.stringify(week.counts));
 }
+
+console.log('\n=== "this week" on a weekend means the week ahead ===');
+{
+  const ymdOf = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  /* On a Saturday the week to Sunday is the weekend itself. Planning on Friday
+     night or Monday morning wants the working week ahead, not two empty days. */
+  ok('Saturday 21 Nov looks ahead to Sunday 29 Nov',
+     ymdOf(D.horizonEnd('week', new Date(2026, 10, 21))) === '2026-11-29');
+  ok('Sunday 22 Nov too', ymdOf(D.horizonEnd('week', new Date(2026, 10, 22))) === '2026-11-29');
+  ok('Friday 20 Nov still ends that Sunday', ymdOf(D.horizonEnd('week', new Date(2026, 10, 20))) === '2026-11-22');
+}
 {
   const list = q([t({ id: 'A', title: 'No date on it', due: '' }),
                   t({ id: 'B', due: ymd(1) })], 'payel', 'week');

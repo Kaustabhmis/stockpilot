@@ -500,8 +500,12 @@ function horizonEnd(kind, today) {
   switch (kind) {
     case 'day':   return d;
     case 'week': {
-      /* Monday to Sunday — a factory week, not a calendar library's week. */
+      /* Monday to Sunday — a factory week, not a calendar library's week. On a
+         Saturday or Sunday the week left is the weekend itself, so "this week"
+         means the working week ahead; otherwise Monday's work vanishes from
+         the list exactly when someone sits down to plan it. */
       var dow = d.getDay(), toSunday = dow === 0 ? 0 : 7 - dow;
+      if (dow === 0 || dow === 6) toSunday += 7;
       return addDays(d, toSunday);
     }
     case 'month':   return new Date(d.getFullYear(), d.getMonth() + 1, 0);

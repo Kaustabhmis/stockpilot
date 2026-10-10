@@ -100,6 +100,9 @@ ck('a story must name a value', C.indexOf('a story without one is just a nice st
 ck('actions are due in seven days by default', C.indexOf('d.setDate(d.getDate() + 7); due = ymd(d);') > -1);
 ck('actions go through createTask_', C.indexOf('var r = createTask_(ctx, { title: form.title') > -1);
 ck('ratings: one per person, replaced not added', C.indexOf("r[ctx.actor.username] = s;") > -1);
+ck('board columns show 20 cards, as the manual says', /each column shows its 20 most urgent/i.test(M) && UI.indexOf('var COL_LIMIT = 20;') > -1);
+ck('archive pages are 50, as the manual says', /archive loads 50 closed tasks/i.test(M) && C.indexOf('Math.floor(Number(p.pageSize)) || 50') > -1);
+ck('the dashboard sends active work only', C.indexOf('tasks: active,') > -1 && C.indexOf("case 'getArchive':") > -1);
 ck('the summary goes to everyone present', C.indexOf('.filter(function (a) { return a.present; }).forEach(function (a) {') > -1);
 ck('cancelling sends nothing', C.indexOf("return { status: 'success', message: 'Meeting cancelled. Nothing was sent.' };") > -1);
 ck('the screen follows the chair within a few seconds', UI.indexOf('var POLL_MS = 5000;') > -1);

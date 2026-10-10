@@ -53,7 +53,12 @@ function getDashboard_(ctx) {
   return {
     status: 'success', serviceStopped: false,
     user: me, company: ctx.company,
-    tasks: visible,
+    /* Active work only. Closed work older than a week is fetched a page at a
+       time from Archive (getArchive) — sending every task a person has ever
+       seen, on every 30-second poll, grows without limit and in a year is
+       megabytes per request. */
+    tasks: active,
+    archivedCount: visible.length - active.length,
     categories: readCategories_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {

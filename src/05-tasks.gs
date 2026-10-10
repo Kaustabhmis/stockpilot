@@ -482,3 +482,32 @@ function getPriorityList_(ctx, username, horizon) {
     decisions: q.decisions, handedIn: q.handedIn,
     total: q.total, overdue: q.overdue, undated: q.undated };
 }
+
+/**
+ * Closed work, a page at a time, newest first. Filtered and searched here,
+ * on the server, so the browser never holds a company's whole history.
+ */
+function getArchive_(ctx, p) {
+  p = p || {};
+  var size = Math.min(100, Math.max(10, Math.floor(Number(p.pageSize)) || 50));
+  var page = Math.max(0, Math.floor(Number(p.page)) || 0);
+  var q = String(p.q || '').toLowerCase().trim();
+  var closedAt = function (t) {
+    var h = t.history || [];
+    var d = h.length ? new Date(h[h.length - 1].date) : new Date(t.createdDate);
+    return isNaN(d) ? 0 : d.getTime();
+  };
+  var rows = visibleTasks_(ctx, readTasks_(ctx)).filter(function (t) {
+    if (!t.isArchived) return false;
+    if (p.assignee && t.assignee !== p.assignee) return false;
+    if (p.status && t.status !== p.status) return false;
+    if (p.category && t.jobCategory !== p.category) return false;
+    if (p.goal && t.goal !== p.goal) return false;
+    if (q && (t.title + ' ' + t.desc + ' ' + t.kra + ' ' + t.jobCategory + ' ' + t.id)
+          .toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+  rows.sort(function (a, b) { return closedAt(b) - closedAt(a); });
+  return { status: 'success', tasks: rows.slice(page * size, (page + 1) * size),
+           total: rows.length, page: page, pageSize: size };
+}

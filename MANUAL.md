@@ -152,6 +152,24 @@ Search by title, filter by person, status, category, or **Overdue only**.
 off the active board **seven days** after it closed, so the board stays about
 what is live.
 
+### When the board gets long
+
+A busy team fills a board fast. Three things keep it usable:
+
+- **Each column shows its 20 most urgent cards** — late work first, then the
+  nearest due date; Verified shows the most recently closed. **Show all** at
+  the foot of the column opens the rest; **Show fewer** folds it back. The
+  number at the top of the column always counts every card in it.
+- **Filters reach everything**, folded or not: pick a person under
+  **Everyone** to see one person's board, or search a title. **List** shows
+  the same cards as a table.
+- **Archive loads 50 closed tasks at a time**, newest first, with
+  **Load more** at the bottom. Search and the filters work on the whole
+  archive, not just the page you are looking at.
+
+Your browser is only sent live work; closed work stays on the server until
+you open Archive. So the page does not get heavier as the history builds up.
+
 ---
 
 ## Repeating work

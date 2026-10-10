@@ -213,6 +213,20 @@ function createDemoAccount(email, password) {
   return say(out);
 }
 
+/** Calendar offset of the date N working days (Mon–Fri) before today. */
+function demoWorkdaysBack_(n) {
+  var d = new Date(), back = 0;
+  while (n > 0) { d.setDate(d.getDate() - 1); back++; if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+  return back;
+}
+
+/** The offset moved back, if it lands on a weekend, to the Friday before. */
+function demoWeekdayOnOrBefore_(offset) {
+  var d = new Date(); d.setDate(d.getDate() + offset);
+  while (d.getDay() === 0 || d.getDay() === 6) { d.setDate(d.getDate() - 1); offset--; }
+  return offset;
+}
+
 /** ymd this many days from today. Negative is the past. */
 function demoYmd_(offset) {
   var d = new Date();
@@ -371,7 +385,7 @@ function seedDemoWork_(ctx) {
     ['Preventive maintenance — CNC-1 and 2',     'rafiq',   -3, 'High',     'Maintenance','ontime'],
     ['Issue the revised control plan',           'imran',   -3, 'High',     'Quality',    'ontime'],
     ['Cycle count — bin A to F',                 'meera',   -2, 'Medium',   'Stores',     'ontime'],
-    ['Despatch 95 covers to Mahindra',           'payel',   -1, 'Critical', 'Despatch',   'ontime'],
+    ['Despatch 95 covers to Mahindra',           'payel',   -1, 'Critical', 'Despatch',   'late'],
 
     // still open, so the board and the priority list have something on them
     ['Despatch 180 flanges to Bharat Forge',     'payel',    2, 'Critical', 'Despatch',   'progress'],
@@ -426,6 +440,12 @@ function seedDemoWork_(ctx) {
       j = [String(j[0]).split('|')[1], ctx.me.username, j[1], j[2], j[3], j[4]];
     }
     var offset = squeeze(j[2]);
+    /* Lateness is counted in working days, never weekends or leave — so a past
+       date has to be a weekday, and an "overdue" job needs enough working days
+       behind it to still be late when the demo is built on a Saturday or a
+       Monday. Built on a Saturday before this, the demo had nothing overdue. */
+    if (j[5] === 'overdue') offset = -demoWorkdaysBack_(Math.max(2, Math.round(Math.abs(j[2]) * 1.5)));
+    else if (offset < 0) offset = demoWeekdayOnOrBefore_(offset);
     var title = j[0], who = j[1], due = demoYmd_(offset), priority = j[3],
         cat = j[4], outcome = j[5];
     try {
