@@ -32,7 +32,7 @@ for t in payroll-rules payroll-tabs attendance-rules leave-rules policy-rules \
 done
 
 # Two more, written as modules because they drive the page as well as the API.
-for t in legacy-bonus reply-msg essl-import; do
+for t in legacy-bonus reply-msg essl-import geofence-multi; do
   printf '  %-24s ' "$t"
   out=$(node "$t.test.mjs" "$BASE" 2>&1); code=$?
   if [ $code -eq 0 ]; then pass=$((pass+1)); echo "ok"

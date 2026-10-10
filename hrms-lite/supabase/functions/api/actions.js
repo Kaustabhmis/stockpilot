@@ -417,6 +417,105 @@ export function createActions(api, db, deps) {
     };
   }
 
+  /* --------------------------------------------------------------- geofence
+   * The same fence the Apps Script backend enforces. It was never ported, so
+   * on this backend a punch was stored wherever it was sent, with no site and
+   * no distance - the fence was open. Worse for multiple sites: a person
+   * assigned to two was not checked against either.
+   */
+
+  /* Read a person's site field as a LIST, the way the HR screen writes it:
+     "Unit 1, Unit 2". Blank means any site. Splitting on the same three
+     separators the sheet picker joins with. */
+  function siteList(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .split(/[,;\n]/).map(x => x.trim()).filter(x => x.length > 0);
+  }
+
+  /* metres between two lat/lng, the haversine the sheet used, same earth radius */
+  function metresBetween(aLat, aLng, bLat, bLng) {
+    const R = 6371000, rad = d => d * Math.PI / 180;
+    const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+    const s = Math.sin(dLat / 2) ** 2 +
+      Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+    return Math.round(R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)));
+  }
+
+  async function geoCheck(emp, geo) {
+    const st = await settingsMap();
+    if (String(st.geofence_enabled || 'no').toLowerCase() !== 'yes') {
+      return { ok: true, enabled: false };
+    }
+    const soft = String(st.geofence_mode || 'block').toLowerCase() !== 'block';
+    const maxAcc = Number(st.geofence_accuracy_m || 120);
+
+    if (!geo || geo.lat === undefined || geo.lat === null || geo.lat === '') {
+      return { ok: soft, enabled: true, soft,
+               reason: 'Location is required to punch, and none was sent.' };
+    }
+    if (maxAcc > 0 && geo.accuracy && Number(geo.accuracy) > maxAcc) {
+      return { ok: soft, enabled: true, soft, accuracy: Math.round(Number(geo.accuracy)),
+               reason: 'Location is only accurate to about ' + Math.round(Number(geo.accuracy)) +
+                       ' m; ' + maxAcc + ' m or better is needed.' };
+    }
+
+    let allowed = (await listSheet('Sites')).filter(x =>
+      String(x.active || 'yes').toLowerCase() !== 'no' && x.lat !== '' && x.lng !== '');
+    if (!allowed.length) {
+      return { ok: soft, enabled: true, soft,
+               reason: 'Geofencing is on but no site has been set up yet.' };
+    }
+
+    /* A supervisor is tied to a list of sites, not one. Blank means any.
+       A name that matches nothing is NOT ignored - ignoring it opened the
+       fence at every site on a typo. Honour the ones that match; refuse only
+       when none do, because that is the case that would otherwise mean
+       "anywhere". */
+    let staleNames = '';
+    const wanted = siteList(emp && emp.site);
+    if (wanted.length) {
+      const byName = {};
+      allowed.forEach(x => { byName[String(x.name).trim().toLowerCase()] = x; });
+      const mine = [], unknown = [];
+      wanted.forEach(w => { const h = byName[w.toLowerCase()]; if (h) mine.push(h); else unknown.push(w); });
+      if (!mine.length) {
+        return { ok: false, enabled: true, badSite: true, unknown: unknown.join(', '),
+                 reason: 'Your record lists ' +
+                   (unknown.length > 1 ? 'sites that no longer exist: ' : 'a site that no longer exists: ') +
+                   unknown.join(', ') + '. Ask HR to correct it - punching is blocked until then.' };
+      }
+      allowed = mine;
+      if (unknown.length) staleNames = unknown.join(', ');
+    }
+
+    let best = null;
+    allowed.forEach(x => {
+      const d = metresBetween(Number(geo.lat), Number(geo.lng), Number(x.lat), Number(x.lng));
+      if (!best || d < best.distance) best = { site: x.name, distance: d, radius: Number(x.radius_m || 150) };
+    });
+    if (best.distance <= best.radius) {
+      const good = { ok: true, enabled: true, site: best.site, distance: best.distance };
+      if (staleNames) good.stale = staleNames;
+      return good;
+    }
+
+    /* field staff with an approved out-duty for today are allowed to be away */
+    if (String(st.geofence_allow_od || 'yes').toLowerCase() === 'yes' && emp) {
+      const n = nowParts();
+      const od = await one(
+        `select 1 from hrms.requests
+          where emp_code = $1 and status = 'Approved' and upper(type) = 'OD'
+            and date <= $2 and coalesce(to_date, date) >= $2 limit 1`, [emp.emp_code, n.date]);
+      if (od) return { ok: true, enabled: true, site: 'out duty', distance: best.distance, od: true };
+    }
+
+    return { ok: soft, enabled: true, soft, site: best.site, distance: best.distance,
+      reason: 'You are about ' + best.distance + ' m from ' + best.site +
+              ', which allows ' + best.radius + ' m.' +
+              (allowed.length > 1
+                ? ' You can punch at: ' + allowed.map(x => x.name).join(', ') + '.' : '') };
+  }
+
   async function webPunch(empCodeAsked, kind, note, geo, caller, dirty) {
     const st = await settingsMap();
     if (String(st.web_punch_enabled || 'yes').toLowerCase() === 'no') {
@@ -428,9 +527,17 @@ export function createActions(api, db, deps) {
     if (!empCode) throw new Error('No employee is linked to this login.');
 
     const n = nowParts();
-    const emp = await one('select emp_code, device_id from hrms.employees where emp_code = $1',
+    /* emp.site is needed now: the fence is checked here, same as Apps Script. */
+    const emp = await one('select emp_code, device_id, site from hrms.employees where emp_code = $1',
       [empCode]);
     if (!emp) throw new Error('That staff code is not on the list.');
+
+    /* The fence, enforced on the server - not left to whatever the phone sent.
+       A blocked punch is refused; the site and the distance it settled on are
+       stored with the punch either way, so the log shows where it happened and
+       not just a client's claim. */
+    const fence = await geoCheck(emp, geo);
+    if (!fence.ok) throw new Error(fence.reason);
 
     const byOther = caller.email && String(caller.emp_code || '') !== empCode;
     await db.query(
@@ -444,7 +551,8 @@ export function createActions(api, db, deps) {
        geo && geo.lat !== undefined ? geo.lat : null,
        geo && geo.lng !== undefined ? geo.lng : null,
        geo && geo.accuracy ? Math.round(Number(geo.accuracy)) : null,
-       (geo && geo.site) || null, null]);
+       fence.site || (geo && geo.site) || null,
+       fence.distance === undefined ? null : fence.distance]);
     if (dirty) dirty.Punches = 1;
 
     const record = await rebuildDay(empCode, n.date, 'app', [n.time], dirty);

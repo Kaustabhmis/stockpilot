@@ -12442,14 +12442,21 @@ function demoGeoCheck(emp, geo) {
   var allowed = (S.sites || []).filter(function (x) {
     return String(x.active || 'yes').toLowerCase() !== 'no' && x.lat !== '' && x.lng !== '';
   });
-  var only = String((emp && emp.site) || '').trim();
-  if (only) {
-    var mine = allowed.filter(function (x) { return String(x.name).trim() === only; });
-    if (mine.length) allowed = mine;
-  }
   if (!allowed.length) {
     return { ok: soft, enabled: true, soft: soft,
              reason: 'Geofencing is on but no site has been set up yet.' };
+  }
+  /* A person is tied to a LIST of sites, not one - "Unit 1, Unit 2". Reading
+     it as a single string matched neither when two were set, so the demo
+     honoured only a lone site and silently fell open for anyone assigned to
+     more than one. Same reading as the server's siteList(). */
+  var wanted = siteListOf(emp && emp.site);
+  if (wanted.length) {
+    var byName = {};
+    allowed.forEach(function (x) { byName[String(x.name).trim().toLowerCase()] = x; });
+    var mine = wanted.map(function (w) { return byName[w.toLowerCase()]; })
+      .filter(function (x) { return x; });
+    if (mine.length) allowed = mine;
   }
   var best = null;
   allowed.forEach(function (x) {
