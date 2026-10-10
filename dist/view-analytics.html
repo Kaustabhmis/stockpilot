@@ -1,0 +1,1744 @@
+<!-- ===========================================================================
+     DOME BOX — ANALYTICS VIEW  (paste-in block for the live single-file app)
+
+     HOW TO INSTALL
+     1. Paste this whole block into index.html, next to the other <div id="view-…">
+        blocks (order does not matter — it starts hidden).
+     2. Add a nav entry that opens it:
+            <button onclick="toggleView('analytics')">Reports</button>
+     3. Feed it your real data once the user is logged in and tasks are loaded:
+            DomeBoxAnalytics.setData({ users: USERS_FROM_SHEET, tasks: TASKS_FROM_SHEET });
+        Until you call that, the view renders a seeded demo so you can see the
+        layout before wiring anything up.
+
+     WHY IT RE-RENDERS ON OPEN, NOT ON LOAD
+     A hidden element has clientWidth 0, so charts laid out while the view is
+     hidden would all silently collapse to their fallback widths. toggleView()
+     must unhide first and then call DomeBoxAnalytics.open().
+     =========================================================================== -->
+
+<div id="view-analytics" class="hidden min-h-screen bg-gray-50 flex-col">
+
+  <style>
+  /* Scoped to #view-analytics so nothing here can leak into the rest of the app. */
+  /* The view's closed state must not depend on Tailwind having loaded. If the
+     CDN is slow or blocked, a missing .hidden rule would render the whole
+     reports page on top of whatever the user was looking at. */
+  #view-analytics.hidden{ display:none !important; }
+  #view-analytics{
+    /* Categorical — validated on a white surface: all-pairs CVD + contrast PASS. */
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+    /* Status — PASSES every check on light, including CVD separation, which the
+       dark-surface set never did. Still always paired with a letter or a label. */
+    --good:#047857; --warning:#d97706; --critical:#b91c1c;
+    /* Sequential ramp for the heatmap: monotonic lightness, adjacent steps above
+       the normal-vision floor. The lightest step is low-contrast by nature, which
+       is what the table view under every chart is there to relieve. */
+    --ramp-1:#9dc6f0; --ramp-2:#4a8ede; --ramp-3:#1f5fae; --ramp-4:#0f3563;
+    --surface:#ffffff; --surface-2:#f1f5f9; --line:#e5e7eb;
+    --ink:#111827; --ink-2:#4b5563; --muted:#9ca3af;
+  }
+  #view-analytics .gridline{ stroke:var(--line); stroke-width:1; }
+  #view-analytics .baseline{ stroke:#d1d5db; stroke-width:1; }
+  #view-analytics text.axis{ font-size:11px; fill:var(--muted); font-weight:600; }
+  #view-analytics text.dlabel{ font-size:11px; fill:var(--ink); font-weight:800; }
+  #view-analytics #chartHeat{ overflow-x:auto; }
+  #view-analytics .empty{ padding:28px 4px; color:var(--muted); font-size:13px; font-weight:600; }
+
+  #view-analytics .tile .k{ font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); font-weight:800; }
+  #view-analytics .tile .v{ font-size:34px; font-weight:900; line-height:1.1; margin-top:6px; color:var(--ink); }
+  #view-analytics .tile .s{ font-size:11px; color:var(--muted); font-weight:600; margin-top:4px; }
+
+  #view-analytics .tblwrap{ display:none; overflow-x:auto; margin-top:4px; }
+  #view-analytics .tblwrap.on{ display:block; }
+  #view-analytics .tblwrap table{ width:100%; border-collapse:collapse; font-size:12px; }
+  #view-analytics .tblwrap th{ text-align:left; font-weight:800; color:var(--muted);
+    text-transform:uppercase; font-size:10px; letter-spacing:.08em;
+    padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  #view-analytics .tblwrap td{ padding:8px 10px; border-bottom:1px solid #f3f4f6;
+    color:var(--ink-2); white-space:nowrap; }
+
+  #view-analytics .seg button{ padding:8px 16px; border-radius:10px; font-weight:800;
+    font-size:13px; color:var(--ink-2); }
+  #view-analytics .seg button.on{ background:#2563eb; color:#fff; box-shadow:0 4px 12px rgba(37,99,235,.3); }
+
+  #dbx-tip{ position:fixed; pointer-events:none; opacity:0; transition:opacity .12s;
+    background:#111827; color:#fff; border-radius:10px; padding:10px 12px; font-size:12px;
+    z-index:9999; box-shadow:0 12px 28px rgba(0,0,0,.24); min-width:150px; }
+  #dbx-tip .t{ font-weight:800; margin-bottom:6px; }
+  #dbx-tip .r{ display:flex; justify-content:space-between; gap:18px; padding:2px 0; color:#d1d5db; }
+  #dbx-tip .r b{ color:#fff; font-weight:800; }
+
+  @media (max-width:900px){ #view-analytics .card{ grid-column:span 12 !important; } }
+  </style>
+
+  <nav class="bg-white border-b border-gray-100 px-4 lg:px-8 h-16 flex justify-between items-center gap-2 sticky top-0 z-40">
+    <div class="flex items-center cursor-pointer" onclick="toggleView('dashboard')">
+      <span class="material-icons text-blue-600 mr-2">dashboard</span>
+      <span class="font-black text-xl tracking-tight whitespace-nowrap">Dome Box</span>
+      <span class="ml-3 text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-700 px-2 py-1 rounded-md">Reports</span>
+    </div>
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+      <label class="hidden sm:block text-[10px] font-black uppercase tracking-widest text-gray-400" for="person">Person</label>
+      <select id="person" class="border border-gray-200 bg-gray-50 rounded-xl px-2 sm:px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 min-w-0 max-w-[42vw] sm:max-w-none"></select>
+      <button onclick="toggleView('dashboard')" class="text-blue-600 font-bold text-sm hover:underline">Back</button>
+    </div>
+  </nav>
+
+  <div class="bg-white border-b border-gray-100 px-4 lg:px-8 py-3 flex flex-wrap items-center gap-3 sticky top-16 z-30">
+    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Period</span>
+    <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="periodSeg">
+      <button data-p="week">Weekly</button>
+      <button data-p="month" class="on">Monthly</button>
+      <button data-p="quarter">Quarterly</button>
+      <button data-p="year">Full year</button>
+    </div>
+    <select id="offset" class="border border-gray-200 bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"></select>
+    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Showing</span>
+    <select id="span" class="border border-gray-200 bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"></select>
+    <span class="flex-1"></span>
+    <span id="rangeLabel" class="text-xs font-black uppercase tracking-widest text-gray-500"></span>
+  </div>
+
+  <div class="flex-1 p-4 lg:p-8 max-w-[1600px] mx-auto w-full">
+
+    <div id="tiles" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6"></div>
+
+    <div class="grid grid-cols-12 gap-6">
+
+      <div class="card col-span-12 lg:col-span-8 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Performance trend</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1" id="trendSub"></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div id="trendLegend" class="flex gap-3 text-xs font-bold text-gray-500 [&_i]:inline-block [&_i]:w-2 [&_i]:h-2 [&_i]:rounded-sm [&_i]:mr-1.5"></div>
+            <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableTrend">Table</button>
+          </div>
+        </div>
+        <div id="chartTrend"></div>
+        <div class="tblwrap" id="tableTrend"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-4 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Performance bands</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Everyone scored this period</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableBands">Table</button>
+        </div>
+        <div id="chartBands"></div>
+        <div class="tblwrap" id="tableBands"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Score by person</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1" id="peopleSub"></div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tablePeople">Table</button>
+        </div>
+        <div id="chartPeople"></div>
+        <div class="tblwrap" id="tablePeople"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">On-time delivery</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Share of the period's closed work that landed by its deadline</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableOnTime">Table</button>
+        </div>
+        <div id="chartOnTime"></div>
+        <div class="tblwrap" id="tableOnTime"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Work delivered by KRA</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Where the effort actually went</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableKra">Table</button>
+        </div>
+        <div id="chartKra"></div>
+        <div class="tblwrap" id="tableKra"></div>
+      </div>
+
+      <div class="card col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Rework loops</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Times work came back — the quality signal</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableRework">Table</button>
+        </div>
+        <div id="chartRework"></div>
+        <div class="tblwrap" id="tableRework"></div>
+      </div>
+
+      <div class="card col-span-12 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <div class="chead flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-lg font-black text-gray-900">Delivery heatmap</h2>
+            <div class="sub text-xs text-gray-400 font-semibold mt-1">Tasks verified per person, per week — darker is more</div>
+          </div>
+          <button class="tbtn text-[11px] font-black uppercase tracking-wider text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50" data-table="tableHeat">Table</button>
+        </div>
+        <div id="chartHeat"></div>
+        <div class="tblwrap" id="tableHeat"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="dbx-tip"></div>
+
+<script>
+/* ===========================================================================
+   Dome Box scoring engine — the same file the board and the Apps Script backend
+   run, so a score shown here is the score, not a second implementation of it.
+   Generated from domebox/domain.gs; do not hand-edit.
+   =========================================================================== */
+/* AUTO-GENERATED from domebox/domain.gs — do not edit directly.
+ * Regenerate with:  node web/_build/build-domain.js
+ */
+(function (global) {
+  var module = { exports: {} };
+  var exports = module.exports;
+
+/**
+ * DOME BOX — DOMAIN ENGINE
+ * =============================================================================
+ * Pure logic only: no SpreadsheetApp, no GmailApp, no I/O of any kind. Every
+ * function here is deterministic, which is what makes the workflow, delegation,
+ * recurrence and scoring rules testable instead of hopeful.
+ *
+ * Apps Script has no modules, so these become globals in the project. The API
+ * layer (code.gs) and the scheduler (reminders.gs) call into this file.
+ * =============================================================================
+ */
+
+// ---------------------------------------------------------------------------
+// Statuses
+// ---------------------------------------------------------------------------
+var STATUS = {
+  AWAITING_APPROVAL:   'Awaiting Approval',   // delegation gate: assignee's manager must agree
+  DELEGATION_PROPOSED: 'Delegation Proposed', // holder wants to pass it on; their manager decides
+  PENDING:             'Pending',             // accepted, not started
+  IN_PROGRESS:         'In Progress',
+  FOR_REVIEW:          'For Review',          // handed in, waiting on the verifier
+  VERIFIED:            'Verified',            // signed off — the only clean close
+  REJECTED:            'Rejected',            // never accepted
+  CANCELLED:           'Cancelled',           // withdrawn after acceptance
+};
+
+var OPEN_STATUSES = [
+  STATUS.AWAITING_APPROVAL, STATUS.DELEGATION_PROPOSED,
+  STATUS.PENDING, STATUS.IN_PROGRESS, STATUS.FOR_REVIEW,
+];
+var CLOSED_STATUSES = [STATUS.VERIFIED, STATUS.REJECTED, STATUS.CANCELLED];
+
+var ROLE = { ADMIN: 'Admin', MANAGER: 'HOD', DOER: 'Doer' };
+
+// High-priority work counts three times a low-priority one, so one missed
+// critical task cannot be averaged away under a pile of trivial wins.
+var PRIORITY_WEIGHT = { High: 3, Medium: 2, Low: 1 };
+
+function priorityWeight(priority) {
+  return PRIORITY_WEIGHT[priority] || PRIORITY_WEIGHT.Medium;
+}
+
+function isOpen(status) { return OPEN_STATUSES.indexOf(status) > -1; }
+function isClosed(status) { return CLOSED_STATUSES.indexOf(status) > -1; }
+
+// ---------------------------------------------------------------------------
+// Date helpers — all comparisons are on whole days, so a task due today and
+// submitted today is never counted late by a few hours.
+// ---------------------------------------------------------------------------
+function startOfDay(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function dayDiff(a, b) { return Math.round((startOfDay(a) - startOfDay(b)) / 86400000); }
+function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function addMonths(d, n) {
+  var x = new Date(d);
+  var targetDay = x.getDate();
+  x.setDate(1);
+  x.setMonth(x.getMonth() + n);
+  // Clamp: 31 Jan + 1 month must be 28/29 Feb, not 2/3 March.
+  var lastDay = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+  x.setDate(Math.min(targetDay, lastDay));
+  return x;
+}
+function ymd(d) {
+  var x = startOfDay(d);
+  var m = String(x.getMonth() + 1);
+  var day = String(x.getDate());
+  return x.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (day.length < 2 ? '0' + day : day);
+}
+function parseYmd(s) {
+  if (s instanceof Date) return startOfDay(s);
+  var parts = String(s).slice(0, 10).split('-');
+  if (parts.length !== 3) return null;
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// ---------------------------------------------------------------------------
+// WORKFLOW + DELEGATION
+// ---------------------------------------------------------------------------
+/**
+ * Who may move this task, and where to.
+ *
+ * The rules that make the data trustworthy:
+ *  - a person can never verify their own work; only the raiser, the approver or
+ *    an Admin closes a task
+ *  - work only becomes assigned once the holder's own manager has agreed to it,
+ *    so nobody's team gets loaded behind their back
+ *  - handing work onward is itself an approval step, so a delegation chain is
+ *    visible rather than a silent hand-off
+ *
+ * `actor` = { username, role }, `task` = { status, assignee, raisedBy, approver, delegateTo }
+ */
+function allowedTransitions(task, actor) {
+  var isAdmin = actor.role === ROLE.ADMIN;
+  var isAssignee = task.assignee === actor.username;
+  var isRaiser = task.raisedBy === actor.username;
+  var isApprover = task.approver === actor.username;
+  var canVerify = isAdmin || isRaiser || isApprover;
+
+  switch (task.status) {
+    case STATUS.AWAITING_APPROVAL:
+      // The assignee's manager (recorded as approver) accepts or refuses the load.
+      return (isApprover || isAdmin) ? [STATUS.PENDING, STATUS.REJECTED] : [];
+
+    case STATUS.DELEGATION_PROPOSED:
+      // The proposing person's manager decides whether the hand-off is allowed.
+      return (isApprover || isAdmin) ? [STATUS.PENDING, STATUS.IN_PROGRESS] : [];
+
+    case STATUS.PENDING:
+      var fromPending = [];
+      if (isAssignee || isAdmin) fromPending.push(STATUS.IN_PROGRESS);
+      if (isRaiser || isAdmin) fromPending.push(STATUS.CANCELLED);
+      return fromPending;
+
+    case STATUS.IN_PROGRESS:
+      var fromProgress = [];
+      if (isAssignee || isAdmin) fromProgress.push(STATUS.FOR_REVIEW);
+      if (isRaiser || isAdmin) fromProgress.push(STATUS.CANCELLED);
+      return fromProgress;
+
+    case STATUS.FOR_REVIEW:
+      // Deliberately excludes the assignee: you cannot sign off your own work.
+      return canVerify && !(isAssignee && !isAdmin && !isRaiser)
+        ? [STATUS.VERIFIED, STATUS.IN_PROGRESS]   // In Progress here means "rework"
+        : (canVerify ? [STATUS.VERIFIED, STATUS.IN_PROGRESS] : []);
+
+    default:
+      return []; // Verified / Rejected / Cancelled are terminal
+  }
+}
+
+function canTransition(task, actor, next) {
+  return allowedTransitions(task, actor).indexOf(next) > -1;
+}
+
+/**
+ * Where a newly raised task should start.
+ * If the assignee reports to somebody other than the person raising it, that
+ * manager approves first. Assigning to your own report, or to yourself, needs
+ * no gate.
+ */
+function initialStatusFor(assignee, raiser) {
+  var needsApproval = !!assignee.manager &&
+    assignee.manager !== raiser.username &&
+    assignee.username !== raiser.username &&
+    raiser.role !== ROLE.ADMIN;
+  return {
+    status: needsApproval ? STATUS.AWAITING_APPROVAL : STATUS.PENDING,
+    approver: needsApproval ? assignee.manager : (raiser.username || ''),
+    note: needsApproval ? 'Awaiting manager approval' : 'Task assigned',
+  };
+}
+
+/**
+ * A holder proposing to pass work onward. Their own manager arbitrates, which
+ * keeps a delegation chain auditable instead of letting work quietly circulate.
+ */
+function proposeDelegation(task, actor, targetUser, actorUser) {
+  if (task.assignee !== actor.username && actor.role !== ROLE.ADMIN) {
+    return { ok: false, error: 'Only the current owner can hand this task on.' };
+  }
+  if (!targetUser) return { ok: false, error: 'Pick who should take it over.' };
+  if (targetUser.username === task.assignee) {
+    return { ok: false, error: 'That is already the current owner.' };
+  }
+  if (isClosed(task.status)) return { ok: false, error: 'This task is already closed.' };
+
+  // An Admin, or someone with no manager above them, can hand off directly.
+  var arbiter = actorUser && actorUser.manager ? actorUser.manager : '';
+  if (actor.role === ROLE.ADMIN || !arbiter) {
+    return {
+      ok: true, status: STATUS.PENDING, assignee: targetUser.username,
+      approver: task.approver || actor.username, delegateTo: '',
+      note: 'Handed over to ' + targetUser.name + ' by ' + actor.username,
+    };
+  }
+  return {
+    ok: true, status: STATUS.DELEGATION_PROPOSED, assignee: task.assignee,
+    approver: arbiter, delegateTo: targetUser.username,
+    note: actor.username + ' proposes handing this to ' + targetUser.name,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// RECURRING JOBS
+// ---------------------------------------------------------------------------
+var CADENCE = {
+  ONE_TIME: 'One Time',
+  DAILY: 'Daily',
+  WEEKDAYS: 'Weekdays',
+  WEEKLY: 'Weekly',
+  FORTNIGHTLY: 'Fortnightly',
+  MONTHLY: 'Monthly',
+  QUARTERLY: 'Quarterly',
+  HALF_YEARLY: 'Half-Yearly',
+  YEARLY: 'Yearly',
+  CUSTOM_DAYS: 'Every N Days',
+};
+
+/**
+ * The next date a recurring job is due after `from`.
+ *
+ * Returns null for one-off jobs. Weekday cadence skips Saturday and Sunday.
+ * Monthly and longer cadences clamp to the end of short months, so a job set
+ * for the 31st lands on the 28th/29th in February rather than skidding into
+ * March — the bug in naive date arithmetic.
+ */
+function nextOccurrence(cadence, from, opts) {
+  opts = opts || {};
+  var base = parseYmd(from);
+  if (!base) return null;
+
+  switch (cadence) {
+    case CADENCE.DAILY:       return addDays(base, 1);
+    case CADENCE.WEEKDAYS:
+      var d = addDays(base, 1);
+      while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, 1);
+      return d;
+    case CADENCE.WEEKLY:      return addDays(base, 7);
+    case CADENCE.FORTNIGHTLY: return addDays(base, 14);
+    case CADENCE.MONTHLY:     return addMonths(base, 1);
+    case CADENCE.QUARTERLY:   return addMonths(base, 3);
+    case CADENCE.HALF_YEARLY:  return addMonths(base, 6);
+    case CADENCE.YEARLY:      return addMonths(base, 12);
+    case CADENCE.CUSTOM_DAYS:
+      var n = Number(opts.intervalDays || 0);
+      return n > 0 ? addDays(base, n) : null;
+    default: return null;
+  }
+}
+
+/**
+ * Decides what a recurring job template owes us as of `today`.
+ *
+ * This is the fix for the original design, where the next occurrence was only
+ * created when somebody verified the last one — so a single unverified task
+ * silently ended the series, which is precisely when a reminder matters most.
+ * Generation is now driven by the schedule, independent of anyone's behaviour.
+ *
+ * `job` = { cadence, intervalDays, nextDue, endDate, maxOccurrences,
+ *           occurrencesCreated, active, skipIfPreviousOpen }
+ * `state` = { previousOpen: bool }
+ */
+function dueOccurrences(job, today, state) {
+  state = state || {};
+  var out = { create: [], nextDue: job.nextDue, stop: false, reason: '' };
+  if (!job.active) { out.reason = 'paused'; return out; }
+  if (job.cadence === CADENCE.ONE_TIME) { out.stop = true; out.reason = 'one-off'; return out; }
+
+  var cursor = parseYmd(job.nextDue);
+  if (!cursor) { out.reason = 'no next due date'; return out; }
+
+  var end = job.endDate ? parseYmd(job.endDate) : null;
+  var created = Number(job.occurrencesCreated || 0);
+  var max = Number(job.maxOccurrences || 0);
+  var now = startOfDay(today);
+
+  // Cap the catch-up so a job dormant for a year cannot dump 365 tasks at once.
+  var MAX_CATCHUP = 12;
+  var guard = 0;
+
+  while (cursor <= now && guard < MAX_CATCHUP) {
+    guard++;
+    if (end && cursor > end) { out.stop = true; out.reason = 'past end date'; break; }
+    if (max && created >= max) { out.stop = true; out.reason = 'reached occurrence limit'; break; }
+
+    // Don't pile a second copy on someone who hasn't finished the first.
+    if (job.skipIfPreviousOpen && state.previousOpen && out.create.length === 0) {
+      out.reason = 'previous occurrence still open';
+      var skipTo = nextOccurrence(job.cadence, cursor, job);
+      if (!skipTo) break;
+      cursor = skipTo;
+      continue;
+    }
+
+    out.create.push(ymd(cursor));
+    created++;
+    var advanced = nextOccurrence(job.cadence, cursor, job);
+    if (!advanced) break;
+    cursor = advanced;
+  }
+
+  out.nextDue = ymd(cursor);
+  if (end && parseYmd(out.nextDue) > end) { out.stop = true; out.reason = out.reason || 'past end date'; }
+  if (max && created >= max) { out.stop = true; out.reason = out.reason || 'reached occurrence limit'; }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// PERFORMANCE — the Delegation Score
+// ---------------------------------------------------------------------------
+var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
+var LATENESS_POINTS_PER_DAY = 10;   // a day late costs 10 on that task
+var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
+var MAX_MANAGER_DEDUCTION = 15;     // total cap
+var MAX_MANAGER_DEDUCTION_PER_TASK = 10;
+
+function timelinessPoints(daysLate) {
+  if (daysLate <= 0) return 100;
+  return Math.max(0, 100 - daysLate * LATENESS_POINTS_PER_DAY);
+}
+
+/**
+ * When did the holder actually hand the work in? The last time it entered
+ * "For Review" — NOT when it was verified. Scoring the verification date would
+ * punish an employee for their manager's slow review, which is the single most
+ * common way an automated performance metric loses the room's trust.
+ */
+function submittedAt(task) {
+  var history = task.history || [];
+  for (var i = history.length - 1; i >= 0; i--) {
+    if (history[i].status === STATUS.FOR_REVIEW) return new Date(history[i].date);
+  }
+  for (var j = history.length - 1; j >= 0; j--) {
+    if (history[j].status === STATUS.VERIFIED) return new Date(history[j].date);
+  }
+  return null;
+}
+
+/**
+ * A weighted composite out of 100, with the arithmetic exposed so it can be
+ * defended in a review meeting:
+ *
+ *   On-Time Delivery  45%  of what you closed, how much landed by its deadline
+ *   First-Pass Quality 30%  did it come back for rework
+ *   Queue Health      25%  of what is still open, how much is overdue
+ *
+ * then a capped deduction for reviews and approvals left sitting.
+ *
+ * Components with no data are dropped and the remaining weights renormalised,
+ * so a new joiner is measured on what exists rather than handed a fake 100 or
+ * an unearned 0. With nothing at all, hasData is false and the caller should
+ * say "not enough data" rather than print a number.
+ */
+function delegationScore(tasks, username, today) {
+  today = today || new Date();
+  var mine = tasks.filter(function (t) { return t.assignee === username; });
+  var breakdown = [];
+
+  var closed = mine.filter(function (t) { return t.status === STATUS.VERIFIED; });
+  // Queue health counts only work the holder can actually act on. Something
+  // sitting in For Review has already been handed in, and something Awaiting
+  // Approval has not been accepted yet — counting either against them would
+  // penalise a person for their manager's delay, which is the same unfairness
+  // the on-time component is careful to avoid.
+  var open = mine.filter(function (t) {
+    return t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS;
+  });
+
+  // --- on-time delivery ---
+  var otW = 0, otSum = 0, otCount = 0;
+  closed.forEach(function (t) {
+    var sub = submittedAt(t);
+    if (!sub) return;
+    var late = dayDiff(sub, parseYmd(t.due) || sub);
+    var pts = timelinessPoints(late);
+    var w = priorityWeight(t.priority);
+    otSum += pts * w; otW += w; otCount++;
+    breakdown.push({
+      group: 'On-Time Delivery', item: t.title,
+      reason: late <= 0 ? 'Delivered on time (' + t.priority + ')'
+                        : 'Delivered ' + late + ' day(s) late (' + t.priority + ')',
+      impact: pts + '/100',
+    });
+  });
+
+  // --- first-pass quality ---
+  var qW = 0, qSum = 0, reworkTotal = 0;
+  closed.forEach(function (t) {
+    var rw = Number(t.reworkCount || 0);
+    reworkTotal += rw;
+    var pts = Math.max(0, 100 - rw * REWORK_POINTS_EACH);
+    var w = priorityWeight(t.priority);
+    qSum += pts * w; qW += w;
+    if (rw > 0) {
+      breakdown.push({
+        group: 'First-Pass Quality', item: t.title,
+        reason: 'Returned for rework ' + rw + ' time(s)', impact: pts + '/100',
+      });
+    }
+  });
+
+  // --- queue health ---
+  var qhW = 0, qhSum = 0, overdue = 0;
+  open.forEach(function (t) {
+    var due = parseYmd(t.due);
+    var late = due ? dayDiff(today, due) : 0;
+    var pts = timelinessPoints(late);
+    var w = priorityWeight(t.priority);
+    qhSum += pts * w; qhW += w;
+    if (late > 0) {
+      overdue++;
+      breakdown.push({
+        group: 'Queue Health', item: t.title,
+        reason: 'Open and ' + late + ' day(s) overdue (' + t.priority + ')', impact: pts + '/100',
+      });
+    }
+  });
+
+  var parts = [
+    { key: 'onTime',  label: 'On-Time Delivery',   score: otW ? otSum / otW : null,   weight: SCORE_WEIGHTS.onTime,  basis: otCount + ' closed' },
+    { key: 'quality', label: 'First-Pass Quality', score: qW ? qSum / qW : null,      weight: SCORE_WEIGHTS.quality, basis: closed.length + ' closed' },
+    { key: 'queue',   label: 'Queue Health',       score: qhW ? qhSum / qhW : null,   weight: SCORE_WEIGHTS.queue,   basis: open.length + ' open' },
+  ];
+  var active = parts.filter(function (p) { return p.score !== null; });
+  var totalWeight = active.reduce(function (s, p) { return s + p.weight; }, 0);
+  var hasData = active.length > 0;
+  var composite = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
+
+  // --- responsiveness deduction: separate and capped, never averaged in ---
+  var waitingOnMe = tasks.filter(function (t) {
+    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
+           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
+  });
+  var deduction = 0;
+  waitingOnMe.forEach(function (t) {
+    var due = parseYmd(t.due);
+    var late = due ? dayDiff(today, due) : 0;
+    if (late <= 0) return;
+    var penalty = Math.min(late, MAX_MANAGER_DEDUCTION_PER_TASK);
+    deduction += penalty;
+    breakdown.push({
+      group: 'Review Responsiveness', item: t.title,
+      reason: late + ' day(s) waiting on you to ' + (t.status === STATUS.FOR_REVIEW ? 'review' : 'approve'),
+      impact: '-' + penalty,
+    });
+  });
+  deduction = Math.min(deduction, MAX_MANAGER_DEDUCTION);
+
+  /**
+   * A manager may own no tasks at all and still be the reason four people are
+   * stuck. Scoring them "no data" in that situation is the one hole that would
+   * let the least accountable person on the board look unmeasurable, so when
+   * there is no delivery record but there IS a review queue, the score becomes
+   * responsiveness: how promptly they clear what is waiting on them.
+   */
+  if (!hasData && waitingOnMe.length > 0) {
+    var rW = 0, rSum = 0;
+    waitingOnMe.forEach(function (t) {
+      var due = parseYmd(t.due);
+      var waited = due ? dayDiff(today, due) : 0;
+      var w = priorityWeight(t.priority);
+      rSum += timelinessPoints(waited) * w;
+      rW += w;
+    });
+    var responsiveness = rW ? Math.round(rSum / rW) : 100;
+    return {
+      score: Math.max(0, Math.min(100, responsiveness)),
+      hasData: true,
+      deduction: 0,
+      components: [{
+        key: 'responsiveness', label: 'Review Responsiveness', score: responsiveness,
+        weight: 100, basis: waitingOnMe.length + ' waiting on you',
+      }],
+      summary: { closed: 0, open: 0, overdue: 0, reworkLoops: 0, awaitingMe: waitingOnMe.length },
+      breakdown: breakdown,
+      note: 'No delivery record of their own — scored purely on how quickly they clear approvals and reviews.',
+    };
+  }
+
+  return {
+    score: hasData ? Math.max(0, Math.min(100, Math.round(composite - deduction))) : 0,
+    hasData: hasData,
+    deduction: deduction,
+    components: parts.map(function (p) {
+      return {
+        key: p.key, label: p.label,
+        score: p.score === null ? null : Math.round(p.score),
+        weight: Math.round((p.score === null ? 0 : p.weight / totalWeight) * 100),
+        basis: p.basis,
+      };
+    }),
+    summary: { closed: closed.length, open: open.length, overdue: overdue, reworkLoops: reworkTotal },
+    breakdown: breakdown,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// APPRAISAL — KRA / KPI
+// ---------------------------------------------------------------------------
+var APPRAISAL_WEIGHTS = { delegation: 0.40, kra: 0.40, behaviour: 0.20 };
+var MAX_BROWNIE = 5;
+
+/** Ratings are 0-5 against a weight; 0 means "not rated" and is excluded. */
+function weightedRating(items) {
+  var totalWeight = 0, sum = 0;
+  (items || []).forEach(function (i) {
+    var rating = Number(i.rating || 0);
+    var weight = Number(i.weight || 0);
+    if (rating > 0 && weight > 0) { totalWeight += weight; sum += (rating / 5) * 100 * weight; }
+  });
+  return totalWeight ? sum / totalWeight : null;
+}
+
+function validateKraBlueprint(kras) {
+  var rows = (kras || []).filter(function (k) { return k && String(k.item || k.name || '').trim(); });
+  if (!rows.length) return { ok: false, error: 'Add at least one KRA.' };
+  var total = rows.reduce(function (s, k) { return s + Number(k.weight || 0); }, 0);
+  if (total > 100) return { ok: false, error: 'KRA weights total ' + total + '%. They cannot exceed 100%.' };
+  return { ok: true, total: total, rows: rows, warning: total < 100 ? 'Weights total ' + total + '% — ' + (100 - total) + '% unallocated.' : '' };
+}
+
+/**
+ * Blends measured execution with judgement:
+ *   40% delegation score (from verified task history — cannot be talked up)
+ *   40% KRA execution     (weighted, rated 0-5)
+ *   20% behaviour         (weighted, rated 0-5)
+ *   + up to 5 discretionary points
+ * Any unrated half is dropped and the rest renormalised, so a half-finished
+ * appraisal never silently reads as a low score.
+ */
+function finalAppraisalScore(input) {
+  var kra = weightedRating(input.kras);
+  var behaviour = weightedRating(input.behaviours);
+  var delegation = input.hasDelegationData === false ? null : Number(input.delegationScore || 0);
+
+  var parts = [
+    { v: delegation, w: APPRAISAL_WEIGHTS.delegation, key: 'delegation' },
+    { v: kra,        w: APPRAISAL_WEIGHTS.kra,        key: 'kra' },
+    { v: behaviour,  w: APPRAISAL_WEIGHTS.behaviour,  key: 'behaviour' },
+  ].filter(function (p) { return p.v !== null && !isNaN(p.v); });
+
+  if (!parts.length) return { score: 0, hasData: false, components: {}, brownie: 0 };
+
+  var tw = parts.reduce(function (s, p) { return s + p.w; }, 0);
+  var blended = parts.reduce(function (s, p) { return s + p.v * (p.w / tw); }, 0);
+  var brownie = Math.max(0, Math.min(MAX_BROWNIE, Number(input.brownie || 0)));
+
+  return {
+    score: Math.max(0, Math.min(100, Math.round(blended + brownie))),
+    hasData: true,
+    brownie: brownie,
+    components: {
+      delegation: delegation === null ? null : Math.round(delegation),
+      kra: kra === null ? null : Math.round(kra),
+      behaviour: behaviour === null ? null : Math.round(behaviour),
+    },
+    weightsUsed: parts.map(function (p) { return p.key + ':' + Math.round(p.w / tw * 100) + '%'; }).join(' '),
+  };
+}
+
+/** A/B/C banding with the action each implies. */
+function performanceBand(score) {
+  if (score >= 85) return { band: 'A', label: 'Top performer', action: 'Recognise and retain — these are your flight risks.' };
+  if (score >= 60) return { band: 'B', label: 'Solid, needs sharpening', action: 'Coach the specific pattern shown in the breakdown.' };
+  return { band: 'C', label: 'Needs intervention', action: 'Documented basis for a performance conversation or role change.' };
+}
+
+// ---------------------------------------------------------------------------
+// BOARD VIEW  (the Trello-style column layout, with accountability kept intact)
+// ---------------------------------------------------------------------------
+/**
+ * Board columns. Deliberately NOT one column per status: "Awaiting Approval"
+ * and "Delegation Proposed" both mean "blocked on a manager", so they share a
+ * lane. That keeps the board readable while the underlying statuses stay
+ * precise.
+ */
+var BOARD_COLUMNS = [
+  { key: 'inbox',    title: 'Needs Approval', statuses: [STATUS.AWAITING_APPROVAL, STATUS.DELEGATION_PROPOSED], accent: 'amber' },
+  { key: 'todo',     title: 'To Do',          statuses: [STATUS.PENDING],      accent: 'slate' },
+  { key: 'doing',    title: 'In Progress',    statuses: [STATUS.IN_PROGRESS],  accent: 'blue' },
+  { key: 'review',   title: 'For Review',     statuses: [STATUS.FOR_REVIEW],   accent: 'purple' },
+  { key: 'done',     title: 'Verified',       statuses: [STATUS.VERIFIED],     accent: 'green' },
+];
+
+function columnForStatus(status) {
+  for (var i = 0; i < BOARD_COLUMNS.length; i++) {
+    if (BOARD_COLUMNS[i].statuses.indexOf(status) > -1) return BOARD_COLUMNS[i].key;
+  }
+  return null;
+}
+
+/** The status a card takes when dropped into a column. */
+function statusForColumn(columnKey) {
+  for (var i = 0; i < BOARD_COLUMNS.length; i++) {
+    if (BOARD_COLUMNS[i].key === columnKey) return BOARD_COLUMNS[i].statuses[0];
+  }
+  return null;
+}
+
+/**
+ * Can this person drag this card into that column?
+ *
+ * This is where Dome Box departs from Trello on purpose. On a Trello board
+ * anyone can drag anything into Done, which is exactly why a Trello board can
+ * never be the basis for a performance score. Here the drop is checked against
+ * the same workflow rules as the API, plus dependency and subtask gates.
+ */
+function canDropInColumn(task, actor, columnKey, context) {
+  context = context || {};
+  var target = statusForColumn(columnKey);
+  if (!target) return { ok: false, reason: 'Unknown column.' };
+  if (columnForStatus(task.status) === columnKey) return { ok: true, noop: true };
+
+  if (!canTransition(task, actor, target)) {
+    if (target === STATUS.VERIFIED && task.assignee === actor.username) {
+      return { ok: false, reason: 'You cannot sign off your own work — it needs the person who raised it.' };
+    }
+    return { ok: false, reason: 'Your role does not allow that move on this task.' };
+  }
+
+  if (target === STATUS.IN_PROGRESS) {
+    var blockers = openBlockers(task, context.allTasks || []);
+    if (blockers.length) {
+      return { ok: false, reason: 'Blocked by: ' + blockers.map(function (b) { return b.title; }).join(', ') };
+    }
+    var wip = wipStatus(context.allTasks || [], task.assignee, context.wipLimit);
+    if (wip.exceeded) {
+      return { ok: false, reason: task.assignee + ' already has ' + wip.count + ' items in progress (limit ' + wip.limit + ').' };
+    }
+  }
+
+  if (target === STATUS.FOR_REVIEW) {
+    var sub = subtaskProgress(task);
+    if (sub.total > 0 && sub.done < sub.total) {
+      return { ok: false, reason: 'Finish the checklist first (' + sub.done + '/' + sub.total + ').' };
+    }
+  }
+
+  return { ok: true };
+}
+
+function groupIntoBoard(tasks) {
+  var board = {};
+  BOARD_COLUMNS.forEach(function (c) { board[c.key] = []; });
+  (tasks || []).forEach(function (t) {
+    var col = columnForStatus(t.status);
+    if (col) board[col].push(t);
+  });
+  return board;
+}
+
+// ---------------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------------
+/** Blocking tasks that are not yet closed. */
+function openBlockers(task, allTasks) {
+  var ids = task.blockedBy || [];
+  if (!ids.length) return [];
+  var byId = {};
+  (allTasks || []).forEach(function (t) { byId[t.id] = t; });
+  var out = [];
+  ids.forEach(function (id) {
+    var b = byId[id];
+    if (b && !isClosed(b.status)) out.push(b);
+  });
+  return out;
+}
+
+/**
+ * Would adding `blockerId` -> `taskId` create a loop? Without this check a user
+ * can build A blocks B blocks A, and every "can this start?" query afterwards
+ * recurses forever.
+ */
+function wouldCycle(taskId, blockerId, allTasks) {
+  if (taskId === blockerId) return true;
+  var byId = {};
+  (allTasks || []).forEach(function (t) { byId[t.id] = t; });
+
+  // Walk up from the proposed blocker: if we reach taskId, the edge closes a loop.
+  var stack = [blockerId];
+  var seen = {};
+  while (stack.length) {
+    var cur = stack.pop();
+    if (cur === taskId) return true;
+    if (seen[cur]) continue;
+    seen[cur] = true;
+    var node = byId[cur];
+    if (!node) continue;
+    (node.blockedBy || []).forEach(function (up) { stack.push(up); });
+  }
+  return false;
+}
+
+function addDependency(taskId, blockerId, allTasks) {
+  if (taskId === blockerId) return { ok: false, error: 'A task cannot block itself.' };
+  var byId = {};
+  (allTasks || []).forEach(function (t) { byId[t.id] = t; });
+  if (!byId[taskId] || !byId[blockerId]) return { ok: false, error: 'Task not found.' };
+  if ((byId[taskId].blockedBy || []).indexOf(blockerId) > -1) return { ok: false, error: 'Already blocked by that task.' };
+  if (wouldCycle(taskId, blockerId, allTasks)) {
+    return { ok: false, error: 'That would create a circular dependency.' };
+  }
+  return { ok: true, blockedBy: (byId[taskId].blockedBy || []).concat([blockerId]) };
+}
+
+// ---------------------------------------------------------------------------
+// SUBTASKS / CHECKLIST
+// ---------------------------------------------------------------------------
+function subtaskProgress(task) {
+  var items = task.subtasks || [];
+  var done = items.filter(function (i) { return !!i.done; }).length;
+  return { total: items.length, done: done, pct: items.length ? Math.round(done / items.length * 100) : 0 };
+}
+
+// ---------------------------------------------------------------------------
+// WIP LIMIT — the one Kanban rule that actually changes behaviour: cap how much
+// a person may have in progress at once, so "everything is started, nothing is
+// finished" becomes visible instead of normal.
+// ---------------------------------------------------------------------------
+var DEFAULT_WIP_LIMIT = 5;
+
+function wipStatus(allTasks, username, limit) {
+  // 0 is a meaningful value here ("no limit"), so it must not fall through to
+  // the default the way `limit || DEFAULT` would.
+  var cap = (limit === undefined || limit === null || limit === '') ? DEFAULT_WIP_LIMIT : Number(limit);
+  if (isNaN(cap) || cap < 0) cap = DEFAULT_WIP_LIMIT;
+  var count = (allTasks || []).filter(function (t) {
+    return t.assignee === username && t.status === STATUS.IN_PROGRESS;
+  }).length;
+  return { count: count, limit: cap, exceeded: cap > 0 && count >= cap, nearing: cap > 0 && count === cap - 1 };
+}
+
+// ---------------------------------------------------------------------------
+// AUTOMATIONS — the Monday.com-style "when X then Y", evaluated server-side so
+// a rule cannot be bypassed by a crafted request from the browser.
+// ---------------------------------------------------------------------------
+var TRIGGERS = {
+  STATUS_CHANGED: 'status_changed',
+  OVERDUE:        'became_overdue',
+  CREATED:        'created',
+  REWORKED:       'sent_for_rework',
+  VERIFIED:       'verified',
+};
+var ACTIONS = {
+  NOTIFY:        'notify',
+  ESCALATE:      'escalate_to_manager',
+  SET_PRIORITY:  'set_priority',
+  ADD_LABEL:     'add_label',
+  REASSIGN:      'reassign',
+};
+
+/**
+ * Returns the actions a rule set produces for one event. Pure: it decides what
+ * should happen, the caller performs it. That split is what makes automations
+ * testable rather than a pile of side effects.
+ *
+ * rule = { on, if: {field, op, value}, then: {action, ...}, active }
+ */
+function evaluateAutomations(rules, event, task) {
+  var out = [];
+  (rules || []).forEach(function (rule) {
+    if (rule.active === false) return;
+    if (rule.on !== event.type) return;
+    if (rule.if && !matchCondition(rule.if, task, event)) return;
+    out.push(Object.assign({ ruleName: rule.name || rule.on }, rule.then));
+  });
+  return out;
+}
+
+function matchCondition(cond, task, event) {
+  var actual = cond.field === 'toStatus' ? event.toStatus
+             : cond.field === 'fromStatus' ? event.fromStatus
+             : task[cond.field];
+  var expected = cond.value;
+  switch (cond.op || 'eq') {
+    case 'eq':  return String(actual) === String(expected);
+    case 'ne':  return String(actual) !== String(expected);
+    case 'gte': return Number(actual) >= Number(expected);
+    case 'lte': return Number(actual) <= Number(expected);
+    case 'in':  return (expected || []).map(String).indexOf(String(actual)) > -1;
+    case 'contains': return String(actual || '').toLowerCase().indexOf(String(expected).toLowerCase()) > -1;
+    default: return false;
+  }
+}
+
+/** Sensible defaults so a new workspace has useful automation on day one. */
+function defaultAutomations() {
+  return [
+    { name: 'High-priority rework escalates', on: TRIGGERS.REWORKED,
+      if: { field: 'priority', op: 'eq', value: 'High' },
+      then: { action: ACTIONS.ESCALATE, to: 'assigneeManager' }, active: true },
+    { name: 'Overdue 3 days escalates to manager', on: TRIGGERS.OVERDUE,
+      if: { field: 'daysOverdue', op: 'gte', value: 3 },
+      then: { action: ACTIONS.ESCALATE, to: 'assigneeManager' }, active: true },
+    { name: 'Notify the raiser on hand-in', on: TRIGGERS.STATUS_CHANGED,
+      if: { field: 'toStatus', op: 'eq', value: STATUS.FOR_REVIEW },
+      then: { action: ACTIONS.NOTIFY, to: 'raisedBy' }, active: true },
+    { name: 'Notify the owner when verified', on: TRIGGERS.VERIFIED,
+      then: { action: ACTIONS.NOTIFY, to: 'assignee' }, active: true },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// REMINDER DIGEST — what one person needs to be told today. Pure, so the
+// scheduler can be tested without sending a single email.
+// ---------------------------------------------------------------------------
+function buildDigest(tasks, user, today, opts) {
+  opts = opts || {};
+  today = today || new Date();
+  var escalateAfter = Number(opts.escalateAfterDays || 3);
+
+  // Only chase somebody about work the ball is actually with. Once it is in
+  // For Review it is the reviewer's move (it shows up in THEIR digest under
+  // "ready for your review"), and Awaiting Approval is the approver's move.
+  // Reminding the person who already delivered is how a nagging system trains
+  // people to ignore it.
+  var mine = tasks.filter(function (t) {
+    return t.assignee === user.username &&
+      (t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS);
+  });
+  var bucket = { overdue: [], dueToday: [], dueTomorrow: [], rework: [], awaitingMyReview: [], awaitingMyApproval: [], teamOverdue: [] };
+
+  mine.forEach(function (t) {
+    var due = parseYmd(t.due);
+    var late = due ? dayDiff(today, due) : null;
+    if (Number(t.reworkCount || 0) > 0 && t.status === STATUS.IN_PROGRESS) bucket.rework.push(t);
+    if (late === null) return;
+    if (late > 0) bucket.overdue.push(Object.assign({ daysOverdue: late }, t));
+    else if (late === 0) bucket.dueToday.push(t);
+    else if (late === -1) bucket.dueTomorrow.push(t);
+  });
+
+  tasks.forEach(function (t) {
+    if (t.status === STATUS.FOR_REVIEW && t.raisedBy === user.username) bucket.awaitingMyReview.push(t);
+    if ((t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED) && t.approver === user.username) bucket.awaitingMyApproval.push(t);
+  });
+
+  // A manager also needs their team's badly overdue work, which is the point at
+  // which chasing should stop being the manager's job and start being the system's.
+  (opts.reports || []).forEach(function (reportUsername) {
+    tasks.forEach(function (t) {
+      if (t.assignee !== reportUsername || !isOpen(t.status)) return;
+      var due = parseYmd(t.due);
+      var late = due ? dayDiff(today, due) : 0;
+      if (late >= escalateAfter) bucket.teamOverdue.push(Object.assign({ daysOverdue: late }, t));
+    });
+  });
+
+  bucket.overdue.sort(function (a, b) { return b.daysOverdue - a.daysOverdue; });
+  bucket.teamOverdue.sort(function (a, b) { return b.daysOverdue - a.daysOverdue; });
+
+  var total = bucket.overdue.length + bucket.dueToday.length + bucket.dueTomorrow.length +
+              bucket.awaitingMyReview.length + bucket.awaitingMyApproval.length + bucket.teamOverdue.length;
+  return { user: user, buckets: bucket, total: total, isEmpty: total === 0 };
+}
+
+// ---------------------------------------------------------------------------
+// PERIOD SCORING — weekly / monthly / quarterly / yearly
+// ---------------------------------------------------------------------------
+var PERIOD = { WEEK: 'week', MONTH: 'month', QUARTER: 'quarter', YEAR: 'year' };
+
+function startOfWeek(d) {           // ISO week: Monday
+  var x = startOfDay(d);
+  var dow = (x.getDay() + 6) % 7;   // Mon=0 … Sun=6
+  return addDays(x, -dow);
+}
+function isoWeekNumber(d) {
+  var x = startOfDay(d);
+  x.setDate(x.getDate() + 4 - ((x.getDay() + 6) % 7 + 1));  // nearest Thursday
+  var yearStart = new Date(x.getFullYear(), 0, 1);
+  return Math.ceil((((x - yearStart) / 86400000) + 1) / 7);
+}
+
+/**
+ * The window for a period, `offset` back from today (0 = current).
+ * Returns inclusive `from`/`to` day boundaries plus a short and long label.
+ */
+function periodRange(kind, offset, today) {
+  offset = Number(offset || 0);
+  var now = startOfDay(today || new Date());
+  var from, to, label, short;
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  if (kind === PERIOD.WEEK) {
+    from = addDays(startOfWeek(now), -7 * offset);
+    to = addDays(from, 6);
+    short = 'W' + isoWeekNumber(from);
+    label = 'Week ' + isoWeekNumber(from) + ' · ' + MONTHS[from.getMonth()] + ' ' + from.getDate();
+  } else if (kind === PERIOD.MONTH) {
+    var m = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    from = m;
+    to = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    short = MONTHS[from.getMonth()];
+    label = MONTHS[from.getMonth()] + ' ' + from.getFullYear();
+  } else if (kind === PERIOD.QUARTER) {
+    var qBase = new Date(now.getFullYear(), now.getMonth(), 1);
+    var qIndex = Math.floor(qBase.getMonth() / 3) - offset;
+    var qYear = qBase.getFullYear() + Math.floor(qIndex / 4);
+    var qMonth = ((qIndex % 4) + 4) % 4 * 3;
+    from = new Date(qYear, qMonth, 1);
+    to = new Date(qYear, qMonth + 3, 0);
+    short = 'Q' + (Math.floor(qMonth / 3) + 1);
+    label = 'Q' + (Math.floor(qMonth / 3) + 1) + ' ' + qYear;
+  } else {
+    var y = now.getFullYear() - offset;
+    from = new Date(y, 0, 1);
+    to = new Date(y, 11, 31);
+    short = String(y);
+    label = String(y);
+  }
+  return { kind: kind, from: startOfDay(from), to: startOfDay(to), label: label, short: short, offset: offset };
+}
+
+/** When a task counts as delivered — the verification date. */
+function closedAt(task) {
+  var history = task.history || [];
+  for (var i = history.length - 1; i >= 0; i--) {
+    if (history[i].status === STATUS.VERIFIED) return new Date(history[i].date);
+  }
+  return null;
+}
+
+function inWindow(date, range) {
+  if (!date) return false;
+  var d = startOfDay(date);
+  return d >= range.from && d <= range.to;
+}
+
+/**
+ * Score for one person over one period.
+ *
+ * A task belongs to the period it was CLOSED in, so "your March score" means
+ * the work you finished in March — not everything that happens to be open now.
+ * Queue health is judged as at the end of the window, so a historic period is
+ * measured on how the queue looked then rather than how it looks today.
+ */
+function scoreForPeriod(tasks, username, range) {
+  var closedInWindow = tasks.filter(function (t) {
+    return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
+  });
+
+  // Work that was open at the end of the window: raised on or before it, and
+  // either still open now or closed after the window ended.
+  var openThen = tasks.filter(function (t) {
+    if (t.assignee !== username) return false;
+    var due = parseYmd(t.due);
+    if (!due || due > range.to) return false;
+    var closed = closedAt(t);
+    if (closed && startOfDay(closed) <= range.to) return false;
+    return t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS || isClosed(t.status) === false;
+  }).map(function (t) {
+    return { assignee: t.assignee, status: STATUS.PENDING, title: t.title, due: t.due, priority: t.priority, reworkCount: t.reworkCount, history: [] };
+  });
+
+  /**
+   * Work that is waiting on this person as approver or reviewer. delegationScore
+   * reads it off the task list it is handed, so it has to survive the filtering
+   * above — without it a manager who owns no tasks is handed an empty list and
+   * scores "no data" every period, which is exactly the person the responsiveness
+   * path exists to keep measurable.
+   */
+  var waitingOnThem = tasks.filter(function (t) {
+    if (t.assignee === username) return false;
+    var due = parseYmd(t.due);
+    if (due && due > range.to) return false;
+    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
+           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
+  });
+
+  var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
+  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf);
+  result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
+  result.delivered = closedInWindow.length;
+  result.openThen = openThen.length;
+  result.awaitingThem = waitingOnThem.length;
+
+  /**
+   * A period score has to be earned inside the period. Without this gate, someone
+   * who closed nothing in the window still scores — purely on the queue health of
+   * work carried in from earlier — so on day 1 of a month a person with two old
+   * overdue tasks lands a 26 and gets banded "C · Needs action" for a month that
+   * has barely started. That is a snapshot of their open queue, not a measure of
+   * a period's performance, and it is the kind of number that loses an appraisal
+   * conversation. Delivery in the window, or a review queue they were sitting on,
+   * is the evidence; without either, the honest answer is "no data yet".
+   */
+  var responsivenessOnly = result.components.length === 1 && result.components[0].key === 'responsiveness';
+  if (result.hasData && !responsivenessOnly && closedInWindow.length === 0) {
+    result.hasData = false;
+    result.score = 0;
+    result.reason = openThen.length
+      ? 'Nothing closed in this period — ' + openThen.length + ' item(s) still open. Carried-over work is not scored here.'
+      : 'Nothing closed in this period.';
+  }
+  return result;
+}
+
+/** A trend of the last `count` periods, oldest first — ready to plot. */
+function scoreTrend(tasks, username, kind, count, today, endOffset) {
+  var end = Number(endOffset) || 0;
+  var out = [];
+  for (var i = count - 1 + end; i >= end; i--) {
+    var range = periodRange(kind, i, today);
+    var s = scoreForPeriod(tasks, username, range);
+    out.push({
+      label: range.label, short: range.short,
+      score: s.hasData ? s.score : null,
+      delivered: s.delivered,
+      hasData: s.hasData,
+      components: s.components,
+    });
+  }
+  return out;
+}
+
+/**
+ * Everything the analytics dashboard needs for one period, in one pass:
+ * headline counts, per-person scores, KRA split and the A/B/C spread.
+ */
+function periodAnalytics(tasks, users, range, today) {
+  var delivered = [], overdueNow = [], reworkLoops = 0, onTime = 0, onTimeBase = 0;
+
+  tasks.forEach(function (t) {
+    var closed = closedAt(t);
+    if (t.status === STATUS.VERIFIED && inWindow(closed, range)) {
+      delivered.push(t);
+      reworkLoops += Number(t.reworkCount || 0);
+      var sub = submittedAt(t), due = parseYmd(t.due);
+      if (sub && due) { onTimeBase++; if (dayDiff(sub, due) <= 0) onTime++; }
+    }
+    var d = parseYmd(t.due);
+    if (isOpen(t.status) && d && dayDiff(today || new Date(), d) > 0) overdueNow.push(t);
+  });
+
+  var people = users.map(function (u) {
+    var s = scoreForPeriod(tasks, u.username, range);
+    return {
+      username: u.username, name: u.name, role: u.role, dept: u.dept,
+      score: s.hasData ? s.score : null, hasData: s.hasData,
+      delivered: s.delivered, components: s.components,
+      band: s.hasData ? performanceBand(s.score).band : null,
+      reason: s.hasData ? null : (s.reason || 'Nothing closed in this period.'),
+    };
+  });
+
+  var kra = {};
+  delivered.forEach(function (t) { var k = t.kra || 'Unassigned'; kra[k] = (kra[k] || 0) + 1; });
+  var kraRows = Object.keys(kra).map(function (k) { return { kra: k, count: kra[k] }; })
+    .sort(function (a, b) { return b.count - a.count; });
+
+  var bands = { A: 0, B: 0, C: 0, none: 0 };
+  people.forEach(function (p) { bands[p.band || 'none']++; });
+
+  var scored = people.filter(function (p) { return p.hasData; });
+  return {
+    range: { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) },
+    delivered: delivered.length,
+    overdueNow: overdueNow.length,
+    reworkLoops: reworkLoops,
+    onTimeRate: onTimeBase ? Math.round(onTime / onTimeBase * 100) : null,
+    teamScore: scored.length ? Math.round(scored.reduce(function (s, p) { return s + p.score; }, 0) / scored.length) : null,
+    people: people,
+    kra: kraRows,
+    bands: bands,
+  };
+}
+
+// Export for the Node test harness; harmless inside Apps Script.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    STATUS: STATUS, ROLE: ROLE, CADENCE: CADENCE, OPEN_STATUSES: OPEN_STATUSES,
+    isOpen: isOpen, isClosed: isClosed, priorityWeight: priorityWeight,
+    startOfDay: startOfDay, dayDiff: dayDiff, addDays: addDays, addMonths: addMonths,
+    ymd: ymd, parseYmd: parseYmd,
+    allowedTransitions: allowedTransitions, canTransition: canTransition,
+    initialStatusFor: initialStatusFor, proposeDelegation: proposeDelegation,
+    nextOccurrence: nextOccurrence, dueOccurrences: dueOccurrences,
+    timelinessPoints: timelinessPoints, submittedAt: submittedAt, delegationScore: delegationScore,
+    weightedRating: weightedRating, validateKraBlueprint: validateKraBlueprint,
+    finalAppraisalScore: finalAppraisalScore, performanceBand: performanceBand,
+    SCORE_WEIGHTS: SCORE_WEIGHTS, APPRAISAL_WEIGHTS: APPRAISAL_WEIGHTS,
+    BOARD_COLUMNS: BOARD_COLUMNS, columnForStatus: columnForStatus, statusForColumn: statusForColumn,
+    canDropInColumn: canDropInColumn, groupIntoBoard: groupIntoBoard,
+    openBlockers: openBlockers, wouldCycle: wouldCycle, addDependency: addDependency,
+    subtaskProgress: subtaskProgress, wipStatus: wipStatus, DEFAULT_WIP_LIMIT: DEFAULT_WIP_LIMIT,
+    TRIGGERS: TRIGGERS, ACTIONS: ACTIONS, evaluateAutomations: evaluateAutomations,
+    matchCondition: matchCondition, defaultAutomations: defaultAutomations,
+    buildDigest: buildDigest,
+    PERIOD: PERIOD, startOfWeek: startOfWeek, isoWeekNumber: isoWeekNumber,
+    periodRange: periodRange, closedAt: closedAt, inWindow: inWindow,
+    scoreForPeriod: scoreForPeriod, scoreTrend: scoreTrend, periodAnalytics: periodAnalytics,
+  };
+}
+
+
+  global.DomeBox = module.exports;
+})(typeof window !== 'undefined' ? window : this);
+
+</script>
+
+<script>
+(function(){
+'use strict';
+const S = DomeBox.STATUS, P = DomeBox.PERIOD;
+const C = (n) => getComputedStyle(document.getElementById('view-analytics')).getPropertyValue(n).trim();
+
+let USERS = [], TASKS = [];
+let KIND = P.MONTH, SPAN = 12, PERSON = '', OFFSET = 0;
+const SPANS = { week:[8,12,26], month:[6,12,18], quarter:[4,6,8], year:[2,3,5] };
+
+const isVisible = () => {
+  const v = document.getElementById('view-analytics');
+  return !!(v && !v.classList.contains('hidden') && v.clientWidth > 0);
+};
+
+/* ---------- tiny chart toolkit (inline SVG, no library) ---------- */
+const tip = document.getElementById('dbx-tip');
+function showTip(html, e){
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY - h - pad;
+  if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+  if (y < 8) y = e.clientY + pad;
+  tip.style.left = x+'px'; tip.style.top = y+'px';
+}
+const hideTip = () => tip.style.opacity = 0;
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const svgEl = (n,a) => { const e=document.createElementNS('http://www.w3.org/2000/svg',n); for(const k in a) e.setAttribute(k,a[k]); return e; };
+
+/** Line chart with a crosshair. Null values break the line rather than
+ *  pretending a period with no data scored zero. */
+function lineChart(host, series, opts){
+  opts = opts||{};
+  const W = host.clientWidth || 720, H = opts.height || 230;
+  const m = { t:14, r:16, b:26, l:34 };
+  const iw = W-m.l-m.r, ih = H-m.t-m.b;
+  const labels = series[0].points.map(p=>p.label);
+  const n = labels.length;
+  const yMax = 100;
+  const x = i => m.l + (n===1 ? iw/2 : i*(iw/(n-1)));
+  const y = v => m.t + ih - (v/yMax)*ih;
+
+  host.innerHTML='';
+  const svg = svgEl('svg',{width:'100%',height:H,viewBox:`0 0 ${W} ${H}`,role:'img'});
+
+  [0,25,50,75,100].forEach(v=>{
+    svg.appendChild(svgEl('line',{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),class:v===0?'baseline':'gridline'}));
+    const t=svgEl('text',{x:m.l-7,y:y(v)+3.5,class:'axis','text-anchor':'end'}); t.textContent=v; svg.appendChild(t);
+  });
+  // Label interval comes from the width available, not the number of points:
+  // twelve months at 390px collided into "SepOctNovDec".
+  const step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw/40))));
+  labels.forEach((l,i)=>{ if(i%step) return;
+    const t=svgEl('text',{x:x(i),y:H-8,class:'axis','text-anchor':'middle'}); t.textContent=l; svg.appendChild(t);
+  });
+
+  series.forEach(s=>{
+    let run=[];
+    const flush=()=>{ if(run.length>1){
+        svg.appendChild(svgEl('path',{d:'M'+run.map(p=>`${x(p.i)},${y(p.v)}`).join('L'),
+          fill:'none',stroke:s.color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+      } else if(run.length===1){
+        svg.appendChild(svgEl('circle',{cx:x(run[0].i),cy:y(run[0].v),r:3,fill:s.color}));
+      } run=[]; };
+    s.points.forEach((p,i)=>{ if(p.value==null){flush();return;} run.push({i,v:p.value}); });
+    flush();
+    s.points.forEach((p,i)=>{ if(p.value==null) return;
+      svg.appendChild(svgEl('circle',{cx:x(i),cy:y(p.value),r:3.5,fill:s.color,stroke:C('--surface'),'stroke-width':2}));
+    });
+    // direct-label the final point so identity never depends on colour alone
+    for(let i=s.points.length-1;i>=0;i--){ if(s.points[i].value!=null){
+      // Flip the label inward when it would run past the plot edge, rather than
+      // letting the viewBox clip it down to its first letter.
+      const wide = s.name.length*6.4 + 10;
+      const flip = x(i)+wide > W-2;
+      const t=svgEl('text',{x: flip ? x(i)-8 : x(i)+8, y:y(s.points[i].value)+3.5,
+        class:'dlabel', fill:s.color, 'text-anchor': flip ? 'end' : 'start'});
+      t.textContent=s.name; svg.appendChild(t); break; } }
+  });
+
+  const cross = svgEl('line',{y1:m.t,y2:m.t+ih,stroke:C('--muted'),'stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
+  svg.appendChild(cross);
+  const hit = svgEl('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});
+  svg.appendChild(hit);
+  hit.addEventListener('mousemove',e=>{
+    const r=svg.getBoundingClientRect();
+    const px=(e.clientX-r.left)*(W/r.width);
+    let i=Math.round((px-m.l)/(iw/Math.max(n-1,1))); i=Math.max(0,Math.min(n-1,i));
+    cross.setAttribute('x1',x(i)); cross.setAttribute('x2',x(i)); cross.setAttribute('opacity',1);
+    showTip(`<div class="t">${esc(series[0].points[i].label)}</div>`+
+      series.map(s=>`<div class="r"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:6px"></i>${esc(s.name)}</span><b>${s.points[i].value==null?'no data':s.points[i].value}</b></div>`).join('')
+      + (series[0].points[i].note?`<div class="r"><span>Delivered</span><b>${series[0].points[i].note}</b></div>`:''), e);
+  });
+  hit.addEventListener('mouseleave',()=>{ cross.setAttribute('opacity',0); hideTip(); });
+  host.appendChild(svg);
+}
+
+/** Horizontal bars — 4px rounded data-end, anchored to the baseline. */
+function barsH(host, rows, opts){
+  opts=opts||{};
+  const W = host.clientWidth||480, rowH=28, H = Math.max(rows.length*rowH+10, 40);
+  const labelW = opts.labelW || 118;
+  // Reserve room for the widest value label. A fixed pad silently clips anything
+  // longer than three characters — "100 · A" came out as "100 · /".
+  const longest = rows.reduce(function(m,r){
+    var t = r.value==null ? 'no data' : String(r.display==null ? r.value : r.display);
+    return Math.max(m, t.length); }, 3);
+  const pad = Math.max(46, longest*6.6 + 14);
+  const iw = W-labelW-pad;
+  const max = opts.max || Math.max(1,...rows.map(r=>r.value||0));
+  host.innerHTML='';
+  if(!rows.length){ host.innerHTML='<div class="empty">Nothing delivered in this period.</div>'; return; }
+  const svg=svgEl('svg',{width:'100%',height:H,viewBox:`0 0 ${W} ${H}`,role:'img'});
+  rows.forEach((r,i)=>{
+    const y=i*rowH+6, bh=15;
+    const lt=svgEl('text',{x:0,y:y+bh-3,class:'axis',fill:C('--ink-2')}); lt.textContent=r.label; svg.appendChild(lt);
+    svg.appendChild(svgEl('rect',{x:labelW,y,width:iw,height:bh,rx:4,fill:C('--surface-2')}));
+    const w = r.value==null?0:Math.max(2,(r.value/max)*iw);
+    if(r.value!=null){
+      const bar=svgEl('rect',{x:labelW,y,width:w,height:bh,rx:4,fill:r.color||C('--series-1')});
+      bar.addEventListener('mousemove',e=>showTip(`<div class="t">${esc(r.label)}</div><div class="r"><span>${esc(opts.metric||'Value')}</span><b>${r.display??r.value}</b></div>`+(r.note?`<div class="r"><span>${esc(r.note.k)}</span><b>${esc(r.note.v)}</b></div>`:''),e));
+      bar.addEventListener('mouseleave',hideTip);
+      svg.appendChild(bar);
+    }
+    const vt=svgEl('text',{x:labelW+w+7,y:y+bh-3,class:'dlabel'});
+    vt.textContent = r.value==null ? 'no data' : (r.display??r.value);
+    if(r.value==null) vt.setAttribute('fill',C('--muted'));
+    svg.appendChild(vt);
+  });
+  host.appendChild(svg);
+}
+
+/** Ordinal heatmap on the validated 4-step blue ramp. */
+function heatmap(host, rowLabels, colLabels, values){
+  const W=host.clientWidth||1000, gap=3;
+  const gut=Math.min(130,Math.max(52,Math.round(W*0.3)));
+  const cell=Math.max(11,Math.min(26,(W-gut-10)/colLabels.length-3));
+  /* If the cells cannot fit the host even at their minimum size, widen the canvas
+     and let the container scroll. Shrinking them further makes the ramp
+     unreadable, and the SVG viewBox would otherwise clip the right-hand columns
+     silently — dropping whole weeks off the chart with nothing to show it. */
+  const needed=gut+colLabels.length*(cell+gap)+10;
+  const CW=Math.max(W,needed);
+  const H=rowLabels.length*(cell+gap)+30;
+  const max=Math.max(1,...values.flat());
+  const ramp=[C('--ramp-1'),C('--ramp-2'),C('--ramp-3'),C('--ramp-4')];
+  host.innerHTML='';
+  const svg=svgEl('svg',{width:CW>W?CW:'100%',height:H,viewBox:`0 0 ${CW} ${H}`,role:'img'});
+  rowLabels.forEach((rl,r)=>{
+    const t=svgEl('text',{x:0,y:r*(cell+gap)+cell-2,class:'axis',fill:C('--ink-2')}); t.textContent=rl; svg.appendChild(t);
+    values[r].forEach((v,c)=>{
+      const x=gut+c*(cell+gap), y=r*(cell+gap);
+      // Zero stays as surface so "nothing happened" doesn't read as a value.
+      const fill = v===0 ? C('--surface-2') : ramp[Math.min(ramp.length-1, Math.floor((v/max)*ramp.length))];
+      const rect=svgEl('rect',{x,y,width:cell,height:cell,rx:3,fill});
+      rect.addEventListener('mousemove',e=>showTip(`<div class="t">${esc(rl)}</div><div class="r"><span>${esc(colLabels[c])}</span><b>${v} verified</b></div>`,e));
+      rect.addEventListener('mouseleave',hideTip);
+      svg.appendChild(rect);
+    });
+  });
+  const cstep = Math.max(1, Math.ceil(34/(cell+gap)));
+  colLabels.forEach((cl,c)=>{ if(c%cstep) return;
+    const t=svgEl('text',{x:gut+c*(cell+gap)+cell/2,y:H-8,class:'axis','text-anchor':'middle'}); t.textContent=cl; svg.appendChild(t);
+  });
+  host.appendChild(svg);
+}
+
+function tableFor(host, cols, rows){
+  host.innerHTML = `<table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const range = DomeBox.periodRange(KIND, OFFSET);
+  const a = DomeBox.periodAnalytics(TASKS, USERS, range);
+  const prev = DomeBox.periodAnalytics(TASKS, USERS, DomeBox.periodRange(KIND, OFFSET + 1));
+  document.getElementById('rangeLabel').textContent = a.range.label + '  ·  ' + a.range.from + ' → ' + a.range.to;
+
+  /* tiles */
+  const d = (now, before, unit) => {
+    if (now==null||before==null) return '<span class="s">no comparison</span>';
+    const diff = now - before;
+    const col = diff===0 ? 'var(--ink-2)' : (diff>0 ? 'var(--good)' : 'var(--critical)');
+    return `<span class="s"><span class="delta" style="color:${col}">${diff>0?'▲':diff<0?'▼':'■'} ${Math.abs(diff)}${unit||''}</span> vs previous</span>`;
+  };
+  document.getElementById('tiles').innerHTML = `
+    <div class="tile"><div class="k">Team score</div><div class="v" style="color:${a.teamScore==null?'var(--muted)':a.teamScore>=85?'var(--good)':a.teamScore>=60?'var(--warning)':'var(--critical)'}">${a.teamScore??'—'}</div>${d(a.teamScore,prev.teamScore)}</div>
+    <div class="tile"><div class="k">Delivered</div><div class="v">${a.delivered}</div>${d(a.delivered,prev.delivered)}</div>
+    <div class="tile"><div class="k">On-time</div><div class="v">${a.onTimeRate==null?'—':a.onTimeRate+'%'}</div>${d(a.onTimeRate,prev.onTimeRate,'pt')}</div>
+    <div class="tile"><div class="k">Rework loops</div><div class="v" style="color:${a.reworkLoops>prev.reworkLoops?'var(--critical)':'var(--ink)'}">${a.reworkLoops}</div>${d(a.reworkLoops,prev.reworkLoops)}</div>
+    <div class="tile"><div class="k">Overdue now</div><div class="v" style="color:${a.overdueNow?'var(--critical)':'var(--good)'}">${a.overdueNow}</div><div class="s">open past deadline</div></div>`;
+
+  /* trend: team average + optionally one person */
+  const teamTrend = [];
+  for (let i = SPAN-1+OFFSET; i >= OFFSET; i--) {
+    const r = DomeBox.periodRange(KIND, i);
+    const p = DomeBox.periodAnalytics(TASKS, USERS, r);
+    teamTrend.push({ label:r.short, full:r.label, value:p.teamScore, note:p.delivered });
+  }
+  const series = [{ name:'Team', color:C('--series-1'), points:teamTrend }];
+  if (PERSON) {
+    const t = DomeBox.scoreTrend(TASKS, PERSON, KIND, SPAN, null, OFFSET);
+    series.push({ name:(USERS.find(u=>u.username===PERSON)||{}).name.split(' ')[0],
+      color:C('--series-2'), points:t.map(x=>({label:x.short, value:x.score, note:x.delivered})) });
+  }
+  document.getElementById('trendSub').textContent =
+    `Delegation score across ${SPAN} ${KIND}s ending ${a.range.short}` + (PERSON?' — team versus individual':'');
+  document.getElementById('trendLegend').innerHTML = series.length>1
+    ? series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('') : '';
+  lineChart(document.getElementById('chartTrend'), series, {height:236});
+  tableFor(document.getElementById('tableTrend'),
+    ['Period', ...series.map(s=>s.name), 'Delivered'],
+    teamTrend.map((p,i)=>[p.full, ...series.map(s=>s.points[i].value??'no data'), p.note]));
+
+  /* bands — colour is backed by the letter, never colour alone */
+  const bandsHost = document.getElementById('chartBands');
+  const bandDefs = [
+    {k:'A', label:'A · Top performer', color:C('--good'), n:a.bands.A},
+    {k:'B', label:'B · Solid', color:C('--warning'), n:a.bands.B},
+    {k:'C', label:'C · Needs action', color:C('--critical'), n:a.bands.C},
+    {k:'—', label:'No data yet', color:C('--muted'), n:a.bands.none},
+  ];
+  const scoredN = Math.max(1, bandDefs.reduce((s,b)=>s+b.n,0));
+  bandsHost.innerHTML = bandDefs.map(b=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
+      <span style="width:22px;height:22px;border-radius:6px;background:${b.color};color:#08101f;
+        display:grid;place-items:center;font-weight:800;font-size:11px;flex:none">${b.k}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:4px">
+          <span style="color:var(--ink-2)">${b.label}</span><b>${b.n}</b></div>
+        <div style="height:5px;background:var(--surface-2);border-radius:99px;overflow:hidden">
+          <span style="display:block;height:100%;width:${b.n/scoredN*100}%;background:${b.color};border-radius:99px"></span></div>
+      </div></div>`).join('');
+  tableFor(document.getElementById('tableBands'), ['Band','People'], bandDefs.map(b=>[b.label,b.n]));
+
+  /* per-person score */
+  const ppl = a.people.slice().sort((x,y)=>(y.score??-1)-(x.score??-1));
+  document.getElementById('peopleSub').textContent = a.range.label + ' · sorted best first';
+  barsH(document.getElementById('chartPeople'), ppl.map(p=>({
+    // Band letter rides with the bar: the score colours fail CVD separation, so
+    // colour never carries the verdict on its own.
+    label:p.name.split(' ')[0], value:p.score,
+    display: p.score==null ? null : `${p.score} · ${p.band}`,
+    color: p.score==null?C('--muted'):p.score>=85?C('--good'):p.score>=60?C('--warning'):C('--critical'),
+    note: p.score==null ? {k:'Why',v:p.reason} : {k:'Delivered',v:p.delivered},
+  })), {max:100, metric:'Score'});
+  tableFor(document.getElementById('tablePeople'), ['Person','Role','Score','Band','Delivered'],
+    ppl.map(p=>[p.name,p.role,p.score??'no data',p.band??'—',p.delivered]));
+
+  /* on-time % per person — its own chart, never a second axis on the score chart */
+  const onTime = USERS.map(u=>{
+    const closed = TASKS.filter(t=>t.assignee===u.username && t.status===S.VERIFIED &&
+      DomeBox.inWindow(DomeBox.closedAt(t), range));
+    let ok=0,base=0;
+    closed.forEach(t=>{ const s=DomeBox.submittedAt(t), dd=DomeBox.parseYmd(t.due);
+      if(s&&dd){base++; if(DomeBox.dayDiff(s,dd)<=0) ok++;} });
+    return { label:u.name.split(' ')[0], value: base?Math.round(ok/base*100):null,
+      display: base?Math.round(ok/base*100)+'%':null, note:{k:'Closed',v:String(base)} };
+  }).sort((x,y)=>(y.value??-1)-(x.value??-1));
+  barsH(document.getElementById('chartOnTime'), onTime, {max:100, metric:'On-time'});
+  tableFor(document.getElementById('tableOnTime'), ['Person','On-time %'], onTime.map(r=>[r.label, r.display??'no data']));
+
+  /* KRA */
+  barsH(document.getElementById('chartKra'), a.kra.slice(0,7).map(k=>({label:k.kra, value:k.count})), {metric:'Tasks', labelW:150});
+  tableFor(document.getElementById('tableKra'), ['KRA','Delivered'], a.kra.map(k=>[k.kra,k.count]));
+
+  /* rework per person */
+  const rework = USERS.map(u=>{
+    const closed = TASKS.filter(t=>t.assignee===u.username && t.status===S.VERIFIED &&
+      DomeBox.inWindow(DomeBox.closedAt(t), range));
+    const loops = closed.reduce((s,t)=>s+Number(t.reworkCount||0),0);
+    return { label:u.name.split(' ')[0], value:loops, display:loops,
+      color: loops===0?C('--good'):loops<=3?C('--warning'):C('--critical'),
+      note:{k:'Closed',v:String(closed.length)} };
+  }).sort((x,y)=>y.value-x.value);
+  barsH(document.getElementById('chartRework'), rework, {metric:'Rework loops'});
+  tableFor(document.getElementById('tableRework'), ['Person','Rework loops'], rework.map(r=>[r.label,r.value]));
+
+  /* heatmap: last 20 weeks */
+  const weeks = [];
+  for (let i=19;i>=0;i--) weeks.push(DomeBox.periodRange(P.WEEK, i));
+  const rowsL = USERS.map(u=>u.name.split(' ')[0]);
+  const vals = USERS.map(u=>weeks.map(w=>TASKS.filter(t=>t.assignee===u.username &&
+    t.status===S.VERIFIED && DomeBox.inWindow(DomeBox.closedAt(t), w)).length));
+  heatmap(document.getElementById('chartHeat'), rowsL, weeks.map(w=>w.short), vals);
+  tableFor(document.getElementById('tableHeat'), ['Person', ...weeks.map(w=>w.short)],
+    USERS.map((u,i)=>[u.name, ...vals[i]]));
+}
+
+/* ---------- chrome ---------- */
+/* Which period to look at. Reviews are retrospective, so a closed period must be
+   reachable — and on day 1 of a month "this month" is legitimately empty. */
+const OFFSET_COUNT = { week:12, month:12, quarter:8, year:3 };
+function setOffsets(){
+  const n = OFFSET_COUNT[KIND] || 12;
+  const now = [];
+  for (let i=0;i<n;i++){
+    const r = DomeBox.periodRange(KIND, i);
+    const tag = i===0 ? ' (current)' : i===1 ? ' (last)' : '';
+    now.push(`<option value="${i}">${r.label}${tag}</option>`);
+  }
+  if (OFFSET >= n) OFFSET = 0;
+  const el = document.getElementById('offset');
+  el.innerHTML = now.join('');
+  el.value = String(OFFSET);
+}
+function setSpans(){
+  const opts = SPANS[KIND];
+  document.getElementById('span').innerHTML = opts.map(n=>`<option value="${n}">${n} ${KIND}s</option>`).join('');
+  SPAN = opts[1] ?? opts[0];
+  document.getElementById('span').value = SPAN;
+}
+document.getElementById('periodSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button[data-p]'); if(!b) return;
+  KIND=b.dataset.p;
+  document.querySelectorAll('#periodSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  setSpans(); setOffsets(); render();
+});
+document.getElementById('offset').addEventListener('change', e=>{ OFFSET=Number(e.target.value); render(); });
+document.getElementById('span').addEventListener('change', e=>{ SPAN=Number(e.target.value); render(); });
+document.getElementById('person').addEventListener('change', e=>{ PERSON=e.target.value; render(); });
+document.addEventListener('click', e=>{
+  const b=e.target.closest('[data-table]'); if(!b) return;
+  const el=document.getElementById(b.dataset.table);
+  if(!el) return;
+  const on=el.classList.toggle('on');
+  b.textContent = on?'Chart':'Table';
+  b.setAttribute('aria-expanded', on);
+});
+let rt; addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(isVisible()) render(); },180); });
+
+
+
+/* ---------- data seam ----------------------------------------------------
+   The engine needs these fields per task. Map your sheet's column names onto
+   them here; everything else on the row is ignored.
+
+     assignee     login email of the person doing the work
+     status       one of DomeBox.STATUS (Pending / In Progress / For Review /
+                  Awaiting Approval / Verified …)
+     due          'YYYY-MM-DD'
+     priority     'High' | 'Medium' | 'Low'   (weights the score 3x / 2x / 1x)
+     kra          KRA name, for the KRA split
+     reworkCount  how many times it came back
+     history      [{status, date}] — the audit trail. This is what decides which
+                  period a task counts in: a task belongs to the period it was
+                  VERIFIED in, not the one it was raised in.
+     raisedBy     who raised it   } these two make managers scoreable on how
+     approver     who approves it } fast they clear reviews and approvals
+   ------------------------------------------------------------------------ */
+function mapTask(row){
+  return {
+    id: row.id || row.taskId || row.ID,
+    title: row.title || row.task || row.Task || '',
+    assignee: row.assignee || row.assignedTo || row.username || '',
+    raisedBy: row.raisedBy || row.assignedBy || row.createdBy || '',
+    approver: row.approver || row.raisedBy || row.assignedBy || '',
+    status: row.status || row.Status,
+    priority: row.priority || row.Priority || 'Medium',
+    due: row.due || row.dueDate || row.deadline || '',
+    kra: row.kra || row.KRA || row.category || 'Unassigned',
+    reworkCount: Number(row.reworkCount || row.reworks || 0),
+    history: Array.isArray(row.history) ? row.history
+           : (typeof row.history === 'string' && row.history ? safeParse(row.history) : []),
+    blockedBy: row.blockedBy || [], subtasks: row.subtasks || [],
+  };
+}
+function mapUser(row){
+  return {
+    username: row.username || row.email || row.emailId || '',
+    name: row.name || row.fullName || row.username || '',
+    role: row.role || row.Role || 'Doer',
+    dept: row.dept || row.department || '',
+  };
+}
+function safeParse(s){ try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch(e){ return []; } }
+
+/* ---------- public API --------------------------------------------------- */
+window.DomeBoxAnalytics = {
+  /** Hand it the rows you already loaded for the dashboard. */
+  setData: function(d){
+    USERS = (d && d.users || []).map(mapUser).filter(u => u.username);
+    TASKS = (d && d.tasks || []).map(mapTask).filter(t => t.assignee);
+    document.getElementById('person').innerHTML =
+      '<option value="">Team only</option>' +
+      USERS.map(u => '<option value="'+u.username+'">'+u.name+'</option>').join('');
+    if (isVisible()) { setSpans(); setOffsets(); render(); }
+    return this;
+  },
+  /** Call this AFTER the view is unhidden — a hidden host measures 0 wide. */
+  open: function(){
+    if (!USERS.length) this.setData(demo());
+    setSpans(); setOffsets(); render();
+  },
+  refresh: function(){ if (isVisible()) render(); },
+};
+
+/* ---------- seeded demo, so the page is viewable before it is wired ------- */
+function demo(){
+  let seed = 20260715;
+  const rnd = () => (seed = (seed*1664525 + 1013904223) % 4294967296) / 4294967296;
+  const pick = a => a[Math.floor(rnd()*a.length)];
+  const users = [
+    { username:'sruti@acme.in',  name:'Sruti Charulata', role:'HOD',  dept:'Operations', skill:.86 },
+    { username:'imran@acme.in',  name:'Imran Qureshi',   role:'HOD',  dept:'Quality',    skill:.62 },
+    { username:'payel@acme.in',  name:'Payel Sanyamath', role:'Doer', dept:'Operations', skill:.91 },
+    { username:'vikram@acme.in', name:'Vikram Rathore',  role:'Doer', dept:'Purchase',   skill:.58 },
+    { username:'neha@acme.in',   name:'Neha Bhandari',   role:'Doer', dept:'Quality',    skill:.79 },
+  ];
+  const kras = ['Vendor Quality','Inventory Accuracy','Rejection Control','Cost Savings','Process Compliance','Customer Satisfaction','Capability Building'];
+  const titles = ['Vendor audit','Stock reconciliation','Rejection analysis','AMC negotiation','PDI checklist update','Complaint closure','Operator training','Costing review','Supplier CAPA','Line balancing','Calibration','Layout revision'];
+  const tasks = [], today = new Date(); let id = 1000;
+  for (let back = 364; back >= 0; back--) {
+    const day = DomeBox.addDays(today, -back);
+    if (day.getDay() === 0 || day.getDay() === 6) continue;
+    users.forEach(u => {
+      if (rnd() > .34) return;
+      const m = day.getMonth(), dip = (m===7||m===8) ? .16 : 0;
+      const skill = Math.max(.2, u.skill - dip);
+      const priority = pick(['High','Medium','Medium','Low']);
+      const due = DomeBox.addDays(day, 3 + Math.floor(rnd()*9));
+      if (due > today) return;
+      const lateBy = rnd() < skill ? -Math.floor(rnd()*3) : 1 + Math.floor(rnd()*7);
+      const submitted = DomeBox.addDays(due, lateBy);
+      const reworks = rnd() < (1-skill)*.55 ? 1 + (rnd()<.25?1:0) : 0;
+      const verified = DomeBox.addDays(submitted, 1 + Math.floor(rnd()*3));
+      if (verified > today) return;
+      const hist = [{ status:S.PENDING, date: day.toISOString() }];
+      for (let r=0;r<reworks;r++) hist.push({ status:S.IN_PROGRESS, date: DomeBox.addDays(submitted,-1).toISOString() });
+      hist.push({ status:S.FOR_REVIEW, date: submitted.toISOString() });
+      hist.push({ status:S.VERIFIED,  date: verified.toISOString() });
+      tasks.push({ id:'T-'+(++id), title:pick(titles), assignee:u.username, raisedBy:'rohan@acme.in',
+        approver:'rohan@acme.in', status:S.VERIFIED, priority, due:DomeBox.ymd(due),
+        kra:pick(kras), reworkCount:reworks, history:hist });
+    });
+  }
+  users.forEach((u,i) => { for (let k=0;k<2+(i%3);k++){
+    const due = DomeBox.addDays(new Date(), Math.floor(rnd()*18)-9);
+    tasks.push({ id:'T-'+(++id), title:pick(titles), assignee:u.username, raisedBy:'rohan@acme.in',
+      approver:'rohan@acme.in', status: rnd()<.5?S.PENDING:S.IN_PROGRESS,
+      priority:pick(['High','Medium','Low']), due:DomeBox.ymd(due), kra:pick(kras),
+      reworkCount:0, history:[{status:S.PENDING,date:DomeBox.addDays(due,-6).toISOString()}] });
+  }});
+  return { users, tasks };
+}
+})();
+</script>

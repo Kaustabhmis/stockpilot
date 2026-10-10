@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dome Box — Execution Board</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📋</text></svg>">
+<style>
+  :root {
+    --bg:#0f1420; --panel:#161c2b; --panel-2:#1d2434; --line:#28314a;
+    --ink:#e8edf7; --ink-2:#94a2be; --ink-3:#63718d;
+    --accent:#4b7bff; --accent-2:#3a63d8;
+    --amber:#f0a637; --blue:#4b7bff; --purple:#9b7bf0; --green:#2fbf76; --red:#ef5a5a; --slate:#7d8aa5;
+    --r:10px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;
+    background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column;
+    font-size:14px;-webkit-font-smoothing:antialiased;overflow:hidden;
+  }
+  button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+  /* ---------- top bar ---------- */
+  .top{
+    display:flex;align-items:center;gap:14px;padding:10px 16px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex:none;
+  }
+  .logo{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:-.01em}
+  .logo i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:12px;font-style:normal}
+  .views{display:flex;gap:2px;background:var(--panel-2);padding:3px;border-radius:8px}
+  .views button{padding:5px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+  .views button.on{background:var(--accent);color:#fff}
+  .spacer{flex:1}
+  .who{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2)}
+  .who select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:12.5px}
+  .btn{background:var(--accent);color:#fff;padding:7px 13px;border-radius:8px;font-weight:700;font-size:12.5px}
+  .btn:hover{background:var(--accent-2)}
+  .btn-ghost{background:var(--panel-2);color:var(--ink-2);border:1px solid var(--line)}
+
+  .filters{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex:none;overflow-x:auto}
+  .filters input,.filters select{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:5px 9px;font-size:12.5px}
+  .filters input{min-width:190px}
+  .chip{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
+
+  /* ---------- board ---------- */
+  .board{flex:1;display:flex;gap:12px;padding:14px 16px;overflow-x:auto;overflow-y:hidden;align-items:flex-start}
+  .col{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    width:290px;min-width:290px;display:flex;flex-direction:column;max-height:100%;
+  }
+  .col-head{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .col-title{font-weight:700;font-size:12.5px;letter-spacing:.01em}
+  .count{margin-left:auto;font-size:11px;color:var(--ink-3);background:var(--panel-2);padding:2px 7px;border-radius:99px;font-variant-numeric:tabular-nums}
+  .cards{padding:10px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;flex:1;min-height:70px}
+  .col.over .cards{background:rgba(75,123,255,.07);outline:2px dashed rgba(75,123,255,.4);outline-offset:-6px;border-radius:8px}
+  .col.deny .cards{background:rgba(239,90,90,.07);outline:2px dashed rgba(239,90,90,.45);outline-offset:-6px;border-radius:8px}
+
+  .card{
+    background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--slate);
+    border-radius:8px;padding:10px 11px;cursor:grab;transition:transform .12s,box-shadow .12s;
+  }
+  .card:hover{transform:translateY(-1px);box-shadow:0 8px 18px -8px rgba(0,0,0,.6);border-color:#38445f}
+  .card.dragging{opacity:.4}
+  .card.p-High{border-left-color:var(--red)}
+  .card.p-Medium{border-left-color:var(--amber)}
+  .card.p-Low{border-left-color:var(--blue)}
+  .card-title{font-weight:600;line-height:1.35;font-size:13px;margin-bottom:7px}
+  .meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10.5px;color:var(--ink-3)}
+  .tag{padding:2px 6px;border-radius:5px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+  .tag.kra{color:#9fc0ff;border-color:#2c3d63;background:rgba(75,123,255,.12)}
+  .tag.late{color:#ffb4b4;border-color:#5c2b2b;background:rgba(239,90,90,.14);font-weight:700}
+  .tag.block{color:#ffcf9b;border-color:#5c452b;background:rgba(240,166,55,.14)}
+  .av{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:800;color:#08101f;margin-left:auto}
+  .bar{height:3px;background:var(--line);border-radius:99px;margin-top:8px;overflow:hidden}
+  .bar span{display:block;height:100%;background:var(--green);border-radius:99px}
+
+  /* ---------- list view ---------- */
+  .list{flex:1;overflow:auto;padding:14px 16px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  th{text-align:left;padding:9px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);background:var(--panel-2);border-bottom:1px solid var(--line)}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:rgba(255,255,255,.02)}
+  .pill{font-size:10.5px;padding:2px 8px;border-radius:99px;font-weight:700}
+
+  /* ---------- scores view ---------- */
+  .scores{flex:1;overflow:auto;padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px;align-content:start}
+  .scard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px}
+  .sname{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .sbig{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+  .band{font-size:10px;font-weight:800;padding:3px 8px;border-radius:99px;margin-left:auto}
+  .comp{margin-bottom:9px}
+  .comp-top{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;color:var(--ink-2)}
+  .comp-bar{height:5px;background:var(--line);border-radius:99px;overflow:hidden}
+  .comp-bar span{display:block;height:100%;border-radius:99px}
+
+  /* ---------- toast ---------- */
+  #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
+  .toast{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--accent);padding:10px 14px;border-radius:8px;font-size:12.5px;max-width:330px;box-shadow:0 12px 30px -10px rgba(0,0,0,.7);animation:in .2s ease-out}
+  .toast.err{border-left-color:var(--red)}
+  .toast.ok{border-left-color:var(--green)}
+  @keyframes in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.toast{animation:none}.card{transition:none}}
+
+  /* ---------- drawer ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(6,9,16,.6);display:none;z-index:60}
+  .scrim.on{display:block}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(430px,100%);background:var(--panel);border-left:1px solid var(--line);z-index:61;transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column}
+  .drawer.on{transform:none}
+  .dhead{padding:15px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+  .dbody{padding:15px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:15px}
+  .sec-t{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);margin-bottom:7px;font-weight:700}
+  .kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:12.5px}
+  .kv dt{color:var(--ink-3)}
+  .hist{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .hist li{display:flex;gap:9px;font-size:12px}
+  .hist .hd{width:7px;height:7px;border-radius:50%;background:var(--accent);margin-top:5px;flex:none}
+  .sub{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 0}
+  .acts{display:flex;gap:7px;flex-wrap:wrap;padding:13px 15px;border-top:1px solid var(--line)}
+  .why{font-size:11.5px;color:var(--ink-3);padding:9px 11px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo"><i>D</i> Dome Box</div>
+  <div class="views" id="views">
+    <button data-view="board" class="on">Board</button>
+    <button data-view="list">List</button>
+    <button data-view="scores">Scores</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="who">
+    Acting as
+    <select id="actor" title="Switch user to see how the rules change"></select>
+  </div>
+  <button class="btn" id="newTask">+ Task</button>
+</div>
+
+<div class="filters">
+  <input id="q" placeholder="Search tasks…">
+  <select id="fAssignee"><option value="">Everyone</option></select>
+  <select id="fPriority"><option value="">Any priority</option><option>High</option><option>Medium</option><option>Low</option></select>
+  <select id="fKra"><option value="">Any KRA</option></select>
+  <label class="chip"><input type="checkbox" id="fMine"> Only mine</label>
+  <label class="chip"><input type="checkbox" id="fLate"> Overdue only</label>
+  <span class="spacer"></span>
+  <span class="chip" id="wipChip"></span>
+</div>
+
+<div class="board" id="board"></div>
+<div class="list" id="list" style="display:none"></div>
+<div class="scores" id="scores" style="display:none"></div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer"></aside>
+<div id="toasts"></div>
+
+<!-- The rules engine. Identical logic to the Apps Script backend, so the board
+     cannot allow a move the server would reject. -->
+<script src="/domain.js"></script>
+<script>
+/* ===========================================================================
+   Dome Box — Execution Board
+   Board / List / Scores over one dataset, with every drag validated against
+   the same workflow, dependency, checklist and WIP rules as the backend.
+   =========================================================================== */
+
+const S = DomeBox.STATUS, ROLE = DomeBox.ROLE;
+const AV = ['#4b7bff','#2fbf76','#f0a637','#9b7bf0','#ef5a5a','#22b8cf'];
+
+/* ---------- demo dataset: an Indian manufacturing SME ---------- */
+const off = n => DomeBox.ymd(DomeBox.addDays(new Date(), n));
+const at  = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString(); };
+
+const USERS = [
+  { username:'rohan@acme.in',  name:'Rohan Agarwal',   role:ROLE.ADMIN,   manager:'',                dept:'Management' },
+  { username:'sruti@acme.in',  name:'Sruti Charulata', role:ROLE.MANAGER, manager:'rohan@acme.in',   dept:'Operations' },
+  { username:'imran@acme.in',  name:'Imran Qureshi',   role:ROLE.MANAGER, manager:'rohan@acme.in',   dept:'Quality'    },
+  { username:'payel@acme.in',  name:'Payel Sanyamath', role:ROLE.DOER,    manager:'sruti@acme.in',   dept:'Operations' },
+  { username:'vikram@acme.in', name:'Vikram Rathore',  role:ROLE.DOER,    manager:'sruti@acme.in',   dept:'Purchase'   },
+  { username:'neha@acme.in',   name:'Neha Bhandari',   role:ROLE.DOER,    manager:'imran@acme.in',   dept:'Quality'    },
+];
+const U = u => USERS.find(x => x.username === u) || { name:u, username:u, role:ROLE.DOER, manager:'' };
+
+let TASKS = [
+  { id:'T-101', title:'Q3 vendor audit — Pune castings', desc:'On-site audit of three casting vendors; file the scorecard.',
+    assignee:'payel@acme.in', raisedBy:'sruti@acme.in', approver:'sruti@acme.in', status:S.FOR_REVIEW,
+    priority:'High', due:off(-4), kra:'Vendor Quality', category:'SUPPLIER', cadence:'One Time', reworkCount:0,
+    blockedBy:[], subtasks:[{t:'Visit vendor A',done:true},{t:'Visit vendor B',done:true},{t:'Visit vendor C',done:true},{t:'File scorecard',done:true}],
+    history:[{status:S.PENDING,by:'sruti@acme.in',date:at(-12),note:'Task assigned'},
+             {status:S.IN_PROGRESS,by:'payel@acme.in',date:at(-9),note:''},
+             {status:S.FOR_REVIEW,by:'payel@acme.in',date:at(-4),note:'Scorecard attached'}] },
+
+  { id:'T-102', title:'Monthly inventory reconciliation', desc:'Match physical stock to system for all A-class items.',
+    assignee:'vikram@acme.in', raisedBy:'sruti@acme.in', approver:'sruti@acme.in', status:S.IN_PROGRESS,
+    priority:'High', due:off(-2), kra:'Inventory Accuracy', category:'INVENTORY', cadence:'Monthly', reworkCount:1,
+    blockedBy:[], subtasks:[{t:'Count bin A',done:true},{t:'Count bin B',done:false}],
+    history:[{status:S.PENDING,by:'sruti@acme.in',date:at(-9),note:'Task assigned'},
+             {status:S.FOR_REVIEW,by:'vikram@acme.in',date:at(-5),note:'Done'},
+             {status:S.IN_PROGRESS,by:'sruti@acme.in',date:at(-3),note:'Bin B-12 does not tally — recheck'}] },
+
+  { id:'T-103', title:'Update PDI checklist for new model', desc:'Add the 14 inspection points agreed with the customer.',
+    assignee:'neha@acme.in', raisedBy:'imran@acme.in', approver:'imran@acme.in', status:S.IN_PROGRESS,
+    priority:'Medium', due:off(3), kra:'Process Compliance', category:'PDI', cadence:'One Time', reworkCount:0,
+    blockedBy:[], subtasks:[{t:'Draft points',done:true},{t:'Customer sign-off',done:false}],
+    history:[{status:S.PENDING,by:'imran@acme.in',date:at(-2),note:'Task assigned'},
+             {status:S.IN_PROGRESS,by:'neha@acme.in',date:at(-1),note:''}] },
+
+  { id:'T-104', title:'Rejection analysis — Line 2', desc:'Root-cause the 4.2% rejection spike; propose corrective action.',
+    assignee:'neha@acme.in', raisedBy:'imran@acme.in', approver:'imran@acme.in', status:S.PENDING,
+    priority:'High', due:off(1), kra:'Rejection Control', category:'PQC', cadence:'One Time', reworkCount:0,
+    blockedBy:['T-103'], subtasks:[],
+    history:[{status:S.PENDING,by:'imran@acme.in',date:at(0),note:'Task assigned'}] },
+
+  { id:'T-105', title:'Weekly production plan sign-off', desc:'Circulate next week’s plan to all HODs.',
+    assignee:'payel@acme.in', raisedBy:'sruti@acme.in', approver:'sruti@acme.in', status:S.PENDING,
+    priority:'Medium', due:off(2), kra:'Planning Discipline', category:'PRODUCTION', cadence:'Weekly', reworkCount:0,
+    blockedBy:[], subtasks:[],
+    history:[{status:S.PENDING,by:'sruti@acme.in',date:at(0),note:'Auto-generated (Weekly)'}] },
+
+  { id:'T-106', title:'Negotiate AMC renewal — compressor', desc:'Target 8% reduction against last year.',
+    assignee:'vikram@acme.in', raisedBy:'sruti@acme.in', approver:'sruti@acme.in', status:S.PENDING,
+    priority:'Low', due:off(6), kra:'Cost Savings', category:'PURCHASE', cadence:'Yearly', reworkCount:0,
+    blockedBy:[], subtasks:[],
+    history:[{status:S.PENDING,by:'sruti@acme.in',date:at(-1),note:'Task assigned'}] },
+
+  { id:'T-107', title:'Train line operators on new SOP', desc:'All three shifts; capture attendance.',
+    assignee:'neha@acme.in', raisedBy:'sruti@acme.in', approver:'imran@acme.in', status:S.AWAITING_APPROVAL,
+    priority:'Medium', due:off(4), kra:'Capability Building', category:'HR', cadence:'One Time', reworkCount:0,
+    blockedBy:[], subtasks:[],
+    history:[{status:S.AWAITING_APPROVAL,by:'sruti@acme.in',date:at(0),note:'Awaiting manager approval'}] },
+
+  { id:'T-108', title:'Customer complaint closure — Batch 8841', desc:'8D report submitted to the customer.',
+    assignee:'payel@acme.in', raisedBy:'sruti@acme.in', approver:'sruti@acme.in', status:S.VERIFIED,
+    priority:'High', due:off(-9), kra:'Customer Satisfaction', category:'CRM', cadence:'One Time', reworkCount:0,
+    blockedBy:[], subtasks:[],
+    history:[{status:S.PENDING,by:'sruti@acme.in',date:at(-16),note:'Task assigned'},
+             {status:S.IN_PROGRESS,by:'payel@acme.in',date:at(-14),note:''},
+             {status:S.FOR_REVIEW,by:'payel@acme.in',date:at(-11),note:'8D submitted'},
+             {status:S.VERIFIED,by:'sruti@acme.in',date:at(-9),note:'Customer confirmed closure'}] },
+
+  { id:'T-109', title:'Calibrate CMM machine', desc:'Annual external calibration with certificate.',
+    assignee:'neha@acme.in', raisedBy:'imran@acme.in', approver:'imran@acme.in', status:S.VERIFIED,
+    priority:'Medium', due:off(-20), kra:'Process Compliance', category:'MAINTENANCE', cadence:'Yearly', reworkCount:0,
+    blockedBy:[], subtasks:[],
+    history:[{status:S.PENDING,by:'imran@acme.in',date:at(-30),note:'Task assigned'},
+             {status:S.FOR_REVIEW,by:'neha@acme.in',date:at(-22),note:'Certificate uploaded'},
+             {status:S.VERIFIED,by:'imran@acme.in',date:at(-20),note:''}] },
+
+  { id:'T-110', title:'ISO internal audit — Section 8', desc:'Internal audit ahead of the surveillance visit.',
+    assignee:'payel@acme.in', raisedBy:'imran@acme.in', approver:'sruti@acme.in', status:S.PENDING,
+    priority:'High', due:off(-6), kra:'Process Compliance', category:'SYSTEMS', cadence:'Half-Yearly', reworkCount:0,
+    blockedBy:[], subtasks:[],
+    history:[{status:S.PENDING,by:'imran@acme.in',date:at(-8),note:'Approved and assigned'}] },
+];
+
+let ACTOR = USERS[1];   // start as the Operations Head
+let VIEW = 'board';
+let OPEN_ID = null;
+
+/* ---------- helpers ---------- */
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const initials = n => n.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+const avColour = u => AV[USERS.findIndex(x=>x.username===u) % AV.length] || AV[0];
+const lateDays = t => { const d = DomeBox.parseYmd(t.due); return d ? DomeBox.dayDiff(new Date(), d) : 0; };
+const fmtDue = t => {
+  const n = lateDays(t);
+  if (DomeBox.isClosed(t.status)) return t.due;
+  if (n > 0) return n + 'd overdue';
+  if (n === 0) return 'Due today';
+  if (n === -1) return 'Due tomorrow';
+  return 'in ' + (-n) + 'd';
+};
+function toast(msg, kind){
+  const el=document.createElement('div'); el.className='toast '+(kind||''); el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>el.remove(), kind==='err'?4200:2600);
+}
+
+/* ---------- filtering ---------- */
+function visible(){
+  const q=document.getElementById('q').value.trim().toLowerCase();
+  const fa=document.getElementById('fAssignee').value;
+  const fp=document.getElementById('fPriority').value;
+  const fk=document.getElementById('fKra').value;
+  const mine=document.getElementById('fMine').checked;
+  const late=document.getElementById('fLate').checked;
+  return TASKS.filter(t=>{
+    if(q && !(t.title+' '+t.desc+' '+t.id).toLowerCase().includes(q)) return false;
+    if(fa && t.assignee!==fa) return false;
+    if(fp && t.priority!==fp) return false;
+    if(fk && t.kra!==fk) return false;
+    if(mine && t.assignee!==ACTOR.username && t.raisedBy!==ACTOR.username && t.approver!==ACTOR.username) return false;
+    if(late && !(lateDays(t)>0 && DomeBox.isOpen(t.status))) return false;
+    return true;
+  });
+}
+
+/* ---------- board ---------- */
+function renderBoard(){
+  const board = DomeBox.groupIntoBoard(visible());
+  const host = document.getElementById('board');
+  host.innerHTML = DomeBox.BOARD_COLUMNS.map(col=>{
+    const cards = board[col.key]||[];
+    return `<section class="col" data-col="${col.key}">
+      <div class="col-head">
+        <span class="dot" style="background:var(--${col.accent})"></span>
+        <span class="col-title">${col.title}</span>
+        <span class="count">${cards.length}</span>
+      </div>
+      <div class="cards" data-drop="${col.key}">${cards.map(cardHtml).join('')}</div>
+    </section>`;
+  }).join('');
+  wireDnd();
+}
+
+function cardHtml(t){
+  const n = lateDays(t), open = DomeBox.isOpen(t.status);
+  const sub = DomeBox.subtaskProgress(t);
+  const blockers = DomeBox.openBlockers(t, TASKS);
+  return `<article class="card p-${t.priority}" draggable="true" data-id="${t.id}">
+    <div class="card-title">${esc(t.title)}</div>
+    <div class="meta">
+      <span class="tag">${t.id}</span>
+      ${t.kra?`<span class="tag kra">${esc(t.kra)}</span>`:''}
+      ${open&&n>0?`<span class="tag late">${n}d late</span>`:''}
+      ${blockers.length?`<span class="tag block">⛔ blocked</span>`:''}
+      ${t.cadence&&t.cadence!=='One Time'?`<span class="tag">↻ ${t.cadence}</span>`:''}
+      ${t.reworkCount>0?`<span class="tag">↩ ${t.reworkCount}</span>`:''}
+      <span class="av" style="background:${avColour(t.assignee)}" title="${esc(U(t.assignee).name)}">${initials(U(t.assignee).name)}</span>
+    </div>
+    ${sub.total?`<div class="bar"><span style="width:${sub.pct}%"></span></div>`:''}
+  </article>`;
+}
+
+/* ---------- drag and drop, with the rules enforced ---------- */
+let DRAG_ID = null;
+function wireDnd(){
+  document.querySelectorAll('.card').forEach(el=>{
+    el.addEventListener('dragstart', e=>{
+      DRAG_ID = el.dataset.id;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      try{ e.dataTransfer.setData('text/plain', DRAG_ID); }catch(_){}
+    });
+    el.addEventListener('dragend', ()=>{ el.classList.remove('dragging'); DRAG_ID=null; clearHints(); });
+    el.addEventListener('click', ()=> openTask(el.dataset.id));
+  });
+
+  document.querySelectorAll('.col').forEach(col=>{
+    const key = col.dataset.col;
+    col.addEventListener('dragover', e=>{
+      if(!DRAG_ID) return;
+      e.preventDefault();
+      const t = TASKS.find(x=>x.id===DRAG_ID);
+      const v = DomeBox.canDropInColumn(t, ACTOR, key, {allTasks:TASKS, wipLimit:WIP_LIMIT});
+      clearHints();
+      col.classList.add(v.ok ? 'over' : 'deny');
+      e.dataTransfer.dropEffect = v.ok ? 'move' : 'none';
+    });
+    col.addEventListener('dragleave', ()=> col.classList.remove('over','deny'));
+    col.addEventListener('drop', e=>{
+      e.preventDefault(); clearHints();
+      if(!DRAG_ID) return;
+      moveTask(DRAG_ID, key);
+      DRAG_ID = null;
+    });
+  });
+}
+function clearHints(){ document.querySelectorAll('.col').forEach(c=>c.classList.remove('over','deny')); }
+
+const WIP_LIMIT = 4;
+
+function moveTask(id, colKey){
+  const t = TASKS.find(x=>x.id===id);
+  if(!t) return;
+  const verdict = DomeBox.canDropInColumn(t, ACTOR, colKey, {allTasks:TASKS, wipLimit:WIP_LIMIT});
+  if(verdict.noop) return;
+  if(!verdict.ok){ toast(verdict.reason, 'err'); return; }
+
+  const target = DomeBox.statusForColumn(colKey);
+  const wasReview = t.status === S.FOR_REVIEW;
+
+  // Sending work back from review is a rework loop, not a plain status change.
+  if(wasReview && target === S.IN_PROGRESS){
+    t.reworkCount = (t.reworkCount||0) + 1;
+    t.history.push({status:S.IN_PROGRESS, by:ACTOR.username, date:new Date().toISOString(), note:'Sent back for rework'});
+    t.status = S.IN_PROGRESS;
+    toast(`${t.id} sent back for rework`, 'ok');
+  } else {
+    t.status = target;
+    t.history.push({status:target, by:ACTOR.username, date:new Date().toISOString(), note:''});
+    toast(`${t.id} → ${target}`, 'ok');
+
+    // Verifying a recurring job schedules the next one, the way the backend does.
+    if(target === S.VERIFIED && t.cadence && t.cadence !== 'One Time'){
+      const nd = DomeBox.nextOccurrence(t.cadence, t.due, {});
+      if(nd){
+        const copy = JSON.parse(JSON.stringify(t));
+        copy.id = 'T-' + (100 + TASKS.length + 1);
+        copy.status = S.PENDING; copy.due = DomeBox.ymd(nd); copy.reworkCount = 0;
+        copy.subtasks = (t.subtasks||[]).map(s=>({t:s.t,done:false}));
+        copy.history = [{status:S.PENDING, by:t.raisedBy, date:new Date().toISOString(), note:'Auto-generated ('+t.cadence+')'}];
+        TASKS.push(copy);
+        toast(`Next ${t.cadence.toLowerCase()} occurrence scheduled for ${copy.due}`, 'ok');
+      }
+    }
+  }
+  render();
+}
+
+/* ---------- list ---------- */
+function renderList(){
+  const rows = visible().slice().sort((a,b)=>lateDays(b)-lateDays(a));
+  document.getElementById('list').innerHTML = `<table>
+    <thead><tr><th>Task</th><th>Owner</th><th>KRA</th><th>Priority</th><th>Status</th><th>Due</th><th>Checklist</th></tr></thead>
+    <tbody>${rows.map(t=>{
+      const n=lateDays(t), open=DomeBox.isOpen(t.status), sub=DomeBox.subtaskProgress(t);
+      return `<tr style="cursor:pointer" onclick="openTask('${t.id}')">
+        <td><strong>${esc(t.title)}</strong><br><span style="color:var(--ink-3);font-size:11px">${t.id}${t.cadence!=='One Time'?' · ↻ '+t.cadence:''}</span></td>
+        <td>${esc(U(t.assignee).name)}</td>
+        <td style="color:var(--ink-2)">${esc(t.kra||'—')}</td>
+        <td><span class="pill" style="background:rgba(255,255,255,.06);color:var(--${t.priority==='High'?'red':t.priority==='Medium'?'amber':'blue'})">${t.priority}</span></td>
+        <td><span class="pill" style="background:rgba(255,255,255,.06);color:var(--ink-2)">${t.status}</span></td>
+        <td style="${open&&n>0?'color:var(--red);font-weight:700':'color:var(--ink-2)'}">${fmtDue(t)}</td>
+        <td style="color:var(--ink-3)">${sub.total?sub.done+'/'+sub.total:'—'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+/* ---------- scores ---------- */
+function renderScores(){
+  document.getElementById('scores').innerHTML = USERS.map(u=>{
+    const s = DomeBox.delegationScore(TASKS, u.username, new Date());
+    const band = DomeBox.performanceBand(s.score);
+    const bandCol = band.band==='A'?'green':band.band==='B'?'amber':'red';
+    return `<div class="scard">
+      <div class="sname">
+        <span class="av" style="background:${avColour(u.username)};margin:0;width:26px;height:26px;font-size:10px">${initials(u.name)}</span>
+        <div><div style="font-weight:700">${esc(u.name)}</div><div style="font-size:11px;color:var(--ink-3)">${u.role} · ${u.dept}</div></div>
+        <span class="band" style="background:rgba(255,255,255,.07);color:var(--${bandCol})">${s.hasData?'Band '+band.band:'No data'}</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:13px">
+        <span class="sbig" style="color:var(--${bandCol})">${s.hasData?s.score:'—'}</span>
+        <span style="font-size:11px;color:var(--ink-3)">/100 · ${s.summary.closed} closed · ${s.summary.overdue} overdue · ${s.summary.reworkLoops} rework</span>
+      </div>
+      ${s.components.map(c=>c.score===null?
+        `<div class="comp"><div class="comp-top"><span>${c.label}</span><span style="color:var(--ink-3)">no data</span></div></div>`:
+        `<div class="comp"><div class="comp-top"><span>${c.label} <span style="color:var(--ink-3)">· ${c.weight}%</span></span><span style="font-weight:700;color:var(--ink)">${c.score}</span></div>
+         <div class="comp-bar"><span style="width:${c.score}%;background:var(--${c.score>=85?'green':c.score>=60?'amber':'red'})"></span></div></div>`).join('')}
+      ${s.deduction>0?`<div class="comp-top" style="margin-top:9px"><span style="color:var(--red);font-weight:700">Review responsiveness</span><span style="color:var(--red);font-weight:800">−${s.deduction}</span></div>`:''}
+      ${s.hasData?`<div class="why" style="margin-top:11px">${esc(band.action)}</div>`:
+        `<div class="why" style="margin-top:11px">Not enough history yet — this is deliberately blank rather than shown as zero.</div>`}
+    </div>`;
+  }).join('');
+}
+
+/* ---------- task drawer ---------- */
+function openTask(id){
+  const t = TASKS.find(x=>x.id===id);
+  if(!t) return;
+  OPEN_ID = id;
+  const sub = DomeBox.subtaskProgress(t);
+  const blockers = DomeBox.openBlockers(t, TASKS);
+  const moves = DomeBox.allowedTransitions(t, ACTOR);
+
+  document.getElementById('drawer').innerHTML = `
+    <div class="dhead">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--ink-3);margin-bottom:3px">${t.id} · ${esc(t.category||'')}</div>
+        <div style="font-weight:700;font-size:15px;line-height:1.35">${esc(t.title)}</div>
+      </div>
+      <button class="btn-ghost btn" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="dbody">
+      <div style="font-size:12.5px;color:var(--ink-2);line-height:1.55">${esc(t.desc||'No description.')}</div>
+
+      <div>
+        <div class="sec-t">Details</div>
+        <dl class="kv">
+          <dt>Owner</dt><dd>${esc(U(t.assignee).name)}</dd>
+          <dt>Raised by</dt><dd>${esc(U(t.raisedBy).name)}</dd>
+          <dt>Verifier</dt><dd>${esc(U(t.approver||t.raisedBy).name)}</dd>
+          <dt>Due</dt><dd style="${lateDays(t)>0&&DomeBox.isOpen(t.status)?'color:var(--red);font-weight:700':''}">${t.due} · ${fmtDue(t)}</dd>
+          <dt>Priority</dt><dd>${t.priority}</dd>
+          <dt>KRA</dt><dd>${esc(t.kra||'—')}</dd>
+          <dt>Recurrence</dt><dd>${t.cadence==='One Time'?'One-off':'↻ '+t.cadence}</dd>
+          <dt>Rework</dt><dd>${t.reworkCount||0}</dd>
+        </dl>
+      </div>
+
+      ${blockers.length?`<div class="why" style="border-color:#5c452b;color:#ffcf9b">⛔ Blocked by ${blockers.map(b=>esc(b.id+' '+b.title)).join(', ')} — it cannot start until those close.</div>`:''}
+
+      ${sub.total?`<div>
+        <div class="sec-t">Checklist · ${sub.done}/${sub.total}</div>
+        ${t.subtasks.map((s,i)=>`<label class="sub"><input type="checkbox" ${s.done?'checked':''} onchange="toggleSub('${t.id}',${i})"> <span style="${s.done?'color:var(--ink-3);text-decoration:line-through':''}">${esc(s.t)}</span></label>`).join('')}
+      </div>`:''}
+
+      <div>
+        <div class="sec-t">Audit trail</div>
+        <ul class="hist">${t.history.slice().reverse().map(h=>`<li><span class="hd"></span><div>
+          <div><strong>${h.status}</strong> <span style="color:var(--ink-3)">· ${esc(U(h.by).name)}</span></div>
+          <div style="color:var(--ink-3);font-size:11px">${new Date(h.date).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+          ${h.note?`<div style="margin-top:3px;color:var(--ink-2);font-style:italic">“${esc(h.note)}”</div>`:''}
+        </div></li>`).join('')}</ul>
+      </div>
+    </div>
+    <div class="acts">
+      ${moves.length?moves.map(m=>`<button class="btn ${m===S.VERIFIED?'':'btn-ghost'}" onclick="act('${t.id}','${m}')">${
+        m===S.IN_PROGRESS&&t.status===S.FOR_REVIEW?'Send back for rework':
+        m===S.IN_PROGRESS?'Start work':
+        m===S.FOR_REVIEW?'Submit for review':
+        m===S.VERIFIED?'Verify & close':m}</button>`).join('')
+      :`<div class="why">Nothing for you to do here as <strong>${esc(ACTOR.name)}</strong>${t.assignee===ACTOR.username&&t.status===S.FOR_REVIEW?' — your own work must be signed off by ${esc(U(t.approver||t.raisedBy).name)}.':'.'}</div>`}
+    </div>`;
+  document.getElementById('drawer').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+}
+function closeDrawer(){
+  OPEN_ID=null;
+  document.getElementById('drawer').classList.remove('on');
+  document.getElementById('scrim').classList.remove('on');
+}
+function act(id, target){
+  const col = DomeBox.columnForStatus(target);
+  const t = TASKS.find(x=>x.id===id);
+  if(target===S.IN_PROGRESS && t.status===S.FOR_REVIEW){ moveTask(id,'doing'); }
+  else if(col){ moveTask(id, col); }
+  if(OPEN_ID) openTask(id);
+}
+function toggleSub(id, i){
+  const t = TASKS.find(x=>x.id===id);
+  t.subtasks[i].done = !t.subtasks[i].done;
+  render(); openTask(id);
+}
+
+/* ---------- chrome ---------- */
+function render(){
+  document.getElementById('board').style.display = VIEW==='board'?'flex':'none';
+  document.getElementById('list').style.display  = VIEW==='list'?'block':'none';
+  document.getElementById('scores').style.display= VIEW==='scores'?'grid':'none';
+  if(VIEW==='board') renderBoard();
+  if(VIEW==='list') renderList();
+  if(VIEW==='scores') renderScores();
+
+  const w = DomeBox.wipStatus(TASKS, ACTOR.username, WIP_LIMIT);
+  document.getElementById('wipChip').textContent = `WIP ${w.count}/${w.limit}` + (w.exceeded?' — at limit':'');
+  document.getElementById('wipChip').style.color = w.exceeded?'var(--red)':w.nearing?'var(--amber)':'var(--ink-2)';
+}
+
+function boot(){
+  const actorSel = document.getElementById('actor');
+  actorSel.innerHTML = USERS.map(u=>`<option value="${u.username}">${esc(u.name)} — ${u.role}</option>`).join('');
+  actorSel.value = ACTOR.username;
+  actorSel.onchange = e => { ACTOR = U(e.target.value); toast('Now acting as '+ACTOR.name+' ('+ACTOR.role+')'); render(); if(OPEN_ID) openTask(OPEN_ID); };
+
+  document.getElementById('fAssignee').innerHTML = '<option value="">Everyone</option>' + USERS.map(u=>`<option value="${u.username}">${esc(u.name)}</option>`).join('');
+  const kras = [...new Set(TASKS.map(t=>t.kra).filter(Boolean))].sort();
+  document.getElementById('fKra').innerHTML = '<option value="">Any KRA</option>' + kras.map(k=>`<option>${esc(k)}</option>`).join('');
+
+  ['q','fAssignee','fPriority','fKra','fMine','fLate'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.addEventListener(id==='q'?'input':'change', render);
+  });
+
+  document.getElementById('views').addEventListener('click', e=>{
+    const b = e.target.closest('button[data-view]'); if(!b) return;
+    VIEW = b.dataset.view;
+    document.querySelectorAll('#views button').forEach(x=>x.classList.toggle('on', x===b));
+    render();
+  });
+
+  document.getElementById('newTask').onclick = ()=>{
+    const title = prompt('Task title'); if(!title) return;
+    const assignee = USERS[3];
+    const init = DomeBox.initialStatusFor(assignee, ACTOR);
+    const t = { id:'T-'+(100+TASKS.length+1), title, desc:'', assignee:assignee.username, raisedBy:ACTOR.username,
+      approver:init.approver, status:init.status, priority:'Medium', due:off(5), kra:'General', category:'GENERAL',
+      cadence:'One Time', reworkCount:0, blockedBy:[], subtasks:[],
+      history:[{status:init.status, by:ACTOR.username, date:new Date().toISOString(), note:init.note}] };
+    TASKS.push(t);
+    toast(init.status===S.AWAITING_APPROVAL
+      ? `Created — waiting on ${U(init.approver).name} to approve, because ${assignee.name} reports to them`
+      : 'Task created', 'ok');
+    render();
+  };
+
+  document.getElementById('scrim').onclick = closeDrawer;
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+
+  render();
+  setTimeout(()=>toast('Try dragging “Q3 vendor audit” into Verified as Payel — the board refuses it.'), 700);
+}
+boot();
+</script>
+</body>
+</html>

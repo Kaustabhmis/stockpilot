@@ -1,0 +1,24 @@
+{
+  "_comment": "Fill every field. gen-pages.js refuses to build while any required value is empty, so an incomplete legal page cannot reach the live site by accident.",
+
+  "legalEntity": "BISCS India",
+  "productName": "Dome Box",
+  "domain": "www.domebox.in",
+  "supportEmail": "info@biscsindia.com",
+
+  "registeredAddress": "",
+  "phone": "",
+  "gstin": "",
+  "entityType": "",
+  "registrationNumber": "",
+
+  "grievanceOfficerName": "",
+  "grievanceOfficerEmail": "info@biscsindia.com",
+
+  "dataRetentionMonths": 12,
+  "refundWindowDays": 7,
+  "jurisdictionCity": "",
+  "jurisdictionState": "",
+
+  "effectiveDate": "2026-09-16"
+}

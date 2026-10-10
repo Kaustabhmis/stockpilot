@@ -1,0 +1,92 @@
+
+<!-- ============================ AUTH ============================ -->
+<div id="view-auth" class="hidden min-h-screen flex items-center justify-center p-4"
+     style="background:radial-gradient(1000px 600px at 28% 12%,#3f2fa6 0%,rgba(63,47,166,0) 62%),radial-gradient(700px 500px at 88% 92%,#7d2a12 0%,rgba(125,42,18,0) 58%),#15121f">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center gap-2 text-white">
+        <svg width="38" height="38" viewBox="0 0 100 100" aria-hidden="true"><path d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#fff"/><path d="M35 55 L46 66 L67 42" fill="none" stroke="#5b4bdb" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="font-black text-2xl tracking-tight">Dome Box</span>
+      </div>
+      <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Task &amp; Team Management</p>
+      <p class="text-slate-300 text-sm font-semibold mt-3 leading-relaxed">
+        Assign the work, approve what comes back, and get a performance score
+        your team can see the working for.</p>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-2xl p-7 fade">
+      <!-- sign in -->
+      <form id="formLogin" class="space-y-4">
+        <h1 class="text-xl font-black">Sign in</h1>
+        <div>
+          <label class="lb" for="liUser">Email or username</label>
+          <input id="liUser" class="in" autocomplete="username" required>
+        </div>
+        <div>
+          <label class="lb" for="liPass">Password</label>
+          <input id="liPass" type="password" class="in" autocomplete="current-password" required>
+        </div>
+        <button type="submit" id="btnLogin" class="btn btn-p w-full">Sign in</button>
+        <div class="text-center space-y-2 pt-2 border-t border-gray-100">
+          <button type="button" class="text-xs font-bold text-blue-600 hover:underline block w-full"
+                  onclick="showAuth('forgot')">Forgot password?</button>
+          <button type="button" class="text-sm font-black text-blue-600 hover:underline block w-full"
+                  onclick="showAuth('signup')">Create a company workspace</button>
+        </div>
+      </form>
+
+      <!-- sign up -->
+      <form id="formSignup" class="space-y-3 hidden">
+        <h1 class="text-xl font-black">Create your workspace</h1>
+        <p class="text-xs text-gray-500 font-semibold">Free for 5 people and 50 tasks a month. No card needed.</p>
+        <div><label class="lb" for="suCompany">Company name</label>
+          <input id="suCompany" class="in" autocomplete="organization" required></div>
+        <div><label class="lb" for="suName">Your name</label>
+          <input id="suName" class="in" autocomplete="name" required></div>
+        <div><label class="lb" for="suEmail">Work email</label>
+          <input id="suEmail" type="email" class="in" autocomplete="email" required></div>
+        <div><label class="lb" for="suPhone">Phone</label>
+          <input id="suPhone" type="tel" class="in" autocomplete="tel"></div>
+        <div><label class="lb" for="suPass">Password</label>
+          <input id="suPass" type="password" class="in" autocomplete="new-password" minlength="8" required>
+          <p class="text-[11px] text-gray-400 font-semibold mt-1">At least 8 characters.</p></div>
+        <button type="submit" id="btnSignup" class="btn btn-p w-full">Create workspace</button>
+        <button type="button" class="text-xs font-bold text-gray-500 hover:text-gray-800 block w-full pt-1"
+                onclick="showAuth('login')">Back to sign in</button>
+      </form>
+
+      <!-- forgot -->
+      <form id="formForgot" class="space-y-4 hidden">
+        <h1 class="text-xl font-black">Reset your password</h1>
+        <p class="text-xs text-gray-500 font-semibold">We will email you a link. It works once and expires in an hour.</p>
+        <div><label class="lb" for="fpEmail">Work email</label>
+          <input id="fpEmail" type="email" class="in" autocomplete="email" required></div>
+        <button type="submit" id="btnForgot" class="btn btn-p w-full">Send reset link</button>
+        <button type="button" class="text-xs font-bold text-gray-500 hover:text-gray-800 block w-full"
+                onclick="showAuth('login')">Back to sign in</button>
+      </form>
+
+      <!-- reset (reached from the emailed link) -->
+      <form id="formReset" class="space-y-4 hidden">
+        <h1 class="text-xl font-black">Set a new password</h1>
+        <div><label class="lb" for="rsPass">New password</label>
+          <input id="rsPass" type="password" class="in" autocomplete="new-password" minlength="8" required></div>
+        <div><label class="lb" for="rsPass2">Confirm</label>
+          <input id="rsPass2" type="password" class="in" autocomplete="new-password" minlength="8" required></div>
+        <button type="submit" id="btnReset" class="btn btn-p w-full">Save password</button>
+      </form>
+    </div>
+
+    <p class="text-center mt-5">
+      <button type="button" class="text-slate-400 text-xs font-bold hover:text-slate-200"
+              onclick="showHome()">&larr; Back to the Dome Box home page</button>
+    </p>
+
+    <p class="text-center text-slate-500 text-xs mt-3">
+      <a href="/privacy" class="hover:text-slate-300">Privacy</a> ·
+      <a href="/terms" class="hover:text-slate-300">Terms</a> ·
+      <a href="/refund" class="hover:text-slate-300">Refunds</a> ·
+      <a href="/contact" class="hover:text-slate-300">Contact</a>
+    </p>
+  </div>
+</div>

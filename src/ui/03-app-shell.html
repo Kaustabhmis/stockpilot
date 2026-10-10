@@ -1,0 +1,245 @@
+
+<!-- ============================ APP ============================ -->
+<div id="view-app" class="hidden min-h-screen">
+
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <svg width="28" height="28" viewBox="0 0 100 100" aria-hidden="true"><path d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#5b4bdb"/><path d="M35 55 L46 66 L67 42" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="font-black text-lg tracking-tight whitespace-nowrap">Dome Box</span>
+        <span id="navCompany" class="sm-up text-xs font-bold text-gray-400 truncate ml-1"></span>
+      </div>
+
+      <div class="seg md-up flex gap-1 bg-gray-100 p-1 rounded-xl" id="navTabs">
+        <button data-tab="tasks" class="on">Tasks</button>
+        <button data-tab="priority">Priority</button>
+        <button data-tab="projects">Projects</button>
+        <button data-tab="team">Team</button>
+        <button data-tab="reports">Reports</button>
+        <button data-tab="goals">Goals</button>
+        <button data-tab="meetings">Meetings</button>
+        <button data-tab="board">Board</button>
+      </div>
+
+      <div class="flex items-center gap-1 sm:gap-2">
+        <div class="relative">
+          <button id="btnBell" class="p-2 rounded-full hover:bg-gray-100 relative text-gray-600" aria-label="Notifications">
+            <span class="material-icons">notifications</span>
+            <span id="bellCount" class="hidden absolute top-1 right-1 h-4 min-w-[16px] px-1 bg-red-600
+                   rounded-full text-[10px] text-white flex items-center justify-center font-black border-2 border-white">0</span>
+          </button>
+          <div id="bellMenu" class="hidden absolute right-0 top-12 bg-white border border-gray-200 rounded-2xl
+               shadow-2xl w-80 max-h-96 overflow-y-auto z-50">
+            <div class="p-3 border-b bg-gray-50 font-black text-sm">Notifications</div>
+            <div id="bellList"></div>
+          </div>
+        </div>
+        <button id="btnAi" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 sm-up" title="AI insight">
+          <span class="material-icons">auto_awesome</span></button>
+        <button id="btnHelp" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 sm-up" title="Help (press ?)">
+          <span class="material-icons">help_outline</span></button>
+        <div class="h-7 w-px bg-gray-200 mx-1"></div>
+        <div class="text-right sm-up leading-tight">
+          <div id="navName" class="text-sm font-black"></div>
+          <div id="navRole" class="text-[11px] font-bold text-blue-600"></div>
+        </div>
+        <button id="btnAccount" class="p-2 rounded-full hover:bg-gray-100 text-gray-500" title="Account">
+          <span class="material-icons">account_circle</span></button>
+      </div>
+    </div>
+
+    <!-- Five tabs no longer fit across a phone at equal widths, so they scroll
+         rather than squeeze. flex-1 here would push the row past the viewport
+         and give the whole page a horizontal scrollbar. -->
+    <div class="seg md-down flex gap-1 bg-gray-100 p-1 mx-4 mb-3 rounded-xl overflow-x-auto"
+         id="navTabsMobile" style="scrollbar-width:none">
+      <button data-tab="tasks" class="on shrink-0">Tasks</button>
+      <button data-tab="priority" class="shrink-0">Priority</button>
+      <button data-tab="projects" class="shrink-0">Projects</button>
+      <button data-tab="team" class="shrink-0">Team</button>
+      <button data-tab="reports" class="shrink-0">Reports</button>
+        <button data-tab="goals" class="shrink-0">Goals</button>
+        <button data-tab="meetings" class="shrink-0">Meetings</button>
+        <button data-tab="board" class="shrink-0">Board</button>
+    </div>
+  </nav>
+
+  <div id="banner" class="hidden"></div>
+
+  <!-- ---------------------------- TASKS ---------------------------- -->
+  <section id="tab-tasks">
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 pt-6">
+      <div id="statTiles" class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5"></div>
+    </div>
+
+    <div class="bg-white border-y border-gray-100 sticky top-16 z-30">
+      <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center gap-2">
+        <input id="fSearch" class="in max-w-[200px]" placeholder="Search tasks…">
+        <select id="fAssignee" class="in max-w-[160px]"></select>
+        <select id="fStatus" class="in max-w-[150px]"></select>
+        <select id="fCategory" class="in max-w-[150px]"></select>
+        <select id="fGoal" class="in max-w-[190px] hidden" aria-label="Filter by goal"></select>
+        <label class="flex items-center gap-2 text-xs font-bold text-gray-600 px-1 whitespace-nowrap">
+          <input type="checkbox" id="fOverdue" class="w-4 h-4 accent-red-600"> Overdue
+        </label>
+        <button id="btnHistory" class="btn btn-g text-xs py-2 px-3">
+          <span class="material-icons text-sm">history</span> <span class="sm-up">Archive</span>
+        </button>
+        <span class="flex-1"></span>
+        <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="viewMode">
+          <button data-mode="board" class="on text-xs">Board</button>
+          <button data-mode="list" class="text-xs">List</button>
+        </div>
+        <button id="btnNewTask" class="btn btn-p flex items-center gap-1">
+          <span class="material-icons text-base">add</span><span class="sm-up">Assign</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-6">
+      <div id="board" class="grid gap-4" style="grid-template-columns:repeat(5,minmax(230px,1fr));overflow-x:auto"></div>
+      <div id="list" class="hidden bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
+      <div id="archiveMore" class="hidden flex items-center justify-between gap-3 mt-4 px-1"></div>
+      <div id="tasksEmpty" class="hidden text-center py-24 text-gray-400 font-bold"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------- PRIORITY ---------------------------- -->
+  <section id="tab-priority" class="hidden">
+    <div class="max-w-[1100px] mx-auto px-4 lg:px-6 py-6">
+      <div class="flex flex-wrap items-center gap-3 mb-1">
+        <h2 class="text-2xl font-black">What to do next</h2>
+        <span class="flex-1"></span>
+        <select id="prPerson" class="in max-w-[200px] md-up"></select>
+      </div>
+      <p class="text-sm text-gray-400 font-semibold mb-4">Ranked by what is actually most pressing,
+        not just by the label on it. Every row says why it is where it is.</p>
+      <div id="prHorizons" class="flex flex-wrap gap-2 mb-5"></div>
+      <div id="prBody"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------- PROJECTS --------------------------- -->
+  <section id="tab-projects" class="hidden">
+    <div class="max-w-[1400px] mx-auto px-4 lg:px-6 py-6">
+      <div class="flex flex-wrap items-center gap-3 mb-1">
+        <h2 class="text-2xl font-black">Projects</h2>
+        <span class="flex-1"></span>
+        <button id="btnNewProject" class="btn btn-p flex items-center gap-1">
+          <span class="material-icons text-base">add</span> New project</button>
+      </div>
+      <p class="text-sm text-gray-400 font-semibold mb-5">Work that runs in stages. Every stage has
+        its own owner and its own deadline, and meeting one earns score in its own right.</p>
+      <div id="projectList"></div>
+    </div>
+  </section>
+
+  <!-- ---------------------------- TEAM ----------------------------- -->
+  <section id="tab-team" class="hidden">
+    <div class="max-w-[1400px] mx-auto px-4 lg:px-6 py-6">
+      <div class="flex flex-wrap items-center gap-3 mb-5">
+        <h2 class="text-2xl font-black">Team</h2>
+        <span class="flex-1"></span>
+        <button id="btnLeave" class="btn btn-g">Record leave</button>
+        <button id="btnCookie" class="btn btn-g flex items-center gap-1"><span class="material-icons text-base">emoji_events</span> Cookie points</button>
+        <button id="btnOrg" class="btn btn-g">Org chart</button>
+        <button id="btnKra" class="btn btn-g">KRA &amp; KPI</button>
+        <button id="btnCategories" class="btn btn-g sm-up">Categories &amp; priorities</button>
+        <button id="btnNewUser" class="btn btn-p flex items-center gap-1">
+          <span class="material-icons text-base">person_add</span> Add member</button>
+      </div>
+      <div id="teamStats" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5"></div>
+      <div id="teamTable" class="bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
+    </div>
+  </section>
+
+  <!-- --------------------------- REPORTS --------------------------- -->
+  <section id="tab-goals" class="hidden">
+    <div class="max-w-[1100px] mx-auto px-4 lg:px-6 py-6" id="goalsBody"></div>
+  </section>
+
+  <section id="tab-meetings" class="hidden">
+    <div id="meetBody"></div>
+  </section>
+
+  <section id="tab-board" class="hidden">
+    <div class="bg-white border-b border-gray-100">
+      <div class="max-w-[1100px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center gap-2">
+        <span class="lb mb-0">Period</span>
+        <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="lbPeriod">
+          <button data-p="week" class="text-xs">Week</button>
+          <button data-p="month" class="on text-xs">Month</button>
+          <button data-p="quarter" class="text-xs">Quarter</button>
+          <button data-p="year" class="text-xs">Year</button>
+        </div>
+        <select id="lbOffset" class="in max-w-[180px]"></select>
+        <span class="flex-1"></span>
+        <div id="lbVisWrap" class="hidden flex items-center gap-2">
+          <span class="lb mb-0">Seen by</span>
+          <select id="lbVis" class="in max-w-[190px]">
+            <option value="everyone">Everyone</option>
+            <option value="top">Top 3 + own place</option>
+            <option value="managers">Managers only</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="max-w-[1100px] mx-auto px-4 lg:px-6 py-6" id="lbBody"></div>
+  </section>
+
+  <section id="tab-reports" class="hidden">
+    <div class="bg-white border-b border-gray-100">
+      <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center gap-2">
+        <span class="lb mb-0">Period</span>
+        <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="periodSeg">
+          <button data-p="week" class="text-xs">Weekly</button>
+          <button data-p="month" class="on text-xs">Monthly</button>
+          <button data-p="quarter" class="text-xs">Quarterly</button>
+          <button data-p="year" class="text-xs">Full year</button>
+        </div>
+        <select id="rOffset" class="in max-w-[180px]"></select>
+        <select id="rPerson" class="in max-w-[170px]"></select>
+        <span class="flex-1"></span>
+        <button id="btnAppraise" class="btn btn-g">Appraisal</button>
+        <button id="btnAccount2" class="btn btn-g">Accountability</button>
+        <button id="btnHistoryRpt" class="btn btn-g">Review history</button>
+      </div>
+    </div>
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-6">
+      <div id="reportsLocked" class="hidden"></div>
+      <div id="reportsBody">
+        <div id="rTiles" class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5"></div>
+        <div class="grid grid-cols-12 gap-5">
+          <div class="card-12 col-span-12 lg:col-span-8 bg-white rounded-3xl border border-gray-100 p-5">
+            <div class="flex justify-between items-start mb-3">
+              <div><h3 class="font-black">Performance trend</h3>
+                   <div id="rTrendSub" class="text-xs text-gray-400 font-semibold"></div></div>
+              <div id="rLegend" class="flex gap-3 text-xs font-bold text-gray-500"></div>
+            </div>
+            <div id="chartTrend"></div>
+          </div>
+          <div class="card-12 col-span-12 lg:col-span-4 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-3">Performance bands</h3>
+            <div id="chartBands"></div>
+          </div>
+          <div class="card-12 col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-3">Score by person</h3><div id="chartPeople"></div>
+          </div>
+          <div class="card-12 col-span-12 lg:col-span-6 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-3">Work delivered by KRA</h3><div id="chartKra"></div>
+          </div>
+          <div class="card-12 col-span-12 bg-white rounded-3xl border border-gray-100 p-5">
+            <h3 class="font-black mb-1">Delivery heatmap</h3>
+            <div class="text-xs text-gray-400 font-semibold mb-3">Tasks verified per person, per week — darker is more</div>
+            <div id="chartHeat"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="scrim"><div id="modal" class="max-w-lg"></div></div>
+<div id="drawer"></div>
+<div id="toasts"></div>
+<div id="tip"></div>
