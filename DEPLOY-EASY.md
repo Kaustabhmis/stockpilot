@@ -1,5 +1,7 @@
 # Deploy Dome Box — the easy guide
 
+> New to this? Read **[`DEPLOY-BOOK.pdf`](DEPLOY-BOOK.pdf)** instead — the same steps in very simple words, with a picture of every screen.
+
 Twelve steps. Do them in order. Each one ends with **✅ how you know it worked**.
 
 You need: your Google account (the one that owns `info@biscsindia.com`), your
@@ -203,11 +205,13 @@ Your customers keep **their own spreadsheets** — nothing is copied or moved.
 The new code reads them where they are and only *adds* new columns and tabs.
 [`MIGRATING-CUSTOMERS.md`](MIGRATING-CUSTOMERS.md) explains it in full.
 
-1. **Back up first.** Add `domebox/backup.gs` as another file in Apps Script,
-   run `backupAllTenants`, then `verifyLatestBackup`.
+1. Make a copy of your live **Master** sheet (File → Make a copy) as a safety copy.
 2. In Script Properties, change `MASTER_DB_ID` to your **current live
    registry** ID. Change `SHEET_ID` in `reminders` to the same. Run
    `ensureRegistry`.
+   **Back up now** — after the IDs point at the real customers, not before.
+   Add `domebox/backup.gs` as another file in Apps Script, run
+   `backupAllTenants`, then `verifyLatestBackup`.
 3. Run **`previewMigration`** (it's already inside `code.gs`) and read the log. It changes nothing. It lists every
    customer and what will happen to each.
 

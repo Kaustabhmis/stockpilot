@@ -401,18 +401,23 @@ Netlify gives you a `*.netlify.app` URL. Open it and walk through:
 
 Only once everything above behaves on the preview.
 
-### 5.1 Back up
+### 5.1 Point at the live registry
+
+Make a copy of the live registry first (File → Make a copy). Then change
+`MASTER_DB_ID` (and `REG.SHEET_ID` in `reminders.gs`) to your **live**
+registry id. Run `ensureRegistry()`.
+
+It only adds missing tabs to the registry and never rewrites a row.
+
+### 5.2 Back up
 
 Add **`domebox/backup.gs`** to the Apps Script project and run
 `backupAllTenants()`, then `verifyLatestBackup()`. Confirm the output before
 going further. This is the step you will be glad of exactly once.
 
-### 5.2 Point at the live registry
-
-Change `MASTER_DB_ID` (and `REG.SHEET_ID` in `reminders.gs`) to your **live**
-registry id. Run `ensureRegistry()`.
-
-It only adds missing tabs to the registry and never rewrites a row.
+The order matters: `backupAllTenants` backs up the companies listed in the
+registry `MASTER_DB_ID` points at. Run before 5.1, it backs up the practice
+registry and none of your real customers.
 
 Then run **`previewMigration`**. It reads every customer's sheet and changes
 nothing: it reports what will be added to each, anyone who would not be able

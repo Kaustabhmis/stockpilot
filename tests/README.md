@@ -38,6 +38,7 @@ node netlify-test.js        # the real deploy build, run into a throwaway folder
 node scope-test.js          # no .gs file redefines another's names in one project
 node archive-test.js        # year-old work moves to Tasks_Archive: nothing lost, nothing changes
 node reminders-test.js      # open-task reminders: 9/3/5, assign day, 2 days before, urgent first
+node scheduler-live-test.js  # code.gs + reminders.gs + backup.gs together, on a registry the app made
 node demo-test.js           # the demo workspace, and that it demos something
 
 node server.js &            # then, for the browser tests:

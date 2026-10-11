@@ -91,5 +91,26 @@ ok('setupDomeBox looks for all of them',
 ok('and it reuses the rules engine rather than carrying its own copy',
    /dueOccurrences\(/.test(read('domebox/reminders.gs')));
 
+console.log('\n=== every helper a file calls exists somewhere in the project ===');
+{
+  /* backup.gs and whatsapp.gs both called loadTenants_ after it was renamed in
+     reminders.gs. Nothing failed until the job ran, and then it failed every
+     night. Every name ending in _ that a file calls must be defined in one of
+     the files that sit in the project with it. */
+  const base = '/home/user/stockpilot/';
+  const files = ['dist/code.gs', 'domebox/reminders.gs', 'domebox/backup.gs', 'domebox/whatsapp.gs',
+                 'domebox/remediate-sharing.gs'].map((f) => [f, fs.readFileSync(base + f, 'utf8')]);
+  const defined = new Set();
+  files.forEach(([, src]) => { for (const m of src.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)) defined.add(m[1]); });
+  const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').replace(/'(?:\\.|[^'\\])*'/g, "''");
+  const missing = [];
+  files.forEach(([f, src]) => {
+    for (const m of strip(src).matchAll(/(^|[^.\w$])([A-Za-z][\w$]*_)\s*\(/g)) {
+      if (!defined.has(m[2])) missing.push(f + ': ' + m[2]);
+    }
+  });
+  ok('no file calls a helper that is not defined', missing.length === 0, [...new Set(missing)].join(', '));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

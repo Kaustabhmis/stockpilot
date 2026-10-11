@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dome Box — Deploy Book</title>
+<style>
+  :root { --ink:#1b1a33; --soft:#55536f; --line:#d9d6e8; --paper:#fffdf8; --brand:#5b4bdb; --red:#d62f2f; --ok:#0e8f61; --warn:#b4570b; --tint:#f3f1ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#ecebe6; color:var(--ink); font: 17px/1.55 "Segoe UI", Arial, sans-serif; }
+  .page { background:var(--paper); max-width: 820px; margin: 0 auto; padding: 44px 52px; }
+  h1 { font-size: 34px; line-height:1.15; margin: 0 0 8px; }
+  h2 { font-size: 26px; margin: 46px 0 6px; padding-top: 14px; border-top: 3px solid var(--ink); }
+  h3 { font-size: 20px; margin: 30px 0 8px; display:flex; gap:12px; align-items:center; }
+  h3 .n { display:inline-flex; width:38px; height:38px; border-radius:50%; background:var(--brand); color:#fff; align-items:center; justify-content:center; font-size:18px; flex:none; }
+  p { margin: 8px 0; }
+  ol, ul { margin: 6px 0; padding-left: 26px; } li { margin: 5px 0; }
+  code, .mono { font-family: Consolas, "Courier New", monospace; font-size: 15px; background:#f0eee8; padding: 1px 6px; border-radius: 5px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 16px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f1ea; }
+  .lead { font-size: 19px; color: var(--soft); }
+  .tick { margin: 12px 0 4px; padding: 10px 14px; border: 2px dashed var(--ok); border-radius: 10px; color: #0b6a48; font-weight: 600; }
+  .tick::before { content: "☐  "; font-size: 20px; }
+  .stop { margin: 12px 0; padding: 12px 14px; background: #fff1f0; border-left: 6px solid var(--red); border-radius: 6px; }
+  .note { margin: 12px 0; padding: 12px 14px; background: var(--tint); border-left: 6px solid var(--brand); border-radius: 6px; }
+  .part { margin: 40px 0 0; padding: 22px 26px; border-radius: 14px; color: #fff; background: var(--ink); }
+  .part h2 { border: 0; margin: 0; padding: 0; color:#fff; } .part p { color: #cfcbe9; margin: 6px 0 0; }
+  .cover { text-align:center; padding: 30px 0 10px; }
+  .cover .big { font-size: 46px; font-weight: 800; margin: 18px 0 6px; }
+  .rules { display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }
+  .rule { border: 2px solid var(--ink); border-radius: 12px; padding: 12px; font-size: 15.5px; }
+  .rule b { display:block; font-size: 17px; margin-bottom: 4px; }
+
+  /* ---------- drawn screens ---------- */
+  figure { margin: 16px 0 18px; } figcaption { font-size: 14px; color: var(--soft); margin-top: 6px; text-align:center; font-style: italic; }
+  .screen { position: relative; border: 2px solid #9a97b4; border-radius: 10px; background: #fff; overflow: hidden; box-shadow: 0 3px 0 #d0cde0; }
+  .titlebar { background: #e9e7f2; padding: 7px 12px; font-size: 13px; color: #4a4866; display:flex; gap:6px; align-items:center; border-bottom: 1px solid #cfcce0; }
+  .titlebar i { width:10px; height:10px; border-radius:50%; background:#c9c6da; display:inline-block; }
+  .addr { margin: 8px 12px; padding: 6px 12px; border: 1px solid #c9c6da; border-radius: 16px; font: 14px Consolas, monospace; color:#555; background:#fafafe; white-space: nowrap; overflow:hidden; }
+  .addr .id { background: #fff2a8; outline: 3px solid var(--red); border-radius: 4px; padding: 0 3px; color: #111; font-weight: 700; }
+  .body { padding: 12px 14px; font-size: 14.5px; }
+  .row { display:flex; gap: 12px; align-items: center; }
+  .side { width: 130px; flex: none; border-right: 1px solid #e3e1ee; padding: 10px; font-size: 13.5px; color:#4a4866; background:#faf9fd; align-self: stretch; }
+  .side div { padding: 6px 8px; border-radius: 6px; margin-bottom: 2px; }
+  .side .on { background: #e7e4fb; font-weight: 700; color: var(--ink); }
+  .btnx { display:inline-block; padding: 6px 12px; border-radius: 6px; border: 1px solid #b9b6cf; background:#fff; font-size: 13.5px; font-weight: 600; }
+  .btnx.blue { background:#3b5bdb; color:#fff; border-color:#3b5bdb; }
+  .sel { display:inline-block; padding: 6px 30px 6px 10px; border: 1px solid #b9b6cf; border-radius: 6px; font-size: 13.5px; position: relative; background:#fff; }
+  .sel::after { content: "▾"; position:absolute; right: 9px; color:#666; }
+  .field { border: 1px solid #c6c3d8; border-radius: 6px; padding: 6px 9px; font: 13.5px Consolas, monospace; background: #fff; min-height: 30px; }
+  .lbl { font-size: 12px; color:#6a6886; margin: 8px 0 3px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .code { font: 12.5px/1.45 Consolas, monospace; color: #3a3a55; background: #fbfbfe; padding: 10px 12px; white-space: pre; overflow: hidden; }
+  .code .fade { color: #a9a7bf; }
+  .code .edit { background: #fff2a8; outline: 2px solid var(--red); border-radius: 3px; }
+  .log { white-space: pre; overflow: hidden; font: 12.5px/1.5 Consolas, monospace; background: #1f1e2e; color: #d8d6ea; padding: 10px 12px; }
+  .log .ok { color: #7ee2b0; } .log .miss { color: #ffb4a8; } .log .h { color: #fff; font-weight: 700; }
+  .hl { outline: 3px solid var(--red); outline-offset: 3px; border-radius: 8px; }
+  .num { position: absolute; width: 28px; height: 28px; border-radius: 50%; background: var(--red); color: #fff; font: 700 15px Arial; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 0 3px #fff; z-index: 2; }
+  .inl { position: static; display:inline-flex; vertical-align: middle; margin-right: 4px; }
+  .menu { position:absolute; background:#fff; border:1px solid #bdbad2; border-radius: 8px; box-shadow: 0 6px 16px rgba(0,0,0,.15); font-size: 13.5px; padding: 4px 0; z-index: 1; }
+  .menu div { padding: 6px 14px; } .menu .on { background:#e7e4fb; font-weight:700; }
+  .boxes { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .box { border: 3px solid var(--ink); border-radius: 14px; padding: 12px 14px; background:#fff; }
+  .box h4 { margin: 0 0 4px; font-size: 18px; } .box p { font-size: 14.5px; margin: 4px 0; color: var(--soft); }
+  .box.new { border-color: var(--brand); background: var(--tint); grid-column: 1 / span 2; text-align:center; }
+  .box .lock { color: var(--red); font-weight: 700; }
+  .arrowdown { text-align:center; font-size: 26px; color: var(--soft); line-height: 1; margin: 6px 0; }
+  .notepad { background:#fffef2; border:2px solid #c8c29a; border-radius:8px; font: 14px/1.7 Consolas, monospace; padding: 12px 16px; }
+  @media print {
+    body { background: #fff; } .page { max-width: none; padding: 0; }
+    h2, .part { break-before: page; } .part + h3 { break-before: avoid; }
+    figure, .tick, .stop, .note, table { break-inside: avoid; }
+  }
+  @page { size: A4; margin: 16mm 15mm; }
+</style>
+</head>
+<body><div class="page">
+
+<div class="cover">
+  <div style="font-size:15px;letter-spacing:.2em;color:var(--soft);font-weight:700">DOME BOX · BISCS INDIA</div>
+  <div class="big">The Deploy Book</div>
+  <p class="lead">How to put the new Dome Box online.<br>Simple words. One step at a time. Pictures for every screen.</p>
+</div>
+
+<div class="note"><b>How to use this book.</b> Read one step. Do it. Tick the box ☐. Then go to the next step.
+Do not skip steps. Do not do two steps at once. The pictures are drawings of the screens — your screen may
+look a little different, but the buttons have the same names. <b>Red numbers</b> show what to click, in order.</div>
+
+<h2>Chapter 0 — What you already have</h2>
+
+<p>You already have <b>two Google Sheets</b>. And every customer has <b>their own sheet</b> with their tasks.</p>
+
+<figure>
+<div class="boxes">
+  <div class="box"><h4>📄 Template sheet</h4><p>An empty pattern. When a new company signs up, Dome Box makes a copy of it for them.</p><p>Like a blank exam paper that gets photocopied.</p><p class="lock">Do not change it.</p></div>
+  <div class="box"><h4>📒 Master sheet</h4><p>The list of every company, their login and their plan. It also has your <b>OLD script</b> inside it.</p><p>Like the school register.</p><p class="lock">Do not touch the old script.</p></div>
+  <div class="box new"><h4>🆕 NEW script — its own separate project</h4><p>You make it at <b>script.google.com</b>. It is <b>not inside any sheet</b>. It only needs to know the <b>ID</b> of your Template and Master sheets.</p></div>
+</div>
+<figcaption>Picture 1 — Your three things. The new script reads your two sheets. It does not live inside them.</figcaption>
+</figure>
+
+<h3>The three rules of this book</h3>
+<div class="rules">
+  <div class="rule"><b>1. Old script: leave it.</b>The old script inside your Master sheet is your live website. Customers use it right now.</div>
+  <div class="rule"><b>2. Customer sheets: never edit.</b>The new script upgrades them safely. You never open them.</div>
+  <div class="rule"><b>3. New script: own project.</b>Made at script.google.com in Step 3. Not inside a sheet.</div>
+</div>
+
+<h3>Words used in this book</h3>
+<table>
+<tr><th style="width:24%">Word</th><th>Meaning</th></tr>
+<tr><td><b>ID</b></td><td>The long code in a sheet's web address — the sheet's roll number. See Step 1.</td></tr>
+<tr><td><b>Script</b></td><td>The program. Your file <code>code.gs</code> is a script.</td></tr>
+<tr><td><b>Project</b></td><td>A box that holds scripts.</td></tr>
+<tr><td><b>Run</b></td><td>Press the ▶ Run button to make the script do one job.</td></tr>
+<tr><td><b>Log</b></td><td>The messages the script writes after Run. They appear at the bottom.</td></tr>
+<tr><td><b>Script Properties</b></td><td>A small settings list inside the project — like a notebook.</td></tr>
+</table>
+
+<h3>What you need</h3>
+<ul>
+<li>A computer with Google Chrome</li>
+<li>Logged in to Google with the account that owns <b>info@biscsindia.com</b></li>
+<li>The file <b>dome-box-complete.zip</b>, unzipped into a folder</li>
+<li>Your Netlify login, your Razorpay login, your GitHub login</li>
+<li>Notepad open, to write down codes</li>
+<li>About 2 hours, with no hurry</li>
+</ul>
+
+<p>There are <b>two parts</b>. <b>Part 1 — Practice:</b> you build the new system next to the old one and test it. Customers notice nothing.
+<b>Part 2 — Switch:</b> you point the new system at your real Master sheet and move the website (about 45 minutes).</p>
+
+<!-- =================================================================== -->
+<div class="part"><h2>PART 1 — PRACTICE</h2><p>Customers notice nothing. Nothing real is changed.</p></div>
+
+<h3><span class="n">1</span>Write down your sheet IDs</h3>
+<ol>
+<li>Open your <b>Template sheet</b>.</li>
+<li>Look at the web address at the top. The <b>ID</b> is the part between <code>/d/</code> and <code>/edit</code>.</li>
+<li>Select it with the mouse, press <b>Ctrl + C</b>. In Notepad write <code>Template ID = </code> and press <b>Ctrl + V</b>.</li>
+<li>Do the same for your <b>Master sheet</b>: <code>Master ID = </code></li>
+</ol>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Master sheet — Google Sheets</div>
+  <div class="addr">docs.google.com/spreadsheets/d/<span class="id">1qO3Q2WJ7X3xOf9Xi-JyYZbi3c-zbsd</span>/edit#gid=0</div>
+  <div class="body" style="color:#888">A1 &nbsp;|&nbsp; Company &nbsp; Email &nbsp; Password &nbsp; Plan …</div>
+</div><figcaption>Picture 2 — The yellow part is the ID. Copy only that part.</figcaption></figure>
+<div class="tick">I have Template ID and Master ID in Notepad.</div>
+
+<h3><span class="n">2</span>Make a practice Master sheet</h3>
+<p>We practise on a <b>new, empty</b> sheet so the real customer list stays safe.</p>
+<ol>
+<li>Go to <b>sheets.google.com</b> → click <b>Blank</b> (the big <b>+</b>).</li>
+<li>Click <i>Untitled spreadsheet</i> at the top and type <b>PRACTICE Master</b>.</li>
+<li>Copy its ID like in Step 1. In Notepad: <code>Practice ID = </code></li>
+</ol>
+<div class="tick">I have Practice ID in Notepad.</div>
+
+<h3><span class="n">3</span>Make the NEW script project</h3>
+<ol>
+<li>Go to <b>script.google.com</b>. Click <b>New project</b> <span class="num inl">1</span>.</li>
+<li>Click <i>Untitled project</i> <span class="num inl">2</span> and name it <b>Dome Box NEW</b>.</li>
+<li>Click inside the code, press <b>Ctrl + A</b> then <b>Delete</b> <span class="num inl">3</span>.</li>
+<li>On your computer open the zip folder → <b>dist</b> → <b>code.gs</b> with Notepad. <b>Ctrl + A</b>, <b>Ctrl + C</b>.</li>
+<li>Back in the browser click inside the empty code area and press <b>Ctrl + V</b>.</li>
+<li>Click <b>💾 Save</b> <span class="num inl">4</span>.</li>
+</ol>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; script.google.com</div>
+  <div class="row" style="align-items:stretch">
+    <div class="side" style="width:170px"><span class="num inl">1</span><span class="btnx blue hl">+ New project</span><div style="margin-top:8px">My projects</div><div>Shared</div></div>
+    <div style="flex:1;min-width:0">
+      <div class="body" style="display:flex;gap:8px;align-items:center;border-bottom:1px solid #e3e1ee;flex-wrap:wrap">
+        <span class="num inl">2</span><span class="hl" style="font-weight:700;font-size:16px;padding:2px 6px">Dome Box NEW</span>
+        <span style="margin-left:auto"></span><span class="num inl">4</span><span class="btnx hl">💾 Save</span><span class="btnx">▶ Run</span>
+      </div>
+      <div class="row" style="align-items:stretch">
+        <div class="side" style="width:100px"><div>Files <b>+</b></div><div class="on">Code.gs</div></div>
+        <div style="flex:1;min-width:0;padding:8px"><span class="num inl">3</span><span style="font-size:13px;font-weight:600">Delete everything, then paste all of dist/code.gs:</span>
+        <div class="code hl" style="margin-top:6px">// ===========================================
+// DOME BOX — CONFIG
+// ===========================================
+var TAB = { USERS:'Users', TASKS:'Tasks', …
+<span class="fade">… about 9,000 more lines …</span></div></div>
+      </div>
+    </div>
+  </div>
+</div><figcaption>Picture 3 — A new project at script.google.com. The code goes into Code.gs.</figcaption></figure>
+<div class="stop">❗ You did this at <b>script.google.com</b> — NOT inside your Master sheet. That is correct.</div>
+<div class="tick">Dome Box NEW has the long code in it, saved, with no red lines.</div>
+
+<h3><span class="n">4</span>Fill in the settings notebook</h3>
+<ol>
+<li>On the left, click the <b>⚙ gear</b> (Project Settings) <span class="num inl">1</span>.</li>
+<li><b>Time zone</b> → choose <b>(GMT+05:30) India Standard Time</b> <span class="num inl">2</span>.</li>
+<li>Scroll down to <b>Script Properties</b> → <b>Add script property</b> <span class="num inl">3</span>. Add these rows:</li>
+</ol>
+<table>
+<tr><th>Property (left box)</th><th>Value (right box)</th></tr>
+<tr><td><code>MASTER_DB_ID</code></td><td>your <b>Practice ID</b> (Step 2) — <i>not</i> the real Master yet</td></tr>
+<tr><td><code>TEMPLATE_ID</code></td><td>your <b>Template ID</b> (Step 1)</td></tr>
+<tr><td><code>SITE_URL</code></td><td><code>https://www.domebox.in</code></td></tr>
+<tr><td><code>MAIL_FROM</code></td><td><code>info@biscsindia.com</code></td></tr>
+<tr><td><code>SELLER_LEGAL_NAME</code></td><td><code>BISCS India</code></td></tr>
+<tr><td><code>SELLER_ADDRESS</code></td><td>your office address, in one line</td></tr>
+<tr><td><code>SELLER_STATE</code></td><td><code>West Bengal</code></td></tr>
+</table>
+<p>4. Click <b>Save script properties</b> <span class="num inl">4</span>.</p>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Dome Box NEW — Project Settings</div>
+  <div class="row" style="align-items:stretch">
+    <div class="side" style="width:180px"><div>&lt;&gt; Editor</div><div>⏱ Triggers</div><div><span class="num inl">1</span><span class="hl" style="font-weight:700;padding:2px 4px">⚙ Project Settings</span></div></div>
+    <div class="body" style="flex:1">
+      <div class="lbl">Time zone</div><span class="num inl">2</span><span class="sel hl">(GMT+05:30) India Standard Time</span>
+      <div class="lbl" style="margin-top:14px">Script Properties</div>
+      <table style="font-size:13px;margin:4px 0"><tr><th>Property</th><th>Value</th></tr>
+        <tr><td class="mono">MASTER_DB_ID</td><td class="mono">1PqR… (Practice ID)</td></tr>
+        <tr><td class="mono">TEMPLATE_ID</td><td class="mono">1AbC… (Template ID)</td></tr>
+        <tr><td class="mono">SITE_URL</td><td class="mono">https://www.domebox.in</td></tr>
+        <tr><td class="mono">MAIL_FROM</td><td class="mono">info@biscsindia.com</td></tr>
+        <tr><td class="mono" colspan="2" style="color:#999">… 3 more rows …</td></tr></table>
+      <span class="num inl">3</span><span class="btnx hl">Add script property</span> &nbsp; <span class="num inl">4</span><span class="btnx blue hl">Save script properties</span>
+    </div>
+  </div>
+</div><figcaption>Picture 4 — Project Settings: time zone, then the settings list.</figcaption></figure>
+<div class="tick">Seven rows saved. Time zone is India.</div>
+
+<h3><span class="n">5</span>Run the setup check</h3>
+<ol>
+<li>Click <b>&lt;&gt; Editor</b> on the left.</li>
+<li>In the function box at the top <span class="num inl">1</span> choose <b>setupDomeBox</b>.</li>
+<li>Click <b>▶ Run</b> <span class="num inl">2</span>.</li>
+<li>Google asks for permission (Picture 6): <b>Review permissions</b> → your account → <b>Advanced</b> → <b>Go to Dome Box NEW (unsafe)</b> → <b>Allow</b>. It says “unsafe” only because you made the app yourself.</li>
+<li>Read the <b>Execution log</b> at the bottom <span class="num inl">3</span>. Some lines say <b style="color:var(--ok)">ok</b>, some say <b style="color:var(--red)">MISSING</b>. That is normal now — the next steps fix them.</li>
+</ol>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Dome Box NEW — Editor</div>
+  <div class="body" style="display:flex;gap:8px;align-items:center;border-bottom:1px solid #e3e1ee">
+    <b>Dome Box NEW</b><span style="margin-left:auto" class="btnx">💾</span>
+    <span class="num inl">1</span><span class="sel hl">setupDomeBox</span> <span class="num inl">2</span><span class="btnx blue hl">▶ Run</span>
+  </div>
+  <div class="code" style="height:44px"><span class="fade">… code …</span></div>
+  <div style="padding:6px"><span class="num inl">3</span><b style="font-size:13px">Execution log (bottom of the screen):</b>
+  <div class="log hl" style="margin-top:6px;white-space:pre">--- REGISTRY ---
+<span class="ok">  ok      tabs present: Directory, Global_Users, Reset_Tokens …</span>
+--- EMAIL ---
+<span class="miss">  MISSING "info@biscsindia.com" is not a verified send-as alias</span>
+--- WEB APP ---
+<span class="miss">  MISSING not deployed as a web app yet.</span>
+=== WHAT IS LEFT ===      ← always read this part</div></div>
+</div><figcaption>Picture 5 — Choose the function, press Run, read the log.</figcaption></figure>
+<figure><div class="row" style="gap:10px;align-items:stretch">
+  <div class="screen" style="flex:1"><div class="titlebar">Authorization required</div><div class="body">This project needs your permission.<br><br><span class="btnx blue hl">Review permissions</span></div></div>
+  <div class="arrowdown" style="align-self:center">→</div>
+  <div class="screen" style="flex:1"><div class="titlebar">Google hasn't verified this app</div><div class="body"><span class="hl" style="text-decoration:underline">Advanced</span><br><br><span class="hl" style="text-decoration:underline">Go to Dome Box NEW (unsafe)</span></div></div>
+  <div class="arrowdown" style="align-self:center">→</div>
+  <div class="screen" style="flex:1"><div class="titlebar">Dome Box NEW wants to access…</div><div class="body">See, edit spreadsheets…<br>Send email as you…<br><br><span class="btnx blue hl">Allow</span></div></div>
+</div><figcaption>Picture 6 — The permission screens, only the first time.</figcaption></figure>
+<p>6. Go back to <b>⚙ Project Settings</b>. A new row <b>AUTH_PEPPER</b> has appeared. <b>Copy its value into Notepad and keep it forever.</b> If it is lost, every customer must reset their password.</p>
+<div class="tick">setupDomeBox ran. AUTH_PEPPER is in Notepad.</div>
+
+<h3><span class="n">6</span>Let it send emails from info@biscsindia.com</h3>
+<p>Only if the log says <b>not a verified send-as alias</b>:</p>
+<ol>
+<li>Open <b>Gmail</b> → <b>⚙</b> → <b>See all settings</b> → tab <b>Accounts and Import</b>.</li>
+<li><b>Send mail as</b> → <b>Add another email address</b> → type <code>info@biscsindia.com</code> → follow the steps.</li>
+<li>Open the email Google sends and click the link inside it.</li>
+<li>Back in the script: run <b>setupDomeBox</b> again.</li>
+</ol>
+<div class="tick">The log says: every email will leave from info@biscsindia.com</div>
+
+<h3><span class="n">7</span>Put the new script on the internet</h3>
+<ol>
+<li>Top right: <b>Deploy</b> <span class="num inl">1</span> → <b>New deployment</b> <span class="num inl">2</span>.</li>
+<li>Click the <b>⚙</b> next to <i>Select type</i> → <b>Web app</b> <span class="num inl">3</span>.</li>
+<li><b>Execute as: Me</b>. <b>Who has access: Anyone</b> <span class="num inl">4</span>. Click <b>Deploy</b>.</li>
+<li>Copy the <b>Web app URL</b> that ends with <b>/exec</b> <span class="num inl">5</span>. In Notepad: <code>API URL = </code></li>
+</ol>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Dome Box NEW</div>
+  <div class="body" style="display:flex;gap:8px;align-items:center;border-bottom:1px solid #e3e1ee"><b>Dome Box NEW</b><span style="margin-left:auto"></span><span class="num inl">1</span><span class="btnx blue hl">Deploy ▾</span></div>
+  <div class="row" style="align-items:flex-start;padding:10px;gap:14px">
+    <div class="screen" style="flex:1">
+      <div class="titlebar">New deployment</div>
+      <div class="body">
+        <div class="lbl">Select type ⚙</div><span class="num inl">3</span><span class="sel hl">Web app</span>
+        <div class="lbl">Execute as</div><span class="num inl">4</span><span class="sel hl">Me</span>
+        <div class="lbl">Who has access</div><span class="num inl" style="visibility:hidden">4</span><span class="sel hl">Anyone</span>
+        <div style="margin-top:10px"><span class="btnx blue">Deploy</span></div>
+        <div class="lbl" style="margin-top:12px">Web app URL — copy this</div><span class="num inl">5</span><div class="field hl" style="font-size:12px;display:inline-block">https://script.google.com/macros/s/AKfy…/exec</div>
+      </div>
+    </div>
+    <div style="width:220px"><span class="num inl">2</span><div class="menu" style="position:static;display:inline-block;width:180px;vertical-align:top"><div class="on hl">New deployment</div><div>Manage deployments</div><div>Test deployments</div></div></div>
+  </div>
+</div><figcaption>Picture 7 — Deploy → New deployment → Web app → Me → Anyone → Deploy. Copy the /exec address.</figcaption></figure>
+<div class="note">Later, whenever you change the code: <b>Deploy → Manage deployments → ✏ pencil → Version: New version → Deploy</b>. Just pressing Save is <b>not</b> enough.</div>
+<div class="tick">I have the API URL in Notepad.</div>
+
+<h3><span class="n">8</span>Add the reminders file</h3>
+<p>A <b>second file in the same project</b>. It sends the 9 am, 3 pm and 5 pm reminders and makes repeating tasks.</p>
+<ol>
+<li>Next to <b>Files</b> click <b>+</b> → <b>Script</b> <span class="num inl">1</span>. Name it <code>reminders</code>.</li>
+<li>Delete what is inside. Paste all of <b>domebox → reminders.gs</b> from the zip.</li>
+<li>Near the top change two lines <span class="num inl">2</span> (see picture): put your <b>Practice ID</b> inside the quotes after <code>SHEET_ID:</code>, and change <code>DRY_RUN: true</code> to <code>DRY_RUN: false</code>.</li>
+<li><b>💾 Save</b>. Choose <b>installDomeBoxSchedules</b> → <b>▶ Run</b>.</li>
+<li>Choose <b>setupDomeBox</b> → <b>▶ Run</b>.</li>
+</ol>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Dome Box NEW — reminders.gs</div>
+  <div class="row" style="align-items:stretch">
+    <div class="side" style="width:150px"><div><span class="num inl">1</span><span class="hl" style="padding:2px 4px">Files <b>+</b></span></div><div>Code.gs</div><div class="on">reminders.gs</div></div>
+    <div style="flex:1;min-width:0;padding:8px"><span class="num inl">2</span><span style="font-size:13px;font-weight:600">Change only the two yellow parts:</span>
+    <div class="code" style="margin-top:6px">var REG = {
+  SHEET_ID: '<span class="edit">1PqR…your Practice ID…</span>',   // registry spreadsheet id
+  TAB: '',
+};
+
+var SCHED = {
+  DRY_RUN: <span class="edit">false</span>,
+  SEND_HOUR: 8,
+  …</div></div>
+  </div>
+</div><figcaption>Picture 8 — The only two things you change in reminders.gs.</figcaption></figure>
+<div class="stop">❗ Never add the file <code>payments-secure.gs</code>. It is old and breaks payments.</div>
+<div class="tick">The log says: all scheduled jobs are installed (task reminders at 9, 15 and 17)</div>
+
+<h3><span class="n">9</span>Connect Razorpay (payments)</h3>
+<ol>
+<li><b>Razorpay Dashboard</b> → <b>Settings</b> → <b>API Keys</b> → <b>Regenerate</b>. Copy the new <b>Key ID</b> and <b>Key Secret</b>. (The old keys were inside the old code, so they must change.)</li>
+<li>Make up a long password, e.g. <code>dbx-Hq27-Kolkata-91</code>. In Notepad: <code>Webhook secret = </code></li>
+<li>Script → <b>⚙ Project Settings</b> → Script Properties → add:</li>
+</ol>
+<table>
+<tr><th>Property</th><th>Value</th></tr>
+<tr><td><code>RAZORPAY_KEY_ID</code></td><td>the new Key ID</td></tr>
+<tr><td><code>RAZORPAY_KEY_SECRET</code></td><td>the new Key Secret</td></tr>
+<tr><td><code>RAZORPAY_WEBHOOK_SECRET</code></td><td>the password you made up</td></tr>
+<tr><td><code>SELLER_GSTIN</code></td><td>your GST number (skip if not GST registered)</td></tr>
+</table>
+<p>4. Razorpay → <b>Settings</b> → <b>Webhooks</b> → <b>Add New Webhook</b>: URL = your <b>API URL</b>, Secret = the same made-up password, tick <b>payment.captured</b>, <b>Create</b>.</p>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Razorpay — Add New Webhook</div>
+  <div class="body">
+    <div class="lbl">Webhook URL</div><div class="field hl">https://script.google.com/macros/s/AKfy…/exec</div>
+    <div class="lbl">Secret</div><div class="field hl">dbx-Hq27-Kolkata-91</div>
+    <div class="lbl">Active events</div><div><span class="hl" style="padding:2px 6px">☑ payment.captured</span> &nbsp; ☐ payment.failed &nbsp; ☐ order.paid</div>
+    <div style="margin-top:12px"><span class="btnx blue">Create Webhook</span></div>
+  </div>
+</div><figcaption>Picture 9 — The webhook: your API URL, your made-up secret, one event.</figcaption></figure>
+<p>5. Run <b>setupDomeBox</b> again.</p>
+<div class="tick">No Razorpay line says MISSING.</div>
+
+<h3><span class="n">10</span>Make a practice website on Netlify</h3>
+<ol>
+<li><b>app.netlify.com</b> → <b>Add new site</b> → <b>Import an existing project</b> → <b>GitHub</b> → choose <b>stockpilot</b>.</li>
+<li>Fill the boxes exactly as in Picture 10.</li>
+<li><b>Add environment variables</b>: <code>API_URL</code> = your API URL, and <code>ALLOW_MISSING_LEGAL</code> = <code>1</code> (only for practice — Step 15 removes it).</li>
+<li>Click <b>Deploy</b>. Wait until it says <b>Published</b>. Click the link ending in <b>.netlify.app</b>.</li>
+</ol>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Netlify — Site settings for stockpilot</div>
+  <div class="body">
+    <div class="lbl">Branch to deploy</div><div class="field hl">claude/obfuscated-html-content-aywe2k</div>
+    <div class="lbl">Base directory</div><div class="field hl">netlify</div>
+    <div class="lbl">Build command</div><div class="field hl">node build.js</div>
+    <div class="lbl">Publish directory</div><div class="field hl">netlify</div>
+    <div class="lbl">Environment variables</div>
+    <table style="font-size:13px;margin:2px 0"><tr><th>Key</th><th>Value</th></tr>
+      <tr><td class="mono">API_URL</td><td class="mono">https://script.google.com/macros/s/AKfy…/exec</td></tr>
+      <tr><td class="mono">ALLOW_MISSING_LEGAL</td><td class="mono">1</td></tr></table>
+    <div style="margin-top:10px"><span class="btnx blue">Deploy stockpilot</span></div>
+  </div>
+</div><figcaption>Picture 10 — Type these exactly. The branch name is long; copy it from here.</figcaption></figure>
+<div class="tick">The practice website opens.</div>
+
+<h3><span class="n">11</span>Test it like a customer</h3>
+<ol>
+<li>On the practice website, <b>Sign up</b> a test company with a second email address you own.</li>
+<li>Add one team member. Assign them a task.</li>
+<li>Log out. Log in again.</li>
+<li>Check your email: did the welcome email come from <b>info@biscsindia.com</b>?</li>
+</ol>
+<div class="tick">Sign up, login, task and email all work.</div>
+<p style="font-size:19px"><b>🎉 Part 1 is done.</b> Customers are still on the old system and noticed nothing.</p>
+
+<!-- =================================================================== -->
+<div class="part"><h2>PART 2 — THE SWITCH</h2><p>About 45 minutes. Do it on a quiet day, for example Sunday evening.</p></div>
+
+<h3><span class="n">12</span>Copy your Master sheet (safety copy)</h3>
+<ol><li>Open your real <b>Master sheet</b> → <b>File</b> → <b>Make a copy</b>.</li>
+<li>Name it <b>Master BACKUP</b> and today's date. Do not use this copy for anything — it is only for safety.</li></ol>
+<div class="tick">Master BACKUP exists.</div>
+
+<h3><span class="n">13</span>Point the NEW script at your REAL Master sheet</h3>
+<ol>
+<li><b>Dome Box NEW</b> → <b>⚙ Project Settings</b> → Script Properties → <code>MASTER_DB_ID</code> → change it from the Practice ID to your <b>real Master ID</b> (Step 1). <b>Save</b>.</li>
+<li>Open the <code>reminders</code> file → change <code>SHEET_ID</code> to the same <b>real Master ID</b>. <b>Save</b>.</li>
+<li>Choose <b>ensureRegistry</b> → <b>▶ Run</b>. (It only adds missing tabs. It never deletes.)</li>
+</ol>
+<figure><div class="row" style="gap:12px;align-items:center">
+  <div class="screen" style="flex:1"><div class="titlebar">Before</div><div class="body"><span class="mono">MASTER_DB_ID</span> = <span class="mono">1PqR… (Practice ID)</span><br><span class="mono">SHEET_ID: '1PqR…'</span></div></div>
+  <div style="font-size:30px">➜</div>
+  <div class="screen" style="flex:1"><div class="titlebar">After</div><div class="body"><span class="mono">MASTER_DB_ID</span> = <span class="mono hl">1qO3… (real Master ID)</span><br><span class="mono hl">SHEET_ID: '1qO3…'</span></div></div>
+</div><figcaption>Picture 11 — The same ID goes in two places.</figcaption></figure>
+<div class="note">This does <b>not</b> change your old script. It only tells the new script where the real customer list is.</div>
+<div class="tick">Both places have the real Master ID.</div>
+
+<h3><span class="n">14</span>Back up every customer's sheet</h3>
+<ol>
+<li><b>Files +</b> → <b>Script</b> → name it <code>backup</code>. Paste all of <b>domebox → backup.gs</b>. <b>Save</b>.</li>
+<li>Choose <b>backupAllTenants</b> → <b>▶ Run</b>. Wait. It makes a copy of every customer's sheet in a Drive folder called <b>Dome Box Backups</b>.</li>
+<li>Choose <b>verifyLatestBackup</b> → <b>▶ Run</b>. Every company should have a good copy.</li>
+</ol>
+<div class="note">Many customers? If the log says <i>Hit MAX_PER_RUN</i>, just run <b>backupAllTenants</b> again — it skips the ones already copied today.</div>
+<div class="tick">verifyLatestBackup shows no “NO BACKUP AT ALL”.</div>
+
+<h3><span class="n">15</span>Fill in your company details for the website</h3>
+<ol>
+<li><b>github.com</b> → your repository <b>stockpilot</b>.</li>
+<li>Click the branch button that says <b>main</b> <span class="num inl">1</span> → choose <b>claude/obfuscated-html-content-aywe2k</b>.</li>
+<li>Open folder <b>netlify</b> → file <b>site-config.json</b> → click the <b>✏ pencil</b> <span class="num inl">2</span>.</li>
+<li>Fill every empty <code>""</code> <span class="num inl">3</span>: address, phone, GSTIN, entity type (e.g. <code>Proprietorship</code>), registration number, grievance officer's name, city, state.</li>
+<li>Click <b>Commit changes</b> <span class="num inl">4</span>.</li>
+<li>Netlify (practice site) → <b>Site configuration</b> → <b>Environment variables</b> → <b>delete <code>ALLOW_MISSING_LEGAL</code></b>.</li>
+<li><b>Deploys</b> → <b>Trigger deploy</b> → <b>Deploy site</b>.</li>
+</ol>
+<figure><div class="screen">
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; github.com / stockpilot / netlify / site-config.json</div>
+  <div class="body" style="display:flex;gap:8px;align-items:center;border-bottom:1px solid #e3e1ee;flex-wrap:wrap">
+    <span class="num inl">1</span><span class="btnx hl">⑂ claude/obfuscated-html-content-aywe2k ▾</span>
+    <span style="margin-left:auto"></span><span class="num inl">2</span><span class="btnx hl">✏</span><span class="num inl">4</span><span class="btnx blue hl">Commit changes</span>
+  </div>
+  <div style="padding:8px"><span class="num inl">3</span><span style="font-size:13px;font-weight:600">Fill the 8 empty quotes (yellow):</span>
+  <div class="code" style="margin-top:6px">{
+  "legalEntity": "BISCS India",
+  "registeredAddress": "<span class="edit">your full office address</span>",
+  "phone": "<span class="edit">+91 your number</span>",
+  "gstin": "<span class="edit">your GSTIN</span>",
+  "entityType": "<span class="edit">Proprietorship</span>",
+  "registrationNumber": "<span class="edit">your registration no.</span>",
+  "grievanceOfficerName": "<span class="edit">your name</span>",
+  "jurisdictionCity": "<span class="edit">Kolkata</span>",
+  "jurisdictionState": "<span class="edit">West Bengal</span>",
+  …</div></div>
+</div><figcaption>Picture 12 — Pick the branch, edit site-config.json, fill the 8 empty quotes, commit.</figcaption></figure>
+<div class="tick">It says Published, and the footer links (Privacy, Terms, Refund, Contact) open.</div>
+
+<h3><span class="n">16</span>Preview the upgrade (changes nothing)</h3>
+<ol><li>Choose <b>previewMigration</b> → <b>▶ Run</b>. Read the log. It lists every customer.</li>
+<li>If there is a section <b>NEEDS A LOOK</b>: someone added an extra column by hand to that company's sheet. The log says which column and where. Move that column to the far right of their Tasks tab, then run <b>previewMigration</b> again. Repeat until <b>NEEDS A LOOK</b> is gone.</li></ol>
+<figure><div class="screen"><div class="log" style="margin:0">=== MIGRATION PREVIEW — nothing is changed ===
+<span class="ok">--- WILL BE UPGRADED (11) ---</span>
+  Sharma Precision Works    Tasks +14 columns …
+<span class="ok">--- ALREADY CURRENT (2) ---</span>
+<span class="miss">--- NEEDS A LOOK (1) — LEFT EXACTLY AS THEY ARE ---</span>
+  Gupta Traders — Tasks column 20 is "Remarks" where Dome Box needs "Project ID"</div></div>
+<figcaption>Picture 13 — Fix anything under NEEDS A LOOK, then preview again.</figcaption></figure>
+<div class="tick">previewMigration shows no NEEDS A LOOK.</div>
+
+<h3><span class="n">17</span>Do the upgrade</h3>
+<ol><li>Choose <b>migrateAllTenants</b> → <b>▶ Run</b>.</li>
+<li>Every company should be under <b>UPGRADED</b> or <b>ALREADY CURRENT</b>.</li></ol>
+<p>Customers keep their own sheets. Nothing is deleted. New columns and tabs are only <b>added</b>.</p>
+<div class="tick">Every company is UPGRADED or ALREADY CURRENT.</div>
+
+<h3><span class="n">18</span>Move www.domebox.in to the new website</h3>
+<ol>
+<li>Netlify → your <b>OLD</b> site → <b>Domain management</b> → remove <code>www.domebox.in</code> and <code>domebox.in</code>.</li>
+<li>Your <b>NEW</b> site → <b>Domain management</b> → <b>Add a domain</b> → <code>www.domebox.in</code>, then <code>domebox.in</code>.</li>
+<li>Wait for the <b>🔒 HTTPS</b> certificate (up to an hour).</li>
+<li>Open <b>www.domebox.in</b> and <b>log in with your existing account and password</b>.</li>
+</ol>
+<figure><div class="row" style="gap:12px;align-items:center">
+  <div class="screen" style="flex:1"><div class="titlebar">OLD Netlify site</div><div class="body"><s>www.domebox.in</s><br><s>domebox.in</s><br><span class="btnx">Remove</span></div></div>
+  <div style="font-size:30px">➜</div>
+  <div class="screen" style="flex:1"><div class="titlebar">NEW Netlify site</div><div class="body"><span class="hl">www.domebox.in 🔒</span><br><span class="hl">domebox.in 🔒</span><br><span class="btnx blue">Add a domain</span></div></div>
+</div><figcaption>Picture 14 — The address moves from the old site to the new one.</figcaption></figure>
+<div class="stop"><b>If something goes wrong:</b> put the domain back on the OLD site. Your old script is still there, untouched. Keep it for one week before deleting anything.</div>
+<div class="tick">www.domebox.in shows the new site, and your old login works.</div>
+
+<h3><span class="n">19</span>Close the old “anyone with the link” sharing</h3>
+<ol>
+<li><b>Files +</b> → <b>Script</b> → name it <code>sharing</code>. Paste all of <b>domebox → remediate-sharing.gs</b>.</li>
+<li>At the top find <code>MASTER_DB_ID: '…'</code>. Make sure the ID inside the quotes is your <b>real Master ID</b>. <b>Save</b>.</li>
+<li>Choose <b>auditSharing</b> → <b>▶ Run</b>. It only looks.</li>
+<li>Change <code>DRY_RUN: true</code> to <code>DRY_RUN: false</code>. <b>Save</b>. Choose <b>lockDownAllTenants</b> → <b>▶ Run</b>.</li>
+<li>Run <b>auditSharing</b> again.</li>
+</ol>
+<div class="tick">auditSharing shows nothing shared publicly.</div>
+
+<h3><span class="n">20</span>Tell your customers</h3>
+<p>Open <b>MIGRATING-CUSTOMERS.md</b> from the zip. Copy the ready email and send it. Customers log in with the <b>same email and password</b>.</p>
+<div class="tick">Email sent.</div>
+
+<h3><span class="n">21</span>One week later</h3>
+<ol>
+<li>Run <b>previewTaskArchive</b>, read it. Then <b>archiveOldTasks</b>. Then <b>installTaskArchiveSchedule</b> once. (Tasks finished over a year ago move to a tab called <i>Tasks_Archive</i> in each customer's own sheet.)</li>
+<li>Run <b>createDemoAccount</b> for sales calls. It prints the login.</li>
+<li>On GitHub, merge <b>Pull Request #2</b> into <code>main</code>.</li>
+</ol>
+<p style="font-size:22px"><b>🎉 Finished!</b></p>
+
+<!-- =================================================================== -->
+<h2>If something goes wrong</h2>
+<table>
+<tr><th style="width:38%">You see</th><th>Do this</th></tr>
+<tr><td>Red error when you press Run</td><td>Check the function name in the box at the top. Run again.</td></tr>
+<tr><td>“MASTER_DB_ID is not set”</td><td>Step 4 — the property name must be exactly <code>MASTER_DB_ID</code>.</td></tr>
+<tr><td>“not a verified send-as alias”</td><td>Step 6.</td></tr>
+<tr><td>Netlify says <b>Build failed</b></td><td>Click the failed deploy. The last lines say what is missing: API_URL or site-config.</td></tr>
+<tr><td>Website opens but login fails</td><td>API_URL in Netlify is wrong — or you changed code and did not do <b>Deploy → New version</b>.</td></tr>
+<tr><td>No reminder emails</td><td>Step 8: <code>DRY_RUN: false</code>, <code>SHEET_ID</code> filled, <b>installDomeBoxSchedules</b> run, time zone India.</td></tr>
+<tr><td>Emails stop in the afternoon</td><td>Free Gmail sends only 100 emails a day. Use a Google <b>Workspace</b> account.</td></tr>
+<tr><td>Anything else</td><td>Run <b>setupDomeBox</b>. Read the last part, <b>WHAT IS LEFT</b>. It tells you the next thing to do.</td></tr>
+</table>
+
+<h2>Your Notepad at the end</h2>
+<figure><div class="notepad">Template ID    = 1AbC…<br>Master ID      = 1qO3…<br>Practice ID    = 1PqR…<br>AUTH_PEPPER    = (long code — secret, keep forever)<br>API URL        = https://script.google.com/macros/s/…/exec<br>Webhook secret = dbx-…</div>
+<figcaption>Picture 15 — Keep this file safe. Do not email it to anyone.</figcaption></figure>
+
+</div></body></html>

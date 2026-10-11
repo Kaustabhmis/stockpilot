@@ -213,6 +213,14 @@ function createDemoAccount(email, password) {
   return say(out);
 }
 
+/** Calendar days from a due date (dueOffset days from today) to N working days after it. */
+function demoWorkdaysAfter_(dueOffset, n) {
+  var d = new Date(); d.setDate(d.getDate() + dueOffset);
+  var days = 0;
+  while (n > 0) { d.setDate(d.getDate() + 1); days++; if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+  return days;
+}
+
 /** Calendar offset of the date N working days (Mon–Fri) before today. */
 function demoWorkdaysBack_(n) {
   var d = new Date(), back = 0;
@@ -525,7 +533,10 @@ function demoBackdate_(ctx, taskId, dueOffset, late) {
     /* Relative to the deadline: raised a week before, started two days later,
        handed in just before it — or three days after it when the job is one of
        the ones meant to be late — and verified the day after that. */
-    var submitted = late ? 3 : -1;
+    /* Three WORKING days late, not three calendar days: lateness never counts
+       a weekend, so "3 days late" across a weekend was 1 day late, and on some
+       days of the week the demo's best person came out a flawless 100. */
+    var submitted = late ? demoWorkdaysAfter_(Number(dueOffset), 3) : -1;
     var marks = [-7, -5, submitted, submitted + 1, submitted + 2, submitted + 3];
 
     hist.forEach(function (h, i) {

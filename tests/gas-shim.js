@@ -98,16 +98,36 @@ function build() {
       return {
         getId: () => id,
         getName: () => FILES[id].getName(),
-        makeCopy(newName) {
+        makeCopy(newName, folder) {
           const nid = 'SHEET_' + (++seq);
           FILES[nid] = FILES[id]._clone(nid, newName);
           META[nid] = { sharing: 'PRIVATE' };
+          if (folder && folder._ids) folder._ids.push(nid);
           return { getId: () => nid, getName: () => newName,
                    setSharing(a, p) { META[nid] = { sharing: String(a) }; } };
         },
         setSharing(a) { META[id] = { sharing: String(a) }; },
         getSharingAccess: () => (META[id] || {}).sharing || 'PRIVATE',
       };
+    },
+    /* Folders, enough for backup.gs: create, find by name or id, list files. */
+    _folders: {},
+    createFolder(name) {
+      const fid = 'FOLDER_' + (++seq), drive = G.DriveApp;
+      const it = (arr) => { let i = 0; return { hasNext: () => i < arr.length, next: () => arr[i++] }; };
+      const fileObj = (nid) => ({ getId: () => nid, getName: () => FILES[nid].getName(),
+        setTrashed(v) { if (v) { const k = folder._ids.indexOf(nid); if (k > -1) folder._ids.splice(k, 1); } },
+        makeCopy: (n, f) => drive.getFileById(nid).makeCopy(n, f), getDateCreated: () => new Date() });
+      const folder = { _ids: [], getId: () => fid, getName: () => name,
+        getFiles: () => it(folder._ids.map(fileObj)),
+        getFilesByName: (n) => it(folder._ids.filter((x) => FILES[x].getName() === n).map(fileObj)) };
+      drive._folders[fid] = folder;
+      return folder;
+    },
+    getFolderById(fid) { if (!G.DriveApp._folders[fid]) throw new Error('No folder ' + fid); return G.DriveApp._folders[fid]; },
+    getFoldersByName(name) {
+      const list = Object.values(G.DriveApp._folders).filter((f) => f.getName() === name); let i = 0;
+      return { hasNext: () => i < list.length, next: () => list[i++] };
     },
   };
   G.PropertiesService = { getScriptProperties: () => ({
@@ -150,6 +170,7 @@ function build() {
     formatDate: (d, tz, fmt) => new Date(d).toISOString(),
     DigestAlgorithm: { SHA_256: 'SHA_256' },
   };
+  G.Session = { getScriptTimeZone: () => 'Asia/Kolkata' };
   G.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 503, getContentText: () => '{}' }) };
   /* The send-as alias is the whole point of the mail rules, so the shim records
      what each message was actually sent AS — not just that something was sent.

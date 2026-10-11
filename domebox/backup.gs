@@ -113,6 +113,21 @@ function backupFolder_() {
   return f;
 }
 
+/**
+ * Every company to back up, from the registry the app itself uses
+ * (MASTER_DB_ID → Directory). This called loadTenants_, a name that no longer
+ * existed anywhere in the project, so every backup run failed before copying
+ * a single file.
+ */
+function bkTenants_(log) {
+  if (typeof allTenants_ !== 'function') {
+    throw new Error('code.gs is not in this project — add backup.gs to the same project as code.gs');
+  }
+  var list = allTenants_();
+  log.push('Companies: ' + list.length);
+  return list;
+}
+
 function backupAllTenants() {
   var started = new Date();
   var log = ['', '=== BACKUP ' + started.toDateString() + ' ===',
@@ -121,7 +136,7 @@ function backupAllTenants() {
 
   var tenants;
   try {
-    tenants = loadTenants_(log);
+    tenants = bkTenants_(log);
     if (!tenants || !tenants.length) throw new Error('registry returned no tenants');
   } catch (e) {
     backupAlert_('Dome Box backup FAILED to start', 'Could not read the tenant registry.\n\n' +
@@ -197,7 +212,7 @@ function backupAllTenants() {
  */
 function verifyLatestBackup() {
   var log = ['', '=== VERIFY BACKUPS ==='];
-  var tenants = loadTenants_(log) || [];
+  var tenants = bkTenants_(log) || [];
   var folder = backupFolder_();
 
   var latest = {};
@@ -303,8 +318,9 @@ function listBackups(filter) {
 
 function backupLog_(started, copied, total, failed, mins) {
   try {
-    if (!REG.SHEET_ID) return;
-    var ss = SpreadsheetApp.openById(REG.SHEET_ID);
+    var regId = (typeof CFG === 'function' && CFG().masterId) || (typeof REG !== 'undefined' && REG.SHEET_ID);
+    if (!regId) return;
+    var ss = SpreadsheetApp.openById(regId);
     var sh = ss.getSheetByName('BackupLog');
     if (!sh) { sh = ss.insertSheet('BackupLog'); sh.appendRow(['when','copied','tenants','failed','minutes']); sh.setFrozenRows(1); }
     sh.appendRow([started, copied, total, failed, mins]);

@@ -2,7 +2,7 @@
 
 Audited the whole system against the question: *what breaks, leaks or embarrasses
 us in the first month?* Three things were found open in the finished product and
-are now closed, three more in the Goals and Meetings release (4c–4e), and three in the archive and reminders release (4f–4h). Four things remain, and three of them are yours, not the code's.
+are now closed, three more in the Goals and Meetings release (4c–4e), three in the archive and reminders release (4f–4h), and two in the scheduler and backups (4i–4j). Four things remain, and three of them are yours, not the code's.
 
 Every finding below is pinned by a test in `tests/audit-test.js`, so none of them
 can quietly come back during a refactor.
@@ -143,6 +143,25 @@ also stops cleanly between customers before the limit and says how to carry on.
 "Line Down" and "Customer Hold" are the workspace's own levels with their own
 weights; the reminder email only knew Critical/High/Medium/Low. It now reads the
 workspace's weights. Pinned in `tests/reminders-test.js`.
+
+### 4i. The scheduler could not find a single customer
+
+`reminders.gs` looked for a registry tab called "Accounts" and read each
+company's plan from a Billing tab inside the company's file. The app's
+registry tab is **Directory**, and the plan lives there. On a real deployment:
+no reminders, no digest, no renewal notices, and **no repeating task was ever
+created**. Every scheduler test had built its own "Accounts" tab. It now reads
+Directory, and Plan / Valid Until from it. `tests/scheduler-live-test.js` runs
+code.gs and reminders.gs together against a registry the app itself created —
+it fails on the old file.
+
+### 4j. Backups never ran
+
+`backup.gs` (and `whatsapp.gs`) called `loadTenants_`, a name that no longer
+existed after the scheduler's helpers were prefixed. `backupAllTenants` failed
+on its first line every night and only said so in an alert email. It now uses
+the app's own registry. `tests/scope-test.js` fails if any file calls a helper
+that is not defined anywhere in the project.
 
 ## Open — and three of them are not the code
 

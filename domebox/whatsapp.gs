@@ -356,7 +356,7 @@ function sendWhatsAppReminders() {
     Logger.log(log.join('\n')); return;
   }
 
-  var tenants = loadTenants_(log);
+  var tenants = waTenants_(log);
   if (!tenants) { Logger.log(log.join('\n')); return; }
 
   var dateKey = ymd(today);
@@ -469,7 +469,7 @@ function waDoPost(e) {
 function waHandleInbound_(fromDigits, optIn) {
   var norm = waNormalizePhone('+' + String(fromDigits).replace(/\D/g, ''), WA.DEFAULT_CC);
   if (!norm) return;
-  var tenants = loadTenants_([]) || [];
+  var tenants = waTenants_([]) || [];
   for (var i = 0; i < tenants.length; i++) {
     try {
       var sh = waLedger_(tenants[i].sheetId), rows = sh.getDataRange().getValues();
@@ -531,4 +531,13 @@ function installWhatsAppSchedule() {
   ScriptApp.newTrigger('sendWhatsAppReminders').timeBased().atHour(9).everyDays(1).create();
   Logger.log('WhatsApp daily run installed for 09:00. WA.ENABLED is ' + WA.ENABLED +
     ', WA.DRY_RUN is ' + WA.DRY_RUN + '.');
+}
+
+
+/* Companies from the app's own registry. Used to call loadTenants_, which no
+   longer exists in the project, so every WhatsApp run failed at its first line. */
+function waTenants_(log) {
+  if (typeof rmLoadTenants_ === 'function') return rmLoadTenants_(log);
+  if (typeof allTenants_ === 'function') return allTenants_();
+  throw new Error('add whatsapp.gs to the same project as code.gs');
 }

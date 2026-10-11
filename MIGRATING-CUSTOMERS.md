@@ -64,13 +64,15 @@ customer's own column is a lost customer.
 
 This is step 11 of [`DEPLOY-EASY.md`](DEPLOY-EASY.md), in more detail.
 
-1. **Back up.** Add `domebox/backup.gs` to the Apps Script project, run
-   `backupAllTenants`, then `verifyLatestBackup`. Every customer's sheet is
-   copied to a backup folder in your Drive. Don't skip this.
-
-2. **Point the new code at your live customers.** Script Properties →
+1. **Point the new code at your live customers.** First make a copy of your
+   live registry (File → Make a copy). Then Script Properties →
    `MASTER_DB_ID` = your **live** registry spreadsheet ID. Set the same ID as
    `SHEET_ID` at the top of `reminders`. Run `ensureRegistry`.
+
+2. **Back up.** Add `domebox/backup.gs` to the Apps Script project, run
+   `backupAllTenants`, then `verifyLatestBackup`. Every customer's sheet is
+   copied to a backup folder in your Drive. Don't skip this — and do it after
+   step 1, because the backup copies the customers `MASTER_DB_ID` points at.
 
 3. **Preview.** Run `previewMigration`. It changes nothing. Read the log:
 

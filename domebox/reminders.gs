@@ -167,7 +167,7 @@ function sendDailyReminders() {
     try { data = rmReadTenant_(tenant.sheetId); }
     catch (e) { log.push('  ' + tenant.company + ': CANNOT OPEN (' + e.message + ')'); continue; }
 
-    if (SCHED.PAID_PLANS_ONLY && data.plan === 'Free Tier') {
+    if (SCHED.PAID_PLANS_ONLY && !rmIsPaid_(tenant, data)) {
       log.push('  ' + tenant.company + ': skipped (Free Tier — email alerts are a paid feature)');
       continue;
     }
@@ -308,7 +308,7 @@ function sendTaskReminders() {
     var data;
     try { data = rmReadTenant_(tenant.sheetId); }
     catch (e) { log.push('  ' + tenant.company + ': CANNOT OPEN (' + e.message + ')'); continue; }
-    if (SCHED.PAID_PLANS_ONLY && data.plan === 'Free Tier') continue;
+    if (SCHED.PAID_PLANS_ONLY && !rmIsPaid_(tenant, data)) continue;
 
     for (var u = 0; u < data.users.length; u++) {
       var user = data.users[u];
@@ -671,6 +671,21 @@ function generateRecurringJobs() {
 
 /** A sheet cell holding a date can come back as a Date or as a string, and a
  *  stop rule compared the wrong way round silently never stops. */
+/**
+ * Whether a company is on a paid, unexpired plan. The registry's Directory tab
+ * is the source of truth — Plan and Valid Until, the same columns the app
+ * checks at sign-in. A Billing tab inside the company's own file is only a
+ * fallback for very old layouts. Reading only that tab treated every company
+ * as Free, so nobody was ever reminded.
+ */
+function rmIsPaid_(tenant, data) {
+  var plan = String((tenant && tenant.plan) || (data && data.plan) || '').trim().toLowerCase();
+  if (!plan || plan === 'free' || plan === 'free tier') return false;
+  var until = tenant && tenant.validUntil ? parseYmd(rmYmd_(tenant.validUntil)) : null;
+  if (until && dayDiff(new Date(), until) > 0) return false;
+  return true;
+}
+
 function rmYmd_(v) {
   if (!v) return '';
   if (v instanceof Date) return ymd(v);
@@ -688,7 +703,8 @@ function rmLoadTenants_(log) {
   try {
     reg = SpreadsheetApp.openById(REG.SHEET_ID);
     tab = REG.TAB ? reg.getSheetByName(REG.TAB)
-                  : (reg.getSheetByName('Accounts') || rmFindTab_(reg, ['accounts', 'registry', 'master', 'companies', 'tenants']));
+                  : (reg.getSheetByName('Directory') || reg.getSheetByName('Accounts') ||
+                     rmFindTab_(reg, ['directory', 'accounts', 'registry', 'master', 'companies', 'tenants']));
   } catch (e) {
     log.push('Cannot open the registry: ' + e.message); return null;
   }
