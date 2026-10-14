@@ -1323,11 +1323,19 @@ function restoreSession() {
   } catch (e) { return false; }
 }
 function signOut(expired) {
+  var wasDemo = !!STATE.demo;
   STATE.token = null; STATE.user = null; STATE.data = null; STATE.demo = false;
   try { sessionStorage.removeItem('dbx'); } catch (e) {}
   closeModal(); closeDrawer();
   $('view-app').classList.add('hidden');
   resetAuthForms();
+  /* A demo visitor has no account to sign back in to: send them home, where
+     the demo and the trial are one click away. */
+  if (wasDemo) {
+    showHome();
+    if (expired) toast('The demo session ended. Open it again any time, or start your free trial.', 'info');
+    return;
+  }
   /* Straight back to the sign-in form, because somebody who just signed out of
      their own workspace is far more likely to be switching accounts than
      reading the sales page. */

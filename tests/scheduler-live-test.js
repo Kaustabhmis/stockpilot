@@ -90,6 +90,8 @@ ok('renewal notices reach a paying owner 3 days before expiry', env.mails.slice(
 console.log('\n=== backups copy every real customer ===');
 /* backup.gs called loadTenants_, which no longer existed: every run failed
    before copying anything, and said so only in an alert email. */
+/* Backups taken before the product was renamed sit in "Dome Box Backups". */
+const oldFolder = env.G.DriveApp.createFolder('Dome Box Backups');
 const files0 = Object.keys(env.FILES).length;
 const b0 = env.mails.length;
 P.backupAllTenants();
@@ -98,6 +100,9 @@ const copies = Object.keys(env.FILES).length - files0;
 ok('backupAllTenants copies all three companies', copies === 3 && !/FATAL/.test(blog), copies + ' copies · ' + blog.slice(0, 300));
 ok('and sends no failure alert', !env.mails.slice(b0).some((m) => /backup/i.test(m.subject)),
    env.mails.slice(b0).map((m) => m.subject).join(' | '));
+ok('backups carry on in the folder made before the rename, renamed to Domebox Backups',
+   oldFolder._ids.length === 3 && oldFolder.getName() === 'Domebox Backups' &&
+   !env.G.DriveApp.getFoldersByName('Dome Box Backups').hasNext(), oldFolder._ids.length + ' ' + oldFolder.getName());
 P.verifyLatestBackup();
 const vlog = env.logs.slice(-1)[0] || '';
 ok('verifyLatestBackup finds a good copy for every company', !/NO BACKUP AT ALL|✗/.test(vlog) && /Companies: 3/.test(vlog), vlog.slice(0, 400));

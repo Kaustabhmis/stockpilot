@@ -111,6 +111,10 @@ const STATE_TAB = (t) => t === 'team';
     return (await r.json()).message;
   });
   ok('a demo token with the read-only mark removed is rejected', /Session is invalid/.test(forged), forged);
+  await p.evaluate(() => signOut(true)); await W(600);
+  ok('when the demo session ends the visitor goes home, not to a sign-in form they cannot use',
+     await p.locator('#view-home').isVisible() && !(await p.locator('#view-auth').isVisible()));
+  await p.locator('#demo button:has-text("as a team member")').click(); await W(3000);
   await p.click('#banner button:has-text("free 14-day trial")'); await W(800);
   ok('the trial button leaves the demo for the sign-up form', await p.locator('#formSignup').isVisible() &&
      await p.evaluate(() => !STATE.token));

@@ -20,6 +20,7 @@
 var BACKUP = {
   FOLDER_ID: '',            // Drive folder for backups. Blank = created on first run.
   FOLDER_NAME: 'Domebox Backups',
+  OLD_FOLDER_NAME: 'Dome Box Backups',   // before the rename — found and renamed once
   KEEP_DAILY: 30,           // daily copies retained per tenant
   KEEP_MONTHLY: 12,         // plus the 1st of each month, retained a year
   ALERT_TO: 'info@biscsindia.com',
@@ -107,6 +108,15 @@ function backupFolder_() {
   if (BACKUP.FOLDER_ID) return DriveApp.getFolderById(BACKUP.FOLDER_ID);
   var it = DriveApp.getFoldersByName(BACKUP.FOLDER_NAME);
   if (it.hasNext()) return it.next();
+  /* The product was renamed from "Dome Box". A folder made under the old name
+     holds the existing backups: carry on using it, under the new name, rather
+     than starting an empty one and orphaning every copy already taken. */
+  var old = DriveApp.getFoldersByName(BACKUP.OLD_FOLDER_NAME);
+  if (old.hasNext()) {
+    var o = old.next();
+    try { o.setName(BACKUP.FOLDER_NAME); } catch (e) {}
+    return o;
+  }
   var f = DriveApp.createFolder(BACKUP.FOLDER_NAME);
   Logger.log('Created backup folder "' + BACKUP.FOLDER_NAME + '" — id ' + f.getId() +
     '\nPut that id in BACKUP.FOLDER_ID so it is never ambiguous.');

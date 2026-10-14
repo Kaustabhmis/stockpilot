@@ -118,7 +118,7 @@ function build() {
       const fileObj = (nid) => ({ getId: () => nid, getName: () => FILES[nid].getName(),
         setTrashed(v) { if (v) { const k = folder._ids.indexOf(nid); if (k > -1) folder._ids.splice(k, 1); } },
         makeCopy: (n, f) => drive.getFileById(nid).makeCopy(n, f), getDateCreated: () => new Date() });
-      const folder = { _ids: [], getId: () => fid, getName: () => name,
+      const folder = { _ids: [], getId: () => fid, getName: () => name, setName(n) { name = n; return folder; },
         getFiles: () => it(folder._ids.map(fileObj)),
         getFilesByName: (n) => it(folder._ids.filter((x) => FILES[x].getName() === n).map(fileObj)) };
       drive._folders[fid] = folder;

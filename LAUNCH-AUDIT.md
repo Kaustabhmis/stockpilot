@@ -253,6 +253,19 @@ nothing drew the eye to the trial. Now, within the corporate palette:
 
 Only the home page changed; the app keeps its own colours.
 
+### 4p. Final audit after the rename
+
+- **Backups would have started an empty folder.** The rename changed the backup folder's
+  name from "Dome Box Backups" to "Domebox Backups". A live script would have created a new
+  folder on its next run, orphaned every existing copy and reported "no backup". It now finds
+  the old folder, renames it and carries on (`scheduler-live-test`).
+- **An expired demo session sent visitors to the sign-in form**, for an account they do not
+  have. They now go back to the home page with a note (`sales-ui-test`).
+- Checked and sound: `dist/code.gs` carries every source file verbatim; calling all twenty
+  read routes as all three demo roles changes no cell of the demo company and sends no email
+  (`trial-test`); the security headers allow the new pictures, the manual and the share
+  image; no customer-visible "Dome Box" remains in any text, PDF or picture.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

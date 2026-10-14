@@ -90,6 +90,34 @@ const w = call({ action: 'createTask', token: demo.token, form: { title: 'spam',
 ok('writing is refused', w.status === 'error' && /changes are switched off/.test(w.message), JSON.stringify(w));
 ok('and no email went anywhere', env.mails.length === mails0);
 ok('an unknown view falls back to the owner', call({ action: 'openDemo', as: 'root' }).user.role === 'Admin');
+{
+  /* Every route a demo token may call, as every demo role: the demo company's
+     spreadsheet must be exactly the same afterwards, cell for cell. */
+  const demoId = (() => { const d = env.FILES.MASTER.getSheetByName('Directory').getDataRange().getValues();
+    for (let i = 1; i < d.length; i++) if (String(d[i][1]) === 'demo@biscsindia.com') return String(d[i][5]); })();
+  const snap = () => JSON.stringify(env.FILES[demoId].getSheets().map((sh) => [sh.getName(), sh.getDataRange().getValues()]));
+  const before = snap();
+  const mails1 = env.mails.length;
+  const ROUTES = ['getDashboard','getArchive','getTasks','getUsers','getProjects','getOrgChart','getCookies','getAnalytics',
+    'getAccountability','getPerformanceReport','getAppraisalForm','getKraOverview','getKraFor','getCategories',
+    'getPriorityList','getLeaderboard','getDirection','getMeetings','getMeeting','getLeave'];
+  const errors = [];
+  for (const as of ['owner', 'manager', 'staff']) {
+    const t = call({ action: 'openDemo', as }).token;
+    for (const r of ROUTES) {
+      const res = call({ action: r, token: t, username: 'payel', period: 'month', id: 'x' });
+      if (res.status === 'error' && /switched off/.test(res.message)) errors.push(as + ':' + r);
+    }
+  }
+  ok('every read route is open to the demo', errors.length === 0, errors.join(', '));
+  const after = snap();
+  let firstDiff = '';
+  if (before !== after) { const a = JSON.parse(before), b = JSON.parse(after);
+    a.forEach((sh, i) => { if (!firstDiff && JSON.stringify(sh) !== JSON.stringify(b[i])) firstDiff = sh[0]; });
+    if (!firstDiff && a.length !== b.length) firstDiff = 'sheet count ' + a.length + ' -> ' + b.length; }
+  ok('and calling all of them, as all three roles, changes nothing in the demo company', before === after, firstDiff);
+  ok('or sends any email', env.mails.length === mails1);
+}
 
 console.log('\n=== the call-back form ===');
 const cb0 = env.mails.length;
