@@ -163,6 +163,24 @@ on its first line every night and only said so in an alert email. It now uses
 the app's own registry. `tests/scope-test.js` fails if any file calls a helper
 that is not defined anywhere in the project.
 
+### 4k. Two tests that would fail on their own, given time
+
+- `migration-test` checked "this month's" score for work done in September, so
+  it began failing on 1 October with no code change. It now asks about
+  September directly.
+- `demo-ui-test` failed when another suite had built the demo first on the same
+  test server; `createDemoAccount` rightly refuses to build over an existing
+  demo. The harness now removes the old demo before building a fresh one.
+
+### 4l. Corporate colour scheme
+
+The app, website pages, favicon and user manual now share one palette: navy
+`#13294b` app bar, blue `#1e4fbf` for actions, teal `#0c7a71` as the accent,
+cool grey surfaces, and gold `#d4930f` only as decoration. Red, amber and green
+are kept for status. Text colours meet WCAG AA (4.5:1) on their backgrounds,
+and the four chart colours pass the colour-blind safety check. Only colours
+changed — no layout, wording or behaviour.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

@@ -19,13 +19,13 @@ function renderTeam() {
   $('teamStats').innerHTML =
     tile('Members', active.length +
          (u.maxUsers ? ' <span class="text-base text-gray-400">/ ' + u.maxUsers + '</span>' : ''),
-         'groups', '#5b4bdb') +
+         'groups', '#1e4fbf') +
     tile('Open tasks', active.reduce(function (n, x) { return n + (x.openTasks || 0); }, 0),
-         'assignment', '#2a74c9') +
+         'assignment', '#3466c8') +
     tile('At WIP limit', atLimit, 'running_with_errors',
-         atLimit ? '#b07d12' : '#d6cec3', atLimit ? 'text-amber-700' : '') +
+         atLimit ? '#d4930f' : '#c3cddc', atLimit ? 'text-amber-700' : '') +
     tile('Scored last month', active.filter(function (x) { return x.lastMonthScore !== null; }).length,
-         'military_tech', '#0e8f80');
+         'military_tech', '#0f8f84');
 
   $('teamTable').innerHTML = '<table class="tbl"><thead><tr>' +
     ['Member','Role','Department','Reports to','Open','WIP','Last month',''].map(function (h) {

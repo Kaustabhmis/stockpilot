@@ -192,14 +192,14 @@ function renderReports(a) {
   };
   $('rTiles').innerHTML =
     tile('Team score', s.teamScore == null ? '\u2014' : s.teamScore, a.range.label,
-         'groups', '#5b4bdb', band(s.teamScore)) +
-    tile('Delivered', s.delivered, 'tasks verified', 'task_alt', '#0e8f80') +
+         'groups', '#1e4fbf', band(s.teamScore)) +
+    tile('Delivered', s.delivered, 'tasks verified', 'task_alt', '#067647') +
     tile('On-time', s.onTimeRate == null ? '\u2014' : s.onTimeRate + '%', 'of closed work',
-         'schedule', '#2a74c9', band(s.onTimeRate)) +
+         'schedule', '#3466c8', band(s.onTimeRate)) +
     tile('Rework loops', s.reworkLoops, 'quality signal', 'replay',
-         s.reworkLoops ? '#a9591a' : '#d6cec3', s.reworkLoops ? 'text-orange-700' : '') +
+         s.reworkLoops ? '#d97706' : '#c3cddc', s.reworkLoops ? 'text-orange-700' : '') +
     tile('Overdue now', s.overdueNow, 'open past deadline', 'warning',
-         s.overdueNow ? '#c0392b' : '#d6cec3', s.overdueNow ? 'text-red-700' : '');
+         s.overdueNow ? '#b42318' : '#c3cddc', s.overdueNow ? 'text-red-700' : '');
 
   $('rTrendSub').textContent = 'Delegation score across 12 ' + STATE.period + 's ending ' + a.range.short;
   var series = [{ name:'Team', color:C('--s1'),

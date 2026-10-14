@@ -48,7 +48,7 @@
 <!-- No Review or AggregateRating is emitted anywhere on this site. Google
      requires those to be genuine, collected reviews; inventing them to win a
      star rating in the results is a manual-action risk and a lie to a buyer. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z' fill='%235b4bdb'/%3E%3Cpath d='M35 55 L46 66 L67 42' fill='none' stroke='%23fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z' fill='%231e4fbf'/%3E%3Cpath d='M35 55 L46 66 L67 42' fill='none' stroke='%23fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,15 +61,16 @@
        3:1 contrast all pass. Status colours are reserved steps, never reused as
        a fourth series, and every status still carries a word or a letter so
        colour never has to be read on its own. */
-    --s1:#5b4bdb; --s2:#e0501f; --s3:#0e8f80; --s4:#b07d12;
-    --good:#047857; --warn:#b45309; --bad:#b91c1c;
+    --s1:#1e4fbf; --s2:#d97706; --s3:#0f8f84; --s4:#9333ea;
+    --good:#067647; --warn:#b54708; --bad:#b42318;
     /* Sequential ramp for the heatmap: one hue, light to dark, monotonic. */
-    --r1:#ece8fd; --r2:#b3a7f2; --r3:#6f5ce2; --r4:#3f2fa6;
+    --r1:#e6eefb; --r2:#a9c1ec; --r3:#4f7fd1; --r4:#17366f;
 
-    --brand:#5b4bdb; --brand-dark:#4a3bc4; --accent:#e0501f;
-    --surface:#fff; --surface2:#f3efe9; --paper:#faf8f5; --line:#e7e1d8;
-    --ink:#1b1726; --ink2:#5a5258; --muted:#a79f95;
-    --lift:0 10px 24px -8px rgba(27,23,38,.18), 0 2px 6px -2px rgba(27,23,38,.08);
+    /* Corporate palette: navy, blue, teal, with gold only as decoration. */
+    --navy:#13294b; --brand:#1e4fbf; --brand-dark:#183f99; --accent:#0c7a71; --gold:#d4930f;
+    --surface:#fff; --surface2:#eef1f6; --paper:#f4f6fa; --line:#e2e7ef;
+    --ink:#0f1b2d; --ink2:#475467; --muted:#667085;
+    --lift:0 10px 24px -8px rgba(15,27,45,.16), 0 2px 6px -2px rgba(15,27,45,.08);
   }
   *{box-sizing:border-box}
   body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
@@ -87,12 +88,12 @@
      "somewhere you want to spend the morning". */
   .col{background:var(--surface2);border-radius:1.15rem;padding:.75rem;min-height:140px;
        border:1px solid var(--line)}
-  .col.over{outline:2px dashed var(--brand);outline-offset:-5px;background:#f1eefe}
+  .col.over{outline:2px dashed var(--brand);outline-offset:-5px;background:#eaf0fb}
 
   .card{background:#fff;border-radius:.9rem;padding:.8rem;margin-bottom:.55rem;
-        border:1px solid var(--line);cursor:grab;box-shadow:0 1px 2px rgba(27,23,38,.05);
+        border:1px solid var(--line);cursor:grab;box-shadow:0 1px 2px rgba(15,27,45,.05);
         transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
-  .card:hover{transform:translateY(-2px);box-shadow:var(--lift);border-color:#d6cec3}
+  .card:hover{transform:translateY(-2px);box-shadow:var(--lift);border-color:#c3cddc}
   .card:active{cursor:grabbing;transform:none}
   .card.drag{opacity:.4;transform:rotate(-1.5deg)}
   /* Priority as a chunky spine down the left: visible at a glance across a full
@@ -104,10 +105,10 @@
   .chip{display:inline-flex;align-items:center;gap:.25rem;font-size:10px;font-weight:800;
         text-transform:uppercase;letter-spacing:.06em;padding:.2rem .5rem;border-radius:.55rem}
 
-  .in{width:100%;border:1.5px solid var(--line);background:#fdfcfa;border-radius:.8rem;
+  .in{width:100%;border:1.5px solid var(--line);background:#fbfcfe;border-radius:.8rem;
       padding:.7rem .85rem;font-size:14px;outline:none;font-family:inherit;color:var(--ink);
       transition:border-color .14s ease,box-shadow .14s ease,background .14s ease}
-  .in:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(91,75,219,.13)}
+  .in:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(30,79,191,.13)}
   .lb{display:block;font-size:10px;font-weight:800;text-transform:uppercase;
       letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem}
 
@@ -115,29 +116,29 @@
        border:none;cursor:pointer;font-family:inherit;
        transition:transform .1s ease,box-shadow .14s ease,background .14s ease}
   .btn:active{transform:translateY(1px)}
-  .btn-p{background:var(--brand);color:#fff;box-shadow:0 6px 16px -4px rgba(91,75,219,.5)}
-  .btn-p:hover{background:var(--brand-dark);box-shadow:0 10px 22px -6px rgba(91,75,219,.55)}
+  .btn-p{background:var(--brand);color:#fff;box-shadow:0 6px 16px -4px rgba(30,79,191,.5)}
+  .btn-p:hover{background:var(--brand-dark);box-shadow:0 10px 22px -6px rgba(30,79,191,.55)}
   .btn-g{background:#fff;color:var(--ink2);border:1.5px solid var(--line)}
-  .btn-g:hover{border-color:#cdc3ba;background:#fdfcfa}
-  .btn-a{background:var(--accent);color:#fff;box-shadow:0 6px 16px -4px rgba(224,80,31,.45)}
-  .btn-a:hover{background:#c7431a}
+  .btn-g:hover{border-color:#c3cddc;background:#fbfcfe}
+  .btn-a{background:var(--accent);color:#fff;box-shadow:0 6px 16px -4px rgba(15,143,132,.4)}
+  .btn-a:hover{background:#0b625b}
   .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
-  #scrim{position:fixed;inset:0;background:rgba(27,23,38,.5);z-index:80;
+  #scrim{position:fixed;inset:0;background:rgba(15,27,45,.5);z-index:80;
          display:none;align-items:center;justify-content:center;padding:1rem;
          backdrop-filter:blur(2px)}
   #scrim.on{display:flex}
   #modal{background:#fff;border-radius:1.6rem;width:100%;max-height:90vh;overflow-y:auto;
-         box-shadow:0 30px 60px -12px rgba(27,23,38,.4);animation:pop .22s ease-out}
+         box-shadow:0 30px 60px -12px rgba(15,27,45,.4);animation:pop .22s ease-out}
   #drawer{position:fixed;top:0;right:0;height:100%;width:100%;max-width:520px;background:#fff;
-          z-index:90;box-shadow:-20px 0 50px rgba(27,23,38,.22);overflow-y:auto;
+          z-index:90;box-shadow:-20px 0 50px rgba(15,27,45,.22);overflow-y:auto;
           transform:translateX(100%);transition:transform .22s cubic-bezier(.3,1,.4,1)}
   #drawer.on{transform:translateX(0)}
 
   #toasts{position:fixed;bottom:1.25rem;right:1.25rem;z-index:9999;display:flex;
           flex-direction:column;gap:.5rem;pointer-events:none}
   .toast{padding:.8rem 1.1rem;border-radius:.9rem;font-weight:700;font-size:13px;color:#fff;
-         box-shadow:0 14px 30px rgba(27,23,38,.28);max-width:360px;animation:pop .24s ease-out}
+         box-shadow:0 14px 30px rgba(15,27,45,.28);max-width:360px;animation:pop .24s ease-out}
   .toast.ok{background:var(--good)} .toast.err{background:var(--bad)}
   .toast.info{background:var(--ink)} .toast.win{background:var(--accent)}
 
@@ -149,22 +150,22 @@
 
   #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--ink);
        color:#fff;border-radius:12px;padding:10px 12px;font-size:12px;z-index:9999;
-       box-shadow:0 14px 30px rgba(27,23,38,.3);min-width:150px}
+       box-shadow:0 14px 30px rgba(15,27,45,.3);min-width:150px}
   #tip .t{font-weight:800;margin-bottom:6px}
-  #tip .r{display:flex;justify-content:space-between;gap:18px;padding:2px 0;color:#d6cec3}
+  #tip .r{display:flex;justify-content:space-between;gap:18px;padding:2px 0;color:#c3cddc}
   #tip .r b{color:#fff}
 
   .tbl{width:100%;border-collapse:collapse;font-size:13px}
   .tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;
           color:var(--muted);font-weight:800;padding:10px 14px;border-bottom:1.5px solid var(--line);
           white-space:nowrap}
-  .tbl td{padding:11px 14px;border-bottom:1px solid #f3efe9;color:var(--ink2)}
-  .tbl tbody tr:hover{background:#faf8f5}
+  .tbl td{padding:11px 14px;border-bottom:1px solid #eef1f6;color:var(--ink2)}
+  .tbl tbody tr:hover{background:#f6f8fb}
 
   .seg{border:1px solid var(--line)}
   .seg button{padding:8px 16px;border-radius:10px;font-weight:800;font-size:13px;color:var(--ink2);
               border:none;background:none;cursor:pointer;font-family:inherit;transition:all .14s ease}
-  .seg button.on{background:var(--brand);color:#fff;box-shadow:0 3px 10px -2px rgba(91,75,219,.5)}
+  .seg button.on{background:var(--brand);color:#fff;box-shadow:0 3px 10px -2px rgba(30,79,191,.5)}
 
   /* A dot grid on the dark sections, so a full-width band of colour has some
      texture to it instead of reading as a slab. */
@@ -198,9 +199,9 @@
      word. */
   .col{position:relative;padding-top:1rem}
   .col::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;
-               border-radius:1rem 1rem 0 0;background:var(--col-tone,#cdc3ba)}
+               border-radius:1rem 1rem 0 0;background:var(--col-tone,#c3cddc)}
   .colhead{display:inline-flex;align-items:center;gap:6px}
-  .coldot{width:9px;height:9px;border-radius:999px;background:var(--col-tone,#cdc3ba);flex-shrink:0}
+  .coldot{width:9px;height:9px;border-radius:999px;background:var(--col-tone,#c3cddc);flex-shrink:0}
 
   /* ---------- stat tiles --------------------------------------------------- */
   .tile{background:#fff;border:1.5px solid var(--line);border-radius:1.15rem;padding:1rem;
@@ -212,7 +213,26 @@
   .tile .ts{font-size:11px;font-weight:700;color:var(--muted);margin-top:.1rem}
   .tile .ti{position:absolute;right:.7rem;top:.7rem;opacity:.9}
   .tile.lead{cursor:pointer}
-  .tile.lead:hover{border-color:#b3a7f2}
+  .tile.lead:hover{border-color:#a9c1ec}
+  /* A thin brand rule along the top of every stat tile — the dashboard reads as
+     one set of instruments rather than loose white boxes. */
+  .tile::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--tile-tone,var(--brand))}
+
+  /* ---------- the app bar: navy, the corporate anchor of every screen ------- */
+  .appbar{background:var(--navy) !important;border-bottom:3px solid var(--brand) !important}
+  .appbar .brandname{color:#fff}
+  .appbar .logo-dome{fill:#fff} .appbar .logo-tick{stroke:var(--navy)}
+  .appbar #navCompany{color:#9fb3d1}
+  .appbar #navName{color:#fff}
+  .appbar #navRole{color:#f2c25b}
+  .appbar .barbtn{color:#c9d6ea}
+  .appbar .barbtn:hover{background:rgba(255,255,255,.1);color:#fff}
+  .appbar .bardiv{background:rgba(255,255,255,.2)}
+  .appbar #bellCount{border-color:var(--navy)}
+  .appbar .seg{background:rgba(255,255,255,.07) !important;border-color:rgba(255,255,255,.12)}
+  .appbar .seg button{color:#c9d6ea}
+  .appbar .seg button:hover{color:#fff}
+  .appbar .seg button.on{background:#fff;color:var(--navy);box-shadow:0 2px 8px -2px rgba(0,0,0,.35)}
 
   @media(max-width:900px){ .card-12{grid-column:span 12 !important} }
 
@@ -247,9 +267,9 @@
   .hc-list{margin:0 0 14px;padding-left:20px}
   .hc-list li{margin:4px 0}
   ul.hc-list{list-style:disc} ol.hc-list{list-style:decimal}
-  .hc-pre{background:var(--ink);color:#e9e5f5;border-radius:12px;padding:14px 16px;font-size:12.5px;
+  .hc-pre{background:var(--ink);color:#e6ebf3;border-radius:12px;padding:14px 16px;font-size:12.5px;
           line-height:1.55;overflow-x:auto;margin:0 0 14px;white-space:pre}
-  .hc-note{border-left:3px solid var(--brand);background:#f4f2ff;border-radius:0 10px 10px 0;
+  .hc-note{border-left:3px solid var(--brand);background:#eef3fb;border-radius:0 10px 10px 0;
            padding:10px 14px;margin:0 0 14px;font-size:13.5px}
   .hc-tablewrap{overflow-x:auto;margin:0 0 16px;border:1px solid var(--line);border-radius:12px}
   .hc-table{width:100%;border-collapse:collapse;font-size:13px}

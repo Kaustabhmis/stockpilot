@@ -51,7 +51,7 @@ function progressBar(p) {
   if (!p || !p.total) return '<span class="text-[11px] font-bold text-gray-400">No work linked yet</span>';
   return '<div class="flex items-center gap-2 min-w-[140px]">' +
     '<div class="h-2 rounded-full bg-gray-100 flex-1 overflow-hidden">' +
-      '<div class="h-2 rounded-full" style="width:' + p.percent + '%;background:#5b4bdb"></div></div>' +
+      '<div class="h-2 rounded-full" style="width:' + p.percent + '%;background:var(--brand)"></div></div>' +
     '<span class="text-[11px] font-black text-gray-600 whitespace-nowrap">' + p.done + '/' + p.total +
       (p.overdue ? ' · <span class="text-red-600">' + p.overdue + ' late</span>' : '') + '</span></div>';
 }
@@ -85,7 +85,7 @@ function renderGoals(d) {
         d.values.map(function (v) {
           return '<div class="rounded-xl border border-gray-100 p-4 flex gap-3">' +
             (v.code ? '<div class="h-9 px-2 rounded-xl shrink-0 flex items-center justify-center font-black text-white text-xs tracking-wide" ' +
-              'style="background:#5b4bdb;min-width:36px">' + esc(v.code) + '</div>' : '') +
+              'style="background:var(--navy);min-width:36px">' + esc(v.code) + '</div>' : '') +
             '<div class="min-w-0"><div class="font-black text-sm">' + esc(v.title) + '</div>' +
             (v.detail ? '<div class="text-xs font-semibold text-gray-500 mt-0.5">' + esc(v.detail) + '</div>' : '') +
             '</div></div>'; }).join('') + '</div>'

@@ -39,7 +39,7 @@ function loadMeetings() {
 function renderMeetingList(r) {
   MEET.list = r;
   var live = r.live
-    ? '<div class="rounded-2xl p-5 mb-6 text-white flex flex-wrap items-center gap-4" style="background:linear-gradient(135deg,#5b4bdb,#8e3fb8)">' +
+    ? '<div class="rounded-2xl p-5 mb-6 text-white flex flex-wrap items-center gap-4" style="background:linear-gradient(135deg,#13294b,#1e4fbf)">' +
         '<span class="w-3 h-3 rounded-full bg-white animate-pulse"></span>' +
         '<div class="flex-1 min-w-[200px]"><div class="font-black text-lg">' + esc(r.live.title) + ' is running</div>' +
         '<div class="text-xs font-bold opacity-80">Now on: ' + esc(r.live.segment) + '</div></div>' +
@@ -188,7 +188,7 @@ function drawRunner(v) {
       '</div>' +
       '<div class="max-w-[1100px] mx-auto px-4 lg:px-6 pb-3 flex gap-1.5 overflow-x-auto">' +
         m.agenda.map(function (a, i) {
-          var cls = i === m.segment ? 'background:var(--brand);color:#fff' : i < m.segment ? 'background:#e7f6f3;color:#0e8f80' : 'background:#f3efe9;color:#7d7570';
+          var cls = i === m.segment ? 'background:var(--brand);color:#fff' : i < m.segment ? 'background:#e7f4ee;color:#067647' : 'background:#eef1f6;color:#667085';
           return '<button class="shrink-0 rounded-full px-3 py-1.5 text-xs font-black whitespace-nowrap" style="' + cls + '"' +
             (m.iAmChair ? ' onclick="meetGoTo(' + i + ')"' : ' disabled') + '>' + (i < m.segment ? '✓ ' : (i + 1) + ' · ') + esc(a.title) + '</button>';
         }).join('') + '</div></div>' +
@@ -267,7 +267,7 @@ function segmentFixed(key, v) {
       '<button type="submit" class="btn btn-p ml-auto">' + esc(btn) + '</button></div></form>';
   };
   if (key === 'wins') return form('fWin', 'One good thing from your week — work or home.', '', 'Share');
-  if (key === 'values') return (v.purpose ? '<div class="rounded-2xl p-4 mb-4 text-sm font-bold" style="background:#f4f2ff;color:#3d2fa8">' +
+  if (key === 'values') return (v.purpose ? '<div class="rounded-2xl p-4 mb-4 text-sm font-bold" style="background:#eef3fb;color:#17366f">' +
       '“' + esc(v.purpose) + '”</div>' : '') +
     (v.values.length ? '' : '<div class="text-sm font-bold text-amber-700 mb-4">No values are set up yet — an Admin adds them under Goals.</div>') +
     form('fStory', 'Who lived one of our values this week? What did they do?',
@@ -414,7 +414,7 @@ function segmentLive(key, v) {
     var r = m.ratings;
     return '<div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4">' +
       '<div class="flex justify-between font-black"><span>Ratings in</span><span>' + r.count + ' / ' + r.expected + '</span></div>' +
-      '<div class="h-2 rounded-full bg-gray-100 mt-2 overflow-hidden"><div class="h-2 rounded-full" style="background:#5b4bdb;width:' +
+      '<div class="h-2 rounded-full bg-gray-100 mt-2 overflow-hidden"><div class="h-2 rounded-full" style="background:var(--brand);width:' +
         (r.expected ? Math.min(100, r.count / r.expected * 100) : 0) + '%"></div></div>' +
       '<div class="text-[11px] font-semibold text-gray-400 mt-2">Anonymous — nobody’s name is shown against a score.' +
         (r.average !== null && m.iAmChair ? ' Average so far: <strong>' + r.average + '</strong>.' : '') + '</div></div>' +

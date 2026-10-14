@@ -102,21 +102,21 @@ function avatar(name, px) {
    the state, never the person or the priority — those have their own. */
 var STATE_TONE = {
   /* Board column titles… */
-  'Needs Approval':      { tone: '#b07d12', chip: 't-amber' },
-  'To Do':               { tone: '#5e5873', chip: 't-slate' },
-  'In Progress':         { tone: '#2a74c9', chip: 't-sky' },
-  'For Review':          { tone: '#8e3fb8', chip: 't-plum' },
-  'Verified':            { tone: '#0e8f80', chip: 't-teal' },
+  'Needs Approval':      { tone: '#d4930f', chip: 't-amber' },
+  'To Do':               { tone: '#64748b', chip: 't-slate' },
+  'In Progress':         { tone: '#1e4fbf', chip: 't-sky' },
+  'For Review':          { tone: '#7a4fd6', chip: 't-plum' },
+  'Verified':            { tone: '#067647', chip: 't-teal' },
   /* …and the status values themselves, which the list and the drawer show.
      Keyed separately rather than mapped, because "To Do" is a column holding
      two statuses and the two are not the same thing. */
-  'Pending':             { tone: '#5e5873', chip: 't-slate' },
-  'Awaiting Approval':   { tone: '#b07d12', chip: 't-amber' },
-  'Delegation Proposed': { tone: '#b07d12', chip: 't-amber' },
-  'Rejected':            { tone: '#c0392b', chip: 't-coral' },
-  'Cancelled':           { tone: '#5e5873', chip: 't-slate' },
+  'Pending':             { tone: '#64748b', chip: 't-slate' },
+  'Awaiting Approval':   { tone: '#d4930f', chip: 't-amber' },
+  'Delegation Proposed': { tone: '#d4930f', chip: 't-amber' },
+  'Rejected':            { tone: '#b42318', chip: 't-coral' },
+  'Cancelled':           { tone: '#64748b', chip: 't-slate' },
 };
-function stateTone(key) { return STATE_TONE[key] || { tone: '#cdc3ba', chip: 't-slate' }; }
+function stateTone(key) { return STATE_TONE[key] || { tone: '#c3cddc', chip: 't-slate' }; }
 
 /* Priority by its rank in the workspace's own list, so a renamed level still
    gets the right weight of colour: most urgent reads hottest. */
@@ -269,7 +269,7 @@ function renderTiles() {
   var tile = function (o) {
     return '<div class="tile' + (o.lead ? ' lead' : '') + '"' +
       (o.onclick ? ' onclick="' + o.onclick + '"' : '') + '>' +
-      '<span class="ti material-icons" style="color:' + (o.icon2 || '#d6cec3') + '">' +
+      '<span class="ti material-icons" style="color:' + (o.icon2 || '#c3cddc') + '">' +
         o.icon + '</span>' +
       '<div class="tk">' + esc(o.k) + '</div>' +
       '<div class="tv ' + (o.tone || '') + '">' + o.v + '</div>' +
@@ -282,20 +282,20 @@ function renderTiles() {
   };
 
   $('statTiles').innerHTML =
-    tile({ k:'Pending',     v:s.pending,  icon:'inbox',       icon2:'#8a8086' }) +
-    tile({ k:'In progress', v:s.progress, icon:'bolt',        icon2:'#2a74c9' }) +
-    tile({ k:'For review',  v:s.review,   icon:'rate_review', icon2:'#8e3fb8',
+    tile({ k:'Pending',     v:s.pending,  icon:'inbox',       icon2:'#64748b' }) +
+    tile({ k:'In progress', v:s.progress, icon:'bolt',        icon2:'#1e4fbf' }) +
+    tile({ k:'For review',  v:s.review,   icon:'rate_review', icon2:'#7a4fd6',
            sub: s.review ? 'with a reviewer' : '' }) +
     tile({ k:'Overdue',     v:s.overdue,  icon:'warning',
-           icon2: s.overdue ? '#c0392b' : '#d6cec3',
+           icon2: s.overdue ? '#b42318' : '#c3cddc',
            tone: s.overdue ? 'text-red-700' : '', sub:'needs attention' }) +
-    tile({ k:'Delegation',  icon:'speed', icon2:'#5b4bdb',
+    tile({ k:'Delegation',  icon:'speed', icon2:'#1e4fbf',
            v: sc.hasData && sc.delegation != null ? sc.delegation : '—',
            tone: band(sc.hasData ? sc.delegation : null),
            sub: sc.hasData ? (sc.load ? sc.load.percent + '% of an expected load' : 'this month')
                            : 'no data yet' }) +
     tile({ k:'Final score', icon:'emoji_events',
-           icon2: sc.final == null ? '#d6cec3' : '#d4541f',
+           icon2: sc.final == null ? '#c3cddc' : '#0f8f84',
            v: sc.final == null ? '—' : sc.final, tone: band(sc.final),
            sub:'See why →', lead:true, onclick:'openScoreBreakdown()' });
 }

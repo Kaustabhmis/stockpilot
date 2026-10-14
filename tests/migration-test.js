@@ -214,7 +214,13 @@ ok('the leaderboard and priority list work on day one',
 console.log('\n=== their history means something on day one ===');
 ok('past appraisals are still on file',
    (call({ action: 'getPerformanceReport', token: O.token }).report || []).length === 2);
-ok('scores are computed from the old task history', R && call({ action: 'getDashboard', token: R.token }).stats.scores.delegation > 0);
+/* Asked of September 2026 — the month the old work was done — not of "this
+   month", which made the check depend on the day the suite happened to run. */
+const sepOffset = (() => { const n = new Date(); return (n.getFullYear() - 2026) * 12 + n.getMonth() - 8; })();
+const sep = call({ action: 'getLeaderboard', token: O.token, period: 'month', offset: sepOffset });
+const raviSep = (sep.rows || []).find((r) => r.username === 'ravi');
+ok('scores are computed from the old task history', /Sep/.test(sep.range && sep.range.label) && raviSep && raviSep.score > 0,
+   JSON.stringify(sep.range) + ' ' + JSON.stringify(raviSep));
 
 console.log('\n=== they keep working, and the old data stays put ===');
 const nt = call({ action: 'createTask', token: O.token, form: { title: 'First task on the new system',

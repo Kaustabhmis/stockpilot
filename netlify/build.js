@@ -152,11 +152,11 @@ if (!fs.existsSync(notFound)) {
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="robots" content="noindex"><title>Page not found — Dome Box</title>' +
     '<link rel="icon" href="/favicon.svg"><style>' +
-    'body{margin:0;min-height:100vh;display:grid;place-items:center;background:#faf8f5;' +
-    'color:#2b2630;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
+    'body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f6fa;' +
+    'color:#1d2939;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
     'text-align:center;padding:24px}h1{font-size:clamp(28px,6vw,44px);margin:0 0 8px}' +
-    'p{color:#7d7570;font-weight:600;margin:0 0 24px}' +
-    'a{background:#5b4bdb;color:#fff;text-decoration:none;padding:13px 28px;' +
+    'p{color:#667085;font-weight:600;margin:0 0 24px}' +
+    'a{background:#1e4fbf;color:#fff;text-decoration:none;padding:13px 28px;' +
     'border-radius:10px;font-weight:800;display:inline-block}</style></head><body><div>' +
     '<h1>That page is not here</h1><p>The link may be out of date.</p>' +
     '<a href="/">Go to Dome Box</a></div></body></html>');

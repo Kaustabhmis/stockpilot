@@ -148,7 +148,7 @@ function taskCard(t) {
     /* A checklist deserves a bar, not a fraction nobody reads. */
     (sub.length ? '<div class="h-1.5 rounded-full bg-gray-100 overflow-hidden mb-2">' +
       '<div class="h-full" style="width:' + Math.round(done / sub.length * 100) + '%;' +
-      'background:' + (done === sub.length ? '#0e8f80' : '#5b4bdb') + '"></div></div>' : '') +
+      'background:' + (done === sub.length ? '#067647' : '#1e4fbf') + '"></div></div>' : '') +
     '<div class="flex flex-wrap items-center gap-1.5">' +
       '<span class="chip ' + (late ? 't-coral' : 't-slate') + '">' +
         fmtDate(t.due) + (late ? ' \u00b7 ' + late + 'd late' : '') + '</span>' +

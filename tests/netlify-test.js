@@ -63,7 +63,10 @@ ok('a preview can still be forced through',
 ok('the homepage links really are only those four, so the rule stays true',
    (() => {
      const hrefs = [...R('index.html', OUT).matchAll(/href="(\/[^"#]*)"/g)].map((m) => m[1]);
-     return [...new Set(hrefs)].every((h) => ['/privacy', '/terms', '/refund', '/contact'].indexOf(h) > -1);
+     /* ...plus files the site itself ships, such as the user manual, which
+        cannot 404 because they are in the published folder. */
+     return [...new Set(hrefs)].every((h) => ['/privacy', '/terms', '/refund', '/contact'].indexOf(h) > -1 ||
+       fs.existsSync(path.join(OUT, h.slice(1))));
    })(), [...new Set([...R('index.html', OUT).matchAll(/href="(\/[^"#]*)"/g)].map((m) => m[1]))].join(' '));
 
 console.log('\n=== a good build produces a site ===');

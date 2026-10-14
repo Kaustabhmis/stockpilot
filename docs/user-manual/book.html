@@ -9,9 +9,9 @@
      people, settings), nothing about how the system is built or run.
      Pictures are real screens from the demo company, in pics/. -->
 <style>
-  :root { --ink:#1b1a33; --soft:#55536f; --line:#dedbea; --paper:#fffdf8; --brand:#5b4bdb; --red:#c62828; --ok:#0e8f61; --warn:#b4570b; --tint:#f3f1ff; }
+  :root { --ink:#0f1b2d; --soft:#4b5565; --line:#dfe4ec; --paper:#ffffff; --brand:#1e4fbf; --navy:#13294b; --gold:#d4930f; --red:#b42318; --ok:#0f7b55; --warn:#b54708; --tint:#eef3fb; }
   * { box-sizing: border-box; }
-  body { margin:0; background:#ecebe6; color:var(--ink); font: 16px/1.55 "Segoe UI", Arial, sans-serif; }
+  body { margin:0; background:#eef1f5; color:var(--ink); font: 16px/1.55 "Segoe UI", Arial, sans-serif; }
   .page { background:var(--paper); max-width: 820px; margin: 0 auto; padding: 40px 48px; }
   h1 { font-size: 34px; line-height:1.15; margin: 0 0 8px; }
   h2 { font-size: 25px; margin: 0 0 6px; padding-top: 12px; border-top: 3px solid var(--ink); display:flex; gap:12px; align-items:center; }
@@ -19,10 +19,10 @@
   h3 { font-size: 18.5px; margin: 24px 0 6px; }
   p { margin: 7px 0; }
   ol, ul { margin: 6px 0; padding-left: 24px; } li { margin: 4px 0; }
-  b.k { background:#eceaf8; border:1px solid #d3cff0; border-radius:6px; padding:0 6px; font-weight:700; white-space:nowrap; }
+  b.k { background:#eef3fb; border:1px solid #c9d7ef; border-radius:6px; padding:0 6px; font-weight:700; white-space:nowrap; }
   table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 15px; }
   th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
-  th { background: #f3f1ea; }
+  th { background: #f3f5f8; }
   .lead { font-size: 18px; color: var(--soft); }
   .tip { margin: 12px 0; padding: 10px 14px; background: #ecf8f2; border-left: 6px solid var(--ok); border-radius: 6px; }
   .tip::before { content: "Tip  "; font-weight: 800; color: var(--ok); }
@@ -52,7 +52,35 @@
   .qa > b { display:block; margin-top: 12px; break-after: avoid; }
   .foot { margin-top: 36px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--soft); text-align:center; }
   h2, h3 { break-after: avoid; } tr, .roles, .tip, .note, .warn, .flow { break-inside: avoid; }
-  @media print { body { background: #fff; } .page { max-width: none; padding: 0; } }
+
+  /* ---------- colour: one corporate palette — navy, blue, a gold accent ---------- */
+  h2 { border-top: 0; padding: 14px 18px; border-radius: 10px; color: #fff; background: linear-gradient(110deg, var(--navy), #1c3d73); border-bottom: 4px solid var(--gold); margin-bottom: 14px; }
+  h2 .n { background: var(--gold); color: #fff; font-weight: 800; }
+  h3 { color: var(--navy); padding-left: 10px; border-left: 4px solid var(--brand); }
+  th { background: var(--navy); color: #fff; border-color: var(--navy); font-weight: 600; }
+  tr:nth-child(even) td { background: #f6f8fb; }
+  b.k { color: var(--brand); }
+  figure img { border: 1px solid #cfd8e6; box-shadow: 0 4px 14px rgba(15,27,45,.10); }
+  ul li::marker, ol li::marker { color: var(--brand); font-weight: 700; }
+  .flow span { border-color: var(--brand); background: var(--tint); color: var(--navy); }
+  .roles div { border: 1px solid var(--line); border-top: 4px solid var(--brand); background: #fff; }
+  .roles div:nth-child(2) { border-top-color: var(--navy); } .roles div:nth-child(3) { border-top-color: var(--gold); }
+  .roles b { color: var(--navy); }
+  .tip { background:#ecf6f1; border-left-color: var(--ok); } .tip::before { color: var(--ok); }
+  .note { background: var(--tint); border-left-color: var(--brand); }
+  .warn { background:#fdf4e7; border-left-color: var(--gold); }
+  .qa > b { color: var(--navy); }
+  .who { background: var(--navy); color: #fff; }
+  .cover { color:#fff; border-radius: 16px; padding: 64px 40px 40px; background: linear-gradient(150deg, #0f1b2d 0%, #13294b 45%, #1e4fbf 100%); border-bottom: 6px solid var(--gold); }
+  .cover .logo { background: #fff; color: var(--brand); }
+  .cover .big { letter-spacing: -.5px; }
+  .cover .sub { color: #dbe6f7; } .cover .lead { color: #b9c8e2; }
+  .toc { background: #fff; color: var(--ink); border-radius: 12px; padding: 16px 20px; }
+  .toc div { border-bottom: 1px solid #edf0f5; }
+  .toc b { display:inline-flex; width:24px; height:24px; border-radius:6px; background: var(--navy); color:#fff; align-items:center; justify-content:center; font-size:12px; margin-right:8px; }
+  .cover .contact { color: #b9c8e2; }
+  .foot { border-top: 3px solid var(--navy); }
+  @media print { body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page { max-width: none; padding: 0; } }
 </style>
 </head>
 <body>
@@ -80,7 +108,7 @@
     <div><b>13</b>For team leads</div>
     <div><b>14</b>Common questions</div>
   </div>
-  <p style="margin-top:34px;color:var(--soft);font-size:14px">www.domebox.in · help: info@biscsindia.com</p>
+  <p class="contact" style="margin-top:30px;font-size:14px">www.domebox.in · help: info@biscsindia.com</p>
 </div>
 
 <!-- ================= 1 ================= -->

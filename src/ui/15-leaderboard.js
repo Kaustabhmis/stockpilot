@@ -68,7 +68,7 @@ function lbBar(score) {
      bars are read against a common baseline rather than against each other. */
   return '<div class="h-2 rounded-full bg-gray-100 overflow-hidden w-full">' +
     '<div class="h-2 rounded-full" style="width:' + Math.max(2, Number(score) || 0) +
-    '%;background:#5b4bdb"></div></div>';
+    '%;background:var(--brand)"></div></div>';
 }
 
 function championCard(c, shared, range, belowFirst) {
@@ -78,7 +78,7 @@ function championCard(c, shared, range, belowFirst) {
       '<div class="text-xs font-semibold text-gray-400 mt-1">Nobody delivered a full enough load of ' +
       'their own to be crowned on it. The ranking below still stands.</div></div>';
   }
-  return '<div class="rounded-2xl p-6 mb-6 text-white" style="background:linear-gradient(135deg,#5b4bdb,#8e3fb8)">' +
+  return '<div class="rounded-2xl p-6 mb-6 text-white" style="background:linear-gradient(135deg,#13294b,#1e4fbf)">' +
     '<div class="text-[11px] font-black uppercase tracking-widest opacity-80">' +
       (shared ? 'Joint best delivery in ' : 'Best delivery in ') + esc(range.label) + '</div>' +
     '<div class="flex items-center gap-4 mt-3">' +

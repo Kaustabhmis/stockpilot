@@ -298,7 +298,7 @@ function payNow(planName, promo) {
                         ' = ' + inr(ch.total) + ' payable', 'info');
       var rz = new Razorpay({
         key: o.key, order_id: o.order_id, amount: o.amount, currency: o.currency,
-        name: o.name, description: o.description, prefill: o.prefill, theme: { color: '#2563eb' },
+        name: o.name, description: o.description, prefill: o.prefill, theme: { color: '#1e4fbf' },
         /* The response object carries the signature. The old build used an empty
            parameter list here and threw it away, which is why nothing could be
            verified afterwards. */

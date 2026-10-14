@@ -6,9 +6,10 @@
  *
  * The brand is applied by REDEFINING the ramps the app already uses rather than
  * by rewriting hundreds of class strings. `blue-600` still means "the action
- * colour" everywhere it appears; it is now Dome Box violet. `slate` carries the
- * dark sections and `gray` the neutrals, both warmed so the whole surface reads
- * like paper rather than like a spreadsheet.
+ * colour" everywhere it appears; it is Dome Box corporate blue. `slate` carries
+ * the navy sections, `gray` the cool neutrals, and `coral` (kept as a name) is
+ * the teal accent. Brand palette: navy #13294b, blue #1e4fbf, teal #0f8f84,
+ * gold #d4930f (decoration only — never text on white).
  */
 module.exports = {
   content: [require('path').join(__dirname, '..', '..', 'dist', 'index.html')],
@@ -16,36 +17,36 @@ module.exports = {
     extend: {
       fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
       colors: {
-        /* Action — a violet with some life in it. 600 is the one that matters;
-           it is the validated categorical slot 1 and clears 4.5:1 on white. */
+        /* Action — corporate blue. 600 is the one that matters: buttons, links,
+           the active tab. It is categorical slot 1 and clears 7:1 on white. */
         blue: {
-          50:'#f1eefe', 100:'#e4e0fc', 200:'#cdc5f8', 300:'#b3a7f2',
-          400:'#8a79ea', 500:'#6f5ce2', 600:'#5b4bdb', 700:'#4a3bc4',
-          800:'#3f2fa6', 900:'#2f2379', 950:'#1d1551',
+          50:'#eef3fb', 100:'#dbe6f7', 200:'#bccfee', 300:'#8fb0e0',
+          400:'#5b87cc', 500:'#3466c8', 600:'#1e4fbf', 700:'#183f99',
+          800:'#17366f', 900:'#13294b', 950:'#0c1a30',
         },
-        /* The dark sections: plum-black, not navy. */
+        /* The dark sections: navy. */
         slate: {
-          50:'#f8f6f4', 100:'#f1ede9', 200:'#e3dcd5', 300:'#cdc3ba',
-          400:'#a79c96', 500:'#857a80', 600:'#6a6072', 700:'#4e4559',
-          800:'#2f2940', 900:'#1b1726', 950:'#120f1a',
+          50:'#f6f8fb', 100:'#eef2f7', 200:'#dde4ee', 300:'#c3cddc',
+          400:'#94a3b8', 500:'#64748b', 600:'#475569', 700:'#334155',
+          800:'#1c2f4f', 900:'#13294b', 950:'#0c1a30',
         },
-        /* Neutrals warmed a few degrees — paper, not printer paper. */
+        /* Neutrals — cool greys, the standard business surface. */
         gray: {
-          50:'#faf8f5', 100:'#f3efe9', 200:'#e7e1d8', 300:'#d6cec3',
-          400:'#a79f95', 500:'#7d7570', 600:'#5a5258', 700:'#453f4c',
-          800:'#2e2937', 900:'#1b1726', 950:'#120f1a',
+          50:'#f6f8fb', 100:'#eef1f6', 200:'#e2e7ef', 300:'#cdd5e1',
+          400:'#8a94a6', 500:'#667085', 600:'#475467', 700:'#344054',
+          800:'#1d2939', 900:'#0f1b2d', 950:'#0a1220',
         },
-        /* Secondary accent — the warm one. Used for recognition, highlights and
-           anything meant to feel like a good day rather than a status. */
+        /* Secondary accent — teal. Recognition, highlights, the good news. The
+           ramp keeps its old name so no class string has to change. */
         coral: {
-          50:'#fdf1ec', 100:'#fbe2d8', 200:'#f6c3ae', 300:'#ef9c7c',
-          400:'#e8724b', 500:'#e0501f', 600:'#c7431a', 700:'#a33616',
-          800:'#7d2a12', 900:'#5a1e0d',
+          50:'#effaf8', 100:'#d5f2ee', 200:'#ade4dc', 300:'#7dcfc5',
+          400:'#3fb3a7', 500:'#0f8f84', 600:'#0c7a71', 700:'#0b625b',
+          800:'#0a4f4a', 900:'#083f3b',
         },
       },
       borderRadius: { xl:'0.9rem', '2xl':'1.15rem', '3xl':'1.6rem' },
       boxShadow: {
-        lift: '0 10px 24px -8px rgba(27,23,38,.18), 0 2px 6px -2px rgba(27,23,38,.08)',
+        lift: '0 10px 24px -8px rgba(15,27,45,.16), 0 2px 6px -2px rgba(15,27,45,.08)',
       },
     },
   },
