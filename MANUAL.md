@@ -284,6 +284,12 @@ milestone component is worth 20% of your delivery score.
 Your dashboard shows your score, and **See why** opens the full working, line by
 line. Read this section once and the number stops being mysterious.
 
+It is **this month's** score — the work you closed this month, and what you were
+still holding — and it is the same number the leaderboard, Reports and your
+appraisal use. Until you close something in the month it reads *no data yet*,
+which is not a zero. Weekly, quarterly and yearly views measure the load you
+carried against that length of time, not against a month.
+
 ### The three things measured
 
 | Component | Weight | What it measures |
@@ -294,10 +300,12 @@ line. Read this section once and the number stops being mysterious.
 
 *On a project, those become 35 / 25 / 20 with 20% for stage milestones.*
 
-- A day late costs **10 points on that task**. Five days late is zero on it.
+- A working day late costs **10 points on that task**. Five days late leaves 50; ten or more is zero on it.
 - Each rework loop costs **25 points on that task**.
 - Every task is weighted by its priority, so a Critical job counts for more
   than a Low one.
+- Days late are **working days**: weekends and your approved leave are never
+  counted.
 
 ### The thing that makes it fair
 

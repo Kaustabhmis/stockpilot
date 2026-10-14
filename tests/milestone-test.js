@@ -33,12 +33,17 @@ console.log('\n=== meeting a stage deadline gains score ===');
   ok('it is recorded as met', m.met === 1 && m.missed === 0);
   ok('the milestone score is full marks', m.score === 100, m.score);
   ok('and the gain is itemised, not only the failures',
-     m.breakdown.length === 1 && String(m.breakdown[0].impact).charAt(0) === '+', JSON.stringify(m.breakdown[0]));
+     m.breakdown.length === 1 && m.breakdown[0].impact === '100/100' && /met/.test(m.breakdown[0].reason),
+     JSON.stringify(m.breakdown[0]));
   ok('naming the project and the stage',
      /Fixture line upgrade · stage 1/.test(m.breakdown[0].item), m.breakdown[0].item);
-  ok('a high-priority stage is worth more than a low one',
-     D.milestoneStats([done(1, 'p', '2026-11-05', '2026-11-04')].map((x) => Object.assign(x, { priority: 'High' })), 'p', today, null)
-       .breakdown[0].impact === '+30');
+  /* High (×3) met + Low (×1) 5 days late: (100×3 + 50×1)/4 = 87.5 → 88.
+     The other way round: (100×1 + 50×3)/4 = 62.5 → 63. */
+  const pair = (hiLate) => D.milestoneStats([
+    Object.assign(done(1, 'p', '2026-11-05', hiLate ? '2026-11-10' : '2026-11-04'), { priority: 'High', projectId: 'PA' }),
+    Object.assign(done(1, 'p', '2026-11-05', hiLate ? '2026-11-04' : '2026-11-10'), { priority: 'Low', projectId: 'PB' })],
+    'p', today, null).score;
+  ok('a high-priority stage is worth more than a low one', pair(false) === 88 && pair(true) === 63, pair(false) + ' / ' + pair(true));
 }
 
 console.log('\n=== missing one costs score, and says by how much ===');

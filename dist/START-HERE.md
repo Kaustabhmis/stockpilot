@@ -11,5 +11,5 @@ screen. The same steps in text: [`../DEPLOY-SIMPLE.md`](../DEPLOY-SIMPLE.md).
 Your old script inside the Master sheet keeps running your live site until the switch in
 Part 2 of the book. Do not edit it.
 
-Tested: 1,815 checks across forty-six suites — server rules and the
+Tested: 1,870 checks across forty-eight suites — server rules and the
 real page in a browser. See `tests/README.md`.

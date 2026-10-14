@@ -141,6 +141,7 @@ function createProject_locked_(ctx, form) {
 /** Every project in the workspace, with where each one has got to. */
 function getProjects_(ctx) {
   var tasks = readAllTasks_(ctx);
+  var cal = leaveCalendar_(ctx);
   var names = {};
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
 
@@ -154,7 +155,7 @@ function getProjects_(ctx) {
     if (mine && !stages.some(function (s) {
       return s.assignee === ctx.me.username || s.raisedBy === ctx.me.username; })) return;
 
-    var sum = projectSummary(tasks, id);
+    var sum = projectSummary(tasks, id, cal);
     if (!sum) return;
     sum.currentOwnerName = sum.currentOwner ? (names[sum.currentOwner] || sum.currentOwner) : '';
     sum.stageList = stages.map(function (s) {
@@ -168,8 +169,10 @@ function getProjects_(ctx) {
            stage before them overran, so nobody wears somebody else's slip. */
         effectiveDue: due ? ymd(due) : s.due,
         extended: !!(due && parseYmd(s.due) && startOfDay(due) > parseYmd(s.due)),
-        metOnTime: s.status === 'Verified' && sub && due ? dayDiff(sub, due) <= 0 : null,
-        daysLate: s.status === 'Verified' && sub && due ? Math.max(0, dayDiff(sub, due)) : null,
+        /* Working days, leave excluded — the same count the score uses, so this
+           table and the milestone line in "See why" never disagree. */
+        metOnTime: s.status === 'Verified' && sub && due ? chargeableLateDays(due, sub, s.assignee, cal) <= 0 : null,
+        daysLate: s.status === 'Verified' && sub && due ? Math.max(0, chargeableLateDays(due, sub, s.assignee, cal)) : null,
         blocked: openBlockers(s, tasks).length > 0,
       };
     });

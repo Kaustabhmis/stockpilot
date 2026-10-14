@@ -1974,7 +1974,7 @@ function getUsers_(ctx) {
 
   return { status: 'success', users: users.map(function (u) {
     var wip = wipStatus(tasks, u.username, u.wipLimit == null ? DEFAULT_WIP_LIMIT : u.wipLimit);
-    var s = scoreForPeriod(tasks, u.username, range, cal);
+    var s = scoreForPeriod(tasks, u.username, range, cal, scoreOpts_(ctx, u.username));
     return {
       /* Deliberately no password field. The old getUsersList returned every
          employee's password to the browser in plain text. */
@@ -2184,8 +2184,12 @@ function getDashboard_(ctx) {
   var reports = users.filter(function (u) { return u.manager === me.username; })
                      .map(function (u) { return u.username; });
 
-  var del = delegationScore(tasks.filter(function (t) { return !t.isArchived ||
-    inThisMonth_(t); }), me.username, new Date(), cal, scoreOpts_(ctx, me.username));
+  /* THE score: this month's, exactly as the leaderboard and Reports compute
+     it. It used to be worked out over a different window here (open work plus
+     anything closed in the last week), so a person could read one number on
+     their dashboard and find another against their name on the leaderboard. */
+  var del = scoreForPeriod(tasks, me.username, periodRange(PERIOD.MONTH, 0), cal,
+    scoreOpts_(ctx, me.username));
 
   /* The last appraisal's PERFORMANCE half, paired with today's delegation half.
      An empty cell is not a zero: reading it as one used to halve everybody's
@@ -2289,13 +2293,6 @@ function getDashboard_(ctx) {
       warnings: planUsage(ctx.planName, activeUsers, usedTasks).warnings,
     },
   };
-}
-
-function inThisMonth_(t) {
-  var d = closedAt(t) || new Date(t.createdDate);
-  if (!d || isNaN(d)) return false;
-  var now = new Date();
-  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 }
 
 /** The bell. Ordered by urgency, because a list nobody can triage gets ignored. */
@@ -2430,7 +2427,10 @@ function getAppraisalForm_(ctx, username) {
 
   var tasks = readAllTasks_(ctx);
   var cal = leaveCalendar_(ctx);
-  var del = delegationScore(tasks, username, new Date(), cal, scoreOpts_(ctx, username));
+  /* The month being appraised, measured the same way as everywhere else. An
+     all-time figure here ignored workload entirely (years of closed work always
+     reads as a full load) and differed from the dashboard and leaderboard. */
+  var del = scoreForPeriod(tasks, username, periodRange(PERIOD.MONTH, 0), cal, scoreOpts_(ctx, username));
 
   // Their own set first, else whatever their job profile defines.
   var kras = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
@@ -2465,7 +2465,7 @@ function submitAppraisal_(ctx, data) {
      the browser sent it, and a score an employee can edit in devtools is not a
      score. */
   var tasks = readAllTasks_(ctx);
-  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx),
+  var measured = scoreForPeriod(tasks, data.employee, periodRange(PERIOD.MONTH, 0), leaveCalendar_(ctx),
     scoreOpts_(ctx, data.employee));
 
   var result = finalAppraisalScore({
@@ -2500,7 +2500,7 @@ function submitAppraisal_(ctx, data) {
 
 /**
  * What the score engine needs to know about this person beyond their tasks:
- * the load expected of them, and the recognition they were given this month.
+ * the load expected of them, and every cookie they were given (each period keeps its own).
  *
  * The expectation is their WIP limit, so a part-time or deliberately
  * low-volume role is measured against its own bar rather than the busiest desk
@@ -2524,13 +2524,15 @@ function scoreOpts_(ctx, username) {
  * more — and Apps Script kills any execution at six minutes, so the largest
  * account is the first one that cannot open its own reports.
  *
- * None of it varied by period anyway: a WIP limit is a constant and the cookie
- * window is always the current month.
+ * None of it varies by period: a WIP limit is a constant, and the full cookie
+ * list is filtered to each period by scoreForPeriod.
  */
 function scoreOptsMap_(ctx) {
   if (ctx._scoreOpts) return ctx._scoreOpts;
 
-  var range = periodRange(PERIOD.MONTH, 0);
+  /* Every cookie, with its date. The score for a period keeps the ones awarded
+     inside that period — loading only this month's used to add October's
+     cookies to September's score and lose September's own. */
   var byUser = {};
   readUsers_(ctx).forEach(function (u) {
     byUser[u.username] = {
@@ -2545,7 +2547,7 @@ function scoreOptsMap_(ctx) {
     var slot = byUser[c.to];
     if (!slot) return;
     var d = new Date(c.date);
-    if (isNaN(d) || !inWindow(d, range)) return;
+    if (isNaN(d)) return;
     slot.cookies.push({ date: c.date, points: c.points, reason: c.reason,
                         by: c.by, byName: names[c.by] || c.by });
   });
@@ -2741,7 +2743,8 @@ function aiInsight_(ctx, question) {
   var tasks = readTasks_(ctx);
   var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
   var cal = leaveCalendar_(ctx);
-  var a = periodAnalytics(tasks, users, periodRange('month', 1), new Date(), cal);
+  var a = periodAnalytics(tasks, users, periodRange('month', 1), new Date(), cal,
+    function (u) { return scoreOpts_(ctx, u.username); });
 
   var facts = [
     'Company: ' + (ctx.company || 'this company'),
@@ -3433,6 +3436,7 @@ function createProject_locked_(ctx, form) {
 /** Every project in the workspace, with where each one has got to. */
 function getProjects_(ctx) {
   var tasks = readAllTasks_(ctx);
+  var cal = leaveCalendar_(ctx);
   var names = {};
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
 
@@ -3446,7 +3450,7 @@ function getProjects_(ctx) {
     if (mine && !stages.some(function (s) {
       return s.assignee === ctx.me.username || s.raisedBy === ctx.me.username; })) return;
 
-    var sum = projectSummary(tasks, id);
+    var sum = projectSummary(tasks, id, cal);
     if (!sum) return;
     sum.currentOwnerName = sum.currentOwner ? (names[sum.currentOwner] || sum.currentOwner) : '';
     sum.stageList = stages.map(function (s) {
@@ -3460,8 +3464,10 @@ function getProjects_(ctx) {
            stage before them overran, so nobody wears somebody else's slip. */
         effectiveDue: due ? ymd(due) : s.due,
         extended: !!(due && parseYmd(s.due) && startOfDay(due) > parseYmd(s.due)),
-        metOnTime: s.status === 'Verified' && sub && due ? dayDiff(sub, due) <= 0 : null,
-        daysLate: s.status === 'Verified' && sub && due ? Math.max(0, dayDiff(sub, due)) : null,
+        /* Working days, leave excluded — the same count the score uses, so this
+           table and the milestone line in "See why" never disagree. */
+        metOnTime: s.status === 'Verified' && sub && due ? chargeableLateDays(due, sub, s.assignee, cal) <= 0 : null,
+        daysLate: s.status === 'Verified' && sub && due ? Math.max(0, chargeableLateDays(due, sub, s.assignee, cal)) : null,
         blocked: openBlockers(s, tasks).length > 0,
       };
     });
@@ -7366,21 +7372,28 @@ function stageReleasedAt(stages, stage) {
  * person's slip onto everyone downstream — the surest way to make a team stop
  * reporting slippage at all.
  *
- * So a stage released after its own deadline gets back the window the plan gave
- * it: the gap between its date and the date of the stage before it, counted
- * from the day it was actually released. They promised that many days of work,
- * they get that many days — no more, so a late start is not a blank cheque.
+ * So a stage released after the stage before it was due gets back the window
+ * the plan gave it: the gap between its date and the date of the stage before
+ * it, counted from the day it was actually released. Stage 2 planned five days
+ * after stage 1; stage 1 ran four days over; stage 2 is due five days from
+ * when it reached its owner — not one. They promised that many days of work,
+ * they get that many days and no more, so a late start is not a blank cheque.
+ * A stage released on time, or early, keeps its own date.
  */
 function stageEffectiveDue(stages, stage) {
   var due = parseYmd(stage.due);
   var released = stageReleasedAt(stages, stage);
   if (!due) return released ? startOfDay(released) : null;
-  if (!released || startOfDay(released) <= due) return due;
+  if (!released) return due;
 
   var prev = previousStage(stages, stage);
   var prevDue = prev ? parseYmd(prev.due) : null;
-  var planned = prevDue ? Math.max(0, dayDiff(due, prevDue)) : 0;
-  return addDays(startOfDay(released), planned);
+  if (!prevDue) return startOfDay(released) <= due ? due : startOfDay(released);
+  if (startOfDay(released) <= prevDue) return due;             // released on time
+
+  var planned = Math.max(0, dayDiff(due, prevDue));
+  var moved = addDays(startOfDay(released), planned);
+  return moved > due ? moved : due;
 }
 
 /**
@@ -7392,14 +7405,18 @@ function stageEffectiveDue(stages, stage) {
  * hits and the misses are itemised, because a score that shows a person only
  * their failures is one they will read as a punishment ledger.
  */
-function milestoneStats(tasks, username, today, cal) {
+function milestoneStats(tasks, username, today, cal, contextTasks) {
   var now = today || new Date();
   var mine = (tasks || []).filter(function (t) {
     return t.assignee === username && t.projectId && Number(t.stageNo) > 0;
   });
 
+  /* Stages are looked up in the FULL task list when the caller has one. A
+     period score is handed only this person's tasks, and without the stage
+     before theirs the deadline extension could not be worked out — so they
+     were charged for an upstream delay after all. */
   var byProject = {};
-  (tasks || []).forEach(function (t) {
+  (contextTasks || tasks || []).forEach(function (t) {
     if (!t.projectId) return;
     (byProject[t.projectId] = byProject[t.projectId] || []).push(t);
   });
@@ -7422,7 +7439,8 @@ function milestoneStats(tasks, username, today, cal) {
       if (!sub || !due) return;
       var late = chargeableLateDays(due, sub, username, cal);
       var hit = late <= 0;
-      wTotal += w; wSum += (hit ? 100 : Math.max(0, 100 - late * LATENESS_POINTS_PER_DAY)) * w;
+      var stagePts = timelinessPoints(late);
+      wTotal += w; wSum += stagePts * w;
       if (hit) met++; else missed++;
       items.push({ id: t.id, title: t.title, project: t.projectName, stage: Number(t.stageNo),
                    met: hit, daysLate: Math.max(0, late), extended: !!extended });
@@ -7431,7 +7449,7 @@ function milestoneStats(tasks, username, today, cal) {
         reason: hit ? 'Stage deadline met' + (extended ? ' (deadline moved out: the stage before it ran over)' : '')
                     : 'Stage deadline missed by ' + late + ' day(s)' +
                       (extended ? ', counted from the day it was actually released' : ''),
-        impact: hit ? '+' + w * 10 : '-' + Math.min(100, late * LATENESS_POINTS_PER_DAY),
+        impact: stagePts + '/100',
       });
       return;
     }
@@ -7455,7 +7473,7 @@ function milestoneStats(tasks, username, today, cal) {
 }
 
 /** A whole project's state, for the board and the project list. */
-function projectSummary(tasks, projectId) {
+function projectSummary(tasks, projectId, cal) {
   var stages = projectStages(tasks, projectId);
   if (!stages.length) return null;
   var done = stages.filter(function (s) { return s.status === STATUS.VERIFIED; });
@@ -7467,7 +7485,7 @@ function projectSummary(tasks, projectId) {
   var metOnTime = 0;
   done.forEach(function (s) {
     var sub = submittedAt(s), due = stageEffectiveDue(stages, s);
-    if (sub && due && dayDiff(sub, due) <= 0) metOnTime++;
+    if (sub && due && chargeableLateDays(due, sub, s.assignee, cal) <= 0) metOnTime++;
   });
   var last = stages[stages.length - 1];
   return {
@@ -7527,11 +7545,15 @@ var DECISION_EFFORT = 1;            // an approval or review cleared, in load un
  * Capped at 1: carrying double does not make a score of 200, it makes a
  * complete one.
  */
-function workloadCredit(deliveredWeight, expectedTasks) {
+function workloadCredit(deliveredWeight, expectedTasks, periodMonths) {
+  /* The expectation is a MONTH's load. A week is measured against a week's
+     share of it and a quarter against three months', or every weekly score
+     would be capped near 25 and every yearly one would carry no load check. */
+  var months = Number(periodMonths) > 0 ? Number(periodMonths) : 1;
   var expected = Math.max(1, Number(expectedTasks) || EXPECTED_MONTHLY_TASKS) *
-                 priorityWeight('Medium');
+                 priorityWeight('Medium') * months;
   var credit = deliveredWeight / expected;
-  return { delivered: Math.round(deliveredWeight * 10) / 10, expected: expected,
+  return { delivered: Math.round(deliveredWeight * 10) / 10, expected: Math.round(expected * 10) / 10,
            credit: Math.max(0, Math.min(1, credit)),
            percent: Math.round(Math.max(0, Math.min(1, credit)) * 100),
            full: credit >= 1 };
@@ -7663,6 +7685,10 @@ function submittedAt(task) {
 function queueSpells(task) {
   var h = (task.history || []).slice().filter(function (e) { return e && e.date; });
   var out = [];
+  /* Who a review waits on. Work somebody raised for themselves is signed off by
+     an Admin, not by them — so it waits on no one person, and the doer is never
+     charged for the review of their own work. */
+  var reviewer = task.approver || (task.raisedBy !== task.assignee ? task.raisedBy : null) || null;
   var WAITING = {};
   WAITING[STATUS.FOR_REVIEW] = 'review';
   WAITING[STATUS.AWAITING_APPROVAL] = 'approval';
@@ -7679,7 +7705,7 @@ function queueSpells(task) {
       if (!isNaN(d)) { to = d; break; }
     }
     out.push({ kind: kind, from: from, to: to,
-      holder: kind === 'review' ? (task.approver || task.raisedBy) : task.approver,
+      holder: kind === 'review' ? reviewer : task.approver,
       open: to === null });
   }
 
@@ -7690,7 +7716,7 @@ function queueSpells(task) {
     var started = h.length ? new Date(h[h.length - 1].date) : parseYmd(task.due);
     if (started && !isNaN(started)) {
       out.push({ kind: nowKind, from: started, to: null, open: true,
-        holder: nowKind === 'review' ? (task.approver || task.raisedBy) : task.approver });
+        holder: nowKind === 'review' ? reviewer : task.approver });
     }
   }
   return out;
@@ -7710,9 +7736,19 @@ function responsivenessStats(tasks, username, today, cal, opts) {
   var now = today || new Date();
   var items = [], breakdown = [], penalty = 0;
 
+  /* Inside a period, every spell is counted exactly once: in the period it was
+     cleared, or — while still waiting — in the current period. Counting every
+     spell the task ever had charged one slow review again every month after. */
+  var range = opts.range || null;
+  var current = !range || !!opts.rangeIsCurrent;
+
   (tasks || []).forEach(function (t) {
     queueSpells(t).forEach(function (sp) {
       if (sp.holder !== username) return;
+      if (range) {
+        if (sp.to && !inWindow(sp.to, range)) return;   // cleared in another period
+        if (!sp.to && !current) return;                 // still waiting: counted now
+      }
       var end = sp.to || now;
       if (startOfDay(end) < startOfDay(sp.from)) return;   // clock skew, ignore
 
@@ -7759,9 +7795,26 @@ function responsivenessStats(tasks, username, today, cal, opts) {
   };
 }
 
+/**
+ * The deadline a task is judged against. For a project stage that is the
+ * effective deadline — moved out when the stage before it overran — so the
+ * on-time and queue parts of the score agree with the milestone part, and
+ * nobody is marked late for somebody else's delay.
+ */
+function answerableDue_(t, context) {
+  var due = parseYmd(t.due);
+  if (!t.projectId || !(Number(t.stageNo) > 0)) return due;
+  var stages = projectStages(context || [], t.projectId);
+  var real = null;
+  for (var i = 0; i < stages.length; i++) if (stages[i].id === t.id) { real = stages[i]; break; }
+  if (!real) return due;
+  return stageEffectiveDue(stages, real) || due;
+}
+
 function delegationScore(tasks, username, today, cal, opts) {
   today = today || new Date();
   opts = opts || {};
+  var context = opts.allTasks || tasks;
   var mine = tasks.filter(function (t) { return t.assignee === username; });
   var breakdown = [];
 
@@ -7780,7 +7833,7 @@ function delegationScore(tasks, username, today, cal, opts) {
   closed.forEach(function (t) {
     var sub = submittedAt(t);
     if (!sub) return;
-    var late = chargeableLateDays(parseYmd(t.due) || sub, sub, t.assignee, cal);
+    var late = chargeableLateDays(answerableDue_(t, context) || sub, sub, t.assignee, cal);
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
     otSum += pts * w; otW += w; otCount++;
@@ -7811,7 +7864,7 @@ function delegationScore(tasks, username, today, cal, opts) {
   // --- queue health ---
   var qhW = 0, qhSum = 0, overdue = 0;
   open.forEach(function (t) {
-    var due = parseYmd(t.due);
+    var due = answerableDue_(t, context);
     var late = due ? chargeableLateDays(due, today, t.assignee, cal) : 0;
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
@@ -7830,7 +7883,7 @@ function delegationScore(tasks, username, today, cal, opts) {
      around, so meeting one earns its own score rather than disappearing into
      the on-time average. It is weighted, not added on top, so nobody can lift
      their score simply by having their work cut into more pieces. */
-  var ms = milestoneStats(tasks, username, today, cal);
+  var ms = milestoneStats(tasks, username, today, cal, context);
   ms.breakdown.forEach(function (b) { breakdown.push(b); });
   var W = ms.hasData ? MILESTONE_WEIGHTS : SCORE_WEIGHTS;
 
@@ -7854,7 +7907,8 @@ function delegationScore(tasks, username, today, cal, opts) {
      working days, excluding their own approved leave. The old version keyed off
      the task's deadline, so work handed in early that then sat for a fortnight
      cost the reviewer nothing. */
-  var resp = responsivenessStats(tasks, username, today, cal);
+  var resp = responsivenessStats(tasks, username, today, cal,
+    { range: opts.range, rangeIsCurrent: opts.rangeIsCurrent });
   var deduction = resp.penalty;
   resp.breakdown.forEach(function (b) { breakdown.push(b); });
 
@@ -7869,7 +7923,7 @@ function delegationScore(tasks, username, today, cal, opts) {
                            not idle, and a load figure that said otherwise would
                            be read as an accusation. */
                         open.reduce(function (n, t) { return n + priorityWeight(t.priority) / 2; }, 0);
-  var load = workloadCredit(deliveredWeight, opts.expectedTasks);
+  var load = workloadCredit(deliveredWeight, opts.expectedTasks, opts.periodMonths);
   var composite = rate * load.credit;
   if (hasData) {
     breakdown.push({
@@ -7999,15 +8053,6 @@ function validateKraBlueprint(kras) {
   return { ok: true, total: total, rows: rows, warning: total < 100 ? 'Weights total ' + total + '% — ' + (100 - total) + '% unallocated.' : '' };
 }
 
-/**
- * Blends measured execution with judgement:
- *   40% delegation score (from verified task history — cannot be talked up)
- *   40% KRA execution     (weighted, rated 0-5)
- *   20% behaviour         (weighted, rated 0-5)
- *   + up to 5 discretionary points
- * Any unrated half is dropped and the rest renormalised, so a half-finished
- * appraisal never silently reads as a low score.
- */
 /**
  * THE ONE DEFINITION OF A FINAL SCORE.
  *
@@ -8464,22 +8509,51 @@ function inWindow(date, range) {
  * Queue health is judged as at the end of the window, so a historic period is
  * measured on how the queue looked then rather than how it looks today.
  */
+/** What a task's status was at the end of a given day, read from its history. */
+function statusAt_(task, day) {
+  var h = task.history || [], st = null, seen = false;
+  for (var i = 0; i < h.length; i++) {
+    var d = h[i] && h[i].date ? new Date(h[i].date) : null;
+    if (!d || isNaN(d)) continue;
+    seen = true;
+    if (startOfDay(d) <= day) st = h[i].status;
+  }
+  return seen ? st : undefined;     // undefined: no history to read, null: not raised yet
+}
+
+/** How many months a period is, for the load a person is expected to carry. */
+function periodMonths_(range) {
+  if (range.kind === PERIOD.WEEK) return 7 * 12 / 365.25;
+  if (range.kind === PERIOD.QUARTER) return 3;
+  if (range.kind === PERIOD.YEAR) return 12;
+  return 1;
+}
+
 function scoreForPeriod(tasks, username, range, cal, opts) {
+  opts = opts || {};
   var closedInWindow = tasks.filter(function (t) {
     return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
   });
 
-  // Work that was open at the end of the window: raised on or before it, and
-  // either still open now or closed after the window ended.
+  /* Work that was in this person's hands at the end of the window — To do or In
+     progress on that day, read from the history. Work they had already handed
+     in, or that was still waiting for approval, was not theirs to act on, and
+     queue health promises not to count it. */
   var openThen = tasks.filter(function (t) {
     if (t.assignee !== username) return false;
     var due = parseYmd(t.due);
     if (!due || due > range.to) return false;
     var closed = closedAt(t);
     if (closed && startOfDay(closed) <= range.to) return false;
-    return t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS || isClosed(t.status) === false;
+    var then = statusAt_(t, range.to);
+    if (then === undefined) {                 // no history: fall back to its status now
+      return t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS;
+    }
+    return then === STATUS.PENDING || then === STATUS.IN_PROGRESS;
   }).map(function (t) {
-    return { assignee: t.assignee, status: STATUS.PENDING, title: t.title, due: t.due, priority: t.priority, reworkCount: t.reworkCount, history: [] };
+    return { id: t.id, assignee: t.assignee, status: STATUS.PENDING, title: t.title, due: t.due,
+             priority: t.priority, reworkCount: t.reworkCount, history: [],
+             projectId: t.projectId, stageNo: t.stageNo, stageGate: t.stageGate, projectName: t.projectName };
   });
 
   /**
@@ -8499,9 +8573,21 @@ function scoreForPeriod(tasks, username, range, cal, opts) {
     });
   });
 
-  var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
+  var todayStart = startOfDay(new Date());
+  var isCurrent = range.to >= todayStart && range.from <= todayStart;
+  var asOf = range.to > todayStart ? new Date() : range.to;
+  var periodOpts = {
+    expectedTasks: opts.expectedTasks,
+    periodMonths: periodMonths_(range),
+    /* Cookie points count in the period they were awarded in. */
+    cookies: (opts.cookies || []).filter(function (c) {
+      var d = new Date(c.date); return !isNaN(d) && inWindow(d, range); }),
+    allTasks: tasks,
+    range: range,
+    rangeIsCurrent: isCurrent,
+  };
   var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem),
-                               username, asOf, cal, opts);
+                               username, asOf, cal, periodOpts);
   result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
   result.delivered = closedInWindow.length;
   result.openThen = openThen.length;

@@ -21,8 +21,12 @@ function getDashboard_(ctx) {
   var reports = users.filter(function (u) { return u.manager === me.username; })
                      .map(function (u) { return u.username; });
 
-  var del = delegationScore(tasks.filter(function (t) { return !t.isArchived ||
-    inThisMonth_(t); }), me.username, new Date(), cal, scoreOpts_(ctx, me.username));
+  /* THE score: this month's, exactly as the leaderboard and Reports compute
+     it. It used to be worked out over a different window here (open work plus
+     anything closed in the last week), so a person could read one number on
+     their dashboard and find another against their name on the leaderboard. */
+  var del = scoreForPeriod(tasks, me.username, periodRange(PERIOD.MONTH, 0), cal,
+    scoreOpts_(ctx, me.username));
 
   /* The last appraisal's PERFORMANCE half, paired with today's delegation half.
      An empty cell is not a zero: reading it as one used to halve everybody's
@@ -126,13 +130,6 @@ function getDashboard_(ctx) {
       warnings: planUsage(ctx.planName, activeUsers, usedTasks).warnings,
     },
   };
-}
-
-function inThisMonth_(t) {
-  var d = closedAt(t) || new Date(t.createdDate);
-  if (!d || isNaN(d)) return false;
-  var now = new Date();
-  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 }
 
 /** The bell. Ordered by urgency, because a list nobody can triage gets ignored. */
@@ -267,7 +264,10 @@ function getAppraisalForm_(ctx, username) {
 
   var tasks = readAllTasks_(ctx);
   var cal = leaveCalendar_(ctx);
-  var del = delegationScore(tasks, username, new Date(), cal, scoreOpts_(ctx, username));
+  /* The month being appraised, measured the same way as everywhere else. An
+     all-time figure here ignored workload entirely (years of closed work always
+     reads as a full load) and differed from the dashboard and leaderboard. */
+  var del = scoreForPeriod(tasks, username, periodRange(PERIOD.MONTH, 0), cal, scoreOpts_(ctx, username));
 
   // Their own set first, else whatever their job profile defines.
   var kras = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
@@ -302,7 +302,7 @@ function submitAppraisal_(ctx, data) {
      the browser sent it, and a score an employee can edit in devtools is not a
      score. */
   var tasks = readAllTasks_(ctx);
-  var measured = delegationScore(tasks, data.employee, new Date(), leaveCalendar_(ctx),
+  var measured = scoreForPeriod(tasks, data.employee, periodRange(PERIOD.MONTH, 0), leaveCalendar_(ctx),
     scoreOpts_(ctx, data.employee));
 
   var result = finalAppraisalScore({
@@ -337,7 +337,7 @@ function submitAppraisal_(ctx, data) {
 
 /**
  * What the score engine needs to know about this person beyond their tasks:
- * the load expected of them, and the recognition they were given this month.
+ * the load expected of them, and every cookie they were given (each period keeps its own).
  *
  * The expectation is their WIP limit, so a part-time or deliberately
  * low-volume role is measured against its own bar rather than the busiest desk
@@ -361,13 +361,15 @@ function scoreOpts_(ctx, username) {
  * more — and Apps Script kills any execution at six minutes, so the largest
  * account is the first one that cannot open its own reports.
  *
- * None of it varied by period anyway: a WIP limit is a constant and the cookie
- * window is always the current month.
+ * None of it varies by period: a WIP limit is a constant, and the full cookie
+ * list is filtered to each period by scoreForPeriod.
  */
 function scoreOptsMap_(ctx) {
   if (ctx._scoreOpts) return ctx._scoreOpts;
 
-  var range = periodRange(PERIOD.MONTH, 0);
+  /* Every cookie, with its date. The score for a period keeps the ones awarded
+     inside that period — loading only this month's used to add October's
+     cookies to September's score and lose September's own. */
   var byUser = {};
   readUsers_(ctx).forEach(function (u) {
     byUser[u.username] = {
@@ -382,7 +384,7 @@ function scoreOptsMap_(ctx) {
     var slot = byUser[c.to];
     if (!slot) return;
     var d = new Date(c.date);
-    if (isNaN(d) || !inWindow(d, range)) return;
+    if (isNaN(d)) return;
     slot.cookies.push({ date: c.date, points: c.points, reason: c.reason,
                         by: c.by, byName: names[c.by] || c.by });
   });

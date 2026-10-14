@@ -41,10 +41,48 @@ var ROLE = { ADMIN: 'Admin', MANAGER: 'HOD', DOER: 'Doer' };
 
 // High-priority work counts three times a low-priority one, so one missed
 // critical task cannot be averaged away under a pile of trivial wins.
-var PRIORITY_WEIGHT = { High: 3, Medium: 2, Low: 1 };
+//
+// The levels are the DEFAULT, not the law: a workspace can name its own —
+// "Line Down", "Customer Hold", "Routine" — and give each one a weight. Those
+// are merged in once per request by setPriorityScale, so every scoring call
+// site below keeps working unchanged whether a tenant has customised them or
+// not.
+var DEFAULT_PRIORITIES = [
+  { name: 'Critical', weight: 4 },
+  { name: 'High',     weight: 3 },
+  { name: 'Medium',   weight: 2 },
+  { name: 'Low',      weight: 1 },
+];
+var PRIORITY_WEIGHT = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+var PRIORITY_ORDER = ['Critical', 'High', 'Medium', 'Low'];
+
+/**
+ * Point the engine at this workspace's own priority levels.
+ *
+ * Merged rather than replaced: a task created under a level that has since been
+ * renamed or deleted still has to score, and silently weighting it as Medium is
+ * better than throwing on a row somebody wrote two years ago.
+ */
+function setPriorityScale(levels) {
+  if (!levels || !levels.length) return;
+  PRIORITY_ORDER = [];
+  levels.forEach(function (l) {
+    var name = String((l && l.name) || '').trim();
+    if (!name) return;
+    var w = Number(l.weight);
+    PRIORITY_WEIGHT[name] = (isNaN(w) || w <= 0) ? 2 : w;
+    PRIORITY_ORDER.push(name);
+  });
+}
 
 function priorityWeight(priority) {
-  return PRIORITY_WEIGHT[priority] || PRIORITY_WEIGHT.Medium;
+  return PRIORITY_WEIGHT[priority] || PRIORITY_WEIGHT.Medium || 2;
+}
+
+/** Highest weight first — the order a list should be read in. */
+function priorityRank(priority) {
+  var i = PRIORITY_ORDER.indexOf(priority);
+  return i > -1 ? i : PRIORITY_ORDER.length;
 }
 
 function isOpen(status) { return OPEN_STATUSES.indexOf(status) > -1; }
@@ -146,17 +184,77 @@ function canTransition(task, actor, next) {
  * manager approves first. Assigning to your own report, or to yourself, needs
  * no gate.
  */
-function initialStatusFor(assignee, raiser) {
-  var needsApproval = !!assignee.manager &&
-    assignee.manager !== raiser.username &&
-    assignee.username !== raiser.username &&
-    raiser.role !== ROLE.ADMIN;
-  return {
-    status: needsApproval ? STATUS.AWAITING_APPROVAL : STATUS.PENDING,
-    approver: needsApproval ? assignee.manager : (raiser.username || ''),
-    note: needsApproval ? 'Awaiting manager approval' : 'Task assigned',
-  };
+/**
+ * MULTI-LEVEL ASSIGNMENT — who may assign work to whom.
+ *
+ *   Admin        anyone
+ *   HOD          anyone, in any department
+ *   Doer         upward only: their own manager, or any HOD/Admin
+ *
+ * A Doer assigning sideways to a peer is deliberately refused. It is the one
+ * direction with no accountability attached — nobody has agreed to the work and
+ * nobody is answerable for it landing, so it becomes a way to move your own
+ * tasks onto someone else's list.
+ */
+function canAssignTo(raiser, assignee) {
+  if (!raiser || !assignee) return { ok: false, reason: 'Unknown person.' };
+  if (assignee.active === false) return { ok: false, reason: assignee.name + ' is no longer active.' };
+  if (raiser.username === assignee.username) return { ok: true, self: true };
+
+  if (raiser.role === ROLE.ADMIN || raiser.role === ROLE.MANAGER) return { ok: true };
+
+  // Doer: upward only.
+  var isOwnManager = assignee.username === raiser.manager;
+  var isSenior = assignee.role === ROLE.MANAGER || assignee.role === ROLE.ADMIN;
+  if (isOwnManager || isSenior) return { ok: true, upward: true };
+
+  return { ok: false, upward: false,
+    reason: 'You can raise work for your manager or a department head, not for a colleague. ' +
+            'Ask your manager to assign it.' };
 }
+
+/**
+ * Where a new task lands, and who decides.
+ *
+ *   raised by an Admin                  → straight to the assignee
+ *   raised by the assignee's manager    → straight to the assignee
+ *   assigned to yourself                → straight to your own list
+ *   raised UPWARD by a Doer             → the recipient accepts or declines it
+ *                                         themselves; it is their time being
+ *                                         asked for, so nobody else arbitrates
+ *   anyone else                         → the assignee's own manager approves
+ *
+ * That last line is the important one: an HOD in another department can give
+ * work to anyone, but it reaches that person only once their own manager has
+ * agreed. A manager always knows what their team has been committed to.
+ */
+function initialStatusFor(assignee, raiser) {
+  if (!assignee || !raiser) {
+    return { status: STATUS.PENDING, approver: '', note: 'Task assigned' };
+  }
+  if (assignee.username === raiser.username) {
+    return { status: STATUS.PENDING, approver: raiser.username || '', note: 'Self-assigned' };
+  }
+  if (raiser.role === ROLE.ADMIN) {
+    return { status: STATUS.PENDING, approver: raiser.username || '', note: 'Task assigned' };
+  }
+
+  var upward = raiser.role === ROLE.DOER &&
+    (assignee.username === raiser.manager ||
+     assignee.role === ROLE.MANAGER || assignee.role === ROLE.ADMIN);
+  if (upward) {
+    return { status: STATUS.AWAITING_APPROVAL, approver: assignee.username,
+             note: 'Raised by ' + (raiser.name || raiser.username) + ' — awaiting your acceptance',
+             upward: true };
+  }
+
+  var needsApproval = !!assignee.manager && assignee.manager !== raiser.username;
+  return needsApproval
+    ? { status: STATUS.AWAITING_APPROVAL, approver: assignee.manager,
+        note: 'Awaiting approval from ' + (assignee.name || assignee.username) + "'s manager" }
+    : { status: STATUS.PENDING, approver: raiser.username || '', note: 'Task assigned' };
+}
+
 
 /**
  * A holder proposing to pass work onward. Their own manager arbitrates, which
@@ -294,13 +392,501 @@ function dueOccurrences(job, today, state) {
 }
 
 // ---------------------------------------------------------------------------
+// THE PRIORITY LIST — what to do next, and why
+// ---------------------------------------------------------------------------
+/* A board shows everything at once, which is exactly the wrong shape for the
+   question people actually ask on a Monday morning: what do I do first?
+   Priority alone does not answer it either — a Low task due this afternoon
+   beats a High one due next month, and a task three other people are waiting
+   on beats both.
+   So the order is computed from three things, and every row says which of them
+   put it where it is. A ranking nobody can see the reasoning for is one people
+   quietly ignore and go back to their own notebook. */
+var URGENCY = {
+  overdueBase: 40,      // past its date — nothing outranks this but a bigger overrun
+  overduePerDay: 2,
+  overdueCap: 20,
+  dueToday: 36, dueTomorrow: 28, dueThisWeek: 16, dueSoon: 8,
+  perDependent: 8, dependentCap: 24,
+  inProgress: 6,        // finishing beats starting
+};
+
+/** One task's place in the queue, with the working shown. */
+function taskUrgency(task, allTasks, today, cal) {
+  var now = today || new Date();
+  var reasons = [], score = 0;
+
+  var w = priorityWeight(task.priority);
+  score += w * 10;
+  reasons.push({ kind: 'priority', text: task.priority || 'Medium', points: w * 10 });
+
+  var due = parseYmd(task.due);
+  if (due) {
+    var days = dayDiff(due, now);            // positive = still to come
+    var late = chargeableLateDays(due, now, task.assignee, cal);
+    if (late > 0) {
+      var pts = URGENCY.overdueBase + Math.min(late * URGENCY.overduePerDay, URGENCY.overdueCap);
+      score += pts;
+      reasons.push({ kind: 'overdue', text: late + ' day(s) overdue', points: pts });
+    } else if (days <= 0) {
+      score += URGENCY.dueToday;
+      reasons.push({ kind: 'today', text: 'Due today', points: URGENCY.dueToday });
+    } else if (days === 1) {
+      score += URGENCY.dueTomorrow;
+      reasons.push({ kind: 'soon', text: 'Due tomorrow', points: URGENCY.dueTomorrow });
+    } else if (days <= 7) {
+      score += URGENCY.dueThisWeek;
+      reasons.push({ kind: 'soon', text: 'Due in ' + days + ' days', points: URGENCY.dueThisWeek });
+    } else if (days <= 14) {
+      score += URGENCY.dueSoon;
+      reasons.push({ kind: 'later', text: 'Due in ' + days + ' days', points: URGENCY.dueSoon });
+    }
+  }
+
+  /* Work that other work is waiting on. Finishing it releases somebody else,
+     which is worth more than its own deadline suggests. */
+  var dependents = (allTasks || []).filter(function (t) {
+    return isOpen(t.status) && (t.blockedBy || []).indexOf(task.id) > -1;
+  });
+  if (dependents.length) {
+    var dp = Math.min(dependents.length * URGENCY.perDependent, URGENCY.dependentCap);
+    score += dp;
+    reasons.push({ kind: 'blocking', points: dp,
+      text: dependents.length + ' task(s) waiting on this' });
+  }
+
+  if (task.status === STATUS.IN_PROGRESS) {
+    score += URGENCY.inProgress;
+    reasons.push({ kind: 'started', text: 'Already started', points: URGENCY.inProgress });
+  }
+
+  /* An item sitting on somebody's desk is urgent because of how long it has sat
+     there, which is the same clock the responsiveness score runs on. */
+  if (task.status === STATUS.FOR_REVIEW || task.status === STATUS.AWAITING_APPROVAL ||
+      task.status === STATUS.DELEGATION_PROPOSED) {
+    var spells = queueSpells(task).filter(function (sp) { return sp.open; });
+    if (spells.length) {
+      var held = chargeableLateDays(spells[0].from, now, task.approver || task.raisedBy, cal);
+      if (held > 0) {
+        var hp = Math.min(held * 6, 36);
+        score += hp;
+        reasons.push({ kind: 'held', points: hp,
+          text: 'Waiting on a decision for ' + held + ' working day(s)' });
+      }
+    }
+  }
+
+  var blockers = openBlockers(task, allTasks || []);
+  return {
+    id: task.id, score: Math.round(score), reasons: reasons,
+    blocked: blockers.length > 0,
+    blockedBy: blockers.map(function (b) { return { id: b.id, title: b.title }; }),
+    dependents: dependents.length,
+  };
+}
+
+/* HORIZONS — the same list, asked over a different stretch of time.
+   "What do I do today" and "what has to land this quarter" are different
+   questions with different answers, and a single flat list answers neither
+   well. The windows are cumulative: this week contains today, this month
+   contains this week. Anything overdue appears in every one of them, because
+   work that is already late does not become less late when you widen the
+   lens. */
+var HORIZONS = [
+  { key: 'day',     label: 'Today' },
+  { key: 'week',    label: 'This week' },
+  { key: 'month',   label: 'This month' },
+  { key: 'quarter', label: 'This quarter' },
+  { key: 'year',    label: 'This year' },
+  { key: 'all',     label: 'Everything' },
+];
+
+/** The last date a task may be due on and still count as inside this horizon. */
+function horizonEnd(kind, today) {
+  var d = startOfDay(today || new Date());
+  switch (kind) {
+    case 'day':   return d;
+    case 'week': {
+      /* Monday to Sunday — a factory week, not a calendar library's week. On a
+         Saturday or Sunday the week left is the weekend itself, so "this week"
+         means the working week ahead; otherwise Monday's work vanishes from
+         the list exactly when someone sits down to plan it. */
+      var dow = d.getDay(), toSunday = dow === 0 ? 0 : 7 - dow;
+      if (dow === 0 || dow === 6) toSunday += 7;
+      return addDays(d, toSunday);
+    }
+    case 'month':   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    case 'quarter': return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 + 3, 0);
+    case 'year':    return new Date(d.getFullYear(), 11, 31);
+    default:        return null;              // 'all' — no end
+  }
+}
+
+function inHorizon(task, kind, today) {
+  if (kind === 'all' || !kind) return true;
+  var due = parseYmd(task.due);
+  if (!due) return false;                     // no date, no horizon to be in
+  var now = startOfDay(today || new Date());
+  if (due < now) return true;                 // overdue surfaces everywhere
+  var end = horizonEnd(kind, today);
+  return !end || due <= end;
+}
+
+/**
+ * The whole queue, ranked and banded, over one horizon.
+ *
+ * Blocked work is pulled out rather than ranked among the rest: however urgent
+ * it is, nobody can act on it, and leaving it at the top of a to-do list is how
+ * the list stops being read.
+ */
+function priorityQueue(tasks, username, today, cal, opts) {
+  opts = opts || {};
+  var horizon = opts.horizon || 'all';
+  var all = tasks || [];
+  var mine = all.filter(function (t) {
+    if (!isOpen(t.status) || t.isArchived) return false;
+    if (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED) return false;
+    return !username || t.assignee === username;
+  });
+
+  /* Decisions this person owes other people. Their own board does not show
+     these as theirs, but the scoring charges them for sitting on them — so a
+     list that left them out would be telling somebody to do one thing while
+     marking them down for another. */
+  var decisions = username ? all.filter(function (t) {
+    if (!isOpen(t.status) || t.isArchived) return false;
+    if (t.assignee === username) return false;
+    if (t.status === STATUS.FOR_REVIEW) return (t.approver || t.raisedBy) === username;
+    if (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED) {
+      return t.approver === username;
+    }
+    return false;
+  }) : [];
+
+  var rank = function (list) {
+    return list.map(function (t) {
+      var u = taskUrgency(t, all, today, cal);
+      return {
+        id: t.id, title: t.title, due: t.due, priority: t.priority, status: t.status,
+        assignee: t.assignee, projectName: t.projectName || '', stageNo: Number(t.stageNo) || 0,
+        score: u.score, reasons: u.reasons, blocked: u.blocked, blockedBy: u.blockedBy,
+        dependents: u.dependents, kind: u.kind || 'task',
+      };
+    }).sort(function (a, b) {
+      return b.score - a.score ||
+             priorityRank(a.priority) - priorityRank(b.priority) ||
+             String(a.due || '9999').localeCompare(String(b.due || '9999'));
+    });
+  };
+
+  var rows = rank(mine.filter(function (t) { return inHorizon(t, horizon, today); }));
+
+  /* Work already handed in is not this person's to do. It is with whoever has
+     to sign it off, and ranking it among their own jobs would have them chasing
+     something they finished last week. */
+  var handedIn = rows.filter(function (r) { return r.status === STATUS.FOR_REVIEW; });
+  rows = rows.filter(function (r) { return r.status !== STATUS.FOR_REVIEW; });
+
+  var actionable = rows.filter(function (r) { return !r.blocked; });
+  var waiting = rows.filter(function (r) { return r.blocked; });
+
+  /* How much sits in each window, so the horizon buttons can carry a number
+     and nobody has to click through five of them to find the busy one. */
+  var counts = {};
+  HORIZONS.forEach(function (h) {
+    counts[h.key] = mine.filter(function (t) { return inHorizon(t, h.key, today); }).length;
+  });
+
+  /* Bands rather than a bare ranked list: "do these three today" is an
+     instruction, where "here are 40 tasks in order" is still a decision. */
+  var now = Math.max(1, Number(opts.doNow) || 3);
+  return {
+    horizon: horizon,
+    decisions: rank(decisions).map(function (r) {
+      r.kind = r.status === STATUS.FOR_REVIEW ? 'review' : 'approval';
+      return r;
+    }),
+    handedIn: handedIn,
+    horizonEnd: horizonEnd(horizon, today) ? ymd(horizonEnd(horizon, today)) : '',
+    doNow: actionable.slice(0, now),
+    next: actionable.slice(now, now + 5),
+    later: actionable.slice(now + 5),
+    waiting: waiting,
+    counts: counts,
+    total: rows.length,
+    overdue: actionable.filter(function (r) {
+      return r.reasons.some(function (x) { return x.kind === 'overdue'; }); }).length,
+    undated: mine.filter(function (t) { return !parseYmd(t.due); }).length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PROJECTS — multi-stage work with a deadline on every stage
+// ---------------------------------------------------------------------------
+/* A project is a run of stages that share a Project ID. Each stage is an
+   ordinary task — same board, same approvals, same review — carrying its own
+   deadline and its own owner. Stage 2 is blocked by stage 1 through the
+   blocker mechanism that already exists, so nothing new had to be invented to
+   stop somebody starting out of order.
+
+   A stage deadline is a promise to the people downstream, not only to the
+   manager, which is why meeting one is scored in its own right. */
+var MILESTONE_WEIGHTS = { onTime: 0.35, quality: 0.25, queue: 0.20, milestones: 0.20 };
+
+/** Every stage of one project, in order. */
+function projectStages(tasks, projectId) {
+  return (tasks || [])
+    .filter(function (t) { return t.projectId && t.projectId === projectId; })
+    .sort(function (a, b) { return (Number(a.stageNo) || 0) - (Number(b.stageNo) || 0); });
+}
+
+/** The stage immediately before this one, or null for the first. */
+function previousStage(stages, stage) {
+  var n = Number(stage.stageNo) || 0;
+  var best = null;
+  stages.forEach(function (s) {
+    var m = Number(s.stageNo) || 0;
+    if (m < n && (!best || m > (Number(best.stageNo) || 0))) best = s;
+  });
+  return best;
+}
+
+/**
+ * When this stage actually became startable.
+ *
+ * On a sequential project that is when the stage before it was signed off; on
+ * a parallel one, or the first stage, it is the moment the project was raised.
+ */
+function stageReleasedAt(stages, stage) {
+  if (String(stage.stageGate || 'sequential') === 'parallel') return null;
+  var prev = previousStage(stages, stage);
+  if (!prev) return null;
+  return closedAt(prev);
+}
+
+/**
+ * The deadline this stage's owner is actually answerable for.
+ *
+ * If the stage before it ran over, the work could not start on time however
+ * willing the owner was. Charging them the original date would push one
+ * person's slip onto everyone downstream — the surest way to make a team stop
+ * reporting slippage at all.
+ *
+ * So a stage released after the stage before it was due gets back the window
+ * the plan gave it: the gap between its date and the date of the stage before
+ * it, counted from the day it was actually released. Stage 2 planned five days
+ * after stage 1; stage 1 ran four days over; stage 2 is due five days from
+ * when it reached its owner — not one. They promised that many days of work,
+ * they get that many days and no more, so a late start is not a blank cheque.
+ * A stage released on time, or early, keeps its own date.
+ */
+function stageEffectiveDue(stages, stage) {
+  var due = parseYmd(stage.due);
+  var released = stageReleasedAt(stages, stage);
+  if (!due) return released ? startOfDay(released) : null;
+  if (!released) return due;
+
+  var prev = previousStage(stages, stage);
+  var prevDue = prev ? parseYmd(prev.due) : null;
+  if (!prevDue) return startOfDay(released) <= due ? due : startOfDay(released);
+  if (startOfDay(released) <= prevDue) return due;             // released on time
+
+  var planned = Math.max(0, dayDiff(due, prevDue));
+  var moved = addDays(startOfDay(released), planned);
+  return moved > due ? moved : due;
+}
+
+/**
+ * How well this person keeps the stage deadlines they were given.
+ *
+ * Deliberately scored in its own right, and NOT folded into on-time delivery:
+ * a stage date is a commitment other people have planned around, so hitting it
+ * is worth more than hitting a date only the manager was watching. Both the
+ * hits and the misses are itemised, because a score that shows a person only
+ * their failures is one they will read as a punishment ledger.
+ */
+function milestoneStats(tasks, username, today, cal, contextTasks) {
+  var now = today || new Date();
+  var mine = (tasks || []).filter(function (t) {
+    return t.assignee === username && t.projectId && Number(t.stageNo) > 0;
+  });
+
+  /* Stages are looked up in the FULL task list when the caller has one. A
+     period score is handed only this person's tasks, and without the stage
+     before theirs the deadline extension could not be worked out — so they
+     were charged for an upstream delay after all. */
+  var byProject = {};
+  (contextTasks || tasks || []).forEach(function (t) {
+    if (!t.projectId) return;
+    (byProject[t.projectId] = byProject[t.projectId] || []).push(t);
+  });
+  Object.keys(byProject).forEach(function (k) {
+    byProject[k].sort(function (a, b) { return (Number(a.stageNo) || 0) - (Number(b.stageNo) || 0); });
+  });
+
+  var met = 0, missed = 0, pending = 0, atRisk = 0, wSum = 0, wTotal = 0;
+  var breakdown = [], items = [];
+
+  mine.forEach(function (t) {
+    var stages = byProject[t.projectId] || [t];
+    var due = stageEffectiveDue(stages, t);
+    var extended = due && parseYmd(t.due) && startOfDay(due) > parseYmd(t.due);
+    var w = priorityWeight(t.priority);
+    var label = t.projectName ? t.projectName + ' · stage ' + t.stageNo : 'Stage ' + t.stageNo;
+
+    if (t.status === STATUS.VERIFIED) {
+      var sub = submittedAt(t);
+      if (!sub || !due) return;
+      var late = chargeableLateDays(due, sub, username, cal);
+      var hit = late <= 0;
+      var stagePts = timelinessPoints(late);
+      wTotal += w; wSum += stagePts * w;
+      if (hit) met++; else missed++;
+      items.push({ id: t.id, title: t.title, project: t.projectName, stage: Number(t.stageNo),
+                   met: hit, daysLate: Math.max(0, late), extended: !!extended });
+      breakdown.push({
+        group: 'Project Milestones', item: label + ' — ' + t.title,
+        reason: hit ? 'Stage deadline met' + (extended ? ' (deadline moved out: the stage before it ran over)' : '')
+                    : 'Stage deadline missed by ' + late + ' day(s)' +
+                      (extended ? ', counted from the day it was actually released' : ''),
+        impact: stagePts + '/100',
+      });
+      return;
+    }
+
+    if (isOpen(t.status) && due) {
+      pending++;
+      if (chargeableLateDays(due, now, username, cal) > 0) atRisk++;
+    }
+  });
+
+  var closedCount = met + missed;
+  return {
+    hasData: closedCount > 0,
+    stages: mine.length,
+    met: met, missed: missed, pending: pending, atRisk: atRisk,
+    hitRate: closedCount ? Math.round(met / closedCount * 100) : null,
+    score: wTotal ? Math.round(wSum / wTotal) : null,
+    items: items,
+    breakdown: breakdown,
+  };
+}
+
+/** A whole project's state, for the board and the project list. */
+function projectSummary(tasks, projectId, cal) {
+  var stages = projectStages(tasks, projectId);
+  if (!stages.length) return null;
+  var done = stages.filter(function (s) { return s.status === STATUS.VERIFIED; });
+  var dead = stages.filter(function (s) { return s.status === STATUS.REJECTED || s.status === STATUS.CANCELLED; });
+  var current = null;
+  for (var i = 0; i < stages.length; i++) {
+    if (isOpen(stages[i].status)) { current = stages[i]; break; }
+  }
+  var metOnTime = 0;
+  done.forEach(function (s) {
+    var sub = submittedAt(s), due = stageEffectiveDue(stages, s);
+    if (sub && due && chargeableLateDays(due, sub, s.assignee, cal) <= 0) metOnTime++;
+  });
+  var last = stages[stages.length - 1];
+  return {
+    projectId: projectId,
+    name: stages[0].projectName || 'Project',
+    gate: String(stages[0].stageGate || 'sequential'),
+    stages: stages.length,
+    done: done.length,
+    metOnTime: metOnTime,
+    percent: Math.round(done.length / stages.length * 100),
+    currentStage: current ? Number(current.stageNo) : null,
+    currentTitle: current ? current.title : null,
+    currentOwner: current ? current.assignee : null,
+    currentDue: current ? current.due : null,
+    finalDue: last ? last.due : '',
+    complete: done.length === stages.length,
+    stalled: dead.length > 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // PERFORMANCE — the Delegation Score
 // ---------------------------------------------------------------------------
 var SCORE_WEIGHTS = { onTime: 0.45, quality: 0.30, queue: 0.25 };
 var LATENESS_POINTS_PER_DAY = 10;   // a day late costs 10 on that task
 var REWORK_POINTS_EACH = 25;        // each rework loop costs 25
-var MAX_MANAGER_DEDUCTION = 15;     // total cap
-var MAX_MANAGER_DEDUCTION_PER_TASK = 10;
+
+/* ---------------------------------------------------------------------------
+   WORKLOAD CREDIT — what stops one easy task outscoring ten hard ones.
+
+   Every component above is a RATE: a percentage of the work you took on. On
+   its own a rate is blind to how much work that was, so somebody who closed a
+   single trivial task on time scored 100, while somebody who carried ten and
+   delivered seven of them on time scored 70. The system was quietly telling
+   the hardest workers in the company that they were the worst performers.
+
+   So the rate is credited against the load actually carried. Nobody is handed
+   a score for turning up: you start at zero and earn it by delivering, and
+   because the credit can never exceed 1 the score can never exceed 100.
+
+       score = how well you delivered  ×  how much you delivered
+
+   Load is counted in the same priority weights the rest of the engine uses —
+   a High task is worth three Lows — plus the approvals and reviews you cleared
+   for other people, because that is work too and a manager who spends the
+   month unblocking their team is not idle.
+
+   The expectation is per person, taken from their WIP limit, so a part-time or
+   deliberately low-volume role is measured against its own bar and not against
+   the busiest desk in the building.
+--------------------------------------------------------------------------- */
+var EXPECTED_MONTHLY_TASKS = 5;     // the default WIP limit, in tasks
+var DECISION_EFFORT = 1;            // an approval or review cleared, in load units
+
+/**
+ * How much of the expected load this person actually carried, 0..1.
+ * Capped at 1: carrying double does not make a score of 200, it makes a
+ * complete one.
+ */
+function workloadCredit(deliveredWeight, expectedTasks, periodMonths) {
+  /* The expectation is a MONTH's load. A week is measured against a week's
+     share of it and a quarter against three months', or every weekly score
+     would be capped near 25 and every yearly one would carry no load check. */
+  var months = Number(periodMonths) > 0 ? Number(periodMonths) : 1;
+  var expected = Math.max(1, Number(expectedTasks) || EXPECTED_MONTHLY_TASKS) *
+                 priorityWeight('Medium') * months;
+  var credit = deliveredWeight / expected;
+  return { delivered: Math.round(deliveredWeight * 10) / 10, expected: Math.round(expected * 10) / 10,
+           credit: Math.max(0, Math.min(1, credit)),
+           percent: Math.round(Math.max(0, Math.min(1, credit)) * 100),
+           full: credit >= 1 };
+}
+
+/* COOKIE POINTS — recognition a manager can give on the day, not six months
+   later at the appraisal. Each one is signed and carries a reason, because an
+   anonymous bonus with no stated cause is indistinguishable from favouritism.
+   The score effect is capped: cookies are a thank-you, not a back door to a
+   score nobody earned on the work. */
+var COOKIE_MAX_PER_AWARD = 5;
+var MAX_COOKIE_BONUS = 10;          // the most cookies can move a score
+
+function cookieBonus(cookies) {
+  var total = (cookies || []).reduce(function (s, c) {
+    return s + Math.max(0, Math.min(COOKIE_MAX_PER_AWARD, Number(c.points) || 0)); }, 0);
+  return { awarded: total, bonus: Math.min(total, MAX_COOKIE_BONUS),
+           capped: total > MAX_COOKIE_BONUS, count: (cookies || []).length };
+}
+/* RESPONSIVENESS — the manager's half of accountability.
+   A doer is measured on delivering. The person who has to approve or sign off
+   is measured on not sitting on it. Without this the score is one-sided: a team
+   can be marked down for lateness that their manager caused, which is the
+   fastest way for a workforce to stop believing the numbers.
+   Measured in WORKING days from when the item landed on their desk — not from
+   the task's deadline, so work submitted early that then waits a fortnight is
+   counted properly. */
+var REVIEW_SLA_DAYS = 2;                  // working days to review or approve
+var RESPONSIVENESS_PENALTY_PER_DAY = 2;   // points lost per working day beyond the SLA
+var MAX_RESPONSIVENESS_PENALTY_PER_ITEM = 10;
+var MAX_RESPONSIVENESS_PENALTY = 20;      // no single oversight can destroy a score
+var MAX_MANAGER_DEDUCTION = MAX_RESPONSIVENESS_PENALTY;   // old names, still referenced
+var MAX_MANAGER_DEDUCTION_PER_TASK = MAX_RESPONSIVENESS_PENALTY_PER_ITEM;
 
 // ---------------------------------------------------------------------------
 // WORKING CALENDAR — holidays and approved leave
@@ -388,8 +974,147 @@ function submittedAt(task) {
  * an unearned 0. With nothing at all, hasData is false and the caller should
  * say "not enough data" rather than print a number.
  */
-function delegationScore(tasks, username, today, cal) {
+/**
+ * Every spell an item spent waiting on somebody's decision.
+ *
+ * Reading it out of the history rather than the current status is what lets a
+ * manager be measured on work they have ALREADY actioned — otherwise the only
+ * thing visible is what is stuck right now, and someone who clears their queue
+ * the day before review looks identical to someone who never let it pile up.
+ */
+function queueSpells(task) {
+  var h = (task.history || []).slice().filter(function (e) { return e && e.date; });
+  var out = [];
+  /* Who a review waits on. Work somebody raised for themselves is signed off by
+     an Admin, not by them — so it waits on no one person, and the doer is never
+     charged for the review of their own work. */
+  var reviewer = task.approver || (task.raisedBy !== task.assignee ? task.raisedBy : null) || null;
+  var WAITING = {};
+  WAITING[STATUS.FOR_REVIEW] = 'review';
+  WAITING[STATUS.AWAITING_APPROVAL] = 'approval';
+  WAITING[STATUS.DELEGATION_PROPOSED] = 'approval';
+
+  for (var i = 0; i < h.length; i++) {
+    var kind = WAITING[h[i].status];
+    if (!kind) continue;
+    var from = new Date(h[i].date);
+    if (isNaN(from)) continue;
+    var to = null;
+    for (var j = i + 1; j < h.length; j++) {
+      var d = new Date(h[j].date);
+      if (!isNaN(d)) { to = d; break; }
+    }
+    out.push({ kind: kind, from: from, to: to,
+      holder: kind === 'review' ? reviewer : task.approver,
+      open: to === null });
+  }
+
+  /* A task sitting in a waiting state with no history entry for it still counts:
+     the clock is running even if nobody wrote it down. */
+  var nowKind = WAITING[task.status];
+  if (nowKind && !out.some(function (s) { return s.open; })) {
+    var started = h.length ? new Date(h[h.length - 1].date) : parseYmd(task.due);
+    if (started && !isNaN(started)) {
+      out.push({ kind: nowKind, from: started, to: null, open: true,
+        holder: nowKind === 'review' ? reviewer : task.approver });
+    }
+  }
+  return out;
+}
+
+/**
+ * How promptly this person clears what lands on their desk.
+ *
+ * Returns a 0-100 responsiveness figure and the penalty it costs them, with the
+ * working it out attached — every item, how long it was held, and what that
+ * cost. A number a manager cannot see the derivation of is a number they will
+ * dispute, and they will be right to.
+ */
+function responsivenessStats(tasks, username, today, cal, opts) {
+  opts = opts || {};
+  var sla = opts.slaDays == null ? REVIEW_SLA_DAYS : Number(opts.slaDays);
+  var now = today || new Date();
+  var items = [], breakdown = [], penalty = 0;
+
+  /* Inside a period, every spell is counted exactly once: in the period it was
+     cleared, or — while still waiting — in the current period. Counting every
+     spell the task ever had charged one slow review again every month after. */
+  var range = opts.range || null;
+  var current = !range || !!opts.rangeIsCurrent;
+
+  (tasks || []).forEach(function (t) {
+    queueSpells(t).forEach(function (sp) {
+      if (sp.holder !== username) return;
+      if (range) {
+        if (sp.to && !inWindow(sp.to, range)) return;   // cleared in another period
+        if (!sp.to && !current) return;                 // still waiting: counted now
+      }
+      var end = sp.to || now;
+      if (startOfDay(end) < startOfDay(sp.from)) return;   // clock skew, ignore
+
+      // Working days only, and never charged for their own approved leave.
+      var held = chargeableLateDays(sp.from, end, username, cal);
+      if (held < 0) held = 0;
+      var over = Math.max(0, held - sla);
+      var cost = Math.min(over * RESPONSIVENESS_PENALTY_PER_DAY,
+                          MAX_RESPONSIVENESS_PENALTY_PER_ITEM);
+
+      items.push({ id: t.id, title: t.title, kind: sp.kind, heldDays: held,
+                   overSla: over, open: sp.open, cost: cost });
+      if (cost > 0) {
+        penalty += cost;
+        breakdown.push({
+          group: 'Review Responsiveness', item: t.title,
+          reason: (sp.open ? 'Still waiting on you to ' : 'Took ') +
+                  (sp.open ? (sp.kind === 'review' ? 'review' : 'approve') +
+                             ' after ' + held + ' working day(s)'
+                           : held + ' working day(s) to ' + (sp.kind === 'review' ? 'review' : 'approve')) +
+                  ' (' + sla + ' expected)',
+          impact: '-' + cost,
+        });
+      }
+    });
+  });
+
+  penalty = Math.min(penalty, MAX_RESPONSIVENESS_PENALTY);
+  var withinSla = items.filter(function (i) { return i.overSla === 0; }).length;
+  var pending = items.filter(function (i) { return i.open; });
+
+  return {
+    hasData: items.length > 0,
+    items: items.length,
+    withinSla: withinSla,
+    pending: pending.length,
+    overdueNow: pending.filter(function (i) { return i.overSla > 0; }).length,
+    avgHeldDays: items.length
+      ? Math.round(items.reduce(function (s, i) { return s + i.heldDays; }, 0) / items.length * 10) / 10 : null,
+    responsiveness: items.length ? Math.round(withinSla / items.length * 100) : null,
+    penalty: penalty,
+    slaDays: sla,
+    breakdown: breakdown,
+  };
+}
+
+/**
+ * The deadline a task is judged against. For a project stage that is the
+ * effective deadline — moved out when the stage before it overran — so the
+ * on-time and queue parts of the score agree with the milestone part, and
+ * nobody is marked late for somebody else's delay.
+ */
+function answerableDue_(t, context) {
+  var due = parseYmd(t.due);
+  if (!t.projectId || !(Number(t.stageNo) > 0)) return due;
+  var stages = projectStages(context || [], t.projectId);
+  var real = null;
+  for (var i = 0; i < stages.length; i++) if (stages[i].id === t.id) { real = stages[i]; break; }
+  if (!real) return due;
+  return stageEffectiveDue(stages, real) || due;
+}
+
+function delegationScore(tasks, username, today, cal, opts) {
   today = today || new Date();
+  opts = opts || {};
+  var context = opts.allTasks || tasks;
   var mine = tasks.filter(function (t) { return t.assignee === username; });
   var breakdown = [];
 
@@ -408,7 +1133,7 @@ function delegationScore(tasks, username, today, cal) {
   closed.forEach(function (t) {
     var sub = submittedAt(t);
     if (!sub) return;
-    var late = chargeableLateDays(parseYmd(t.due) || sub, sub, t.assignee, cal);
+    var late = chargeableLateDays(answerableDue_(t, context) || sub, sub, t.assignee, cal);
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
     otSum += pts * w; otW += w; otCount++;
@@ -439,7 +1164,7 @@ function delegationScore(tasks, username, today, cal) {
   // --- queue health ---
   var qhW = 0, qhSum = 0, overdue = 0;
   open.forEach(function (t) {
-    var due = parseYmd(t.due);
+    var due = answerableDue_(t, context);
     var late = due ? chargeableLateDays(due, today, t.assignee, cal) : 0;
     var pts = timelinessPoints(late);
     var w = priorityWeight(t.priority);
@@ -453,71 +1178,125 @@ function delegationScore(tasks, username, today, cal) {
     }
   });
 
+  /* --- project milestones ---
+     A stage deadline is a commitment other people have planned their own work
+     around, so meeting one earns its own score rather than disappearing into
+     the on-time average. It is weighted, not added on top, so nobody can lift
+     their score simply by having their work cut into more pieces. */
+  var ms = milestoneStats(tasks, username, today, cal, context);
+  ms.breakdown.forEach(function (b) { breakdown.push(b); });
+  var W = ms.hasData ? MILESTONE_WEIGHTS : SCORE_WEIGHTS;
+
   var parts = [
-    { key: 'onTime',  label: 'On-Time Delivery',   score: otW ? otSum / otW : null,   weight: SCORE_WEIGHTS.onTime,  basis: otCount + ' closed' },
-    { key: 'quality', label: 'First-Pass Quality', score: qW ? qSum / qW : null,      weight: SCORE_WEIGHTS.quality, basis: closed.length + ' closed' },
-    { key: 'queue',   label: 'Queue Health',       score: qhW ? qhSum / qhW : null,   weight: SCORE_WEIGHTS.queue,   basis: open.length + ' open' },
+    { key: 'onTime',  label: 'On-Time Delivery',   score: otW ? otSum / otW : null,   weight: W.onTime,  basis: otCount + ' closed' },
+    { key: 'quality', label: 'First-Pass Quality', score: qW ? qSum / qW : null,      weight: W.quality, basis: closed.length + ' closed' },
+    { key: 'queue',   label: 'Queue Health',       score: qhW ? qhSum / qhW : null,   weight: W.queue,   basis: open.length + ' open' },
   ];
+  if (ms.hasData) {
+    parts.push({ key: 'milestones', label: 'Project Milestones', score: ms.score,
+      weight: W.milestones,
+      basis: ms.met + ' of ' + (ms.met + ms.missed) + ' stage deadlines met' });
+  }
   var active = parts.filter(function (p) { return p.score !== null; });
   var totalWeight = active.reduce(function (s, p) { return s + p.weight; }, 0);
   var hasData = active.length > 0;
-  var composite = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
+  var rate = hasData ? active.reduce(function (s, p) { return s + p.score * (p.weight / totalWeight); }, 0) : 0;
 
-  // --- responsiveness deduction: separate and capped, never averaged in ---
-  var waitingOnMe = tasks.filter(function (t) {
-    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
-           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
-  });
-  var deduction = 0;
-  waitingOnMe.forEach(function (t) {
-    var due = parseYmd(t.due);
-    var late = due ? chargeableLateDays(due, today, username, cal) : 0;
-    if (late <= 0) return;
-    var penalty = Math.min(late, MAX_MANAGER_DEDUCTION_PER_TASK);
-    deduction += penalty;
+  /* --- responsiveness: separate, capped, never averaged into the delivery half ---
+     Held time is measured from when the item landed on this person's desk, in
+     working days, excluding their own approved leave. The old version keyed off
+     the task's deadline, so work handed in early that then sat for a fortnight
+     cost the reviewer nothing. */
+  var resp = responsivenessStats(tasks, username, today, cal,
+    { range: opts.range, rangeIsCurrent: opts.rangeIsCurrent });
+  var deduction = resp.penalty;
+  resp.breakdown.forEach(function (b) { breakdown.push(b); });
+
+  /* --- the load that rate was earned on ---
+     Closed work in priority weights, plus the decisions cleared for other
+     people, because unblocking your team is work and a score that ignores it
+     tells managers not to bother. */
+  var deliveredWeight = closed.reduce(function (n, t) { return n + priorityWeight(t.priority); }, 0) +
+                        (resp.items - resp.pending) * DECISION_EFFORT +
+                        /* Work in hand counts half. Somebody three weeks into a
+                           large job has not delivered yet, but they are plainly
+                           not idle, and a load figure that said otherwise would
+                           be read as an accusation. */
+                        open.reduce(function (n, t) { return n + priorityWeight(t.priority) / 2; }, 0);
+  var load = workloadCredit(deliveredWeight, opts.expectedTasks, opts.periodMonths);
+  var composite = rate * load.credit;
+  if (hasData) {
     breakdown.push({
-      group: 'Review Responsiveness', item: t.title,
-      reason: late + ' day(s) waiting on you to ' + (t.status === STATUS.FOR_REVIEW ? 'review' : 'approve'),
-      impact: '-' + penalty,
+      group: 'Workload Credit',
+      item: closed.length + ' closed, ' + open.length + ' in hand, ' +
+            (resp.items - resp.pending) + ' decision(s) cleared',
+      reason: load.full
+        ? 'A full load carried — the rates above count in full'
+        : 'Carried ' + load.percent + '% of an expected load, so the rates above count ' +
+          'for ' + load.percent + '% of their value',
+      impact: load.percent + '%',
     });
-  });
-  deduction = Math.min(deduction, MAX_MANAGER_DEDUCTION);
+  }
+
+  /* --- cookie points: recognition, signed and capped --- */
+  var cookies = cookieBonus(opts.cookies);
+  cookies.list = (opts.cookies || []).slice();
+  if (cookies.bonus > 0) {
+    (opts.cookies || []).forEach(function (c) {
+      breakdown.push({ group: 'Cookie Points', item: c.reason || 'Recognised',
+        reason: 'Awarded by ' + (c.byName || c.by || 'a manager') +
+                (c.date ? ' on ' + String(c.date).slice(0, 10) : ''),
+        impact: '+' + Math.max(0, Math.min(COOKIE_MAX_PER_AWARD, Number(c.points) || 0)) });
+    });
+    if (cookies.capped) {
+      breakdown.push({ group: 'Cookie Points', item: 'Capped',
+        reason: cookies.awarded + ' points awarded; cookies can move a score by at most ' +
+                MAX_COOKIE_BONUS,
+        impact: '+' + cookies.bonus });
+    }
+  }
 
   /**
    * A manager may own no tasks at all and still be the reason four people are
-   * stuck. Scoring them "no data" in that situation is the one hole that would
-   * let the least accountable person on the board look unmeasurable, so when
-   * there is no delivery record but there IS a review queue, the score becomes
-   * responsiveness: how promptly they clear what is waiting on them.
+   * stuck. Scoring them "no data" there is the one hole that would let the least
+   * accountable person on the board look unmeasurable, so with no delivery
+   * record but a queue of their own, the score becomes how promptly they clear
+   * it.
    */
-  if (!hasData && waitingOnMe.length > 0) {
-    var rW = 0, rSum = 0;
-    waitingOnMe.forEach(function (t) {
-      var due = parseYmd(t.due);
-      var waited = due ? chargeableLateDays(due, today, username, cal) : 0;
-      var w = priorityWeight(t.priority);
-      rSum += timelinessPoints(waited) * w;
-      rW += w;
-    });
-    var responsiveness = rW ? Math.round(rSum / rW) : 100;
+  if (!hasData && resp.hasData) {
     return {
-      score: Math.max(0, Math.min(100, responsiveness)),
+      score: clampScore_(resp.responsiveness * load.credit + cookies.bonus),
       hasData: true,
       deduction: 0,
+      workload: load,
+      cookies: cookies,
+      responsiveness: resp,
+      milestones: ms,
       components: [{
-        key: 'responsiveness', label: 'Review Responsiveness', score: responsiveness,
-        weight: 100, basis: waitingOnMe.length + ' waiting on you',
+        key: 'responsiveness', label: 'Review Responsiveness', score: resp.responsiveness,
+        weight: 100,
+        basis: resp.withinSla + ' of ' + resp.items + ' cleared within ' + resp.slaDays + ' days',
       }],
-      summary: { closed: 0, open: 0, overdue: 0, reworkLoops: 0, awaitingMe: waitingOnMe.length },
+      summary: { closed: 0, open: 0, overdue: 0, reworkLoops: 0,
+                 awaitingMe: resp.pending, heldOverSla: resp.overdueNow },
       breakdown: breakdown,
-      note: 'No delivery record of their own — scored purely on how quickly they clear approvals and reviews.',
+      note: 'No delivery record of their own — scored purely on how quickly they clear ' +
+            'approvals and reviews.',
     };
   }
 
   return {
-    score: hasData ? Math.max(0, Math.min(100, Math.round(composite - deduction))) : 0,
+    /* Clamped at both ends, always: nobody starts above zero and nothing —
+       cookie points included — takes anybody past 100. */
+    score: hasData ? clampScore_(composite - deduction + cookies.bonus) : 0,
+    rate: hasData ? Math.round(rate) : null,
     hasData: hasData,
     deduction: deduction,
+    workload: load,
+    cookies: cookies,
+    /* A score earned on a sliver of work is a fact, not a verdict. Flagging it
+       stops a light month being read as a bad one. */
+    provisional: load.credit < 0.4,
     components: parts.map(function (p) {
       return {
         key: p.key, label: p.label,
@@ -526,15 +1305,33 @@ function delegationScore(tasks, username, today, cal) {
         basis: p.basis,
       };
     }),
-    summary: { closed: closed.length, open: open.length, overdue: overdue, reworkLoops: reworkTotal },
+    responsiveness: resp,
+    milestones: ms,
+    summary: { closed: closed.length, open: open.length, overdue: overdue,
+               reworkLoops: reworkTotal, awaitingMe: resp.pending, heldOverSla: resp.overdueNow,
+               stagesMet: ms.met, stagesMissed: ms.missed, stagesPending: ms.pending,
+               loadPercent: load.percent, cookiePoints: cookies.awarded },
     breakdown: breakdown,
+    formula: 'Score = how well you delivered (' + Math.round(rate) + ') × the load you carried (' +
+             load.percent + '%)' +
+             (deduction ? ' − ' + deduction + ' for approvals held' : '') +
+             (cookies.bonus ? ' + ' + cookies.bonus + ' cookie points' : ''),
   };
+}
+
+/** Nobody below zero, nobody above a hundred. Enforced in one place. */
+function clampScore_(n) {
+  var v = Math.round(Number(n) || 0);
+  return Math.max(0, Math.min(100, v));
 }
 
 // ---------------------------------------------------------------------------
 // APPRAISAL — KRA / KPI
 // ---------------------------------------------------------------------------
-var APPRAISAL_WEIGHTS = { delegation: 0.40, kra: 0.40, behaviour: 0.20 };
+/* How the 100 performance points are divided. Delegation is not in here: it is
+   the other half of the final score, not a slice of this one. */
+var APPRAISAL_SPLIT = { kra: 75, behaviour: 20 };     // the remaining 5 are brownie
+var APPRAISAL_WEIGHTS = APPRAISAL_SPLIT;              // old name, still referenced
 var MAX_BROWNIE = 5;
 
 /** Ratings are 0-5 against a weight; 0 means "not rated" and is excluded. */
@@ -557,43 +1354,84 @@ function validateKraBlueprint(kras) {
 }
 
 /**
- * Blends measured execution with judgement:
- *   40% delegation score (from verified task history — cannot be talked up)
- *   40% KRA execution     (weighted, rated 0-5)
- *   20% behaviour         (weighted, rated 0-5)
- *   + up to 5 discretionary points
- * Any unrated half is dropped and the rest renormalised, so a half-finished
- * appraisal never silently reads as a low score.
+ * THE ONE DEFINITION OF A FINAL SCORE.
+ *
+ *   Performance = KRA 75% + Behaviour 20% + Brownie (max 5)   → out of 100
+ *   Delegation  = measured from the task record               → out of 100
+ *   Final       = (Performance + Delegation) / 2
+ *
+ * Two halves, weighted equally: what you were judged on, and what the record
+ * shows. There used to be two different formulas — a 40/40/20 blend here and a
+ * flat average on the dashboard — so the number an employee saw was not the
+ * number stored against them. An appraisal figure that cannot be reproduced on
+ * demand is worse than no figure, because it will be challenged and you will
+ * not be able to defend it.
+ *
+ * Someone with no closed work has no delegation half. Their final score is
+ * their performance score rather than half of it — a new joiner is not a poor
+ * performer.
  */
 function finalAppraisalScore(input) {
-  var kra = weightedRating(input.kras);
-  var behaviour = weightedRating(input.behaviours);
-  var delegation = input.hasDelegationData === false ? null : Number(input.delegationScore || 0);
-
-  var parts = [
-    { v: delegation, w: APPRAISAL_WEIGHTS.delegation, key: 'delegation' },
-    { v: kra,        w: APPRAISAL_WEIGHTS.kra,        key: 'kra' },
-    { v: behaviour,  w: APPRAISAL_WEIGHTS.behaviour,  key: 'behaviour' },
-  ].filter(function (p) { return p.v !== null && !isNaN(p.v); });
-
-  if (!parts.length) return { score: 0, hasData: false, components: {}, brownie: 0 };
-
-  var tw = parts.reduce(function (s, p) { return s + p.w; }, 0);
-  var blended = parts.reduce(function (s, p) { return s + p.v * (p.w / tw); }, 0);
+  input = input || {};
+  var kraPct = ratingPercent_(input.kras);                  // 0..100 or null
+  var behPct = ratingPercent_(input.behaviours);
   var brownie = Math.max(0, Math.min(MAX_BROWNIE, Number(input.brownie || 0)));
 
+  var kraPoints = kraPct === null ? null : (kraPct / 100) * APPRAISAL_SPLIT.kra;
+  var behPoints = behPct === null ? null : (behPct / 100) * APPRAISAL_SPLIT.behaviour;
+
+  var rated = (kraPoints !== null) || (behPoints !== null);
+  var performance = rated
+    ? Math.max(0, Math.min(100, (kraPoints || 0) + (behPoints || 0) + brownie))
+    : null;
+
+  var hasDelegation = input.hasDelegationData !== false &&
+                      input.delegationScore !== null && input.delegationScore !== undefined;
+  var delegation = hasDelegation
+    ? Math.max(0, Math.min(100, Number(input.delegationScore) || 0)) : null;
+
+  var halves = [];
+  if (performance !== null) halves.push(performance);
+  if (delegation !== null) halves.push(delegation);
+
+  var score = halves.length
+    ? Math.round(halves.reduce(function (a, b) { return a + b; }, 0) / halves.length) : 0;
+
   return {
-    score: Math.max(0, Math.min(100, Math.round(blended + brownie))),
-    hasData: true,
+    score: score,
+    performance: performance === null ? null : Math.round(performance * 10) / 10,
+    delegation: delegation === null ? null : Math.round(delegation),
+    hasData: halves.length > 0,
     brownie: brownie,
-    components: {
-      delegation: delegation === null ? null : Math.round(delegation),
-      kra: kra === null ? null : Math.round(kra),
-      behaviour: behaviour === null ? null : Math.round(behaviour),
+    parts: {
+      kra:       { percent: kraPct === null ? null : Math.round(kraPct),
+                   points: kraPoints === null ? null : Math.round(kraPoints * 10) / 10,
+                   outOf: APPRAISAL_SPLIT.kra },
+      behaviour: { percent: behPct === null ? null : Math.round(behPct),
+                   points: behPoints === null ? null : Math.round(behPoints * 10) / 10,
+                   outOf: APPRAISAL_SPLIT.behaviour },
+      brownie:   { points: brownie, outOf: MAX_BROWNIE },
     },
-    weightsUsed: parts.map(function (p) { return p.key + ':' + Math.round(p.w / tw * 100) + '%'; }).join(' '),
+    formula: delegation === null
+      ? 'No closed work to measure, so the final score is the performance score alone.'
+      : 'Final = (Performance ' + Math.round(performance) + ' + Delegation ' + delegation + ') / 2',
   };
 }
+
+/** A weighted set of 0-5 ratings as a percentage, or null if nothing was rated. */
+function ratingPercent_(rows) {
+  var items = (rows || []).filter(function (r) {
+    return r && Number(r.rating) > 0; });
+  if (!items.length) return null;
+  var got = 0, max = 0;
+  items.forEach(function (r) {
+    var w = Number(r.weight) || 1;
+    got += (Number(r.rating) || 0) * w;
+    max += 5 * w;
+  });
+  return max ? (got / max) * 100 : null;
+}
+
 
 /** A/B/C banding with the action each implies. */
 function performanceBand(score) {
@@ -971,22 +1809,51 @@ function inWindow(date, range) {
  * Queue health is judged as at the end of the window, so a historic period is
  * measured on how the queue looked then rather than how it looks today.
  */
-function scoreForPeriod(tasks, username, range, cal) {
+/** What a task's status was at the end of a given day, read from its history. */
+function statusAt_(task, day) {
+  var h = task.history || [], st = null, seen = false;
+  for (var i = 0; i < h.length; i++) {
+    var d = h[i] && h[i].date ? new Date(h[i].date) : null;
+    if (!d || isNaN(d)) continue;
+    seen = true;
+    if (startOfDay(d) <= day) st = h[i].status;
+  }
+  return seen ? st : undefined;     // undefined: no history to read, null: not raised yet
+}
+
+/** How many months a period is, for the load a person is expected to carry. */
+function periodMonths_(range) {
+  if (range.kind === PERIOD.WEEK) return 7 * 12 / 365.25;
+  if (range.kind === PERIOD.QUARTER) return 3;
+  if (range.kind === PERIOD.YEAR) return 12;
+  return 1;
+}
+
+function scoreForPeriod(tasks, username, range, cal, opts) {
+  opts = opts || {};
   var closedInWindow = tasks.filter(function (t) {
     return t.assignee === username && t.status === STATUS.VERIFIED && inWindow(closedAt(t), range);
   });
 
-  // Work that was open at the end of the window: raised on or before it, and
-  // either still open now or closed after the window ended.
+  /* Work that was in this person's hands at the end of the window — To do or In
+     progress on that day, read from the history. Work they had already handed
+     in, or that was still waiting for approval, was not theirs to act on, and
+     queue health promises not to count it. */
   var openThen = tasks.filter(function (t) {
     if (t.assignee !== username) return false;
     var due = parseYmd(t.due);
     if (!due || due > range.to) return false;
     var closed = closedAt(t);
     if (closed && startOfDay(closed) <= range.to) return false;
-    return t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS || isClosed(t.status) === false;
+    var then = statusAt_(t, range.to);
+    if (then === undefined) {                 // no history: fall back to its status now
+      return t.status === STATUS.PENDING || t.status === STATUS.IN_PROGRESS;
+    }
+    return then === STATUS.PENDING || then === STATUS.IN_PROGRESS;
   }).map(function (t) {
-    return { assignee: t.assignee, status: STATUS.PENDING, title: t.title, due: t.due, priority: t.priority, reworkCount: t.reworkCount, history: [] };
+    return { id: t.id, assignee: t.assignee, status: STATUS.PENDING, title: t.title, due: t.due,
+             priority: t.priority, reworkCount: t.reworkCount, history: [],
+             projectId: t.projectId, stageNo: t.stageNo, stageGate: t.stageGate, projectName: t.projectName };
   });
 
   /**
@@ -998,14 +1865,29 @@ function scoreForPeriod(tasks, username, range, cal) {
    */
   var waitingOnThem = tasks.filter(function (t) {
     if (t.assignee === username) return false;
-    var due = parseYmd(t.due);
-    if (due && due > range.to) return false;
-    return (t.approver === username && (t.status === STATUS.AWAITING_APPROVAL || t.status === STATUS.DELEGATION_PROPOSED)) ||
-           (t.raisedBy === username && t.status === STATUS.FOR_REVIEW);
+    /* Gated on when the item LANDED on their desk, not on the task's deadline.
+       Keying it to the deadline hid every held review of work that was not due
+       until next month — which is precisely the work it is easiest to sit on. */
+    return queueSpells(t).some(function (sp) {
+      return sp.holder === username && startOfDay(sp.from) <= range.to;
+    });
   });
 
-  var asOf = range.to > startOfDay(new Date()) ? new Date() : range.to;
-  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem), username, asOf, cal);
+  var todayStart = startOfDay(new Date());
+  var isCurrent = range.to >= todayStart && range.from <= todayStart;
+  var asOf = range.to > todayStart ? new Date() : range.to;
+  var periodOpts = {
+    expectedTasks: opts.expectedTasks,
+    periodMonths: periodMonths_(range),
+    /* Cookie points count in the period they were awarded in. */
+    cookies: (opts.cookies || []).filter(function (c) {
+      var d = new Date(c.date); return !isNaN(d) && inWindow(d, range); }),
+    allTasks: tasks,
+    range: range,
+    rangeIsCurrent: isCurrent,
+  };
+  var result = delegationScore(closedInWindow.concat(openThen).concat(waitingOnThem),
+                               username, asOf, cal, periodOpts);
   result.range = { label: range.label, short: range.short, from: ymd(range.from), to: ymd(range.to) };
   result.delivered = closedInWindow.length;
   result.openThen = openThen.length;
@@ -1033,12 +1915,12 @@ function scoreForPeriod(tasks, username, range, cal) {
 }
 
 /** A trend of the last `count` periods, oldest first — ready to plot. */
-function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
+function scoreTrend(tasks, username, kind, count, today, endOffset, cal, opts) {
   var end = Number(endOffset) || 0;
   var out = [];
   for (var i = count - 1 + end; i >= end; i--) {
     var range = periodRange(kind, i, today);
-    var s = scoreForPeriod(tasks, username, range, cal);
+    var s = scoreForPeriod(tasks, username, range, cal, opts);
     out.push({
       label: range.label, short: range.short,
       score: s.hasData ? s.score : null,
@@ -1054,7 +1936,7 @@ function scoreTrend(tasks, username, kind, count, today, endOffset, cal) {
  * Everything the analytics dashboard needs for one period, in one pass:
  * headline counts, per-person scores, KRA split and the A/B/C spread.
  */
-function periodAnalytics(tasks, users, range, today, cal) {
+function periodAnalytics(tasks, users, range, today, cal, optsFor) {
   var delivered = [], overdueNow = [], reworkLoops = 0, onTime = 0, onTimeBase = 0;
 
   tasks.forEach(function (t) {
@@ -1070,11 +1952,15 @@ function periodAnalytics(tasks, users, range, today, cal) {
   });
 
   var people = users.map(function (u) {
-    var s = scoreForPeriod(tasks, u.username, range, cal);
+    var s = scoreForPeriod(tasks, u.username, range, cal,
+      optsFor ? optsFor(u) : null);
     return {
       username: u.username, name: u.name, role: u.role, dept: u.dept,
       score: s.hasData ? s.score : null, hasData: s.hasData,
       delivered: s.delivered, components: s.components,
+      loadPercent: s.workload ? s.workload.percent : null,
+      provisional: !!s.provisional,
+      cookiePoints: s.cookies ? s.cookies.awarded : 0,
       band: s.hasData ? performanceBand(s.score).band : null,
       reason: s.hasData ? null : (s.reason || 'Nothing closed in this period.'),
     };
@@ -1102,19 +1988,152 @@ function periodAnalytics(tasks, users, range, today, cal) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// THE LEADERBOARD
+// ---------------------------------------------------------------------------
+/* A ranking is a strong instrument. Used carelessly it measures who was handed
+   the easiest work, and then publishes that as a judgement of character — so
+   three rules are built into the ordering rather than left to whoever reads it.
+
+   1. NOBODY IS RANKED ON NOTHING. A person with no closed work in the period
+      is not "last", they are unranked, and they are listed separately with the
+      reason. Ranking an absence is how a leaderboard ends up punishing someone
+      who was on leave, or who had just joined.
+
+   2. THE ORDER IS THE SCORE, AND THE SCORE ALREADY CARRIES LOAD. One easy task
+      done perfectly cannot out-rank ten jobs with seven on time, because the
+      score it ranks by is rate × load credit. A thin month is marked
+      `provisional` so the number is read with the caution it deserves.
+
+   3. TIES ARE TIES. Equal scores share a rank and the next rank is skipped,
+      the way every sport does it — inventing a separation on a decimal nobody
+      can see is how you get two people who did identical work told that one of
+      them is better.
+
+   Movement against last period is computed here too, because "up four places"
+   is the part people act on; a static list is just a wall of names. */
+
+/** `components` is a list of {key, score}, not a map — reading it as a map
+ *  silently yields undefined for every row, which renders as a column of
+ *  dashes that looks like missing data rather than a bug. */
+function componentScore_(components, key) {
+  var list = components || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].key === key) return list[i].score == null ? null : list[i].score;
+  }
+  return null;
+}
+
+function leaderboard(people, previousPeople) {
+  var prevRank = {};
+  (previousPeople || []).forEach(function (p) { if (p.rank) prevRank[p.username] = p.rank; });
+
+  var ranked = (people || []).filter(function (p) { return p.hasData && p.score !== null; });
+  var unranked = (people || []).filter(function (p) { return !p.hasData || p.score === null; })
+    .map(function (p) {
+      return { username: p.username, name: p.name, role: p.role, dept: p.dept,
+               reason: p.reason || 'Nothing closed in this period.' };
+    }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+  ranked.sort(function (a, b) {
+    /* Score first. Then volume delivered, because between two people on the
+       same score the one who carried more work did more. Then the name, so the
+       order is stable run to run rather than dependent on sheet order. */
+    return (b.score - a.score) ||
+           ((b.delivered || 0) - (a.delivered || 0)) ||
+           ((b.cookiePoints || 0) - (a.cookiePoints || 0)) ||
+           String(a.name).localeCompare(String(b.name));
+  });
+
+  /* Built with a loop rather than map(). The tie branch has to look at the row
+     before it, and inside a map() callback the array being assigned does not
+     exist yet — so `rows[i - 1]` threw, but only ever on a tie, which no test
+     had produced until a demo workspace with two people on the same score did.
+     A local carries the previous rank instead, and reads the same. */
+  var rows = [], prevRank_ = 0;
+  for (var i = 0; i < ranked.length; i++) {
+    var p = ranked[i];
+    var tie = i > 0 && ranked[i - 1].score === p.score &&
+              (ranked[i - 1].delivered || 0) === (p.delivered || 0);
+    rows.push({
+      // Dense-at-the-top ranking: equal scores share a place, the next is skipped.
+      rank: tie ? prevRank_ : i + 1,
+      username: p.username, name: p.name, role: p.role, dept: p.dept,
+      score: p.score, band: p.band, delivered: p.delivered || 0,
+      loadPercent: p.loadPercent, provisional: !!p.provisional,
+      cookiePoints: p.cookiePoints || 0,
+      onTime: componentScore_(p.components, 'onTime'),
+      /* Scored, but on other people's work rather than their own. Flagged
+         rather than hidden: it is the honest reading of the row. */
+      decisionsOnly: !(p.delivered || 0),
+    });
+    prevRank_ = rows[rows.length - 1].rank;
+  }
+
+  rows.forEach(function (r) {
+    var was = prevRank[r.username];
+    r.previousRank = was || null;
+    r.movement = !was ? 'new' : (was > r.rank ? 'up' : was < r.rank ? 'down' : 'same');
+    r.moved = was ? Math.abs(was - r.rank) : 0;
+  });
+
+  /* Employee of the month is not simply row one.
+     A month thin enough to be provisional is not a month anybody should be
+     crowned for — naming someone on a single easy task devalues the award for
+     everyone who earned it properly.
+     Neither is a month made entirely of decisions. The score counts cleared
+     approvals as real load, and it should: a manager who turns work around the
+     same day is doing the job. But an Admin who verifies everybody else's work
+     and delivers nothing of their own would top this board every single month,
+     and a leaderboard whose answer to "employee of the month" is "the person
+     who clicks Verify" is discredited the first time it is published.
+     So the crown needs delivered work behind it. The ranking itself is left
+     alone — managers are measured on the same scale as everyone else, which is
+     the whole point of counting decisions in the first place.
+     If nobody qualifies, nobody is crowned. That is a more honest answer than
+     a reluctant winner. */
+  var champion = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].provisional || rows[i].decisionsOnly) continue;
+    champion = rows[i];
+    break;
+  }
+
+  var scores = rows.map(function (r) { return r.score; });
+  return {
+    rows: rows,
+    unranked: unranked,
+    champion: champion,
+    /* True when the crown did not come from row one — somebody above them
+       scored higher on approvals or on a month too thin to count. Said out
+       loud by the UI, because a card that claims first place while the table
+       underneath shows otherwise is the kind of small lie that costs a feature
+       all of its credibility. */
+    championBelowFirst: !!(champion && champion.rank !== rows[0].rank),
+    shared: champion ? rows.filter(function (r) { return r.rank === champion.rank; }).length > 1 : false,
+    counts: { ranked: rows.length, unranked: unranked.length },
+    median: scores.length ? scores.slice().sort(function (a, b) { return a - b; })[Math.floor(scores.length / 2)] : null,
+    top: scores.length ? scores[0] : null,
+    bottom: scores.length ? scores[scores.length - 1] : null,
+  };
+}
+
 // Export for the Node test harness; harmless inside Apps Script.
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     STATUS: STATUS, ROLE: ROLE, CADENCE: CADENCE, OPEN_STATUSES: OPEN_STATUSES,
+    leaderboard: leaderboard,
     isOpen: isOpen, isClosed: isClosed, priorityWeight: priorityWeight,
     startOfDay: startOfDay, dayDiff: dayDiff, addDays: addDays, addMonths: addMonths,
     ymd: ymd, parseYmd: parseYmd,
     allowedTransitions: allowedTransitions, canTransition: canTransition,
+    canAssignTo: canAssignTo,
     initialStatusFor: initialStatusFor, proposeDelegation: proposeDelegation,
     nextOccurrence: nextOccurrence, dueOccurrences: dueOccurrences,
     timelinessPoints: timelinessPoints, submittedAt: submittedAt, delegationScore: delegationScore,
     weightedRating: weightedRating, validateKraBlueprint: validateKraBlueprint,
     finalAppraisalScore: finalAppraisalScore, performanceBand: performanceBand,
+    ratingPercent_: ratingPercent_, APPRAISAL_SPLIT: APPRAISAL_SPLIT,
     SCORE_WEIGHTS: SCORE_WEIGHTS, APPRAISAL_WEIGHTS: APPRAISAL_WEIGHTS,
     BOARD_COLUMNS: BOARD_COLUMNS, columnForStatus: columnForStatus, statusForColumn: statusForColumn,
     canDropInColumn: canDropInColumn, groupIntoBoard: groupIntoBoard,

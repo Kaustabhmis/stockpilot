@@ -119,8 +119,10 @@ ok('a project with an open stage keeps all its stages', ids(tasks).indexOf('P2S1
 ok('a project closed long ago moves whole', ids(cold).indexOf('P1S1') > -1 && ids(cold).indexOf('P1S2') > -1);
 
 console.log('\n=== no number anybody has seen changes ===');
-ok('(and there were numbers to compare: last year had deliveries, the appraisal had history)',
-   before.yearAgo.summary.delivered >= 4 && before.appraisal.delegationBreakdown.length >= 6 && before.archive.total >= 8,
+/* The appraisal measures the month being appraised, so it has this month's
+   lines only; the year-ago report and the archive carry the old history. */
+ok('(and there were numbers to compare: last year had deliveries, the appraisal had lines)',
+   before.yearAgo.summary.delivered >= 4 && before.appraisal.delegationBreakdown.length >= 1 && before.archive.total >= 8,
    JSON.stringify([before.yearAgo.summary, before.appraisal.delegationBreakdown.length, before.archive.total]));
 const after = {
   appraisal: call({ action: 'getAppraisalForm', token: A, username: 'payel' }),

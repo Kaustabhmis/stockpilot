@@ -10,7 +10,7 @@ function getUsers_(ctx) {
 
   return { status: 'success', users: users.map(function (u) {
     var wip = wipStatus(tasks, u.username, u.wipLimit == null ? DEFAULT_WIP_LIMIT : u.wipLimit);
-    var s = scoreForPeriod(tasks, u.username, range, cal);
+    var s = scoreForPeriod(tasks, u.username, range, cal, scoreOpts_(ctx, u.username));
     return {
       /* Deliberately no password field. The old getUsersList returned every
          employee's password to the browser in plain text. */

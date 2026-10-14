@@ -184,7 +184,8 @@ function aiInsight_(ctx, question) {
   var tasks = readTasks_(ctx);
   var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
   var cal = leaveCalendar_(ctx);
-  var a = periodAnalytics(tasks, users, periodRange('month', 1), new Date(), cal);
+  var a = periodAnalytics(tasks, users, periodRange('month', 1), new Date(), cal,
+    function (u) { return scoreOpts_(ctx, u.username); });
 
   var facts = [
     'Company: ' + (ctx.company || 'this company'),

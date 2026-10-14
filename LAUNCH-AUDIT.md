@@ -181,6 +181,39 @@ are kept for status. Text colours meet WCAG AA (4.5:1) on their backgrounds,
 and the four chart colours pass the colour-blind safety check. Only colours
 changed — no layout, wording or behaviour.
 
+### 4m. Scoring: the arithmetic, checked by hand
+
+Every rule was recalculated on paper and checked against the engine
+(`tests/scoring-math-test.js`, 48 hand-worked cases). Eleven were wrong:
+
+- **One person had three scores.** The dashboard, the leaderboard/Reports and
+  the appraisal each measured a different window (96 on the dashboard and 86 on
+  the leaderboard for the same person, in the test). All of them now use this
+  month's score; `tests/score-consistency-test.js` asks every screen.
+- **Late stages.** A stage that reached its owner late, but before its own date,
+  kept the original date — the opposite of the manual's own worked example. And
+  the on-time and queue parts of the score never used the moved date at all, so
+  the owner was charged for the earlier stage's delay twice.
+- **Cookie points** loaded only this month's awards and added them to every
+  past month. Each period now counts its own.
+- **A slow approval** was charged again in every later month. It now counts
+  once: in the month it was cleared, or the current month while it waits.
+- **Work already handed in** at the end of a month counted as overdue in that
+  month's score. It no longer does — only work that was still with the person.
+- **Self-raised work:** a person was made the reviewer of their own task and
+  charged for the wait, though only an Admin can sign it off.
+- **Weekly scores** were measured against a month's expected load, so a good
+  week scored about 40; quarter and year views had no load check at all. The
+  expectation now scales with the period.
+- **The Team page and the AI summary** ignored each person's WIP limit and
+  cookies.
+- **"See why"** showed a "+30" for a met project stage that no sum produced; it
+  now shows the stage's real points out of 100. The projects table counted
+  lateness in calendar days while the score used working days; both use
+  working days now.
+- **The manual said five days late is zero.** At 10 points a working day it
+  is 50; ten days is zero.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)
