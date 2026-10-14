@@ -1,7 +1,7 @@
 /* The employee app's shell is cached so it opens on a dead signal at the
    gate. Nothing addressed to the workspace is ever cached: a punch must
    reach the server or fail loudly, never be answered from a stale copy. */
-var CACHE = 'biscs-app-v1';
+var CACHE = 'biscs-app-v2';
 var SHELL = ['./index.html', './app.webmanifest',
              './icons/icon-192.png', './icons/icon-512.png'];
 

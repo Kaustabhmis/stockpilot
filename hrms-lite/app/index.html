@@ -15,14 +15,24 @@
 :root{
   --navy:#0f172a; --navy-2:#1e293b; --primary:#2563eb; --primary-dark:#1d4ed8;
   --green:#10b981; --amber:#f59e0b; --red:#ef4444; --blue:#3b82f6;
-  --bg:#f1f5f9; --card:#ffffff; --line:#e2e8f0;
+  --bg:#eef2f7; --card:#ffffff; --line:#e7edf3;
   --text:#0f172a; --muted:#64748b; --soft:#94a3b8;
-  --pad:16px;
+  --pad:16px; --radius:16px;
+  --grad:linear-gradient(135deg,#2563eb,#1d4ed8);
+  --shadow:0 1px 2px rgba(15,23,42,.04),0 6px 20px rgba(15,23,42,.06);
+  --shadow-lg:0 10px 34px rgba(15,23,42,.12);
+  --ring:0 0 0 3px rgba(37,99,235,.14);
   --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
   font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
+body{background:
+    radial-gradient(900px 480px at 100% -8%,rgba(37,99,235,.08),transparent 60%),
+    radial-gradient(760px 420px at -10% 0%,rgba(16,185,129,.06),transparent 55%),
+    var(--bg);
+  background-attachment:fixed;
+  color:var(--text);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
   overscroll-behavior-y:none;overflow-x:hidden;}
 /* A phone screen is the hard limit: nothing sideways, ever. */
 #app,.view{max-width:100%;}
@@ -60,48 +70,55 @@ button{border:0;background:none;cursor:pointer;}
 #login .row{display:flex;align-items:center;gap:9px;margin-bottom:22px;font-size:.88rem;
   color:#cbd5e1;}
 #login .row input{width:19px;height:19px;accent-color:var(--primary);}
-#login button.go{width:100%;padding:16px;border-radius:12px;background:var(--primary);
-  color:#fff;font-size:1.02rem;font-weight:700;}
-#login button.go:active{background:var(--primary-dark);}
+#login button.go{width:100%;padding:16px;border-radius:14px;background:var(--grad);
+  color:#fff;font-size:1.02rem;font-weight:700;box-shadow:0 12px 28px rgba(37,99,235,.4);
+  transition:transform .1s ease;}
+#login button.go:active{transform:translateY(1px);}
 #login .err{background:#7f1d1d;color:#fecaca;padding:12px 14px;border-radius:10px;
   font-size:.86rem;margin-bottom:16px;display:none;}
 #login .err.on{display:block;}
 #login .foot{margin-top:26px;text-align:center;color:#475569;font-size:.75rem;}
 
 /* ---------------- shell ---------------- */
-#app{display:none;padding-bottom:calc(74px + var(--safe-bot));}
-.top{background:var(--navy);color:#fff;padding:calc(14px + var(--safe-top)) var(--pad) 16px;
-  position:sticky;top:0;z-index:20;}
+#app{display:none;padding-bottom:calc(84px + var(--safe-bot));}
+.top{background:linear-gradient(160deg,#0f172a 0%,#15223c 55%,#1b2b4b 100%);
+  color:#fff;padding:calc(16px + var(--safe-top)) var(--pad) 20px;
+  position:sticky;top:0;z-index:20;
+  border-radius:0 0 22px 22px;box-shadow:0 8px 22px rgba(15,23,42,.18);}
 .top .who{display:flex;align-items:center;gap:12px;}
-.top .av{width:42px;height:42px;border-radius:50%;background:var(--primary);flex:none;
-  display:grid;place-items:center;font-weight:800;font-size:1.05rem;}
-.top .nm{font-weight:700;font-size:1.02rem;}
-.top .cd{color:#94a3b8;font-size:.78rem;}
+.top .av{width:44px;height:44px;border-radius:14px;background:var(--grad);flex:none;
+  display:grid;place-items:center;font-weight:800;font-size:1.05rem;
+  box-shadow:0 6px 16px rgba(37,99,235,.4);}
+.top .nm{font-weight:700;font-size:1.05rem;letter-spacing:-.2px;}
+.top .cd{color:#9fb0cc;font-size:.78rem;}
 .top .clock{margin-left:auto;text-align:right;}
-.top .clock b{display:block;font-size:1.15rem;font-variant-numeric:tabular-nums;}
-.top .clock span{color:#94a3b8;font-size:.7rem;}
+.top .clock b{display:block;font-size:1.2rem;font-weight:700;font-variant-numeric:tabular-nums;}
+.top .clock span{color:#9fb0cc;font-size:.7rem;}
 
 .view{padding:var(--pad);display:none;}
 .view.on{display:block;}
-h2.vt{font-size:1.15rem;font-weight:800;margin-bottom:3px;}
+h2.vt{font-size:1.2rem;font-weight:800;margin-bottom:3px;letter-spacing:-.3px;}
 p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
-  padding:16px;margin-bottom:12px;}
-.card h3{font-size:.95rem;font-weight:800;margin-bottom:2px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;margin-bottom:12px;box-shadow:var(--shadow);}
+.card h3{font-size:.98rem;font-weight:800;margin-bottom:2px;letter-spacing:-.2px;}
 .card .cs{color:var(--muted);font-size:.78rem;margin-bottom:12px;}
 
 /* ---------------- punch ---------------- */
 .punch{text-align:center;padding:22px 16px;}
-.punch .state{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+.punch .state{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
   color:var(--muted);margin-bottom:8px;}
-.punch .big{width:170px;height:170px;border-radius:50%;margin:8px auto 18px;
-  display:grid;place-items:center;color:#fff;font-weight:800;font-size:1.15rem;
-  background:var(--green);box-shadow:0 10px 30px rgba(16,185,129,.35);
-  transition:transform .1s;}
-.punch .big:active{transform:scale(.96);}
-.punch .big.out{background:var(--red);box-shadow:0 10px 30px rgba(239,68,68,.35);}
-.punch .big.done{background:#94a3b8;box-shadow:none;}
+.punch .big{width:184px;height:184px;border-radius:50%;margin:10px auto 20px;
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:1.18rem;
+  background:radial-gradient(130% 130% at 30% 25%,#34d399 0%,#10b981 45%,#059669 100%);
+  box-shadow:0 16px 40px rgba(16,185,129,.4),inset 0 2px 6px rgba(255,255,255,.25);
+  border:6px solid rgba(255,255,255,.65);
+  transition:transform .12s ease;}
+.punch .big:active{transform:scale(.95);}
+.punch .big.out{background:radial-gradient(130% 130% at 30% 25%,#fb7185 0%,#ef4444 45%,#dc2626 100%);
+  box-shadow:0 16px 40px rgba(239,68,68,.4),inset 0 2px 6px rgba(255,255,255,.25);}
+.punch .big.done{background:#94a3b8;box-shadow:none;border-color:rgba(255,255,255,.5);}
 .punch .big small{display:block;font-weight:600;font-size:.72rem;opacity:.9;margin-top:4px;}
 .punch .times{display:flex;justify-content:center;gap:26px;}
 .punch .times div{text-align:center;}
@@ -126,16 +143,19 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
    lines. Two rows of two is better than a number you have to reassemble. */
 @media (max-width:379px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr));} }
 .kpi b{white-space:nowrap;font-size:clamp(1rem,4.6vw,1.25rem);}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;
-  padding:11px 8px;text-align:center;}
-.kpi b{display:block;font-size:1.25rem;font-weight:800;}
-.kpi span{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:13px 8px;text-align:center;box-shadow:var(--shadow);}
+.kpi b{display:block;font-size:1.25rem;font-weight:800;letter-spacing:-.3px;}
+.kpi span{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;
+  font-weight:600;}
 
 /* ---------------- calendar ---------------- */
 .cal-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
 .cal-top b{flex:1;text-align:center;font-size:1rem;}
-.cal-top button{width:38px;height:38px;border-radius:10px;background:var(--card);
-  border:1px solid var(--line);font-size:1.1rem;}
+.cal-top button{width:40px;height:40px;border-radius:12px;background:var(--card);
+  border:1px solid var(--line);font-size:1.1rem;box-shadow:var(--shadow);
+  transition:transform .1s ease;}
+.cal-top button:active{transform:scale(.94);}
 /* minmax(0,1fr), not 1fr: a plain 1fr track will not shrink below the width of
    what is inside it, so the hours on each day pushed the month grid off the
    side of the phone. */
@@ -160,8 +180,8 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
   vertical-align:-1px;}
 
 /* ---------------- lists ---------------- */
-.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;
-  margin-bottom:9px;}
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;
+  margin-bottom:10px;box-shadow:var(--shadow);}
 .item .hd{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
 .item .hd b{font-size:.92rem;}
 .item .meta{font-size:.78rem;color:var(--muted);}
@@ -171,15 +191,24 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .tag.Approved{background:#d1fae5;color:#065f46;}
 .tag.Rejected{background:#fee2e2;color:#991b1b;}
 .tag.Cancelled{background:#e2e8f0;color:#475569;}
-.acts{display:flex;gap:8px;margin-top:11px;}
-.acts button{flex:1;padding:10px;border-radius:9px;font-weight:700;font-size:.85rem;}
-.acts .yes{background:var(--green);color:#fff;}
-.acts .no{background:#fff;border:1px solid var(--red);color:var(--red);}
+.acts{display:flex;gap:9px;margin-top:12px;}
+.acts button{flex:1;padding:12px;border-radius:12px;font-weight:700;font-size:.88rem;
+  transition:transform .1s ease,filter .15s ease;}
+.acts button:active{transform:translateY(1px);}
+.acts .yes{background:var(--green);color:#fff;box-shadow:0 6px 16px rgba(16,185,129,.3);}
+.acts .no{background:#fff;border:1.5px solid #fecaca;color:var(--red);}
+/* A single primary action on its own row (e.g. "Raise a missed punch"). */
+.btn-primary{display:block;width:100%;padding:13px;border-radius:12px;background:var(--grad);
+  color:#fff;font-weight:700;font-size:.92rem;text-align:center;margin-top:12px;
+  box-shadow:0 8px 20px rgba(37,99,235,.3);transition:transform .1s ease;}
+.btn-primary:active{transform:translateY(1px);}
 .empty{text-align:center;color:var(--muted);padding:34px 16px;font-size:.87rem;}
 
-.fab{position:fixed;right:16px;bottom:calc(86px + var(--safe-bot));width:56px;height:56px;
-  border-radius:50%;background:var(--primary);color:#fff;font-size:1.7rem;font-weight:300;
-  display:grid;place-items:center;box-shadow:0 8px 24px rgba(37,99,235,.4);z-index:15;}
+.fab{position:fixed;right:16px;bottom:calc(94px + var(--safe-bot));width:58px;height:58px;
+  border-radius:18px;background:var(--grad);color:#fff;font-size:1.8rem;font-weight:300;
+  display:grid;place-items:center;box-shadow:0 12px 28px rgba(37,99,235,.45);z-index:15;
+  transition:transform .12s ease;}
+.fab:active{transform:scale(.93);}
 
 .rows{display:grid;gap:1px;background:var(--line);border-radius:10px;overflow:hidden;
   border:1px solid var(--line);}
@@ -188,16 +217,25 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .rows div b{font-weight:600;word-break:break-word;}
 
 /* ---------------- bottom nav ---------------- */
-.nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);
+.nav{position:fixed;left:0;right:0;bottom:0;
+  background:rgba(255,255,255,.88);backdrop-filter:saturate(1.6) blur(12px);
+  -webkit-backdrop-filter:saturate(1.6) blur(12px);
   border-top:1px solid var(--line);display:flex;z-index:30;
+  box-shadow:0 -6px 22px rgba(15,23,42,.07);
   padding-bottom:var(--safe-bot);}
-.nav button{flex:1;padding:9px 2px 7px;display:flex;flex-direction:column;align-items:center;
-  gap:3px;color:var(--soft);font-size:.62rem;font-weight:700;}
-.nav button .ic{font-size:1.25rem;line-height:1;}
+.nav button{position:relative;flex:1;padding:10px 2px 8px;display:flex;flex-direction:column;
+  align-items:center;gap:4px;color:var(--soft);font-size:.62rem;font-weight:700;
+  transition:color .15s ease;}
+.nav button .ic{font-size:1.3rem;line-height:1;transition:transform .15s ease;}
 .nav button.on{color:var(--primary);}
-.nav button .dot{position:absolute;transform:translate(14px,-4px);background:var(--red);
-  color:#fff;font-size:.58rem;min-width:16px;height:16px;border-radius:99px;
-  display:grid;place-items:center;padding:0 4px;}
+.nav button.on .ic{transform:translateY(-1px);}
+/* A soft pill behind the active tab's icon. */
+.nav button.on::before{content:'';position:absolute;top:6px;width:46px;height:30px;
+  border-radius:99px;background:rgba(37,99,235,.12);z-index:-1;}
+.nav button .dot{position:absolute;top:4px;left:50%;transform:translateX(6px);
+  background:var(--red);color:#fff;font-size:.58rem;min-width:16px;height:16px;
+  border-radius:99px;display:grid;place-items:center;padding:0 4px;
+  box-shadow:0 2px 6px rgba(239,68,68,.4);}
 
 /* How far up the approval chain something has got. */
 .steps{display:flex;align-items:center;gap:8px;margin-top:9px;}
@@ -230,9 +268,13 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
   border:1px solid var(--line);background:#f8fafc;font-size:.95rem;}
 .sheet textarea{resize:vertical;min-height:80px;}
 .cal-load{font-weight:500;font-size:.72rem;color:var(--muted);}
-.sheet .go{width:100%;padding:15px;border-radius:12px;background:var(--primary);color:#fff;
-  font-weight:700;margin-top:18px;font-size:1rem;}
-.sheet .cancel{width:100%;padding:13px;color:var(--muted);font-weight:600;margin-top:6px;}
+.sheet .go{width:100%;padding:15px;border-radius:13px;background:var(--grad);color:#fff;
+  font-weight:700;margin-top:18px;font-size:1rem;box-shadow:0 10px 24px rgba(37,99,235,.32);
+  transition:transform .1s ease;}
+.sheet .go:active{transform:translateY(1px);}
+.sheet .cancel{width:100%;padding:13px;color:var(--muted);font-weight:700;margin-top:8px;
+  border-radius:12px;}
+.sheet .cancel:active{background:var(--bg);}
 .sheet .err{background:#fee2e2;color:#991b1b;padding:11px;border-radius:9px;font-size:.83rem;
   margin-top:12px;display:none;}
 .sheet .err.on{display:block;}
@@ -711,9 +753,7 @@ function renderPunch() {
     (m.open.length
       ? '<div class="card"><h3>You never punched out</h3><div class="cs">' +
         esc(m.open.join(', ')) + '. Raise a missed-punch request so it is not counted against you.</div>' +
-        '<button class="acts" style="display:block"><span class="yes" style="display:block;padding:11px;' +
-        'border-radius:9px;text-align:center;color:#fff;background:var(--primary);font-weight:700" ' +
-        'onclick="openRequest(\'swipe\')">Raise a missed punch</span></button></div>'
+        '<button class="btn-primary" onclick="openRequest(\'swipe\')">Raise a missed punch</button></div>'
       : '');
 
   if (canPunch) locate(true);
@@ -1249,7 +1289,8 @@ function askReject(sheet, id) {
   openSheet('<h3>Reject this?</h3>' +
     '<label>Why (they will see this)</label>' +
     '<textarea id="rj-why" placeholder="Short reason"></textarea>' +
-    '<button class="go" style="background:var(--red)" onclick="decide(\'' + esc(sheet) + '\',\'' +
+    '<button class="go" style="background:linear-gradient(135deg,#f43f5e,#e11d48);' +
+      'box-shadow:0 10px 24px rgba(239,68,68,.32)" onclick="decide(\'' + esc(sheet) + '\',\'' +
       esc(id) + '\',\'Rejected\',el(\'rj-why\').value)">Reject</button>' +
     '<button class="cancel" onclick="closeSheet()">Cancel</button>');
 }
