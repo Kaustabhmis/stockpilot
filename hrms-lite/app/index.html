@@ -142,10 +142,13 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 /* Four across a 320px phone leaves 70px a tile, which breaks "82:03" over two
    lines. Two rows of two is better than a number you have to reassemble. */
 @media (max-width:379px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr));} }
-.kpi b{white-space:nowrap;font-size:clamp(1rem,4.6vw,1.25rem);}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;
-  padding:13px 8px;text-align:center;box-shadow:var(--shadow);}
-.kpi b{display:block;font-size:1.25rem;font-weight:800;letter-spacing:-.3px;}
+  padding:13px 6px;text-align:center;box-shadow:var(--shadow);min-width:0;}
+/* One rule only. A second, later ".kpi b{font-size:1.25rem}" used to override
+   this clamp, so "0h 11m" rendered at 20px and spilled out of the tile on a
+   phone. The clamp lets the number shrink to fit the four-across tile. */
+.kpi b{display:block;white-space:nowrap;font-weight:800;letter-spacing:-.3px;
+  font-size:clamp(.8rem,4vw,1.2rem);overflow:hidden;text-overflow:ellipsis;}
 .kpi span{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;
   font-weight:600;}
 
@@ -202,6 +205,13 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
   color:#fff;font-weight:700;font-size:.92rem;text-align:center;margin-top:12px;
   box-shadow:0 8px 20px rgba(37,99,235,.3);transition:transform .1s ease;}
 .btn-primary:active{transform:translateY(1px);}
+/* Stacked full-width account actions (Change password / Sign out). Without
+   this they fell back to inline buttons and ran into each other. */
+.acct-btn{display:block;width:100%;padding:14px;border-radius:12px;background:var(--card);
+  border:1px solid var(--line);color:var(--primary);font-weight:700;font-size:.95rem;
+  margin-top:10px;box-shadow:var(--shadow);transition:transform .1s ease;}
+.acct-btn.danger{color:var(--red);border-color:#fecaca;}
+.acct-btn:active{transform:translateY(1px);background:var(--bg);}
 .empty{text-align:center;color:var(--muted);padding:34px 16px;font-size:.87rem;}
 
 .fab{position:fixed;right:16px;bottom:calc(94px + var(--safe-bot));width:58px;height:58px;
@@ -364,7 +374,7 @@ var API = '';   /* set below - the workspace this copy talks to */
 API = 'https://cquczxlfhrrrncbunbhy.supabase.co/functions/v1/api';
 
 var SESSION_KEY = 'biscs_app_session';
-var S = { user: null, me: null, att: [], slips: [], leave: [], reqs: [], types: [], reqTypes: [],
+var S = { user: null, me: null, sites: [], att: [], slips: [], leave: [], reqs: [], types: [], reqTypes: [],
           holidays: [], notices: [], inbox: { isManager: false, team: [], teamLeave: [], teamRequests: [] },
           settings: {}, punch: null, cal: null, view: 'punch', busy: false };
 
@@ -585,6 +595,7 @@ function reload(given) {
   return (given ? Promise.resolve(given) : api('bootstrap')).then(function (d) {
     S.settings = d.settings || {};
     S.me = (d.employees || [])[0] || null;
+    S.sites = d.sites || [];
     S.att = d.attendance || [];
     S.haveMonth = {};                 /* the rows were just replaced */
     /* The server has always sent the worker their own finalised payslips.
@@ -779,6 +790,38 @@ function monthStats(ym) {
 /* --------- where the phone is, and whether that is good enough --- */
 var GEO = { fix: null, at: 0 };
 
+/* Metres between two lat/lng points (haversine) — the same measure the
+   server's geofence uses, so the name shown here matches where it lets you
+   punch. */
+function metresBetween(aLat, aLng, bLat, bLng) {
+  var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
+  var dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return Math.round(2 * R * Math.asin(Math.sqrt(s)));
+}
+/* The nearest office to a fix, restricted to the sites this person is tied to
+   (blank = any), so the punch screen can say where they are standing. */
+function nearestSite(fix) {
+  if (!fix || !S.sites || !S.sites.length) return null;
+  var active = S.sites.filter(function (x) {
+    return String(x.active || 'yes').toLowerCase() !== 'no' &&
+      x.lat !== '' && x.lat != null && x.lng !== '' && x.lng != null;
+  });
+  var mine = String((S.me && S.me.site) || '').split(/[,;\n]/)
+    .map(function (s) { return s.trim().toLowerCase(); }).filter(function (s) { return s; });
+  if (mine.length) {
+    var only = active.filter(function (x) { return mine.indexOf(String(x.name).trim().toLowerCase()) >= 0; });
+    if (only.length) active = only;
+  }
+  var best = null;
+  active.forEach(function (x) {
+    var d = metresBetween(Number(fix.lat), Number(fix.lng), Number(x.lat), Number(x.lng));
+    if (!best || d < best.distance) best = { name: x.name, distance: d, radius: Number(x.radius_m || 150) };
+  });
+  return best;
+}
+
 function locate(quiet) {
   var box = el('geo');
   if (!box) return Promise.resolve(null);
@@ -794,8 +837,17 @@ function locate(quiet) {
       GEO.fix = { lat: pos.coords.latitude, lng: pos.coords.longitude,
                   accuracy: pos.coords.accuracy };
       GEO.at = Date.now();
-      box.className = 'geo ok';
-      box.innerHTML = '&#128205; Located to about ' + Math.round(pos.coords.accuracy) + ' m';
+      var site = nearestSite(GEO.fix);
+      if (site && site.distance <= site.radius) {
+        box.className = 'geo ok';
+        box.innerHTML = '&#128205; At <b>' + esc(site.name) + '</b>';
+      } else if (site) {
+        box.className = 'geo';
+        box.innerHTML = '&#128205; About ' + site.distance + ' m from <b>' + esc(site.name) + '</b>';
+      } else {
+        box.className = 'geo ok';
+        box.innerHTML = '&#128205; Located to about ' + Math.round(pos.coords.accuracy) + ' m';
+      }
       resolve(GEO.fix);
     }, function (err) {
       GEO.fix = null;
@@ -1408,9 +1460,8 @@ function renderMe() {
           ? 'on · ' + (String(S.settings.geofence_mode) === 'block' ? 'must be at a site' : 'warns only')
           : 'off') +
       '</div>' +
-      '<button class="cancel" style="color:var(--primary);font-weight:700;margin-top:14px" ' +
-        'onclick="changePassword()">Change my password</button>' +
-      '<button class="cancel" style="color:var(--red);font-weight:700" onclick="signOut()">Sign out</button>' +
+      '<button class="acct-btn" onclick="changePassword()">Change my password</button>' +
+      '<button class="acct-btn danger" onclick="signOut()">Sign out</button>' +
     '</div>';
 }
 

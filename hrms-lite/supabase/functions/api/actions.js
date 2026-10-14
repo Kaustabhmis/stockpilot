@@ -856,6 +856,10 @@ export function createActions(api, db, deps) {
       holidays: await listSheet('Holidays'),
       events: await listSheet('Events'),
       shifts: await listSheet('Shifts'),
+      /* Office locations, so the punch screen can name where the person is
+         standing ("At 24 Office") instead of only a GPS accuracy radius. The
+         authoritative fence is still checked server-side on every webPunch. */
+      sites: await listSheet('Sites'),
       leaveTypes: await listSheet('LeaveTypes'),
       requestTypes: await listSheet('RequestTypes'),
       notices: (await all(
