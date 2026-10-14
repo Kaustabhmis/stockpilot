@@ -104,7 +104,7 @@ Names must match the code exactly.
 **`domebox_daily_digest`**
 
 > Body:
-> `Hi {{1}}, your Dome Box summary for {{2}}: {{3}} overdue, {{4}} due today, {{5}} waiting on you.`
+> `Hi {{1}}, your Domebox summary for {{2}}: {{3}} overdue, {{4}} due today, {{5}} waiting on you.`
 > Footer: `Reply STOP to turn off these alerts.`
 > Button: *Visit website* → `https://www.domebox.in`
 > Samples: `Asha` · `10 Sep` · `2` · `3` · `1`
@@ -149,7 +149,7 @@ waRecordOptIn(sheetId, 'asha@acme.in', '9876543210', 'profile-page');
 
 The wording next to the checkbox matters — it has to be explicit:
 
-> ☐ Send me Dome Box task reminders on WhatsApp at this number.
+> ☐ Send me Domebox task reminders on WhatsApp at this number.
 > You can reply STOP at any time.
 
 A pre-ticked box is not consent, under Meta's rules or under the DPDP Act.

@@ -1,4 +1,4 @@
-# Moving existing customers onto the new Dome Box
+# Moving existing customers onto the new Domebox
 
 **Short answer:** your customers don't move anywhere. Each company keeps the
 spreadsheet it already has. The new software reads that same spreadsheet, and
@@ -52,7 +52,7 @@ sheet that doesn't match is **left exactly as it is**, and:
 - you get an email naming the exact column;
 - `previewMigration` lists it under **NEEDS A LOOK** and tells you where to
   move the column (for Tasks: column **AD** or later — past the last column
-  Dome Box uses).
+  Domebox uses).
 
 Move the column, run `previewMigration` again, and they're through. A workspace
 that waits an hour for you is a bad hour. One that silently overwrote a
@@ -88,7 +88,7 @@ This is step 11 of [`DEPLOY-EASY.md`](DEPLOY-EASY.md), in more detail.
      Another Customer — 1 person, 1 task; will add …
 
    --- NEEDS A LOOK (1) — LEFT EXACTLY AS THEY ARE ---
-     Bose Steel — Tasks column P is "Site Notes" where Dome Box needs "Spawned By"
+     Bose Steel — Tasks column P is "Site Notes" where Domebox needs "Spawned By"
    ```
 
 4. **Fix anything under NEEDS A LOOK.** Open that customer's sheet, move the
@@ -130,11 +130,11 @@ first sign-in does the same upgrade, with the same column check.
 
 Send this from `info@biscsindia.com` once the switch is done.
 
-> **Subject: Dome Box has been upgraded — nothing for you to do**
+> **Subject: Domebox has been upgraded — nothing for you to do**
 >
 > Hello,
 >
-> We have upgraded Dome Box. You don't need to do anything: go to
+> We have upgraded Domebox. You don't need to do anything: go to
 > www.domebox.in and sign in with the same email and password as before. All
 > your tasks, history, team and appraisals are exactly where you left them.
 >
@@ -161,7 +161,7 @@ Send this from `info@biscsindia.com` once the switch is done.
 >
 > Questions? Just reply to this email.
 >
-> — Team Dome Box, BISCS India
+> — Team Domebox, BISCS India
 
 ---
 

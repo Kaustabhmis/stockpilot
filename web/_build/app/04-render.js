@@ -238,7 +238,7 @@ function userForm(u){
         <div id="uPhoneMsg" class="text-xs font-bold mt-1.5"></div>
         <label class="flex items-start gap-2 text-xs font-semibold text-gray-600 mt-3 leading-relaxed">
           <input type="checkbox" id="uWaOptIn" class="w-4 h-4 accent-blue-600 mt-0.5 shrink-0" ${u.waOptIn?'checked':''}>
-          <span>Send me Dome Box task reminders on WhatsApp at this number.
+          <span>Send me Domebox task reminders on WhatsApp at this number.
             I can reply STOP at any time.</span>
         </label>
         <div class="text-[11px] text-gray-400 font-semibold mt-2">

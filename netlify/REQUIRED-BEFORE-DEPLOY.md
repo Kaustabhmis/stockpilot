@@ -32,7 +32,7 @@ Specifically get a view on:
 - **Cross-border transfer**: your data sits in Google Sheets, so it may leave
   India. That needs disclosing.
 - Whether your **appraisal scoring** counts as automated decision-making that
-  affects a person's employment. If a customer uses a Dome Box score to decide
+  affects a person's employment. If a customer uses a Domebox score to decide
   someone's increment, the employee has a stake in how it was computed. The
   dispute path I recommended earlier is partly a legal safeguard, not just a
   nicety.

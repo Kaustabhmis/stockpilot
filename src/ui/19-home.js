@@ -101,7 +101,7 @@ function roiCalc() {
     '<div class="mt-5">' +
       '<div class="roi-row"><span>Half of that time back is worth</span><b>' + inr(half) + ' a month</b></div>' +
       (plan
-        ? '<div class="roi-row"><span>Dome Box ' + esc(plan.name) + ' for ' + people + ' people</span><b>' + inr(plan.monthly) + ' a month</b></div>' +
+        ? '<div class="roi-row"><span>Domebox ' + esc(plan.name) + ' for ' + people + ' people</span><b>' + inr(plan.monthly) + ' a month</b></div>' +
           '<div class="roi-row" style="border:0"><span>That is</span><b class="win">' +
             (plan.monthly ? (Math.round(half / plan.monthly * 10) / 10) + '× what it costs' : '—') + '</b></div>'
         : '<div class="roi-row" style="border:0"><span>For more than 150 people</span><b>Talk to us</b></div>') +

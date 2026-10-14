@@ -55,7 +55,7 @@ scoped to exactly what your page loads today, so switching it on breaks nothing.
 
 ### 4. Your legal entity does not exist
 
-The footer reads **"© 2026 Dome Box Inc."**. Razorpay checks the entity on the
+The footer reads **"© 2026 Domebox Inc."**. Razorpay checks the entity on the
 site against the entity on the account, and this name is also what a customer
 would see on a GST invoice.
 

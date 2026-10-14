@@ -41,7 +41,7 @@ const { chromium } = require('playwright');
   await p.click('button:has-text("Back to sign in")'); await p.waitForTimeout(200);
   ok('and the sign-in form is one click away', await p.locator('#formLogin').isVisible());
   ok('with a way back to the home page',
-     await p.locator('button:has-text("Back to the Dome Box home page")').isVisible());
+     await p.locator('button:has-text("Back to the Domebox home page")').isVisible());
   await p.click('button:has-text("Create a company workspace")');
   await p.waitForTimeout(200);
   ok('signup form shown', await p.locator('#formSignup').isVisible());

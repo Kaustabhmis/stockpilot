@@ -1,4 +1,4 @@
-# Dome Box
+# Domebox
 
 Task and team management for Indian MSMEs. Assign work, chase nothing, and get
 a performance score your team can see the working for.
@@ -19,7 +19,7 @@ fails.
 
 **→ [`MANUAL.md`](MANUAL.md)** — the user manual, for your customers' teams.
 How the score is calculated, what each tab is for, and what to do when it looks
-wrong. It is also the **in-app Help Centre** — press `?` anywhere in Dome Box —
+wrong. It is also the **in-app Help Centre** — press `?` anywhere in Domebox —
 rendered from this same file at build time, so the two cannot disagree.
 `tests/manual-test.js` checks every number in it against the code.
 

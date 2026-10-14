@@ -1,5 +1,5 @@
 /**
- * DOME BOX — BACKEND API
+ * DOMEBOX — BACKEND API
  * =============================================================================
  * Built for www.domebox.in (BISCS India).
  *
@@ -43,7 +43,7 @@ function CFG() {
 /* The only address customer mail ever leaves from, and the name beside it.
    MAIL_FROM itself is a Script Property so it can be pointed somewhere else in
    a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
-var MAIL_FROM_NAME = 'Dome Box';
+var MAIL_FROM_NAME = 'Domebox';
 
 /* Every new workspace starts on the full Growth plan for this many days, then
    moves to Free unless it pays. Nothing is deleted when a trial ends. */
@@ -130,7 +130,7 @@ var DEFAULT_CATEGORIES = ['NPD','SYSTEM IMPLEMENTATION','MAINTENANCE','PRODUCTIO
 /** Run once. Tells you exactly what is still missing instead of failing later. */
 function setupDomeBox() {
   var p = PropertiesService.getScriptProperties();
-  var out = ['', '=== DOME BOX SETUP ===', ''];
+  var out = ['', '=== DOMEBOX SETUP ===', ''];
 
   var made = [];
   if (!p.getProperty('AUTH_PEPPER'))  { p.setProperty('AUTH_PEPPER', Utilities.getUuid()+Utilities.getUuid()); made.push('AUTH_PEPPER'); }

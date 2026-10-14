@@ -1,5 +1,5 @@
 /**
- * DOME BOX — AUTHENTICATION
+ * DOMEBOX — AUTHENTICATION
  * =============================================================================
  * Replaces two things that are currently broken in a way that cannot be patched
  * around:

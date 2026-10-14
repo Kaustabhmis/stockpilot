@@ -2,7 +2,7 @@
 // INVOICES
 // ===========================================================================
 /**
- * DOME BOX — TAX INVOICES
+ * DOMEBOX — TAX INVOICES
  * =============================================================================
  * Every rupee that reaches the Razorpay account leaves a document behind, sent
  * to the customer from info@biscsindia.com without anyone pressing a button.
@@ -311,7 +311,7 @@ function issueInvoice_locked_(sheetId, planName, paid, company, until) {
       split.sgst / 100, split.igst / 100, split.gross / 100, inv.status, to]);
 
     if (to) sendEmail_(to, (seller.registered ? 'Tax invoice ' : 'Invoice ') + inv.number +
-                           ' — Dome Box', invoiceHtml_(inv));
+                           ' — Domebox', invoiceHtml_(inv));
     else logError_('invoice:noEmail', inv.number + ' has no address to send to (' + sheetId + ')');
 
     if (status !== 'Issued') {
@@ -375,7 +375,7 @@ function invoiceHtml_(inv) {
       '<tr><td style="padding:7px 12px;color:#6b7280;border-bottom:1px solid #eee">Invoice number</td>' +
         '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid #eee;font-weight:800">' + esc_(inv.number) + '</td></tr>' +
       invRow_('Invoice date', inv.date) +
-      invRow_('Description', 'Dome Box — ' + inv.plan + ' subscription') +
+      invRow_('Description', 'Domebox — ' + inv.plan + ' subscription') +
       invRow_('SAC', s.sac) +
       invRow_('Subscription period', inv.period) +
       invRow_(s.registered ? 'Taxable value' : 'Amount', '₹' + rupees_(sp.taxable)) +

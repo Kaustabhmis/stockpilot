@@ -9,7 +9,7 @@ function doGet(e) {
     var vt = PropertiesService.getScriptProperties().getProperty('WA_VERIFY_TOKEN');
     if (vt && p['hub.verify_token'] === vt) return ContentService.createTextOutput(p['hub.challenge']);
   }
-  return ContentService.createTextOutput('Dome Box API is running.')
+  return ContentService.createTextOutput('Domebox API is running.')
     .setMimeType(ContentService.MimeType.TEXT);
 }
 

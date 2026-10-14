@@ -2,7 +2,7 @@
 // MIGRATING EXISTING CUSTOMERS
 // ===========================================================================
 /**
- * DOME BOX — MOVING EXISTING CUSTOMERS ONTO THE NEW BUILD
+ * DOMEBOX — MOVING EXISTING CUSTOMERS ONTO THE NEW BUILD
  * =============================================================================
  * Two functions, both runnable from the editor's Run button:
  *
@@ -108,7 +108,7 @@ function runMigration_(dryRun) {
     out.push('');
     out.push('  These will not open on the new build until fixed, so nothing in them is');
     out.push('  overwritten. It is almost always a column somebody added by hand. Move it');
-    out.push('  past the last column Dome Box uses — Tasks: ' + colLetter_(TASK_COLS.length + 1) +
+    out.push('  past the last column Domebox uses — Tasks: ' + colLetter_(TASK_COLS.length + 1) +
              ' or later; Users: ' + colLetter_(USER_COLS.length + 1) + ' or later —');
     out.push('  then run previewMigration() again.');
     out.push('');

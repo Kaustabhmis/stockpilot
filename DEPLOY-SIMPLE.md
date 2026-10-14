@@ -1,4 +1,4 @@
-# Putting the new Dome Box online — a simple book
+# Putting the new Domebox online — a simple book
 
 > **The same book with pictures, ready to print: [`DEPLOY-BOOK.pdf`](DEPLOY-BOOK.pdf).**
 
@@ -13,7 +13,7 @@ You already have **two Google Sheets**:
 
 | Your sheet | What it is | Like… |
 |---|---|---|
-| **Template sheet** | An empty pattern. When a new company signs up, Dome Box makes a copy of it for them. | A blank exam paper that gets photocopied for every student |
+| **Template sheet** | An empty pattern. When a new company signs up, Domebox makes a copy of it for them. | A blank exam paper that gets photocopied for every student |
 | **Master sheet** | The list of every company, their login, their plan. It also has your **OLD script** inside it. | The school register |
 
 And every customer has **their own sheet** with their tasks. That is their data.
@@ -47,7 +47,7 @@ sheet's roll number.
 
 - [ ] A computer with Google Chrome
 - [ ] Log in to Google with the account that owns **info@biscsindia.com**
-- [ ] The file **dome-box-complete.zip**, unzipped into a folder
+- [ ] The file **domebox-complete.zip**, unzipped into a folder
 - [ ] Your Netlify login and your Razorpay login
 - [ ] About 2 hours, with no hurry
 
@@ -91,7 +91,7 @@ We practise on a **new, empty** sheet, so the real customer list stays safe.
 
 1. Go to **script.google.com**.
 2. Click **New project** (top left).
-3. Click "Untitled project" at the top. Name it **Dome Box NEW**.
+3. Click "Untitled project" at the top. Name it **Domebox NEW**.
 4. You see a file called `Code.gs` with a few lines in it.
    Click inside it, press **Ctrl + A** (select all), press **Delete**.
 5. On your computer, open the folder from the zip → **dist** → **code.gs**.
@@ -101,7 +101,7 @@ We practise on a **new, empty** sheet, so the real customer list stays safe.
 
 ![New project](docs/deploy-book/pictures/picture-03.png)
 
-- [ ] The project **Dome Box NEW** has the long code in it, and no red lines.
+- [ ] The project **Domebox NEW** has the long code in it, and no red lines.
 
 > ❗ You did this at **script.google.com**, NOT inside your Master sheet. Good.
 
@@ -134,7 +134,7 @@ We practise on a **new, empty** sheet, so the real customer list stays safe.
 2. At the top there is a box with a function name. Click it and choose **setupDomeBox**.
 3. Click **▶ Run**.
 4. Google asks: *Authorization required*. Click **Review permissions** → choose
-   your account → **Advanced** → **Go to Dome Box NEW (unsafe)** → **Allow**.
+   your account → **Advanced** → **Go to Domebox NEW (unsafe)** → **Allow**.
    (It says "unsafe" only because you wrote the app yourself. It is fine.)
 5. The **Execution log** opens at the bottom. Read it.
 
@@ -278,7 +278,7 @@ Open your real **Master sheet** → **File** → **Make a copy**. Name it
 
 ## Step 13 — Point the NEW script at your REAL Master sheet
 
-1. **Dome Box NEW** → **⚙ Project Settings** → Script Properties → change
+1. **Domebox NEW** → **⚙ Project Settings** → Script Properties → change
    `MASTER_DB_ID` from the Practice ID to your **real Master ID**. Save.
 2. Open the `reminders` file → change `SHEET_ID` to the same **real Master ID**. Save.
 3. Choose **ensureRegistry** → **▶ Run**. (It only adds missing tabs. It never deletes.)
@@ -294,7 +294,7 @@ Open your real **Master sheet** → **File** → **Make a copy**. Name it
 
 1. **Files +** → **Script** → name it `backup`. Paste all of **domebox → backup.gs**. Save.
 2. Choose **backupAllTenants** → **▶ Run**. It copies every customer's sheet into
-   a Drive folder called **Dome Box Backups**. (If it says *Hit MAX_PER_RUN*, run it again.)
+   a Drive folder called **Domebox Backups**. (If it says *Hit MAX_PER_RUN*, run it again.)
 3. Choose **verifyLatestBackup** → **▶ Run**.
 
 - [ ] verifyLatestBackup shows no "NO BACKUP AT ALL".
@@ -337,7 +337,7 @@ The new script uses the same live key your old system uses today, so payments ne
 1. Open your **Master sheet** → **Extensions → Apps Script** (the OLD script).
    **Ctrl + F** → search `rzp_live`. Copy the Key ID and the Key Secret next to
    it. **Change nothing**, close the tab.
-2. **Dome Box NEW** → **⚙ Project Settings** → replace the test `RAZORPAY_KEY_ID`
+2. **Domebox NEW** → **⚙ Project Settings** → replace the test `RAZORPAY_KEY_ID`
    and `RAZORPAY_KEY_SECRET` with these **live** ones. Save.
 3. Razorpay → **Live Mode** → **Webhooks** → **Add New Webhook**: URL = new
    **API URL**, Secret = your made-up password, **payment.captured** → **Create**.
@@ -367,7 +367,7 @@ now, after the website has moved.
 1. Razorpay → **Live Mode** → **Account & Settings** → **API Keys** →
    **Regenerate**. If asked when the old key should stop, **immediately** is fine
    now — nothing uses it any more.
-2. Put the new **Key ID** and **Key Secret** into **Dome Box NEW** →
+2. Put the new **Key ID** and **Key Secret** into **Domebox NEW** →
    Script Properties. Save. Run **setupDomeBox**.
 3. Razorpay → **Webhooks**: if there is an old webhook pointing to the old
    script's address, delete it.

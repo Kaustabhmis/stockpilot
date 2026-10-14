@@ -1,5 +1,5 @@
 /* ===========================================================================
-   DOME BOX — FRONT END
+   DOMEBOX — FRONT END
    Talks to the Apps Script web app. Put your /exec URL in API_URL below.
    =========================================================================== */
 'use strict';

@@ -1,7 +1,7 @@
 /**
  * MANUAL.md -> the in-app Help Centre.
  *
- * Built from the same file, at build time, so the help inside Dome Box and the
+ * Built from the same file, at build time, so the help inside Domebox and the
  * manual handed to a customer cannot say different things. tests/manual-test.js
  * already holds every number in MANUAL.md against the code; rendering the help
  * from it means that guard covers what people read inside the app too.

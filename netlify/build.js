@@ -150,7 +150,7 @@ if (!fs.existsSync(notFound)) {
      mistypes a URL should land somewhere that still looks like the product. */
   fs.writeFileSync(notFound, '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<meta name="robots" content="noindex"><title>Page not found — Dome Box</title>' +
+    '<meta name="robots" content="noindex"><title>Page not found — Domebox</title>' +
     '<link rel="icon" href="/favicon.svg"><style>' +
     'body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f6fa;' +
     'color:#1d2939;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
@@ -159,7 +159,7 @@ if (!fs.existsSync(notFound)) {
     'a{background:#1e4fbf;color:#fff;text-decoration:none;padding:13px 28px;' +
     'border-radius:10px;font-weight:800;display:inline-block}</style></head><body><div>' +
     '<h1>That page is not here</h1><p>The link may be out of date.</p>' +
-    '<a href="/">Go to Dome Box</a></div></body></html>');
+    '<a href="/">Go to Domebox</a></div></body></html>');
   console.log('\n--- 404 ---\n  404.html written (the plain one; gen-pages.js writes a fuller one)');
 }
 

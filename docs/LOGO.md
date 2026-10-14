@@ -1,4 +1,4 @@
-# The Dome Box mark
+# The Domebox mark
 
 ![the mark](../tests/logo-candidates.png)
 

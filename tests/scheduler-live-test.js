@@ -19,7 +19,7 @@ const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || !x
 
 const env = build();
 Object.assign(env.props, { MASTER_DB_ID: 'MASTER', TEMPLATE_ID: 'TEMPLATE', AUTH_PEPPER: 'a', TOKEN_SECRET: 'b' });
-env.newFile('MASTER', 'Dome Box Master');
+env.newFile('MASTER', 'Domebox Master');
 const tpl = env.newFile('TEMPLATE', 'Template');
 ['Users', 'Tasks', 'KRA_Master', 'Reviews', 'Leave', 'Settings'].forEach((n) => tpl.insertSheet(n));
 tpl.getSheetByName('Settings').appendRow(['General']);

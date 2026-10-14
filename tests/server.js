@@ -14,8 +14,8 @@ const APP = new Function(...names, src + '\n;return { doPost: doPost, doGet: doG
         + '__newExecution: function () { MAIL_ALIAS_OK = null; } };')(...names.map(n => env.G[n]));
 
 /* Seed: a registry and a template, exactly as a real deployment would have. */
-const master = env.newFile('MASTER', 'Dome Box Registry');
-const tpl = env.newFile('TEMPLATE', 'Dome Box Template');
+const master = env.newFile('MASTER', 'Domebox Registry');
+const tpl = env.newFile('TEMPLATE', 'Domebox Template');
 ['Users','Tasks','KRA_Master','Reviews','Leave','Settings'].forEach(n => tpl.insertSheet(n));
 tpl.getSheetByName('Settings').appendRow(['General']);
 

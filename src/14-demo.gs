@@ -2,7 +2,7 @@
 // DEMO WORKSPACE
 // ===========================================================================
 /**
- * DOME BOX — A DEMO ACCOUNT, BUILT FROM THE REAL PRODUCT
+ * DOMEBOX — A DEMO ACCOUNT, BUILT FROM THE REAL PRODUCT
  * =============================================================================
  * Run createDemoAccount() once in the Apps Script editor. It prints a login.
  *
@@ -42,7 +42,7 @@
 
 var DEMO_EMAIL    = 'demo@biscsindia.com';
 var DEMO_PASSWORD = 'DomeBoxDemo2026';
-var DEMO_COMPANY  = 'Dome Box Demo — Sharma Precision Works';
+var DEMO_COMPANY  = 'Domebox Demo — Sharma Precision Works';
 /* Enterprise: every cap lifted, every feature on. A demo on a plan that hides
    half the product sells half the product. */
 var DEMO_PLAN     = 'Enterprise';
@@ -91,7 +91,7 @@ function openDemo_(as) {
  * @param {string=} password  defaults to DEMO_PASSWORD, minimum 8 characters
  */
 function createDemoAccount(email, password) {
-  var out = ['', '=== DOME BOX DEMO ACCOUNT ===', ''];
+  var out = ['', '=== DOMEBOX DEMO ACCOUNT ===', ''];
   email = String(email || DEMO_EMAIL).trim().toLowerCase();
   password = String(password || DEMO_PASSWORD);
 

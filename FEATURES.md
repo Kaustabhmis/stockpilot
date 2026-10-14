@@ -366,7 +366,7 @@ are marked `offered:false` so no new buyer can land on them.
 - [x] **Weekly review** — an eight-segment meeting run from one screen (new)
 - [x] **Tagging everywhere** — task, project, roadblock and key number → goal; story and cookie award → value (new)
 
-The terms are Dome Box's own: Purpose, Values, Year and Quarter goals, Key
+The terms are Domebox's own: Purpose, Values, Year and Quarter goals, Key
 numbers, and a Weekly review in eight segments — Wins, Values in action, Goal
 check, Key numbers, Updates, Roadblocks, Actions, Close.
 
@@ -394,7 +394,7 @@ who was there, from `info@biscsindia.com`, with their own actions at the top.
 - [x] **The user manual, inside the app** (new) — press `?` anywhere
 
 `MANUAL.md` is rendered into the page at build time, so the help a person reads
-in Dome Box is the manual handed to their company, word for word. Every number
+in Domebox is the manual handed to their company, word for word. Every number
 in it is held against the code by `tests/manual-test.js`, so the help cannot
 drift from the product either.
 

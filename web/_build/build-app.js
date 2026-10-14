@@ -55,7 +55,7 @@ const out = `${parts[0]}
 ${a.markup}
 <script>
 /* ===========================================================================
-   Dome Box engine — generated from domebox/domain.gs. The same rules the
+   Domebox engine — generated from domebox/domain.gs. The same rules the
    backend runs; do not hand-edit.
    =========================================================================== */
 ${R('web/domain.js')}

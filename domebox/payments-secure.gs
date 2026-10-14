@@ -19,7 +19,7 @@
  */
 
 /**
- * DOME BOX — PAYMENT VERIFICATION
+ * DOMEBOX — PAYMENT VERIFICATION
  * =============================================================================
  * Replaces handlePaymentSuccess(sheetId, planName), which grants a plan because
  * the browser asked it to. Today this is a free upgrade for anyone:
@@ -106,7 +106,7 @@ function createRazorpayOrder(planName) {
   var order = JSON.parse(res.getContentText());
   return { status: 'success', orderData: {
     key: razorpayKeyId_(), order_id: order.id, amount: order.amount,
-    currency: 'INR', name: 'Dome Box', description: plan.name } };
+    currency: 'INR', name: 'Domebox', description: plan.name } };
 }
 
 /**
@@ -178,7 +178,7 @@ function legacyGrantPlan_(sheetId, planName, paid) {
     dir.getRange(i + 1, 5).setValue(until);
 
     try {
-      sendEmailSafe(data[i][1], 'Dome Box — Payment Receipt',
+      sendEmailSafe(data[i][1], 'Domebox — Payment Receipt',
         legacyReceiptHtml_(data[i][0], planName, paid, until));
     } catch (e) { /* a failed receipt must never undo a paid upgrade */ }
     return until;
@@ -194,7 +194,7 @@ function legacyReceiptHtml_(company, planName, paid, until) {
     '<div style="background:#1e3a8a;color:#fff;padding:20px;border-radius:8px 8px 0 0"><h2 style="margin:0">Payment Receipt</h2></div>' +
     '<div style="padding:20px">' +
     '<p>Hi <strong>' + esc(company) + '</strong>,</p>' +
-    '<p>Your Dome Box workspace has been upgraded.</p>' +
+    '<p>Your Domebox workspace has been upgraded.</p>' +
     '<table style="width:100%;border-collapse:collapse;margin-top:15px">' +
     '<tr style="border-bottom:1px solid #ddd"><td style="padding:10px 0"><strong>Plan</strong></td><td style="text-align:right">' + esc(PLANS[planName] ? PLANS[planName].name : planName) + '</td></tr>' +
     '<tr style="border-bottom:1px solid #ddd"><td style="padding:10px 0"><strong>Amount paid</strong></td><td style="text-align:right;font-weight:bold;color:#047857">' + esc(amount) + '</td></tr>' +

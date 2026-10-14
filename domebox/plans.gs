@@ -1,5 +1,5 @@
 /**
- * DOME BOX — PLAN LIMITS
+ * DOMEBOX — PLAN LIMITS
  * =============================================================================
  * The published pricing promises specific caps. Nothing enforced them, so every
  * plan was effectively Enterprise. These are the rules; they are pure, so the

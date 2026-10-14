@@ -16,7 +16,7 @@ const cfg = JSON.parse(fs.readFileSync(path.join(here, 'site-config.json'), 'utf
 const CHECK = process.argv.includes('--check');
 
 const C = {
-  productName: cfg.productName || 'Dome Box',
+  productName: cfg.productName || 'Domebox',
   legalEntity: cfg.legalEntity || 'BISCS India',
   domain: (cfg.domain || 'www.domebox.in').replace(/^https?:\/\//, '').replace(/\/$/, ''),
   supportEmail: cfg.supportEmail || 'info@biscsindia.com',
@@ -43,7 +43,7 @@ const nav = `
     <path d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#1e4fbf"/>
     <path d="M35 55 L46 66 L67 42" fill="none" stroke="#fff" stroke-width="10"
           stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span>Dome Box</span></a>
+    <span>Domebox</span></a>
   <nav>
     <a href="/features">Features</a>
     <a href="/pricing">Pricing</a>
@@ -75,7 +75,7 @@ body{margin:0;background:#f4f6fa;color:#0f1b2d;
 header{background:#fff;border-bottom:1px solid #e2e7ef;padding:14px 24px;display:flex;
   align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:9}
 .brand{display:flex;align-items:center;gap:8px;font-weight:900;font-size:19px;
-  letter-spacing:-.01em;word-spacing:.18em;color:#0f1b2d;text-decoration:none}
+  letter-spacing:-.01em;color:#0f1b2d;text-decoration:none}
 nav a{color:#475467;text-decoration:none;font-weight:700;font-size:14px;margin-left:18px}
 nav a:hover{color:#1e4fbf}
 .nav-cta{background:#1e4fbf;color:#fff !important;padding:9px 16px;border-radius:10px}

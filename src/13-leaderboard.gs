@@ -2,7 +2,7 @@
 // LEADERBOARD
 // ===========================================================================
 /**
- * DOME BOX — THE LEADERBOARD
+ * DOMEBOX — THE LEADERBOARD
  * =============================================================================
  * Top of the month to bottom, for a workspace that wants its best work seen.
  *

@@ -21,7 +21,7 @@ module.exports = (C) => {
     slug: 'pricing',
     title: 'Pricing',
     h1: 'Pricing',
-    description: 'Dome Box pricing in INR: 14-day free trial, free for 5 users, then ₹2,499/month for 15, ₹5,999 for 50, ₹12,999 for 150. Every feature on every paid plan.',
+    description: 'Domebox pricing in INR: 14-day free trial, free for 5 users, then ₹2,499/month for 15, ₹5,999 for 50, ₹12,999 for 150. Every feature on every paid plan.',
     changefreq: 'monthly', priority: '0.9',
     faq: [
       ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
@@ -67,7 +67,7 @@ ${cta('Try the full product free for 14 days, then pick the size that fits.')}`,
   {
     slug: 'features',
     title: 'Features',
-    h1: 'What Dome Box does',
+    h1: 'What Domebox does',
     description: 'Task board, multi-stage projects, recurring jobs, multi-level approvals, KRA/KPI tracking, appraisals, delegation scoring and an org chart — built for Indian MSMEs.',
     changefreq: 'monthly', priority: '0.8',
     body: `
@@ -133,7 +133,7 @@ ${cta('See it with your own team this week.')}`,
     slug: 'delegation-score',
     title: 'How the delegation score works',
     h1: 'A performance score your team will believe',
-    description: 'The method behind the Dome Box score: how well you delivered multiplied by how much you delivered, with managers measured on the approvals they hold.',
+    description: 'The method behind the Domebox score: how well you delivered multiplied by how much you delivered, with managers measured on the approvals they hold.',
     changefreq: 'monthly', priority: '0.7',
     faq: [
       ['Does one easy task score the same as ten hard ones?', 'No. The rate is credited against the load actually carried, weighted by priority, so ten jobs with seven delivered on time outscores one easy job delivered.'],
@@ -289,7 +289,7 @@ only appears at appraisal time is a form, not a management tool.</li>
 </ul>
 
 <h2>Doing it without a spreadsheet</h2>
-<p>Dome Box holds a KRA set per person with the target, the unit, the direction
+<p>Domebox holds a KRA set per person with the target, the unit, the direction
 and the measurement source, and a job profile keeps the standard for the next
 hire. The appraisal form then shows each target next to the rating, so the
 conversation is about evidence rather than recollection.</p>
@@ -432,7 +432,7 @@ ${cta('Run one line or one department for a month.')}`,
   {
     slug: 'alternatives',
     title: 'Compared with Monday, Trello and Asana',
-    h1: 'How Dome Box compares',
+    h1: 'How Domebox compares',
     description: 'An honest comparison with Monday.com, Trello, Asana and a spreadsheet for an Indian SME — including where one of the others is the better buy.',
     changefreq: 'yearly', priority: '0.7',
     body: `
@@ -446,7 +446,7 @@ this page where the answer is "use the other one".</p>
 <tr><td>A free board for a handful of people, nothing more</td><td>Trello</td></tr>
 <tr><td>Deep customisation and you have someone to maintain it</td><td>Monday.com</td></tr>
 <tr><td>Software-team workflows, sprints and dependencies</td><td>Asana or Jira</td></tr>
-<tr><td>Work tracked <em>and</em> people measured, priced in INR</td><td>Dome Box</td></tr>
+<tr><td>Work tracked <em>and</em> people measured, priced in INR</td><td>Domebox</td></tr>
 <tr><td>Fewer than 5 people and no process yet</td><td>A spreadsheet, honestly</td></tr>
 </tbody></table>
 
@@ -464,11 +464,11 @@ of performance. If all you need is to see who has what, Trello is the cheaper
 answer and we would rather you knew that.</p>
 
 <h2>Against Monday.com and Asana</h2>
-<p>Both are more configurable than Dome Box and both have far bigger ecosystems.
+<p>Both are more configurable than Domebox and both have far bigger ecosystems.
 Two practical differences for an Indian SME:</p>
 <ul>
 <li><strong>Price.</strong> Per-seat pricing in dollars at a 50-person company
-runs to several lakh a year. Dome Box Growth covers 50 people at ₹59,990.</li>
+runs to several lakh a year. Domebox Growth covers 50 people at ₹59,990.</li>
 <li><strong>Appraisals.</strong> Neither produces a defensible performance score
 or holds KRAs and KPIs. You would still buy a second tool for that, or do it in a
 spreadsheet.</li>
@@ -479,10 +479,10 @@ constraint is "I cannot tell who is actually delivering", that is what we built.
 <h2>Against a full HRMS</h2>
 <p>An HRMS handles payroll, attendance, leave and compliance, and does it far
 better than we ever will. It usually treats performance as a form to fill in once
-a year. Dome Box is the opposite: it is weak on payroll and strong on what
+a year. Domebox is the opposite: it is weak on payroll and strong on what
 actually happened week to week. Many customers run both.</p>
 
-<h2>Where Dome Box is genuinely different</h2>
+<h2>Where Domebox is genuinely different</h2>
 <ul>
 <li>A performance score built from the task record rather than from memory, with
 the working shown for every number.</li>

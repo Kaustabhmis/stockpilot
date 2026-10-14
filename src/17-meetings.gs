@@ -2,7 +2,7 @@
 // MEETINGS
 // ===========================================================================
 /**
- * DOME BOX — THE WEEKLY REVIEW
+ * DOMEBOX — THE WEEKLY REVIEW
  * =============================================================================
  * A meeting with a fixed shape, run from one screen, that leaves work behind
  * rather than minutes nobody reads.
@@ -18,7 +18,7 @@
  *
  * WHAT IS DIFFERENT HERE
  *
- * An action agreed in the meeting is not a line in a list. It is a Dome Box
+ * An action agreed in the meeting is not a line in a list. It is a Domebox
  * task: it lands on the person's board, it is chased by the daily digest, it
  * counts toward their score, and if it is tagged to a goal it moves that goal's
  * progress. The next meeting opens with last week's actions, done or not —
@@ -509,5 +509,5 @@ function meetingSummaryHtml_(v, s, mine) {
       ['Key numbers missed', String(s.numbersMissed)],
       ['Rating', s.rating === null ? 'not rated' : s.rating + ' / 10 (' + s.ratingCount + ')']]) +
     (v.meeting.minutes ? '<p><strong>Minutes</strong></p><p style="white-space:pre-wrap">' + esc_(v.meeting.minutes) + '</p>' : '') +
-    btn_('Open Dome Box', CFG().siteUrl));
+    btn_('Open Domebox', CFG().siteUrl));
 }

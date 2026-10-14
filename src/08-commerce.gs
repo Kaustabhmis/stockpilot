@@ -47,7 +47,7 @@ function createRazorpayOrder_(ctx, planName, promoCode) {
        total that is larger than the price on the card they clicked. */
     charge: { net: net / 100, rate: rate, tax: (amount - net) / 100, total: amount / 100 },
     orderData: { key: c.razorKey, order_id: order.id,
-    amount: order.amount, currency: 'INR', name: 'Dome Box',
+    amount: order.amount, currency: 'INR', name: 'Domebox',
     description: plan.name, prefill: { email: ctx.me.email, contact: ctx.me.phone || '' } } };
 }
 
@@ -133,7 +133,7 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     dir.getRange(i + 1, 4).setValue(planName);
     dir.getRange(i + 1, 5).setValue(until);
     dir.getRange(i + 1, 7).setValue('Active');
-    try { sendEmail_(d[i][1], 'Dome Box — payment receipt',
+    try { sendEmail_(d[i][1], 'Domebox — payment receipt',
       receiptHtml_(company || d[i][0], planName, paid, until)); } catch (e) {}
     /* The invoice follows the receipt, from inside the same lock, so the
        serial number cannot collide with another payment landing at the same
@@ -317,11 +317,11 @@ function mailShell_(title, inner) {
     '<div style="background:#5b4bdb;color:#fff;padding:18px 24px">' +
     mailMark_() +
     '<span style="display:inline-block;vertical-align:middle;margin-left:10px;' +
-    'font-weight:900;font-size:15px;letter-spacing:-.2px">Dome Box</span>' +
+    'font-weight:900;font-size:15px;letter-spacing:-.2px">Domebox</span>' +
     '<h2 style="margin:12px 0 0;font-size:18px;font-weight:800">' + esc_(title) + '</h2></div>' +
     '<div style="padding:24px;color:#453f4c;font-size:14px;line-height:1.6">' + inner + '</div>' +
     '<div style="padding:16px 24px;background:#faf8f5;color:#7d7570;font-size:12px;border-top:1px solid #e7e1d8">' +
-    'Dome Box · BISCS India · <a href="' + CFG().siteUrl + '" style="color:#5b4bdb">' +
+    'Domebox · BISCS India · <a href="' + CFG().siteUrl + '" style="color:#5b4bdb">' +
     esc_(CFG().siteUrl.replace(/^https?:\/\//, '')) + '</a></div></div>';
 }
 
@@ -348,7 +348,7 @@ function notifyAssignment_(ctx, target, approver, title, due, id, status) {
         '<p>Hi <strong>' + esc_(target.name) + '</strong>,</p>' +
         '<p><strong>' + esc_(ctx.actor.name) + '</strong> has assigned you a task.</p>' +
         infoTable_([['Task', title], ['Due', due || '—'], ['Ref', id]]) +
-        btn_('Open Dome Box', CFG().siteUrl)));
+        btn_('Open Domebox', CFG().siteUrl)));
   }
 }
 
@@ -370,7 +370,7 @@ function notifyStatus_(ctx, t, status, note) {
     infoTable_([['Task', t.title], ['Due', t.due || '—']]) +
     (note ? '<p style="background:#fffbeb;border:1px solid #fde68a;padding:12px;border-radius:8px">' +
       '<em>"' + esc_(note) + '"</em></p>' : '') +
-    btn_('Open Dome Box', CFG().siteUrl)));
+    btn_('Open Domebox', CFG().siteUrl)));
 }
 
 /**
@@ -388,7 +388,7 @@ function notifyStageReleased_(ctx, project, stage) {
     'so stage ' + esc_(String(stage.stageNo)) + ' is now yours to start.</p>' +
     infoTable_([['Project', project], ['Stage', stage.stageNo + ' of ' + stage.stageCount],
                 ['Your task', stage.title], ['Due', stage.due || '—']]) +
-    btn_('Open Dome Box', CFG().siteUrl)));
+    btn_('Open Domebox', CFG().siteUrl)));
 }
 
 /** Recognition only works if the person hears about it. */
@@ -401,7 +401,7 @@ function notifyCookie_(ctx, who, points, reason) {
     '<p style="background:#ecfdf5;border:1px solid #a7f3d0;padding:12px;border-radius:8px">' +
       '<em>"' + esc_(reason) + '"</em></p>' +
     '<p>It counts towards your score this month and is on the record at your next review.</p>' +
-    btn_('Open Dome Box', CFG().siteUrl)));
+    btn_('Open Domebox', CFG().siteUrl)));
 }
 
 /** The raiser hears the outcome, with the reason if it was refused. */
@@ -414,7 +414,7 @@ function notifyDecision_(ctx, t, isApproved, remarks) {
         '<p>Hi <strong>' + esc_(owner.name) + '</strong>,</p>' +
         '<p><strong>' + esc_(ctx.actor.name) + '</strong> has approved this, so it is on your list now.</p>' +
         infoTable_([['Task', t.title], ['Due', t.due || '—'], ['Raised by', nameOf_(ctx, t.by)]]) +
-        btn_('Open Dome Box', CFG().siteUrl)));
+        btn_('Open Domebox', CFG().siteUrl)));
     }
   }
   if (!raiser || !raiser.email) return;
@@ -428,7 +428,7 @@ function notifyDecision_(ctx, t, isApproved, remarks) {
       infoTable_([['Task', t.title], ['Due', t.due || '—']]) +
       (remarks ? '<p style="background:#fef2f2;border:1px solid #fecaca;padding:12px;border-radius:8px">' +
         '<strong>Remark:</strong> ' + esc_(remarks) + '</p>' : '') +
-      btn_('Open Dome Box', CFG().siteUrl)));
+      btn_('Open Domebox', CFG().siteUrl)));
 }
 
 function infoTable_(rows) {
@@ -441,26 +441,26 @@ function infoTable_(rows) {
 
 function resetEmailHtml_(link) {
   return mailShell_('Reset your password',
-    '<p>We received a request to reset your Dome Box password.</p>' +
+    '<p>We received a request to reset your Domebox password.</p>' +
     btn_('Set a new password', link) +
     '<p style="font-size:12px;color:#6b7280">This link works once and expires in one hour. ' +
     'If you did not ask for it, you can ignore this email — nothing has changed.</p>');
 }
 
 function sendWelcome_(email, name, company, trialEnds) {
-  sendEmail_(email, 'Welcome to Dome Box', mailShell_('Your workspace is ready',
+  sendEmail_(email, 'Welcome to Domebox', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box, with the full ' + TRIAL_PLAN +
+    '<p><strong>' + esc_(company) + '</strong> is set up on Domebox, with the full ' + TRIAL_PLAN +
     ' plan free for ' + TRIAL_DAYS + ' days' + (trialEnds ? ' (until ' + esc_(trialEnds) + ')' : '') +
     ' — up to 50 people, scoring, reports and appraisals included. No card needed. ' +
     'After that it moves to the Free plan unless you choose one; nothing is deleted.</p>' +
-    '<p>Add your team first, then assign the first task.</p>' + btn_('Open Dome Box', CFG().siteUrl)));
+    '<p>Add your team first, then assign the first task.</p>' + btn_('Open Domebox', CFG().siteUrl)));
 }
 
 function sendWelcomeStaff_(email, name, company, username) {
-  sendEmail_(email, 'You have been added to Dome Box', mailShell_('Welcome to the team',
+  sendEmail_(email, 'You have been added to Domebox', mailShell_('Welcome to the team',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p>You have been added to <strong>' + esc_(company) + '</strong> on Dome Box.</p>' +
+    '<p>You have been added to <strong>' + esc_(company) + '</strong> on Domebox.</p>' +
     infoTable_([['Sign in with', email], ['Username', username]]) +
     '<p>Your manager has set your password. Change it after your first sign-in.</p>' +
     btn_('Sign in', CFG().siteUrl)));

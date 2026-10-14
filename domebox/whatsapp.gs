@@ -1,5 +1,5 @@
 /**
- * DOME BOX — WHATSAPP CHANNEL
+ * DOMEBOX — WHATSAPP CHANNEL
  * =============================================================================
  * A second delivery channel for the reminder engine. The rules live in the pure
  * functions at the top (no I/O, unit-tested in Node); Apps Script I/O is below.

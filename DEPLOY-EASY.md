@@ -1,11 +1,11 @@
-# Deploy Dome Box — the easy guide
+# Deploy Domebox — the easy guide
 
 > New to this? Read **[`DEPLOY-BOOK.pdf`](DEPLOY-BOOK.pdf)** instead — the same steps in very simple words, with a picture of every screen.
 
 Twelve steps. Do them in order. Each one ends with **✅ how you know it worked**.
 
 You need: your Google account (the one that owns `info@biscsindia.com`), your
-Razorpay login, your Netlify login, and the files from `dome-box-complete.zip`.
+Razorpay login, your Netlify login, and the files from `domebox-complete.zip`.
 
 Your current live site keeps running untouched until step 11.
 
@@ -19,8 +19,8 @@ Your current live site keeps running untouched until step 11.
 ### 1. Make two spreadsheets
 
 In Google Drive:
-- Make a **copy** of your current template spreadsheet. Name it `Dome Box Template`.
-- Make a **new blank** spreadsheet. Name it `Dome Box Registry`.
+- Make a **copy** of your current template spreadsheet. Name it `Domebox Template`.
+- Make a **new blank** spreadsheet. Name it `Domebox Registry`.
 
 Open each one and copy the long ID from the address bar — the part between
 `/d/` and `/edit`. Paste both IDs into a note; you need them next.

@@ -131,7 +131,7 @@ const headTags = `
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Dome Box — Task &amp; Team Management for Indian MSMEs">
+  <meta name="twitter:title" content="Domebox — Task &amp; Team Management for Indian MSMEs">
   <meta name="twitter:description" content="Automate accountability with delegation scoring, KRA/KPI tracking and performance appraisals.">
   <meta name="twitter:image" content="${ORIGIN}/og-cover.png">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -172,8 +172,8 @@ fix('icon font: display=block so ligature names never flash as text',
   { alreadyDone: h => /Material\+Icons&display=block/.test(h) });
 
 /* ---- 8. legal entity -------------------------------------------------- */
-fix('footer: "Dome Box Inc." is not your legal entity',
-  /&copy; 2026 Dome Box Inc\. All rights reserved\./,
+fix('footer: "Domebox Inc." is not your legal entity',
+  /&copy; 2026 Domebox Inc\. All rights reserved\./,
   `&copy; 2026 ${cfg.legalEntity}. ${cfg.productName} is a product of ${cfg.legalEntity}.`,
   { alreadyDone: h => h.includes(`product of ${cfg.legalEntity}`) });
 
@@ -228,8 +228,8 @@ fix('mobile menu: aria-expanded + accessible name',
 /* ---- 13. hero image: dimensions stop the layout jumping -------------- */
 fix('hero image: width/height (prevents layout shift) + decoding hint',
   /<img src="(https:\/\/images\.unsplash\.com[^"]*)" alt="Dashboard" class="([^"]*)">/,
-  '<img src="$1" alt="The Dome Box task board, showing work in progress across a team" width="1000" height="667" decoding="async" class="$2">',
-  { alreadyDone: h => /alt="The Dome Box task board/.test(h) });
+  '<img src="$1" alt="The Domebox task board, showing work in progress across a team" width="1000" height="667" decoding="async" class="$2">',
+  { alreadyDone: h => /alt="The Domebox task board/.test(h) });
 
 /* ---- 14. contrast failures ------------------------------------------- */
 fix('text-gray-400 on white/gray-50 → gray-500 (was 2.54:1, WCAG AA needs 4.5)',

@@ -6,7 +6,7 @@
  *
  * The brand is applied by REDEFINING the ramps the app already uses rather than
  * by rewriting hundreds of class strings. `blue-600` still means "the action
- * colour" everywhere it appears; it is Dome Box corporate blue. `slate` carries
+ * colour" everywhere it appears; it is Domebox corporate blue. `slate` carries
  * the navy sections, `gray` the cool neutrals, and `coral` (kept as a name) is
  * the teal accent. Brand palette: navy #13294b, blue #1e4fbf, teal #0f8f84,
  * gold #d4930f (decoration only — never text on white).

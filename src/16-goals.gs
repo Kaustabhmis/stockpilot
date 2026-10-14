@@ -2,7 +2,7 @@
 // GOALS, VALUES AND KEY NUMBERS
 // ===========================================================================
 /**
- * DOME BOX — WHERE THE COMPANY IS GOING
+ * DOMEBOX — WHERE THE COMPANY IS GOING
  * =============================================================================
  * Four things, set up once and then lived with every week:
  *
@@ -17,7 +17,7 @@
  *
  * THE PART THAT MAKES IT MORE THAN A WALL POSTER
  *
- * Everything else in Dome Box can point at these. A task or a whole project
+ * Everything else in Domebox can point at these. A task or a whole project
  * says which goal it serves; a cookie award says which value it recognised; a
  * roadblock or a key number says which goal it threatens. So a goal's progress
  * is not somebody's optimistic percentage — it is the share of the work linked

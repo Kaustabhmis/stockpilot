@@ -1,5 +1,5 @@
 /**
- * DOME BOX — RAZORPAY WEBHOOK
+ * DOMEBOX — RAZORPAY WEBHOOK
  * =============================================================================
  * The browser handler is not a source of truth. If the customer closes the tab
  * or loses signal between paying and the callback firing, you are paid and they
@@ -125,7 +125,7 @@ function handleRazorpayWebhook(e) {
     if (intent.action === 'ignore') { billingLog_('IGNORED', event, ''); return out; }
     if (!intent.email) {
       billingLog_('UNMATCHED', event + ' — no email in notes; cannot identify the customer', raw.slice(0, 800));
-      billingAlert_('Dome Box: a paid event could not be matched to a customer',
+      billingAlert_('Domebox: a paid event could not be matched to a customer',
         'Razorpay sent ' + event + ' with no identifying email in notes.\n\n' +
         'Add notes.email when you create the order, or match this one by hand.\n\n' + raw.slice(0, 2000));
       return out;
@@ -150,7 +150,7 @@ function applyBillingIntent_(event, intent) {
   var untilCol = firstIndexOf_(head, ['validuntil', 'graceuntil', 'expiry', 'expires']);
 
   if (emailCol < 0 || planCol < 0) {
-    billingAlert_('Dome Box: registry is missing an email or plan column',
+    billingAlert_('Domebox: registry is missing an email or plan column',
       'Could not apply ' + event + ' for ' + intent.email + '.');
     return;
   }
@@ -161,7 +161,7 @@ function applyBillingIntent_(event, intent) {
     if (intent.action === 'activate') {
       var plan = planForAmount(intent.amount);
       if (!plan) {
-        billingAlert_('Dome Box: payment of an unrecognised amount',
+        billingAlert_('Domebox: payment of an unrecognised amount',
           intent.email + ' paid ' + (intent.amount / 100) + ' INR, which matches no plan.\n' +
           'Add it to BILLING.PLAN_BY_AMOUNT, then set their plan by hand.');
         billingLog_('UNKNOWN_AMOUNT', intent.email + ' ' + intent.amount, '');
@@ -176,7 +176,7 @@ function applyBillingIntent_(event, intent) {
       if (statusCol > -1) reg.getRange(r + 1, statusCol + 1).setValue('Past Due');
       if (untilCol > -1)  reg.getRange(r + 1, untilCol + 1).setValue(graceUntil(new Date(), BILLING.GRACE_DAYS));
       billingLog_('GRACE', intent.email + ' — ' + intent.reason, '');
-      billingAlert_('Dome Box: payment failed for ' + intent.email,
+      billingAlert_('Domebox: payment failed for ' + intent.email,
         intent.reason + '\n\nThey keep access until ' + graceUntil(new Date(), BILLING.GRACE_DAYS) + '.');
 
     } else if (intent.action === 'suspend') {
@@ -184,13 +184,13 @@ function applyBillingIntent_(event, intent) {
       reg.getRange(r + 1, planCol + 1).setValue('Free Tier');
       if (statusCol > -1) reg.getRange(r + 1, statusCol + 1).setValue('Suspended');
       billingLog_('SUSPENDED', intent.email + ' — ' + intent.reason, '');
-      billingAlert_('Dome Box: ' + intent.email + ' suspended', intent.reason);
+      billingAlert_('Domebox: ' + intent.email + ' suspended', intent.reason);
     }
     return;
   }
 
   billingLog_('NO_SUCH_CUSTOMER', intent.email + ' (' + event + ')', '');
-  billingAlert_('Dome Box: paid event for an unknown email',
+  billingAlert_('Domebox: paid event for an unknown email',
     intent.email + ' is not in the registry. Event: ' + event);
 }
 

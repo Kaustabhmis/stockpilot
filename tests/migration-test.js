@@ -28,7 +28,7 @@ const OLD_TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Ass
   'Job Category','Approver Manager'];
 const OLD_USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept','Phone','Manager'];
 
-const reg = env.newFile('LIVE_REGISTRY', 'Dome Box Registry (live)');
+const reg = env.newFile('LIVE_REGISTRY', 'Domebox Registry (live)');
 const dir = reg.insertSheet('Directory');
 dir.appendRow(['Company','Email','Password','Plan','Valid Until','SheetID','Status','Created']);
 dir.appendRow(['Ghosh Fabricators', 'owner@ghoshfab.in', 'OldPass#2024', 'Standard',
@@ -41,7 +41,7 @@ glob.appendRow(['owner@ghoshfab.in', 'OldPass#2024', 'GHOSH_SHEET', 'owner']);
 glob.appendRow(['ravi@ghoshfab.in', 'ravi1234', 'GHOSH_SHEET', 'ravi']);
 glob.appendRow(['boss@other.in', 'theirpass99', 'OTHER_SHEET', 'boss']);
 
-const t = env.newFile('GHOSH_SHEET', 'Ghosh Fabricators — Dome Box');
+const t = env.newFile('GHOSH_SHEET', 'Ghosh Fabricators — Domebox');
 const users = t.insertSheet('Users');
 users.appendRow(OLD_USER_COLS);
 users.appendRow(['Sanjay Ghosh', 'owner', 'OldPass#2024', 'owner@ghoshfab.in', 'Admin', 'Owner', 'Management', '9830000001', '']);
@@ -103,11 +103,11 @@ oth.getSheetByName('Tasks').appendRow(['O-1', '2026-10-01', '2026-10-20', 'Their
 
 /* The dangerous one. Somebody at this company added a "Site Notes" column of
    their own straight after the old fifteen, and has been using it. The schema
-   is positional: column 16 is where Dome Box now keeps "Spawned By". Widen
+   is positional: column 16 is where Domebox now keeps "Spawned By". Widen
    this sheet blindly and the first task update writes over their notes. */
 dir.appendRow(['Bose Steel', 'md@bosesteel.in', 'bosepass1', 'Standard', '2026-12-31', 'BOSE_SHEET', 'Active', '2025-01-10']);
 glob.appendRow(['md@bosesteel.in', 'bosepass1', 'BOSE_SHEET', 'md']);
-const bose = env.newFile('BOSE_SHEET', 'Bose Steel — Dome Box');
+const bose = env.newFile('BOSE_SHEET', 'Bose Steel — Domebox');
 bose.insertSheet('Users').appendRow(OLD_USER_COLS);
 bose.getSheetByName('Users').appendRow(['A. Bose', 'md', 'bosepass1', 'md@bosesteel.in', 'Admin', 'MD', '', '', '']);
 const bt = bose.insertSheet('Tasks');
@@ -267,7 +267,7 @@ ok('their sheet is still byte-for-byte what it was', JSON.stringify(bt.getDataRa
 const width = OLD_TASK_COLS.length + 1;                        // P, with Site Notes in it
 const notes = bt.getRange(1, width, 2, 1).getValues();
 bt.getRange(1, width, 2, 1).setValues([[''], ['']]);
-bt.getRange(1, 30, 2, 1).setValues(notes);                     // AD — the first column past Dome Box's
+bt.getRange(1, 30, 2, 1).setValues(notes);                     // AD — the first column past Domebox's
 const pv2 = APP.previewMigration();
 ok('with the column moved to AD, the preview clears it', /Bose Steel — 1 person, 1 task; will add/.test(pv2) && !/NEEDS A LOOK/.test(pv2),
    (pv2.match(/Bose[^\n]*/) || [])[0]);
@@ -275,7 +275,7 @@ APP.migrateAllTenants();
 const BL2 = call({ action: 'login', username: 'md@bosesteel.in', password: 'bosepass1' });
 ok('and then they sign in', BL2.status === 'success', BL2.message);
 const bvals = bt.getDataRange().getValues();
-ok('Dome Box headings filled P to AC', bvals[0][15] === 'Spawned By' && bvals[0][28] === 'Raised In',
+ok('Domebox headings filled P to AC', bvals[0][15] === 'Spawned By' && bvals[0][28] === 'Raised In',
    bvals[0].slice(15, 29).join(','));
 ok('their own column is untouched at AD, heading and notes',
    bvals[0][29] === 'Site Notes' && bvals[1][29] === 'Client wants matte finish; gate opens inward', bvals[0][29] + ' / ' + bvals[1][29]);

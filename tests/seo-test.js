@@ -24,7 +24,7 @@ console.log('\n=== the front door is open ===');
 ok('the homepage is indexable', /<meta name="robots" content="index, follow/.test(app));
 ok('it has a canonical', /<link rel="canonical" href="https:\/\/www\.domebox\.in\/">/.test(app));
 ok('a title that says what it is and who for',
-   /<title>Dome Box — Task &amp; Team Management Software for Indian MSMEs<\/title>/.test(app));
+   /<title>Domebox — Task &amp; Team Management Software for Indian MSMEs<\/title>/.test(app));
 ok('a description within what Google will show',
    (app.match(/<meta name="description" content="([^"]*)"/) || [, ''])[1].length <= 320);
 ok('Open Graph and Twitter cards, so a shared link is not a bare URL',

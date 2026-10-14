@@ -1,5 +1,5 @@
 /**
- * Assembles the paste-in #view-analytics block for the live single-file Dome Box app.
+ * Assembles the paste-in #view-analytics block for the live single-file Domebox app.
  * The chart toolkit and render() are taken verbatim from web/analytics.html so there is
  * exactly one implementation of them; only the theme tokens, the markup and the data
  * seam differ. Colours are read through CSS custom properties, so the light theme is a

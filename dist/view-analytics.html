@@ -1,5 +1,5 @@
 <!-- ===========================================================================
-     DOME BOX — ANALYTICS VIEW  (paste-in block for the live single-file app)
+     DOMEBOX — ANALYTICS VIEW  (paste-in block for the live single-file app)
 
      HOW TO INSTALL
      1. Paste this whole block into index.html, next to the other <div id="view-…">
@@ -76,7 +76,7 @@
   <nav class="bg-white border-b border-gray-100 px-4 lg:px-8 h-16 flex justify-between items-center gap-2 sticky top-0 z-40">
     <div class="flex items-center cursor-pointer" onclick="toggleView('dashboard')">
       <span class="material-icons text-blue-600 mr-2">dashboard</span>
-      <span class="font-black text-xl tracking-tight whitespace-nowrap">Dome Box</span>
+      <span class="font-black text-xl tracking-tight whitespace-nowrap">Domebox</span>
       <span class="ml-3 text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-700 px-2 py-1 rounded-md">Reports</span>
     </div>
     <div class="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -202,7 +202,7 @@
 
 <script>
 /* ===========================================================================
-   Dome Box scoring engine — the same file the board and the Apps Script backend
+   Domebox scoring engine — the same file the board and the Apps Script backend
    run, so a score shown here is the score, not a second implementation of it.
    Generated from domebox/domain.gs; do not hand-edit.
    =========================================================================== */
@@ -214,7 +214,7 @@
   var exports = module.exports;
 
 /**
- * DOME BOX — DOMAIN ENGINE
+ * DOMEBOX — DOMAIN ENGINE
  * =============================================================================
  * Pure logic only: no SpreadsheetApp, no GmailApp, no I/O of any kind. Every
  * function here is deterministic, which is what makes the workflow, delegation,
@@ -796,7 +796,7 @@ function statusForColumn(columnKey) {
 /**
  * Can this person drag this card into that column?
  *
- * This is where Dome Box departs from Trello on purpose. On a Trello board
+ * This is where Domebox departs from Trello on purpose. On a Trello board
  * anyone can drag anything into Done, which is exactly why a Trello board can
  * never be the basis for a performance score. Here the drop is checked against
  * the same workflow rules as the API, plus dependency and subtask gates.

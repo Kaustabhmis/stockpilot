@@ -1,9 +1,9 @@
 /**
- * DOME BOX — SCHEDULER: REMINDERS + RECURRING JOB GENERATION
+ * DOMEBOX — SCHEDULER: REMINDERS + RECURRING JOB GENERATION
  * =============================================================================
  * Add as another file in the Apps Script project. Requires domain.gs.
  *
- * This is the piece that turns Dome Box from a place where work is recorded
+ * This is the piece that turns Domebox from a place where work is recorded
  * into a system that does the chasing for you. Two time-driven jobs:
  *
  *   sendTaskReminders()     at 9 am, 3 pm and 5 pm: each person's OPEN tasks
@@ -77,7 +77,7 @@ var REMIND = {
    through Script Properties; this is the fallback for a project where that is
    not reachable, and rmMailFrom_() prefers the configured one. */
 var RM_MAIL_FROM = 'info@biscsindia.com';
-var RM_MAIL_NAME = 'Dome Box';
+var RM_MAIL_NAME = 'Domebox';
 
 /** The configured address if code.gs is in this project, else the constant. */
 function rmMailFrom_() {
@@ -115,11 +115,11 @@ function removeDomeBoxSchedules() {
     var fn = t.getHandlerFunction();
     if (known.indexOf(fn) > -1) { ScriptApp.deleteTrigger(t); removed++; }
   });
-  Logger.log('Removed ' + removed + ' existing Dome Box trigger(s).');
+  Logger.log('Removed ' + removed + ' existing Domebox trigger(s).');
 }
 
 function domeBoxScheduleStatus() {
-  var lines = ['', '=== Dome Box schedules ==='];
+  var lines = ['', '=== Domebox schedules ==='];
   var want = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders'];
   var need = { sendTaskReminders: REMIND.HOURS.length };
   var have = {};
@@ -369,8 +369,8 @@ function rmReminderHtml_(list, user, company, slot) {
     ' still open, most urgent first.</p>' +
     rmSection_('Your open work', rows, '#1d4ed8') +
     '<p style="margin:22px 0"><a href="' + SITE_URL + '" style="background:#2563eb;color:#fff;text-decoration:none;' +
-    'padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">Open Dome Box</a></p>' +
-    '<p style="font-size:12px;color:#6b7280">Dome Box reminds you at 9 am, 3 pm and 5 pm on the day a task is assigned, ' +
+    'padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">Open Domebox</a></p>' +
+    '<p style="font-size:12px;color:#6b7280">Domebox reminds you at 9 am, 3 pm and 5 pm on the day a task is assigned, ' +
     REMIND.DAYS_BEFORE_DUE + ' days before it is due' + (REMIND.INCLUDE_OVERDUE ? ', and every working day while it is overdue' : '') +
     '. Hand it in and the reminders stop.' + (company ? '<br>' + rmEsc_(company) : '') + '</p>';
 }
@@ -427,7 +427,7 @@ function sendRenewalReminders() {
       if (TRIAL_MILESTONES.indexOf(days) < 0) return;
       var tkey = 'trial-' + days;
       if (rmAlreadySent_(t.sheetId, t.ownerEmail, tkey)) return;
-      var tsub = (t.company || 'Your Dome Box') + ' trial ' +
+      var tsub = (t.company || 'Your Domebox') + ' trial ' +
                  (days > 1 ? 'ends in ' + days + ' days' : days === 1 ? 'ends tomorrow' : 'ends today');
       if (SCHED.DRY_RUN) { log.push('  would send: ' + tsub + ' -> ' + t.ownerEmail); sent++; return; }
       if (rmSendMail_(t.ownerEmail, tsub, rmTrialHtml_(t, days, until))) { rmMarkSent_(t.sheetId, t.ownerEmail, tkey); sent++; }
@@ -439,10 +439,10 @@ function sendRenewalReminders() {
     if (rmAlreadySent_(t.sheetId, t.ownerEmail, key)) return;
 
     var subject = days > 0
-        ? (t.company || 'Your Dome Box plan') + ' renews in ' + days + ' day' + (days === 1 ? '' : 's')
+        ? (t.company || 'Your Domebox plan') + ' renews in ' + days + ' day' + (days === 1 ? '' : 's')
       : days === 0
-        ? (t.company || 'Your Dome Box plan') + ' expires today'
-        : (t.company || 'Your Dome Box plan') + ' has expired';
+        ? (t.company || 'Your Domebox plan') + ' expires today'
+        : (t.company || 'Your Domebox plan') + ' has expired';
 
     if (SCHED.DRY_RUN) { log.push('  would send: ' + subject + ' -> ' + t.ownerEmail); sent++; return; }
     if (rmSendMail_(t.ownerEmail, subject, rmRenewalHtml_(t, days, until))) {
@@ -464,7 +464,7 @@ function rmTrialHtml_(t, days, until) {
     '<p>After that your workspace moves to the Free plan — 5 people and 100 tasks a month. ' +
     '<strong>Nothing is deleted</strong>, and everybody you added can still sign in.</p>' +
     '<p>To keep the scoring, reports and appraisals, choose a plan from <strong>Plans</strong> ' +
-    'inside Dome Box. Pay before the trial ends and the days you have left are added on.</p>' +
+    'inside Domebox. Pay before the trial ends and the days you have left are added on.</p>' +
     '<p>Questions? Reply to this email and a person will answer.</p>';
 }
 
@@ -480,7 +480,7 @@ function rmRenewalHtml_(t, days, until) {
      loses their history, and saying so is the difference between a renewal and
      a panicked support email. */
   var body = days >= 0
-    ? '<p>Nothing changes before then. You can renew from <strong>Plans</strong> inside Dome Box ' +
+    ? '<p>Nothing changes before then. You can renew from <strong>Plans</strong> inside Domebox ' +
       'at any time, and renewing early adds to the date you already have rather than replacing it.</p>'
     : '<p>Your workspace is still fully usable for a week after expiry. After that it becomes ' +
       'read-only — <strong>nothing is deleted</strong>, and everything comes straight back when ' +
@@ -499,7 +499,7 @@ function rmDigestSubject_(d) {
   if (b.awaitingMyReview.length) return b.awaitingMyReview.length + ' ready for your review';
   if (b.dueToday.length) return b.dueToday.length + ' due today';
   if (b.teamOverdue.length) return 'Your team has overdue work';
-  return 'Your Dome Box for today';
+  return 'Your Domebox for today';
 }
 
 function rmDigestHtml_(d, company, appraisalNudge, reportCount) {
@@ -542,7 +542,7 @@ function rmDigestHtml_(d, company, appraisalNudge, reportCount) {
   }
 
   out += '<p style="margin:22px 0"><a href="' + SITE_URL + '" style="background:#2563eb;color:#fff;text-decoration:none;' +
-    'padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">Open Dome Box</a></p>';
+    'padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">Open Domebox</a></p>';
   out += '<p style="font-size:12px;color:#6b7280">You are getting this because you have open work in ' +
     rmEsc_(company || 'your workspace') + '. One email a day, and none at all on a clear day.</p>';
   return out;
@@ -956,12 +956,12 @@ function rmShell_(title, inner) {
   return '<div style="margin:0;padding:24px;background:#f3f4f6;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif">' +
     '<div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">' +
       '<div style="background:#1e3a8a;padding:18px 26px;color:#fff">' +
-        '<div style="font-size:19px;font-weight:800">Dome Box</div>' +
+        '<div style="font-size:19px;font-weight:800">Domebox</div>' +
         '<div style="font-size:12px;opacity:.8">' + rmEsc_(title) + '</div>' +
       '</div>' +
       '<div style="padding:26px;color:#1f2937;font-size:14px;line-height:1.6">' + inner + '</div>' +
       '<div style="padding:16px 26px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:11px">' +
-        'Dome Box · <a href="mailto:' + RM_MAIL_FROM + '" style="color:#2563eb">' + RM_MAIL_FROM + '</a>' +
+        'Domebox · <a href="mailto:' + RM_MAIL_FROM + '" style="color:#2563eb">' + RM_MAIL_FROM + '</a>' +
       '</div>' +
     '</div></div>';
 }

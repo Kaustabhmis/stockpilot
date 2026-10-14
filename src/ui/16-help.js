@@ -78,7 +78,7 @@ function openHelp(sectionId) {
       /* The same help as a printable book with screenshots, for reading away
          from the screen or for training a new joiner. Served by the website. */
       '<a id="hcPdf" class="btn btn-g mt-3 text-sm" href="/user-manual.pdf" ' +
-        'download="Dome-Box-User-Manual.pdf" target="_blank" rel="noopener" ' +
+        'download="Domebox-User-Manual.pdf" target="_blank" rel="noopener" ' +
         'style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;white-space:nowrap">' +
         '<span class="material-icons" style="font-size:18px">download</span>User manual (PDF)</a>' +
     '</div>' +

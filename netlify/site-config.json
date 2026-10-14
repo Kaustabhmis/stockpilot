@@ -2,7 +2,7 @@
   "_comment": "Fill every field. gen-pages.js refuses to build while any required value is empty, so an incomplete legal page cannot reach the live site by accident.",
 
   "legalEntity": "BISCS India",
-  "productName": "Dome Box",
+  "productName": "Domebox",
   "domain": "www.domebox.in",
   "supportEmail": "info@biscsindia.com",
 

@@ -113,7 +113,7 @@ const act = call({ action: 'addMeetingAction', token: A, id, form: { title: 'Lin
   assignTo: U('sruti'), goal: goal.id, fromItem: rbId, clearItem: true } });
 ok('an action is agreed from the roadblock', act.status === 'success', act.message);
 const t = call({ action: 'getDashboard', token: A }).tasks.find((x) => x.title === 'Line up a second motor supplier');
-ok('it is a Dome Box task on the person’s board', !!t && t.assignee === U('sruti'));
+ok('it is a Domebox task on the person’s board', !!t && t.assignee === U('sruti'));
 ok('due a week out unless said otherwise', t && Math.round((new Date(t.due) - new Date(new Date().toISOString().slice(0, 10))) / 864e5) === 7, t && t.due);
 ok('tied to the goal, so it moves the goal’s progress', t && t.goal === goal.id &&
    call({ action: 'getDirection', token: A }).goals.find((g) => g.id === goal.id).progress.total === 1);

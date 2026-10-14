@@ -1,5 +1,5 @@
 /**
- * DOME BOX — BACKUPS
+ * DOMEBOX — BACKUPS
  * =============================================================================
  * Sheets keeps version history, but that is not a backup. It does not survive
  * the failures that actually happen: a customer's own admin bulk-deleting rows
@@ -19,7 +19,7 @@
 
 var BACKUP = {
   FOLDER_ID: '',            // Drive folder for backups. Blank = created on first run.
-  FOLDER_NAME: 'Dome Box Backups',
+  FOLDER_NAME: 'Domebox Backups',
   KEEP_DAILY: 30,           // daily copies retained per tenant
   KEEP_MONTHLY: 12,         // plus the 1st of each month, retained a year
   ALERT_TO: 'info@biscsindia.com',
@@ -139,7 +139,7 @@ function backupAllTenants() {
     tenants = bkTenants_(log);
     if (!tenants || !tenants.length) throw new Error('registry returned no tenants');
   } catch (e) {
-    backupAlert_('Dome Box backup FAILED to start', 'Could not read the tenant registry.\n\n' +
+    backupAlert_('Domebox backup FAILED to start', 'Could not read the tenant registry.\n\n' +
       e.message + '\n\nNo tenant was backed up tonight.');
     log.push('FATAL: ' + e.message);
     Logger.log(log.join('\n'));
@@ -197,7 +197,7 @@ function backupAllTenants() {
   }
 
   if (failures.length || copied < tenants.length) {
-    backupAlert_('Dome Box backup: ' + failures.length + ' failed, ' + copied + '/' + tenants.length + ' copied',
+    backupAlert_('Domebox backup: ' + failures.length + ' failed, ' + copied + '/' + tenants.length + ' copied',
       log.join('\n'));
   }
   backupLog_(started, copied, tenants.length, failures.length, mins);
@@ -257,7 +257,7 @@ function verifyLatestBackup() {
 
   log.push('');
   log.push(bad.length ? bad.length + ' PROBLEM(S) — see above' : 'All ' + tenants.length + ' tenants have a good, current backup.');
-  if (bad.length) backupAlert_('Dome Box backup verification found ' + bad.length + ' problem(s)', log.join('\n'));
+  if (bad.length) backupAlert_('Domebox backup verification found ' + bad.length + ' problem(s)', log.join('\n'));
   Logger.log(log.join('\n'));
 }
 

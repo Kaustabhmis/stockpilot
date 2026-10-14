@@ -1,5 +1,5 @@
 /**
- * DOME BOX — EMERGENCY: LOCK DOWN TENANT DATABASES
+ * DOMEBOX — EMERGENCY: LOCK DOWN TENANT DATABASES
  * =============================================================================
  * registerCompany() currently runs:
  *

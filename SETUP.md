@@ -1,4 +1,4 @@
-# Dome Box — setup, start to finish
+# Domebox — setup, start to finish
 
 www.domebox.in · BISCS India
 
@@ -138,7 +138,7 @@ Run `setupDomeBox()` once more. It now prints your `/exec` URL:
 
 ## Part 2 — the scheduler
 
-Without this, Dome Box is a board. Nothing is chased, no recurring task is ever
+Without this, Domebox is a board. Nothing is chased, no recurring task is ever
 created, and no renewal notice goes out. It is a second file because the
 handlers run on timers rather than on requests.
 
@@ -435,7 +435,7 @@ registry and none of your real customers.
 Then run **`previewMigration`**. It reads every customer's sheet and changes
 nothing: it reports what will be added to each, anyone who would not be able
 to sign in, and — under **NEEDS A LOOK** — any sheet whose columns are not
-where Dome Box expects them. That is almost always a column somebody added by
+where Domebox expects them. That is almost always a column somebody added by
 hand; the report names it and says where to move it. A sheet that does not
 match is never adjusted, because the schema is positional and a customer's own
 column would be written over.

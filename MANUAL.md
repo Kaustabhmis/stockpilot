@@ -1,8 +1,8 @@
-# Dome Box — user manual
+# Domebox — user manual
 
 Task and team management for Indian MSMEs · **www.domebox.in**
 
-This is for the people who *use* Dome Box. If you are setting it up, you want
+This is for the people who *use* Domebox. If you are setting it up, you want
 [`SETUP.md`](SETUP.md) instead.
 
 | | |
@@ -505,7 +505,7 @@ person or several — each gets their own task), the due date, the priority, and
 the goal it serves. The goal and the person are filled in from the point.
 **Add action** in Actions does the same for something nobody raised as a point.
 
-Each one is a Dome Box task: on the person's board, chased by the daily
+Each one is a Domebox task: on the person's board, chased by the daily
 reminders, counted in their score, due in seven days unless you say otherwise,
 and tied to the goal and the meeting it came from. The task's description says
 which point it came from.
@@ -667,7 +667,7 @@ Nobody loses access to their own history.
 
 ## For managers
 
-Half of Dome Box is about whether *you* are holding work up.
+Half of Domebox is about whether *you* are holding work up.
 
 ### You are measured on your queue
 
@@ -695,7 +695,7 @@ a room's trust is by scoring employees on a clock their manager controls.
 
 ### Reminders
 
-Dome Box emails you about your **open** tasks — To do or In progress — at
+Domebox emails you about your **open** tasks — To do or In progress — at
 **9 am, 3 pm and 5 pm**, most urgent first:
 
 - on the **day a task is assigned** to you,

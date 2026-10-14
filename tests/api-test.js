@@ -211,8 +211,8 @@ ok('and the new password logs in',
 
 console.log('\n=== email actually sent ===');
 const subjects = env.mails.map(m=>m.subject);
-ok('welcome email', subjects.some(s=>/Welcome to Dome Box/.test(s)));
-ok('staff welcome email', subjects.some(s=>/added to Dome Box/.test(s)));
+ok('welcome email', subjects.some(s=>/Welcome to Domebox/.test(s)));
+ok('staff welcome email', subjects.some(s=>/added to Domebox/.test(s)));
 ok('assignment email', subjects.some(s=>/New task:/.test(s)));
 ok('review email', subjects.some(s=>/Ready for review:/.test(s)));
 ok('sent-back email', subjects.some(s=>/Sent back:/.test(s)));

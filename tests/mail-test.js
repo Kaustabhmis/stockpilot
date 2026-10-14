@@ -50,7 +50,7 @@ ok('none went through MailApp, which cannot set a from address at all',
    env.mails.every((m) => m.via === 'gmail'),
    JSON.stringify(env.mails.filter((m) => m.via !== 'gmail').map((m) => m.subject)));
 ok('a reply goes back to the same address', env.mails.every((m) => m.replyTo === FROM));
-ok('and it is signed Dome Box, not a person', env.mails.every((m) => m.name === 'Dome Box'));
+ok('and it is signed Domebox, not a person', env.mails.every((m) => m.name === 'Domebox'));
 
 console.log('\n=== when the alias is missing, nothing goes out at all ===');
 /* The old behaviour: log a warning, then quietly send as the script owner.

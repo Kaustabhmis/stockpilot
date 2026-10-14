@@ -18,7 +18,7 @@ that drives rich results, so it is working against you either way.
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Dome Box",
+  "name": "Domebox",
   "applicationCategory": "BusinessApplication",
   "applicationSubCategory": "Task Management Software",
   "operatingSystem": "Web browser",
@@ -54,13 +54,13 @@ reviews is a documented cause of manual actions, and under the Consumer
 Protection (E-Commerce) Rules it is a compliance problem too. Add it once you
 have real, collectable reviews.
 
-## 2. "Dome Box Inc." is not your company
+## 2. "Domebox Inc." is not your company
 
-**Find:** `© 2026 Dome Box Inc. All rights reserved.`
+**Find:** `© 2026 Domebox Inc. All rights reserved.`
 **Replace:**
 
 ```html
-&copy; 2026 <strong>BISCS India</strong>. Dome Box is a product of BISCS India.
+&copy; 2026 <strong>BISCS India</strong>. Domebox is a product of BISCS India.
 ```
 
 Razorpay checks that the entity on your site matches the entity on the account.
@@ -75,13 +75,13 @@ Paste inside `<head>`, after the existing `og:` tags:
 <link rel="canonical" href="https://www.domebox.in/">
 <meta property="og:url" content="https://www.domebox.in/">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Dome Box">
+<meta property="og:site_name" content="Domebox">
 <meta property="og:locale" content="en_IN">
 <meta property="og:image" content="https://www.domebox.in/og-cover.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Dome Box — Task & Team Management for Indian MSMEs">
+<meta name="twitter:title" content="Domebox — Task & Team Management for Indian MSMEs">
 <meta name="twitter:description" content="Automate accountability with delegation scoring, KRA/KPI tracking and performance appraisals.">
 <meta name="twitter:image" content="https://www.domebox.in/og-cover.png">
 <meta name="robots" content="index, follow, max-image-preview:large">

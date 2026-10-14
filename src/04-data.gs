@@ -100,7 +100,7 @@ function upgradeTenantSchema_(ss, dryRun) {
   var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS]];
   checks.forEach(function (c) {
     var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
-    if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Dome Box needs "' + r.expected + '"');
+    if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Domebox needs "' + r.expected + '"');
     else if (r.add) added.push(c[0] + ' +' + r.add + ' column' + (r.add === 1 ? '' : 's'));
   });
   ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings',

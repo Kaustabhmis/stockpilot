@@ -29,7 +29,7 @@ function registerCompany_locked_(form) {
 
   var newId;
   try {
-    var file = DriveApp.getFileById(c.templateId).makeCopy(company + ' — Dome Box Data');
+    var file = DriveApp.getFileById(c.templateId).makeCopy(company + ' — Domebox Data');
     /* Deliberately NOT shared. The old build set every tenant file to
        ANYONE_WITH_LINK/EDIT, which made each customer's staff records readable
        and writable by anyone holding the URL. The app reaches the file through
@@ -188,7 +188,7 @@ function forgotPassword_(email) {
     tokens.appendRow([token, key, new Date(), '']);
 
     var link = CFG().siteUrl + '/?reset_token=' + encodeURIComponent(token);
-    sendEmail_(key, 'Dome Box — reset your password', resetEmailHtml_(link));
+    sendEmail_(key, 'Domebox — reset your password', resetEmailHtml_(link));
   } catch (e) { logError_('forgotPassword', e.message); }
 
   return generic;

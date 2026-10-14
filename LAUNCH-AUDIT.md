@@ -247,7 +247,7 @@ nothing drew the eye to the trial. Now, within the corporate palette:
   on screen;
 - alternating bands (navy, blue tint, teal, white) so each section reads as a section;
 - coloured icon tiles for the proof strip, the problems and the fairness rules; red ✕ against
-  green ✓ in the WhatsApp-vs-Dome Box comparison; a navy "Most popular" plan card;
+  green ✓ in the WhatsApp-vs-Domebox comparison; a navy "Most popular" plan card;
 - every text and background pair checked: all clear WCAG AA (4.5:1) — the one that did not
   (light text on teal, 4.4) uses near-white instead.
 

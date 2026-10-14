@@ -1,7 +1,7 @@
 
 
 /**
- * DOME BOX — BACKEND API
+ * DOMEBOX — BACKEND API
  * =============================================================================
  * Built for www.domebox.in (BISCS India).
  *
@@ -45,7 +45,7 @@ function CFG() {
 /* The only address customer mail ever leaves from, and the name beside it.
    MAIL_FROM itself is a Script Property so it can be pointed somewhere else in
    a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
-var MAIL_FROM_NAME = 'Dome Box';
+var MAIL_FROM_NAME = 'Domebox';
 
 /* Every new workspace starts on the full Growth plan for this many days, then
    moves to Free unless it pays. Nothing is deleted when a trial ends. */
@@ -132,7 +132,7 @@ var DEFAULT_CATEGORIES = ['NPD','SYSTEM IMPLEMENTATION','MAINTENANCE','PRODUCTIO
 /** Run once. Tells you exactly what is still missing instead of failing later. */
 function setupDomeBox() {
   var p = PropertiesService.getScriptProperties();
-  var out = ['', '=== DOME BOX SETUP ===', ''];
+  var out = ['', '=== DOMEBOX SETUP ===', ''];
 
   var made = [];
   if (!p.getProperty('AUTH_PEPPER'))  { p.setProperty('AUTH_PEPPER', Utilities.getUuid()+Utilities.getUuid()); made.push('AUTH_PEPPER'); }
@@ -367,7 +367,7 @@ function doGet(e) {
     var vt = PropertiesService.getScriptProperties().getProperty('WA_VERIFY_TOKEN');
     if (vt && p['hub.verify_token'] === vt) return ContentService.createTextOutput(p['hub.challenge']);
   }
-  return ContentService.createTextOutput('Dome Box API is running.')
+  return ContentService.createTextOutput('Domebox API is running.')
     .setMimeType(ContentService.MimeType.TEXT);
 }
 
@@ -653,7 +653,7 @@ function registerCompany_locked_(form) {
 
   var newId;
   try {
-    var file = DriveApp.getFileById(c.templateId).makeCopy(company + ' — Dome Box Data');
+    var file = DriveApp.getFileById(c.templateId).makeCopy(company + ' — Domebox Data');
     /* Deliberately NOT shared. The old build set every tenant file to
        ANYONE_WITH_LINK/EDIT, which made each customer's staff records readable
        and writable by anyone holding the URL. The app reaches the file through
@@ -812,7 +812,7 @@ function forgotPassword_(email) {
     tokens.appendRow([token, key, new Date(), '']);
 
     var link = CFG().siteUrl + '/?reset_token=' + encodeURIComponent(token);
-    sendEmail_(key, 'Dome Box — reset your password', resetEmailHtml_(link));
+    sendEmail_(key, 'Domebox — reset your password', resetEmailHtml_(link));
   } catch (e) { logError_('forgotPassword', e.message); }
 
   return generic;
@@ -1016,7 +1016,7 @@ function upgradeTenantSchema_(ss, dryRun) {
   var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS]];
   checks.forEach(function (c) {
     var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
-    if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Dome Box needs "' + r.expected + '"');
+    if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Domebox needs "' + r.expected + '"');
     else if (r.add) added.push(c[0] + ' +' + r.add + ' column' + (r.add === 1 ? '' : 's'));
   });
   ['Users','Tasks','KRA_Master','Reviews','Leave','Cookie_Points','Settings',
@@ -2640,7 +2640,7 @@ function createRazorpayOrder_(ctx, planName, promoCode) {
        total that is larger than the price on the card they clicked. */
     charge: { net: net / 100, rate: rate, tax: (amount - net) / 100, total: amount / 100 },
     orderData: { key: c.razorKey, order_id: order.id,
-    amount: order.amount, currency: 'INR', name: 'Dome Box',
+    amount: order.amount, currency: 'INR', name: 'Domebox',
     description: plan.name, prefill: { email: ctx.me.email, contact: ctx.me.phone || '' } } };
 }
 
@@ -2726,7 +2726,7 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     dir.getRange(i + 1, 4).setValue(planName);
     dir.getRange(i + 1, 5).setValue(until);
     dir.getRange(i + 1, 7).setValue('Active');
-    try { sendEmail_(d[i][1], 'Dome Box — payment receipt',
+    try { sendEmail_(d[i][1], 'Domebox — payment receipt',
       receiptHtml_(company || d[i][0], planName, paid, until)); } catch (e) {}
     /* The invoice follows the receipt, from inside the same lock, so the
        serial number cannot collide with another payment landing at the same
@@ -2910,11 +2910,11 @@ function mailShell_(title, inner) {
     '<div style="background:#5b4bdb;color:#fff;padding:18px 24px">' +
     mailMark_() +
     '<span style="display:inline-block;vertical-align:middle;margin-left:10px;' +
-    'font-weight:900;font-size:15px;letter-spacing:-.2px">Dome Box</span>' +
+    'font-weight:900;font-size:15px;letter-spacing:-.2px">Domebox</span>' +
     '<h2 style="margin:12px 0 0;font-size:18px;font-weight:800">' + esc_(title) + '</h2></div>' +
     '<div style="padding:24px;color:#453f4c;font-size:14px;line-height:1.6">' + inner + '</div>' +
     '<div style="padding:16px 24px;background:#faf8f5;color:#7d7570;font-size:12px;border-top:1px solid #e7e1d8">' +
-    'Dome Box · BISCS India · <a href="' + CFG().siteUrl + '" style="color:#5b4bdb">' +
+    'Domebox · BISCS India · <a href="' + CFG().siteUrl + '" style="color:#5b4bdb">' +
     esc_(CFG().siteUrl.replace(/^https?:\/\//, '')) + '</a></div></div>';
 }
 
@@ -2941,7 +2941,7 @@ function notifyAssignment_(ctx, target, approver, title, due, id, status) {
         '<p>Hi <strong>' + esc_(target.name) + '</strong>,</p>' +
         '<p><strong>' + esc_(ctx.actor.name) + '</strong> has assigned you a task.</p>' +
         infoTable_([['Task', title], ['Due', due || '—'], ['Ref', id]]) +
-        btn_('Open Dome Box', CFG().siteUrl)));
+        btn_('Open Domebox', CFG().siteUrl)));
   }
 }
 
@@ -2963,7 +2963,7 @@ function notifyStatus_(ctx, t, status, note) {
     infoTable_([['Task', t.title], ['Due', t.due || '—']]) +
     (note ? '<p style="background:#fffbeb;border:1px solid #fde68a;padding:12px;border-radius:8px">' +
       '<em>"' + esc_(note) + '"</em></p>' : '') +
-    btn_('Open Dome Box', CFG().siteUrl)));
+    btn_('Open Domebox', CFG().siteUrl)));
 }
 
 /**
@@ -2981,7 +2981,7 @@ function notifyStageReleased_(ctx, project, stage) {
     'so stage ' + esc_(String(stage.stageNo)) + ' is now yours to start.</p>' +
     infoTable_([['Project', project], ['Stage', stage.stageNo + ' of ' + stage.stageCount],
                 ['Your task', stage.title], ['Due', stage.due || '—']]) +
-    btn_('Open Dome Box', CFG().siteUrl)));
+    btn_('Open Domebox', CFG().siteUrl)));
 }
 
 /** Recognition only works if the person hears about it. */
@@ -2994,7 +2994,7 @@ function notifyCookie_(ctx, who, points, reason) {
     '<p style="background:#ecfdf5;border:1px solid #a7f3d0;padding:12px;border-radius:8px">' +
       '<em>"' + esc_(reason) + '"</em></p>' +
     '<p>It counts towards your score this month and is on the record at your next review.</p>' +
-    btn_('Open Dome Box', CFG().siteUrl)));
+    btn_('Open Domebox', CFG().siteUrl)));
 }
 
 /** The raiser hears the outcome, with the reason if it was refused. */
@@ -3007,7 +3007,7 @@ function notifyDecision_(ctx, t, isApproved, remarks) {
         '<p>Hi <strong>' + esc_(owner.name) + '</strong>,</p>' +
         '<p><strong>' + esc_(ctx.actor.name) + '</strong> has approved this, so it is on your list now.</p>' +
         infoTable_([['Task', t.title], ['Due', t.due || '—'], ['Raised by', nameOf_(ctx, t.by)]]) +
-        btn_('Open Dome Box', CFG().siteUrl)));
+        btn_('Open Domebox', CFG().siteUrl)));
     }
   }
   if (!raiser || !raiser.email) return;
@@ -3021,7 +3021,7 @@ function notifyDecision_(ctx, t, isApproved, remarks) {
       infoTable_([['Task', t.title], ['Due', t.due || '—']]) +
       (remarks ? '<p style="background:#fef2f2;border:1px solid #fecaca;padding:12px;border-radius:8px">' +
         '<strong>Remark:</strong> ' + esc_(remarks) + '</p>' : '') +
-      btn_('Open Dome Box', CFG().siteUrl)));
+      btn_('Open Domebox', CFG().siteUrl)));
 }
 
 function infoTable_(rows) {
@@ -3034,26 +3034,26 @@ function infoTable_(rows) {
 
 function resetEmailHtml_(link) {
   return mailShell_('Reset your password',
-    '<p>We received a request to reset your Dome Box password.</p>' +
+    '<p>We received a request to reset your Domebox password.</p>' +
     btn_('Set a new password', link) +
     '<p style="font-size:12px;color:#6b7280">This link works once and expires in one hour. ' +
     'If you did not ask for it, you can ignore this email — nothing has changed.</p>');
 }
 
 function sendWelcome_(email, name, company, trialEnds) {
-  sendEmail_(email, 'Welcome to Dome Box', mailShell_('Your workspace is ready',
+  sendEmail_(email, 'Welcome to Domebox', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box, with the full ' + TRIAL_PLAN +
+    '<p><strong>' + esc_(company) + '</strong> is set up on Domebox, with the full ' + TRIAL_PLAN +
     ' plan free for ' + TRIAL_DAYS + ' days' + (trialEnds ? ' (until ' + esc_(trialEnds) + ')' : '') +
     ' — up to 50 people, scoring, reports and appraisals included. No card needed. ' +
     'After that it moves to the Free plan unless you choose one; nothing is deleted.</p>' +
-    '<p>Add your team first, then assign the first task.</p>' + btn_('Open Dome Box', CFG().siteUrl)));
+    '<p>Add your team first, then assign the first task.</p>' + btn_('Open Domebox', CFG().siteUrl)));
 }
 
 function sendWelcomeStaff_(email, name, company, username) {
-  sendEmail_(email, 'You have been added to Dome Box', mailShell_('Welcome to the team',
+  sendEmail_(email, 'You have been added to Domebox', mailShell_('Welcome to the team',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p>You have been added to <strong>' + esc_(company) + '</strong> on Dome Box.</p>' +
+    '<p>You have been added to <strong>' + esc_(company) + '</strong> on Domebox.</p>' +
     infoTable_([['Sign in with', email], ['Username', username]]) +
     '<p>Your manager has set your password. Change it after your first sign-in.</p>' +
     btn_('Sign in', CFG().siteUrl)));
@@ -3766,7 +3766,7 @@ function getOrgChart_(ctx) {
 // INVOICES
 // ===========================================================================
 /**
- * DOME BOX — TAX INVOICES
+ * DOMEBOX — TAX INVOICES
  * =============================================================================
  * Every rupee that reaches the Razorpay account leaves a document behind, sent
  * to the customer from info@biscsindia.com without anyone pressing a button.
@@ -4075,7 +4075,7 @@ function issueInvoice_locked_(sheetId, planName, paid, company, until) {
       split.sgst / 100, split.igst / 100, split.gross / 100, inv.status, to]);
 
     if (to) sendEmail_(to, (seller.registered ? 'Tax invoice ' : 'Invoice ') + inv.number +
-                           ' — Dome Box', invoiceHtml_(inv));
+                           ' — Domebox', invoiceHtml_(inv));
     else logError_('invoice:noEmail', inv.number + ' has no address to send to (' + sheetId + ')');
 
     if (status !== 'Issued') {
@@ -4139,7 +4139,7 @@ function invoiceHtml_(inv) {
       '<tr><td style="padding:7px 12px;color:#6b7280;border-bottom:1px solid #eee">Invoice number</td>' +
         '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid #eee;font-weight:800">' + esc_(inv.number) + '</td></tr>' +
       invRow_('Invoice date', inv.date) +
-      invRow_('Description', 'Dome Box — ' + inv.plan + ' subscription') +
+      invRow_('Description', 'Domebox — ' + inv.plan + ' subscription') +
       invRow_('SAC', s.sac) +
       invRow_('Subscription period', inv.period) +
       invRow_(s.registered ? 'Taxable value' : 'Amount', '₹' + rupees_(sp.taxable)) +
@@ -4258,7 +4258,7 @@ function previewInvoice() {
 // LEADERBOARD
 // ===========================================================================
 /**
- * DOME BOX — THE LEADERBOARD
+ * DOMEBOX — THE LEADERBOARD
  * =============================================================================
  * Top of the month to bottom, for a workspace that wants its best work seen.
  *
@@ -4393,7 +4393,7 @@ function setLeaderboardVisibility_(ctx, value) {
 // DEMO WORKSPACE
 // ===========================================================================
 /**
- * DOME BOX — A DEMO ACCOUNT, BUILT FROM THE REAL PRODUCT
+ * DOMEBOX — A DEMO ACCOUNT, BUILT FROM THE REAL PRODUCT
  * =============================================================================
  * Run createDemoAccount() once in the Apps Script editor. It prints a login.
  *
@@ -4433,7 +4433,7 @@ function setLeaderboardVisibility_(ctx, value) {
 
 var DEMO_EMAIL    = 'demo@biscsindia.com';
 var DEMO_PASSWORD = 'DomeBoxDemo2026';
-var DEMO_COMPANY  = 'Dome Box Demo — Sharma Precision Works';
+var DEMO_COMPANY  = 'Domebox Demo — Sharma Precision Works';
 /* Enterprise: every cap lifted, every feature on. A demo on a plan that hides
    half the product sells half the product. */
 var DEMO_PLAN     = 'Enterprise';
@@ -4482,7 +4482,7 @@ function openDemo_(as) {
  * @param {string=} password  defaults to DEMO_PASSWORD, minimum 8 characters
  */
 function createDemoAccount(email, password) {
-  var out = ['', '=== DOME BOX DEMO ACCOUNT ===', ''];
+  var out = ['', '=== DOMEBOX DEMO ACCOUNT ===', ''];
   email = String(email || DEMO_EMAIL).trim().toLowerCase();
   password = String(password || DEMO_PASSWORD);
 
@@ -5049,7 +5049,7 @@ function deleteDemoAccount(reallyDoIt, email) {
 // MIGRATING EXISTING CUSTOMERS
 // ===========================================================================
 /**
- * DOME BOX — MOVING EXISTING CUSTOMERS ONTO THE NEW BUILD
+ * DOMEBOX — MOVING EXISTING CUSTOMERS ONTO THE NEW BUILD
  * =============================================================================
  * Two functions, both runnable from the editor's Run button:
  *
@@ -5155,7 +5155,7 @@ function runMigration_(dryRun) {
     out.push('');
     out.push('  These will not open on the new build until fixed, so nothing in them is');
     out.push('  overwritten. It is almost always a column somebody added by hand. Move it');
-    out.push('  past the last column Dome Box uses — Tasks: ' + colLetter_(TASK_COLS.length + 1) +
+    out.push('  past the last column Domebox uses — Tasks: ' + colLetter_(TASK_COLS.length + 1) +
              ' or later; Users: ' + colLetter_(USER_COLS.length + 1) + ' or later —');
     out.push('  then run previewMigration() again.');
     out.push('');
@@ -5179,7 +5179,7 @@ function say_(lines) { var t = lines.join('\n'); Logger.log(t); return t; }
 // GOALS, VALUES AND KEY NUMBERS
 // ===========================================================================
 /**
- * DOME BOX — WHERE THE COMPANY IS GOING
+ * DOMEBOX — WHERE THE COMPANY IS GOING
  * =============================================================================
  * Four things, set up once and then lived with every week:
  *
@@ -5194,7 +5194,7 @@ function say_(lines) { var t = lines.join('\n'); Logger.log(t); return t; }
  *
  * THE PART THAT MAKES IT MORE THAN A WALL POSTER
  *
- * Everything else in Dome Box can point at these. A task or a whole project
+ * Everything else in Domebox can point at these. A task or a whole project
  * says which goal it serves; a cookie award says which value it recognised; a
  * roadblock or a key number says which goal it threatens. So a goal's progress
  * is not somebody's optimistic percentage — it is the share of the work linked
@@ -5576,7 +5576,7 @@ function recordNumber_(ctx, id, value, week) {
 // MEETINGS
 // ===========================================================================
 /**
- * DOME BOX — THE WEEKLY REVIEW
+ * DOMEBOX — THE WEEKLY REVIEW
  * =============================================================================
  * A meeting with a fixed shape, run from one screen, that leaves work behind
  * rather than minutes nobody reads.
@@ -5592,7 +5592,7 @@ function recordNumber_(ctx, id, value, week) {
  *
  * WHAT IS DIFFERENT HERE
  *
- * An action agreed in the meeting is not a line in a list. It is a Dome Box
+ * An action agreed in the meeting is not a line in a list. It is a Domebox
  * task: it lands on the person's board, it is chased by the daily digest, it
  * counts toward their score, and if it is tagged to a goal it moves that goal's
  * progress. The next meeting opens with last week's actions, done or not —
@@ -6083,7 +6083,7 @@ function meetingSummaryHtml_(v, s, mine) {
       ['Key numbers missed', String(s.numbersMissed)],
       ['Rating', s.rating === null ? 'not rated' : s.rating + ' / 10 (' + s.ratingCount + ')']]) +
     (v.meeting.minutes ? '<p><strong>Minutes</strong></p><p style="white-space:pre-wrap">' + esc_(v.meeting.minutes) + '</p>' : '') +
-    btn_('Open Dome Box', CFG().siteUrl));
+    btn_('Open Domebox', CFG().siteUrl));
 }
 
 
@@ -6309,7 +6309,7 @@ function readAllTasks_(ctx) {
 // AUTHENTICATION
 // =========================================================================
 /**
- * DOME BOX — AUTHENTICATION
+ * DOMEBOX — AUTHENTICATION
  * =============================================================================
  * Replaces two things that are currently broken in a way that cannot be patched
  * around:
@@ -6597,7 +6597,7 @@ function countUnmigratedPasswords() {
 // PLAN LIMITS
 // =========================================================================
 /**
- * DOME BOX — PLAN LIMITS
+ * DOMEBOX — PLAN LIMITS
  * =============================================================================
  * The published pricing promises specific caps. Nothing enforced them, so every
  * plan was effectively Enterprise. These are the rules; they are pure, so the
@@ -6806,7 +6806,7 @@ function planUsage(plan, activeUsers, tasksThisMonth) {
 // RULES ENGINE
 // =========================================================================
 /**
- * DOME BOX — DOMAIN ENGINE
+ * DOMEBOX — DOMAIN ENGINE
  * =============================================================================
  * Pure logic only: no SpreadsheetApp, no GmailApp, no I/O of any kind. Every
  * function here is deterministic, which is what makes the workflow, delegation,
@@ -8275,7 +8275,7 @@ function statusForColumn(columnKey) {
 /**
  * Can this person drag this card into that column?
  *
- * This is where Dome Box departs from Trello on purpose. On a Trello board
+ * This is where Domebox departs from Trello on purpose. On a Trello board
  * anyone can drag anything into Done, which is exactly why a Trello board can
  * never be the basis for a performance score. Here the drop is checked against
  * the same workflow rules as the API, plus dependency and subtask gates.

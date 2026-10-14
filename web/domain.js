@@ -6,7 +6,7 @@
   var exports = module.exports;
 
 /**
- * DOME BOX — DOMAIN ENGINE
+ * DOMEBOX — DOMAIN ENGINE
  * =============================================================================
  * Pure logic only: no SpreadsheetApp, no GmailApp, no I/O of any kind. Every
  * function here is deterministic, which is what makes the workflow, delegation,
@@ -1475,7 +1475,7 @@ function statusForColumn(columnKey) {
 /**
  * Can this person drag this card into that column?
  *
- * This is where Dome Box departs from Trello on purpose. On a Trello board
+ * This is where Domebox departs from Trello on purpose. On a Trello board
  * anyone can drag anything into Done, which is exactly why a Trello board can
  * never be the basis for a performance score. Here the drop is checked against
  * the same workflow rules as the API, plus dependency and subtask gates.
