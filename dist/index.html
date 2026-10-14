@@ -331,6 +331,10 @@
   .band-teal .in{background:#fff}
   .demo-pick .material-icons{background:linear-gradient(135deg,#13294b,#1e4fbf)}
 
+  /* The name is two words. Heavy type with tight tracking closed the gap until
+     it read as "DomeBox", so the logotype gets its own spacing. */
+  .brand-word{letter-spacing:-.01em;word-spacing:.18em}
+
   /* ---------- the live-demo bar ------------------------------------------- */
   .demo-bar{background:#fff7e6;border-bottom:1px solid #f3d9a4;color:var(--ink)}
   .demo-tag{background:var(--gold);color:#fff;font-size:10px;font-weight:900;letter-spacing:.1em;
@@ -444,7 +448,7 @@
     <div class="max-w-[1180px] mx-auto px-5 h-16 flex items-center gap-3">
       <span class="flex items-center gap-2">
         <svg width="30" height="30" viewBox="0 0 100 100" aria-hidden="true"><path d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#1e4fbf"/><path d="M35 55 L46 66 L67 42" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="font-black text-lg tracking-tight">Dome Box</span>
+        <span class="brand-word font-black text-lg">Dome Box</span>
       </span>
       <nav class="md-up flex items-center gap-6 ml-6 text-sm font-bold text-gray-500">
         <a href="#tour" class="hover:text-gray-900">Product tour</a>
@@ -772,7 +776,7 @@
     <div class="text-center mb-6">
       <div class="inline-flex items-center gap-2 text-white">
         <svg width="38" height="38" viewBox="0 0 100 100" aria-hidden="true"><path d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#fff"/><path d="M35 55 L46 66 L67 42" fill="none" stroke="#1e4fbf" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="font-black text-2xl tracking-tight">Dome Box</span>
+        <span class="brand-word font-black text-2xl">Dome Box</span>
       </div>
       <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Task &amp; Team Management</p>
       <p class="text-slate-300 text-sm font-semibold mt-3 leading-relaxed">
@@ -864,7 +868,7 @@
     <div class="max-w-[1500px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-3">
       <div class="flex items-center gap-2 min-w-0">
         <svg width="28" height="28" viewBox="0 0 100 100" aria-hidden="true"><path class="logo-dome" d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#1e4fbf"/><path class="logo-tick" d="M35 55 L46 66 L67 42" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="brandname font-black text-lg tracking-tight whitespace-nowrap">Dome Box</span>
+        <span class="brandname brand-word font-black text-lg whitespace-nowrap">Dome Box</span>
         <span id="navCompany" class="sm-up text-xs font-bold text-gray-400 truncate ml-1"></span>
       </div>
 
