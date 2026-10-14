@@ -59,6 +59,18 @@ const post = (body) => new Promise((res, rej) => {
   ok('from the Tasks tab it opens on Tasks',
      /^Tasks$/.test((await p.locator('.hc-h1').textContent()).trim()), await p.locator('.hc-h1').textContent());
   await p.screenshot({ path: 'shot-38-help-tasks.png' });
+  /* The printable user manual: a button in Help, and the file the site serves. */
+  ok('Help offers the user manual as a PDF download',
+     await p.locator('#hcPdf').getAttribute('href') === '/user-manual.pdf' && await p.locator('#hcPdf').isVisible());
+  {
+    const fs = require('fs');
+    const pdf = '/home/user/stockpilot/netlify/user-manual.pdf';
+    ok('and the site has that file to serve', fs.existsSync(pdf) && fs.readFileSync(pdf).slice(0, 5).toString() === '%PDF-');
+    /* It is for users: nothing from the operator's side may leak into it. */
+    const book = fs.readFileSync('/home/user/stockpilot/docs/user-manual/book.html', 'utf8').replace(/<!--[\s\S]*?-->|<style>[\s\S]*?<\/style>/g, '');
+    const leak = book.match(/razorpay|apps script|script propert|code\.gs|master|template|spreadsheet|google sheet|api key|secret|token|webhook|deploy|netlify|GSTIN|invoice|Plans →|Add person|₹/i);
+    ok('and the book says nothing about the admin side or how the system is run', !leak, leak && leak[0]);
+  }
   await p.evaluate(() => closeModal());
 
   await p.click('#navTabs button[data-tab="priority"]'); await p.waitForTimeout(900);

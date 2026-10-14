@@ -43,6 +43,9 @@ Press **?** anywhere (or the **?** in the top bar; on a phone, **Help** in your
 account panel). Help opens on the section for the tab you are on, searches as
 you type, and every page ends with a way to reach a person.
 
+**User manual (PDF)**, under the list of topics in Help, downloads this manual as
+a printable book with a picture of every screen — handy for training a new joiner.
+
 ### The eight tabs
 
 | Tab | What it is for |
