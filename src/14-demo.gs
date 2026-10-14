@@ -48,6 +48,44 @@ var DEMO_COMPANY  = 'Dome Box Demo — Sharma Precision Works';
 var DEMO_PLAN     = 'Enterprise';
 var DEMO_DAYS     = 365;
 
+/* Who a visitor can look around as, from the home page's "See the live demo". */
+var DEMO_VIEWS = { owner: null, manager: 'sruti', staff: 'payel' };
+
+/**
+ * Opens the demo workspace for anybody, view-only. No password is involved:
+ * the token it returns can only read, lasts two hours, and is refused by every
+ * route that writes, emails, pays or calls the AI.
+ */
+function openDemo_(as) {
+  var key = DEMO_VIEWS.hasOwnProperty(String(as)) ? String(as) : 'owner';
+  var master = SpreadsheetApp.openById(CFG().masterId);
+  var dir = master.getSheetByName(TAB.DIRECTORY);
+  var sheetId = null, owner = null;
+  if (dir) {
+    var d = dir.getDataRange().getValues();
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][1]).trim().toLowerCase() === DEMO_EMAIL) { sheetId = String(d[i][5]).trim(); break; }
+    }
+  }
+  if (!sheetId) throw new Error('The demo is being refreshed. Please try again in a few minutes.');
+  var g = master.getSheetByName(TAB.GLOBAL);
+  if (g) {
+    var gd = g.getDataRange().getValues();
+    for (var j = 1; j < gd.length; j++) {
+      if (String(gd[j][0]).trim().toLowerCase() === DEMO_EMAIL) { owner = String(gd[j][3]); break; }
+    }
+  }
+  var ss = SpreadsheetApp.openById(sheetId);
+  var who = findUser_(ss, DEMO_VIEWS[key] || owner);
+  if (!who) throw new Error('The demo is being refreshed. Please try again in a few minutes.');
+  return {
+    status: 'success', demo: true,
+    token: issueViewOnlyToken(sheetId, who.username, who.role),
+    user: { name: who.name, username: who.username, role: who.role, email: '' },
+    company: DEMO_COMPANY,
+  };
+}
+
 /**
  * @param {string=} email     defaults to DEMO_EMAIL
  * @param {string=} password  defaults to DEMO_PASSWORD, minimum 8 characters

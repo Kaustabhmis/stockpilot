@@ -128,6 +128,7 @@ function getDashboard_(ctx) {
       allowReports: ctx.plan.analytics, allowWhatsapp: ctx.plan.whatsapp,
       daysLeft: ctx.daysLeft,
       warnings: planUsage(ctx.planName, activeUsers, usedTasks).warnings,
+      trial: !!ctx.trial, trialEnded: !!ctx.trialEnded,
     },
   };
 }

@@ -160,8 +160,44 @@ function showAuth(which) {
 function saveSession(res) {
   STATE.token = res.token; STATE.user = res.user;
   STATE.company = res.company || ''; STATE.plan = res.plan || 'Free';
+  STATE.demo = !!res.demo;
   try { sessionStorage.setItem('dbx', JSON.stringify({
-    token: res.token, user: res.user, company: res.company, plan: res.plan })); } catch (e) {}
+    token: res.token, user: res.user, company: res.company, plan: res.plan, demo: !!res.demo })); } catch (e) {}
+}
+
+/* ---------- the public demo ----------------------------------------------
+   One click from the home page opens the demo company, view-only, as the
+   owner, a manager or a member of staff. Everything can be opened and read;
+   anything that would change it says so and points at the free trial. */
+var DEMO_AS = { owner: 'the owner', manager: 'a manager (Sruti)', staff: 'a team member (Payel)' };
+function openDemo(as, btn) {
+  if (btn) busy(btn, true, 'Opening the demo…');
+  return api('openDemo', { as: as || 'owner' }).then(function (res) {
+    STATE.demoAs = as || 'owner';
+    saveSession(res);
+    try { sessionStorage.setItem('dbxDemoAs', STATE.demoAs); } catch (e) {}
+    if (btn) busy(btn, false);
+    enterApp();
+  }).catch(function (e) { if (btn) busy(btn, false); toast(e.message, 'err'); });
+}
+function leaveDemoForTrial() {
+  STATE.token = null; STATE.user = null; STATE.data = null; STATE.demo = false;
+  try { sessionStorage.removeItem('dbx'); } catch (e) {}
+  closeModal(); closeDrawer();
+  goAuth('signup');
+}
+function renderDemoBanner() {
+  var as = STATE.demoAs || 'owner';
+  $('banner').className = '';
+  $('banner').innerHTML = '<div class="demo-bar px-4 lg:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">' +
+    '<span class="demo-tag">Live demo</span>' +
+    '<span class="font-bold">You are looking around a demo factory as ' + esc(DEMO_AS[as] || 'the owner') +
+      '. Open anything — changes are switched off.</span>' +
+    '<span class="flex items-center gap-1">' + Object.keys(DEMO_AS).map(function (k) {
+      return '<button class="demo-as' + (k === as ? ' on' : '') + '" onclick="openDemo(\'' + k + '\')">' +
+        ({ owner: 'Owner', manager: 'Manager', staff: 'Staff' })[k] + '</button>'; }).join('') + '</span>' +
+    '<span class="flex-1"></span>' +
+    '<button class="btn btn-a text-xs py-2" onclick="leaveDemoForTrial()">Start your free 14-day trial</button></div>';
 }
 function restoreSession() {
   try {
@@ -171,11 +207,13 @@ function restoreSession() {
     if (!s.token) return false;
     STATE.token = s.token; STATE.user = s.user;
     STATE.company = s.company || ''; STATE.plan = s.plan || 'Free';
+    STATE.demo = !!s.demo;
+    try { STATE.demoAs = sessionStorage.getItem('dbxDemoAs') || 'owner'; } catch (e) {}
     return true;
   } catch (e) { return false; }
 }
 function signOut(expired) {
-  STATE.token = null; STATE.user = null; STATE.data = null;
+  STATE.token = null; STATE.user = null; STATE.data = null; STATE.demo = false;
   try { sessionStorage.removeItem('dbx'); } catch (e) {}
   closeModal(); closeDrawer();
   $('view-app').classList.add('hidden');
@@ -218,6 +256,9 @@ function refresh() {
   return api('getDashboard').then(function (d) {
     STATE.data = d;
     STATE.usage = d.usage;
+    /* The plan as the server sees it now — a trial can end, or a payment land,
+       while somebody is signed in. */
+    if (d.usage && d.usage.plan) STATE.plan = d.usage.plan;
     if (d.serviceStopped) { renderStopped(d); return; }
     renderBanner();
     renderTiles();
@@ -237,12 +278,23 @@ function renderStopped(d) {
 }
 
 function renderBanner() {
+  if (STATE.demo) { renderDemoBanner(); return; }
   var u = STATE.usage, b = $('banner');
   var msgs = [];
-  if (u.daysLeft !== null && u.daysLeft <= 7 && u.daysLeft >= 0 && STATE.plan !== 'Free') {
+  /* A trial is said as a trial: how long is left, and what happens after. */
+  if (u.trial) {
+    msgs.push({ tone: 'info', text: 'Free trial of the full ' + u.planName + ' plan: ' +
+      (u.daysLeft > 1 ? u.daysLeft + ' days left.' : u.daysLeft === 1 ? 'ends tomorrow.' : 'ends today.') +
+      ' After it, the workspace moves to Free — nothing is deleted.' });
+  }
+  if (u.trialEnded && STATE.user && STATE.user.role === 'Admin') {
+    msgs.push({ tone: 'warn', text: 'Your free trial has ended, so you are on the Free plan. ' +
+      'Choose a plan to keep scoring, reports and appraisals.' });
+  }
+  if (!u.trial && u.daysLeft !== null && u.daysLeft <= 7 && u.daysLeft >= 0 && STATE.plan !== 'Free') {
     msgs.push({ tone: 'warn', text: 'Your plan renews in ' + u.daysLeft + ' day(s).' });
   }
-  if (u.daysLeft !== null && u.daysLeft < 0 && STATE.plan !== 'Free') {
+  if (!u.trial && u.daysLeft !== null && u.daysLeft < 0 && STATE.plan !== 'Free') {
     msgs.push({ tone: 'bad', text: 'Payment is overdue. Access stops ' +
       Math.max(0, 7 + u.daysLeft) + ' day(s) from now.' });
   }
@@ -250,15 +302,17 @@ function renderBanner() {
     msgs.push({ tone: w.atLimit ? 'bad' : 'warn', text: w.text });
   });
   if (!msgs.length) { b.className = 'hidden'; b.innerHTML = ''; return; }
-  var worst = msgs.some(function (m) { return m.tone === 'bad'; }) ? 'bad' : 'warn';
+  var worst = msgs.some(function (m) { return m.tone === 'bad'; }) ? 'bad'
+            : msgs.some(function (m) { return m.tone === 'warn'; }) ? 'warn' : 'info';
   b.className = '';
   b.innerHTML = '<div class="' + (worst === 'bad' ? 'bg-red-50 text-red-900 border-red-200'
-      : 'bg-amber-50 text-amber-900 border-amber-200') +
+      : worst === 'warn' ? 'bg-amber-50 text-amber-900 border-amber-200'
+      : 'bg-blue-50 text-blue-900 border-blue-200') +
     ' border-b px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 text-sm font-bold">' +
     '<span class="text-[10px] uppercase tracking-widest font-black">' + esc(u.planName) + '</span>' +
     msgs.map(function (m) { return '<span>' + esc(m.text) + '</span>'; }).join('') +
     '<span class="flex-1"></span>' +
-    '<button class="btn btn-p text-xs py-2" onclick="openBilling()">Upgrade</button></div>';
+    '<button class="btn btn-p text-xs py-2" onclick="openBilling()">' + (u.trial ? 'Choose a plan' : 'Upgrade') + '</button></div>';
 }
 
 function renderTiles() {

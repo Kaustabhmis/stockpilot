@@ -61,6 +61,14 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html); return;
   }
+  /* The marketing pictures and the user manual, as Netlify serves them. */
+  if (req.url.startsWith('/img/') || req.url === '/user-manual.pdf') {
+    const f = '/home/user/stockpilot/netlify' + req.url.split('?')[0];
+    if (!fs.existsSync(f)) { res.writeHead(404); res.end(); return; }
+    const type = f.endsWith('.png') ? 'image/png' : f.endsWith('.pdf') ? 'application/pdf'
+               : f.endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg';
+    res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(f)); return;
+  }
   if (req.url === '/fonts.css') {
     res.writeHead(200, {'Content-Type':'text/css'});
     res.end(fs.readFileSync(__dirname + '/fonts.css')); return;
@@ -81,6 +89,12 @@ const server = http.createServer((req, res) => {
        existing demo, and an earlier suite on the same server may have built one. */
     try { APP.removeDemoAccount(); out = APP.createDemoAccount(); } catch (e) { out = 'ERROR ' + e.message; }
     res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(String(out)); return;
+  }
+  /* HARNESS ONLY — ends a workspace's 14-day trial, as day 15 would. */
+  if (req.url.startsWith('/__endtrial')) {
+    const q = new URL('http://x' + req.url).searchParams;
+    const done = env.endTrial(q.get('email'));
+    res.writeHead(200, {'Content-Type':'application/json'}); res.end(JSON.stringify({ ok: done })); return;
   }
   if (req.url.startsWith('/__setplan')) {
     const q = new URL('http://x' + req.url).searchParams;

@@ -47,6 +47,11 @@ function CFG() {
    a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
 var MAIL_FROM_NAME = 'Dome Box';
 
+/* Every new workspace starts on the full Growth plan for this many days, then
+   moves to Free unless it pays. Nothing is deleted when a trial ends. */
+var TRIAL_DAYS = 14;
+var TRIAL_PLAN = 'Growth';
+
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
             GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points',
@@ -403,7 +408,14 @@ function json_(o) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping'];
+var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo'];
+
+/* The only routes a view-only (demo) session may call. An allow-list, not a
+   block-list: a write route added later is closed to demo visitors by default. */
+var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getProjects','getOrgChart',
+  'getCookies','getAnalytics','getAccountability','getPerformanceReport','getAppraisalForm',
+  'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
+  'getMeetings','getMeeting','getLeave'];
 
 function route_(p) {
   var action = String(p.action || '');
@@ -428,15 +440,24 @@ function route_(p) {
         return forgotPassword_(p.email);
       case 'resetPassword':  return resetPassword_(p.token, p.password);
       case 'contactSales':
-        throttle_('cs', (p.form && p.form.email) || '', PUBLIC_LIMITS.contactSales);
+        throttle_('cs', (p.form && (p.form.phone || p.form.email)) || '', PUBLIC_LIMITS.contactSales);
+        throttle_('csall', 'global', PUBLIC_LIMITS.contactSalesGlobal);
         return contactSales_(p.form);
+      case 'openDemo':
+        throttle_('demo', 'global', PUBLIC_LIMITS.demo);
+        return openDemo_(p.as);
     }
   }
 
   /* Identity comes from the signed token, never from the request body. This one
      line is the difference between "knowing a sheetId" and "being authorised". */
   var S = requireSession(p.token);
+  if (S.viewOnly && VIEW_ONLY_ACTIONS.indexOf(action) < 0) {
+    throw new Error('This is the demo, so changes are switched off. Start your free 14-day trial to ' +
+                    'do this with your own team.');
+  }
   var ctx = tenantContext_(S);
+  ctx.viewOnly = !!S.viewOnly;
 
   switch (action) {
     /* --- read ------------------------------------------------------------ */
@@ -554,6 +575,7 @@ function tenantContext_(session) {
     actor: { username: me.username, role: me.role, name: me.name },
     company: reg ? reg.company : '', planName: normalizePlan(reg ? reg.plan : 'Free'),
     plan: plan, daysLeft: daysLeft,
+    trial: !!(reg && reg.trial), trialEnded: !!(reg && reg.trialEnded),
     // A lapsed paid plan keeps working for a week, then drops to read-only
     // rather than vanishing — nobody loses access to their own history.
     serviceStopped: (daysLeft !== null && daysLeft <= -7 && normalizePlan(reg ? reg.plan : 'Free') !== 'Free'),
@@ -660,18 +682,21 @@ function registerCompany_locked_(form) {
   row[U['Active']] = true;
   ss.getSheetByName(TAB.USERS).appendRow(row);
 
-  var expiry = new Date(); expiry.setDate(expiry.getDate() + 30);
+  /* A new workspace starts on a full trial of the Growth plan, so the owner
+     sees the scoring, reports and appraisals with their own people before they
+     are asked to pay. When it ends they drop to Free — never to read-only. */
+  var expiry = new Date(); expiry.setDate(expiry.getDate() + TRIAL_DAYS);
   mkTab_(master, TAB.DIRECTORY, ['Company','Email','Password','Plan','Valid Until','SheetID','Status','Created'])
-    .appendRow([company, email, '', 'Free', ymd(expiry), newId, 'Active', new Date()]);
+    .appendRow([company, email, '', TRIAL_PLAN, ymd(expiry), newId, 'Trial', new Date()]);
   global.appendRow([email, hash, newId, username]);
 
-  try { sendWelcome_(email, form.name || company, company); } catch (e) {}
+  try { sendWelcome_(email, form.name || company, company, ymd(expiry)); } catch (e) {}
 
   return {
     status: 'success',
     token: issueToken(newId, username, 'Admin'),
     user: { name: row[U['Name']], username: username, role: 'Admin', email: email },
-    company: company, plan: 'Free',
+    company: company, plan: TRIAL_PLAN, trialEnds: ymd(expiry),
   };
 }
 
@@ -858,8 +883,16 @@ function registryRow_(sheetId) {
     var d = dir.getDataRange().getValues();
     for (var i = 1; i < d.length; i++) {
       if (String(d[i][5]).trim() === String(sheetId).trim()) {
-        return { company: d[i][0], email: d[i][1], plan: d[i][3],
-                 validUntil: d[i][4], sheetId: d[i][5], row: i + 1 };
+        /* A trial is a paid plan with an end date. Once that date has passed
+           the workspace is on Free — not a lapsed paid plan, which would go
+           read-only a week later. */
+        var trial = String(d[i][6] || '').trim().toLowerCase() === 'trial';
+        var until = d[i][4] ? new Date(d[i][4]) : null;
+        if (until && !isNaN(until)) until.setHours(23, 59, 59, 999);
+        var trialOver = trial && until && !isNaN(until) && until < new Date();
+        return { company: d[i][0], email: d[i][1], plan: trialOver ? 'Free' : d[i][3],
+                 validUntil: trialOver ? '' : d[i][4], sheetId: d[i][5], row: i + 1,
+                 trial: trial && !trialOver, trialEnded: !!trialOver, trialPlan: trial ? d[i][3] : '' };
       }
     }
   } catch (e) { logError_('registryRow', e.message); }
@@ -2291,6 +2324,7 @@ function getDashboard_(ctx) {
       allowReports: ctx.plan.analytics, allowWhatsapp: ctx.plan.whatsapp,
       daysLeft: ctx.daysLeft,
       warnings: planUsage(ctx.planName, activeUsers, usedTasks).warnings,
+      trial: !!ctx.trial, trialEnded: !!ctx.trialEnded,
     },
   };
 }
@@ -3006,11 +3040,13 @@ function resetEmailHtml_(link) {
     'If you did not ask for it, you can ignore this email — nothing has changed.</p>');
 }
 
-function sendWelcome_(email, name, company) {
+function sendWelcome_(email, name, company, trialEnds) {
   sendEmail_(email, 'Welcome to Dome Box', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box. You are on the Free plan ' +
-    '— up to 5 people and 100 tasks a month, with 30 days to try everything.</p>' +
+    '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box, with the full ' + TRIAL_PLAN +
+    ' plan free for ' + TRIAL_DAYS + ' days' + (trialEnds ? ' (until ' + esc_(trialEnds) + ')' : '') +
+    ' — up to 50 people, scoring, reports and appraisals included. No card needed. ' +
+    'After that it moves to the Free plan unless you choose one; nothing is deleted.</p>' +
     '<p>Add your team first, then assign the first task.</p>' + btn_('Open Dome Box', CFG().siteUrl)));
 }
 
@@ -3036,12 +3072,22 @@ function receiptHtml_(company, planName, paid, until) {
 
 function contactSales_(form) {
   form = form || {};
-  sendEmail_(CFG().mailFrom, 'Enterprise enquiry — ' + String(form.companyName || 'unknown'),
-    mailShell_('New enterprise enquiry', infoTable_([
-      ['Name', form.name || ''], ['Company', form.companyName || ''],
-      ['Email', form.email || ''], ['Phone', form.phone || '']]) +
-      '<p>' + esc_(form.message || '') + '</p>'));
-  return { status: 'success', message: 'Thanks — we will be in touch within one working day.' };
+  var clip = function (v, n) { return String(v == null ? '' : v).trim().slice(0, n || 200); };
+  var phone = clip(form.phone, 30), email = clip(form.email, 120);
+  if (!clip(form.name) || !clip(form.companyName)) throw new Error('Please give your name and company.');
+  if (phone.replace(/\D/g, '').length < 10 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new Error('Please give a phone number or an email we can reach you on.');
+  }
+  var callback = form.kind === 'callback';
+  /* Sent to us only — never to the address in the form, so this route cannot
+     be used to send mail to strangers. */
+  sendEmail_(CFG().mailFrom, (callback ? 'Call-back request — ' : 'Sales enquiry — ') + clip(form.companyName, 80),
+    mailShell_(callback ? 'Please call this prospect back' : 'New sales enquiry', infoTable_([
+      ['Name', clip(form.name)], ['Company', clip(form.companyName)],
+      ['Phone', phone], ['Email', email],
+      ['People', clip(form.size, 10)], ['Best time', clip(form.when, 40)]]) +
+      '<p>' + esc_(clip(form.message, 2000)) + '</p>'));
+  return { status: 'success', message: 'We will call you back within one working day.' };
 }
 
 function contactSupport_(ctx, form) {
@@ -4392,6 +4438,44 @@ var DEMO_COMPANY  = 'Dome Box Demo — Sharma Precision Works';
    half the product sells half the product. */
 var DEMO_PLAN     = 'Enterprise';
 var DEMO_DAYS     = 365;
+
+/* Who a visitor can look around as, from the home page's "See the live demo". */
+var DEMO_VIEWS = { owner: null, manager: 'sruti', staff: 'payel' };
+
+/**
+ * Opens the demo workspace for anybody, view-only. No password is involved:
+ * the token it returns can only read, lasts two hours, and is refused by every
+ * route that writes, emails, pays or calls the AI.
+ */
+function openDemo_(as) {
+  var key = DEMO_VIEWS.hasOwnProperty(String(as)) ? String(as) : 'owner';
+  var master = SpreadsheetApp.openById(CFG().masterId);
+  var dir = master.getSheetByName(TAB.DIRECTORY);
+  var sheetId = null, owner = null;
+  if (dir) {
+    var d = dir.getDataRange().getValues();
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][1]).trim().toLowerCase() === DEMO_EMAIL) { sheetId = String(d[i][5]).trim(); break; }
+    }
+  }
+  if (!sheetId) throw new Error('The demo is being refreshed. Please try again in a few minutes.');
+  var g = master.getSheetByName(TAB.GLOBAL);
+  if (g) {
+    var gd = g.getDataRange().getValues();
+    for (var j = 1; j < gd.length; j++) {
+      if (String(gd[j][0]).trim().toLowerCase() === DEMO_EMAIL) { owner = String(gd[j][3]); break; }
+    }
+  }
+  var ss = SpreadsheetApp.openById(sheetId);
+  var who = findUser_(ss, DEMO_VIEWS[key] || owner);
+  if (!who) throw new Error('The demo is being refreshed. Please try again in a few minutes.');
+  return {
+    status: 'success', demo: true,
+    token: issueViewOnlyToken(sheetId, who.username, who.role),
+    user: { name: who.name, username: who.username, role: who.role, email: '' },
+    company: DEMO_COMPANY,
+  };
+}
 
 /**
  * @param {string=} email     defaults to DEMO_EMAIL
@@ -6365,6 +6449,20 @@ function issueToken(sheetId, username, role) {
  * Returns the identity the token proves, or throws. Every protected route must
  * call this and use what it returns — never params.user.
  */
+/**
+ * A view-only session for the public demo: the same signature, a fifth field
+ * that says "read only", and a short life. Nothing a demo visitor does can
+ * change data, send an email or spend money — the router checks the flag
+ * before any handler runs.
+ */
+var DEMO_SESSION_HOURS = 2;
+function issueViewOnlyToken(sheetId, username, role) {
+  var exp = Date.now() + DEMO_SESSION_HOURS * 3600 * 1000;
+  var body = [sheetId, username, role, exp, 'ro'].join('|');
+  var sig = toHex_(Utilities.computeHmacSha256Signature(body, tokenSecret_()));
+  return Utilities.base64EncodeWebSafe(body) + '.' + sig;
+}
+
 function requireSession(token) {
   if (!token) throw new Error('Not signed in.');
   var bits = String(token).split('.');
@@ -6377,10 +6475,10 @@ function requireSession(token) {
   if (!safeEquals_(expect, bits[1])) throw new Error('Session is invalid. Please sign in again.');
 
   var f = body.split('|');
-  if (f.length !== 4) throw new Error('Session is invalid. Please sign in again.');
+  if (f.length !== 4 && !(f.length === 5 && f[4] === 'ro')) throw new Error('Session is invalid. Please sign in again.');
   if (Number(f[3]) < Date.now()) throw new Error('Session has expired. Please sign in again.');
 
-  return { sheetId: f[0], username: f[1], role: f[2], expires: Number(f[3]) };
+  return { sheetId: f[0], username: f[1], role: f[2], expires: Number(f[3]), viewOnly: f.length === 5 };
 }
 
 /** Routes that only an Admin may call. */
@@ -6424,6 +6522,8 @@ var PUBLIC_LIMITS = {
   forgotPasswordGlobal: { max: 60, windowMin: 60 },
   register:       { max: 3,  windowMin: 60 },
   contactSales:   { max: 5,  windowMin: 60 },
+  demo:           { max: 600, windowMin: 60 },
+  contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood   // the public demo, all visitors together
 };
 
 function throttle_(bucket, key, limit) {

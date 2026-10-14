@@ -39,14 +39,14 @@ const [OWNER, PAYEL, SRUTI] = process.argv.slice(2);
   // The doer's own view: the score that answers the volume question.
   await login(PAYEL, 'staffpass123');
   await p.click('[data-tab="tasks"]'); await p.waitForTimeout(800);
-  await p.click('text=See why'); await p.waitForTimeout(1000); await shot('10-score-load');
+  await p.click('#statTiles >> text=See why'); await p.waitForTimeout(1000); await shot('10-score-load');
   await p.evaluate(() => { document.querySelector('#modal').scrollTop = 620; });
   await p.waitForTimeout(400); await shot('11-score-detail'); await esc();
 
   // And a light record beside it, flagged rather than failed.
   await login(SRUTI, 'staffpass123');
   await p.click('[data-tab="tasks"]'); await p.waitForTimeout(800);
-  await p.click('text=See why'); await p.waitForTimeout(1000); await shot('12-score-manager'); await esc();
+  await p.click('#statTiles >> text=See why'); await p.waitForTimeout(1000); await shot('12-score-manager'); await esc();
 
   const m = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
     isMobile: true, hasTouch: true });

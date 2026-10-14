@@ -420,6 +420,19 @@ function sendRenewalReminders() {
     if (isNaN(until)) return;
     until.setHours(0, 0, 0, 0);
     var days = Math.round((until - today) / 86400000);
+
+    /* A trial is not a renewal: nobody has paid, and nothing goes read-only.
+       Three notes — 3 days, 1 day, the last day — then silence. */
+    if (t.trial) {
+      if (TRIAL_MILESTONES.indexOf(days) < 0) return;
+      var tkey = 'trial-' + days;
+      if (rmAlreadySent_(t.sheetId, t.ownerEmail, tkey)) return;
+      var tsub = (t.company || 'Your Dome Box') + ' trial ' +
+                 (days > 1 ? 'ends in ' + days + ' days' : days === 1 ? 'ends tomorrow' : 'ends today');
+      if (SCHED.DRY_RUN) { log.push('  would send: ' + tsub + ' -> ' + t.ownerEmail); sent++; return; }
+      if (rmSendMail_(t.ownerEmail, tsub, rmTrialHtml_(t, days, until))) { rmMarkSent_(t.sheetId, t.ownerEmail, tkey); sent++; }
+      return;
+    }
     if (RENEWAL_MILESTONES.indexOf(days) < 0) return;
 
     var key = 'renew-' + days;
@@ -440,6 +453,19 @@ function sendRenewalReminders() {
 
   log.push((SCHED.DRY_RUN ? 'Would send ' : 'Sent ') + sent + ' renewal reminder(s).');
   Logger.log(log.join('\n'));
+}
+
+var TRIAL_MILESTONES = [3, 1, 0];
+
+function rmTrialHtml_(t, days, until) {
+  var when = Utilities.formatDate(until, Session.getScriptTimeZone(), 'd MMMM yyyy');
+  return '<p>Hello' + (t.company ? ' ' + rmEsc_(t.company) : '') + ',</p>' +
+    '<p>Your free trial of the full ' + rmEsc_(t.plan) + ' plan ends on ' + when + '.</p>' +
+    '<p>After that your workspace moves to the Free plan — 5 people and 100 tasks a month. ' +
+    '<strong>Nothing is deleted</strong>, and everybody you added can still sign in.</p>' +
+    '<p>To keep the scoring, reports and appraisals, choose a plan from <strong>Plans</strong> ' +
+    'inside Dome Box. Pay before the trial ends and the days you have left are added on.</p>' +
+    '<p>Questions? Reply to this email and a person will answer.</p>';
 }
 
 function rmRenewalHtml_(t, days, until) {
@@ -720,6 +746,7 @@ function rmLoadTenants_(log) {
      produces digests, it just cannot warn anybody their plan is running out. */
   var planIdx = rmFirstDefined_(col, ['plan', 'plantype', 'subscription']);
   var tillIdx = rmFirstDefined_(col, ['validuntil', 'validtill', 'expiry', 'expireson', 'renewson']);
+  var statusIdx = rmFirstDefined_(col, ['status']);
   if (emailIdx === undefined || sheetIdx === undefined) {
     log.push('Registry is missing an email or sheetId column.'); return null;
   }
@@ -737,6 +764,7 @@ function rmLoadTenants_(log) {
       ownerEmail: emailIdx !== undefined ? String(rows[r][emailIdx] || '').trim() : '',
       plan: planIdx !== undefined ? String(rows[r][planIdx] || '').trim() : '',
       validUntil: tillIdx !== undefined ? rows[r][tillIdx] : null,
+      trial: statusIdx !== undefined && String(rows[r][statusIdx] || '').trim().toLowerCase() === 'trial',
     });
   }
   log.push('Companies: ' + out.length);

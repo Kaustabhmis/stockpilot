@@ -1,12 +1,14 @@
 # Feature parity — verified
 
 Every capability from your current `code.gs` and front end, and what proves it.
-Tests: **1,870 checks across forty-eight suites**, run against the real
+Tests: **1,929 checks across fifty suites**, run against the real
 `dist/code.gs` on an in-memory Sheets shim, driven by the real
 `dist/index.html` in a real browser. See `tests/README.md`.
 
 ## Accounts
 - [x] Company signup, creates the tenant spreadsheet from your template
+- [x] Every new company starts on a 14-day trial of the full Growth plan; it moves to Free (never read-only) when it ends — `trial-test.js`
+- [x] Public live demo, view-only, as owner / manager / staff — `trial-test.js`, `sales-ui-test.js`
 - [x] Login by email **or** username
 - [x] Forgot password → emailed reset link
 - [x] Reset password, updates every store

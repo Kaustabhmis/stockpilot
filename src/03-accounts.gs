@@ -58,18 +58,21 @@ function registerCompany_locked_(form) {
   row[U['Active']] = true;
   ss.getSheetByName(TAB.USERS).appendRow(row);
 
-  var expiry = new Date(); expiry.setDate(expiry.getDate() + 30);
+  /* A new workspace starts on a full trial of the Growth plan, so the owner
+     sees the scoring, reports and appraisals with their own people before they
+     are asked to pay. When it ends they drop to Free — never to read-only. */
+  var expiry = new Date(); expiry.setDate(expiry.getDate() + TRIAL_DAYS);
   mkTab_(master, TAB.DIRECTORY, ['Company','Email','Password','Plan','Valid Until','SheetID','Status','Created'])
-    .appendRow([company, email, '', 'Free', ymd(expiry), newId, 'Active', new Date()]);
+    .appendRow([company, email, '', TRIAL_PLAN, ymd(expiry), newId, 'Trial', new Date()]);
   global.appendRow([email, hash, newId, username]);
 
-  try { sendWelcome_(email, form.name || company, company); } catch (e) {}
+  try { sendWelcome_(email, form.name || company, company, ymd(expiry)); } catch (e) {}
 
   return {
     status: 'success',
     token: issueToken(newId, username, 'Admin'),
     user: { name: row[U['Name']], username: username, role: 'Admin', email: email },
-    company: company, plan: 'Free',
+    company: company, plan: TRIAL_PLAN, trialEnds: ymd(expiry),
   };
 }
 
@@ -256,8 +259,16 @@ function registryRow_(sheetId) {
     var d = dir.getDataRange().getValues();
     for (var i = 1; i < d.length; i++) {
       if (String(d[i][5]).trim() === String(sheetId).trim()) {
-        return { company: d[i][0], email: d[i][1], plan: d[i][3],
-                 validUntil: d[i][4], sheetId: d[i][5], row: i + 1 };
+        /* A trial is a paid plan with an end date. Once that date has passed
+           the workspace is on Free — not a lapsed paid plan, which would go
+           read-only a week later. */
+        var trial = String(d[i][6] || '').trim().toLowerCase() === 'trial';
+        var until = d[i][4] ? new Date(d[i][4]) : null;
+        if (until && !isNaN(until)) until.setHours(23, 59, 59, 999);
+        var trialOver = trial && until && !isNaN(until) && until < new Date();
+        return { company: d[i][0], email: d[i][1], plan: trialOver ? 'Free' : d[i][3],
+                 validUntil: trialOver ? '' : d[i][4], sheetId: d[i][5], row: i + 1,
+                 trial: trial && !trialOver, trialEnded: !!trialOver, trialPlan: trial ? d[i][3] : '' };
       }
     }
   } catch (e) { logError_('registryRow', e.message); }

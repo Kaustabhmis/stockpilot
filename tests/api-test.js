@@ -8,7 +8,9 @@ const reg = call({action:'register', form:{companyName:'Acme Engineering', name:
   email:'rohan@acme.in', phone:'9876543210', password:'strongpass123'}});
 ok('signup creates an Admin', reg.user.role==='Admin');
 ok('signup returns a session token', !!reg.token);
-ok('starts on Free', reg.plan==='Free');
+ok('starts on a 14-day Growth trial', reg.plan==='Growth' && !!reg.trialEnds);
+/* The plan-limit checks below are about Free, which is where a trial lands on day 15. */
+env.endTrial('rohan@acme.in');
 const ADMIN = reg.token;
 
 ok('duplicate email refused', /already registered/.test(err(()=>call({action:'register',

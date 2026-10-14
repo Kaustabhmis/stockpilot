@@ -64,7 +64,7 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   await p.click('#btnLogin'); await p.waitForTimeout(1800);
 
   console.log('\n--- and the screen that explains it ---');
-  await p.click('text=See why'); await p.waitForTimeout(800);
+  await p.click('#statTiles >> text=See why'); await p.waitForTimeout(800);
   let modal = await p.locator('#modal').textContent();
   ok('the score leads with how well, times how much', /How well, times how much/.test(modal), modal.slice(0, 200));
   ok('it states the load carried', /of an expected load/.test(modal));
@@ -116,7 +116,7 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   await p.fill('#liUser', U('payel') + '@acme.in'); await p.fill('#liPass', 'staffpass123');
   await p.click('#btnLogin'); await p.waitForTimeout(1800);
   await p.click('[data-tab="tasks"]'); await p.waitForTimeout(700);
-  await p.click('text=See why'); await p.waitForTimeout(800);
+  await p.click('#statTiles >> text=See why'); await p.waitForTimeout(800);
   modal = await p.locator('#modal').textContent();
   ok('the cookie points are on their score screen', /4 cookie points this month/.test(modal), modal.slice(0, 300));
   ok('with the reason they were given for', /Stayed back to clear the audit list/.test(modal));

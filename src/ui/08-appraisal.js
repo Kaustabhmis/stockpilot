@@ -248,7 +248,9 @@ function renderBillingPlans() {
   var buyable = PLAN_CARDS.filter(function (p) { return p.price; });
   el.innerHTML = buyable.map(function (p) {
     var key = planKeyForCycle(p);
-    var current = key === STATE.plan || p.key === STATE.plan || p.yearKey === STATE.plan;
+    /* A trial is not a purchase: every band stays buyable, the trial plan included. */
+    var trial = !!(STATE.usage && STATE.usage.trial);
+    var current = !trial && (key === STATE.plan || p.key === STATE.plan || p.yearKey === STATE.plan);
     var L = planPriceLabel(p);
     var lead = p.tag === 'Most popular';
     return '<div class="border-2 rounded-2xl p-5 flex flex-col ' +

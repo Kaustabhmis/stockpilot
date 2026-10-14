@@ -23,7 +23,7 @@ const { chromium } = require('playwright');
   console.log('--- the landing page ---');
   ok('a stranger lands on the home page, not a bare form',
      await p.locator('#view-home').isVisible() && !(await p.locator('#view-auth').isVisible()));
-  ok('it says what the product is', /Know who is doing what, by when/
+  ok('it says what the product is', /Stop chasing work on WhatsApp/
      .test(await p.locator('#view-home').textContent()));
   ok('and who it is for', /Indian MSMEs/.test(await p.locator('#view-home').textContent()));
   ok('every band is priced on the page', (await p.locator('#homePlans > div').count()) === 5);
@@ -35,7 +35,7 @@ const { chromium } = require('playwright');
      .test(await p.locator('#view-home').textContent()));
 
   console.log('--- signup ---');
-  await p.click('#view-home button:has-text("Start free — no card")');
+  await p.click('#view-home button:has-text("Start your free 14-day trial")');
   await p.waitForTimeout(400);
   ok('Start free goes straight to the signup form', await p.locator('#formSignup').isVisible());
   await p.click('button:has-text("Back to sign in")'); await p.waitForTimeout(200);
@@ -110,6 +110,9 @@ const { chromium } = require('playwright');
   await p.fill('#fSearch',''); await p.waitForTimeout(250);
 
   console.log('--- reports gated on Free ---');
+  /* A new workspace is on a Growth trial; this checks what Free looks like. */
+  await p.evaluate((e) => fetch('/__endtrial?email=' + encodeURIComponent(e)), EMAIL);
+  await p.evaluate(() => refresh()); await p.waitForTimeout(600);
   await p.click('button[data-tab="reports"]'); await p.waitForTimeout(700);
   ok('upgrade wall shown', /Pro feature/.test(await p.locator('#reportsLocked').textContent()));
   await p.click('#reportsLocked button'); await p.waitForTimeout(400);

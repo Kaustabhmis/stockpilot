@@ -48,7 +48,8 @@ const nav = `
     <a href="/features">Features</a>
     <a href="/pricing">Pricing</a>
     <a href="/guides">Guides</a>
-    <a class="nav-cta" href="/?signup=1">Start free</a>
+    <a class="nav-link" href="/?demo=owner">Live demo</a>
+    <a class="nav-cta" href="/?signup=1">Start free trial</a>
   </nav>
 </header>`;
 
@@ -101,6 +102,8 @@ tbody tr:last-child td{border-bottom:none}
 .cta p{margin:0 0 14px;font-size:17px}
 .btn{display:inline-block;background:#1e4fbf;color:#fff;text-decoration:none;font-weight:800;
   padding:13px 26px;border-radius:12px}
+.btn-ghost{background:#fff;color:#1e4fbf !important;border:2px solid #bccfee;margin-left:10px}
+@media(max-width:560px){.btn-ghost{margin:10px 0 0}}
 .fine{color:#667085;font-size:13px;font-weight:600;margin:12px 0 0 !important}
 .cards{display:grid;gap:12px;margin:24px 0}
 .card{display:block;background:#fff;border:1px solid #e2e7ef;border-radius:14px;padding:18px 20px;

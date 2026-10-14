@@ -134,8 +134,37 @@ function renderTasks() {
   var mode = STATE.archive ? 'list' : STATE.mode;
   $('board').classList.toggle('hidden', mode !== 'board' || !rows.length);
   $('list').classList.toggle('hidden', mode !== 'list' || !rows.length);
+  if (!rows.length && !STATE.archive && !(STATE.data.tasks || []).length) renderFirstRun();
   if (!rows.length) return;
   if (mode === 'board') renderBoard(rows); else renderList(rows);
+}
+
+/* A new workspace's empty board is where a trial is won or lost, so instead
+   of "no tasks" it shows the three things that get a team running, ticking
+   them off as they are done. */
+function renderFirstRun() {
+  if (!STATE.user || STATE.user.role === 'Doer' || STATE.demo) return;
+  var people = (STATE.data.staff || []).filter(function (u) { return u.active !== false; }).length;
+  var step = function (done, n, title, sub, action, label) {
+    return '<div class="flex items-center gap-4 py-3 border-t border-gray-100 first:border-0">' +
+      '<span class="w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 ' +
+        (done ? 'bg-emerald-600 text-white' : 'bg-blue-50 text-blue-700') + '">' +
+        (done ? '<span class="material-icons text-[20px]">check</span>' : n) + '</span>' +
+      '<div class="flex-1 text-left"><div class="font-black text-gray-900">' + title + '</div>' +
+        '<div class="text-[13px] font-semibold text-gray-500">' + sub + '</div></div>' +
+      (done ? '' : '<button class="btn btn-p text-sm" onclick="' + action + '">' + label + '</button>') + '</div>';
+  };
+  $('tasksEmpty').innerHTML = '<div class="max-w-[620px] mx-auto bg-white rounded-3xl border-2 border-gray-200 p-6 text-left">' +
+    '<div class="text-[11px] font-black uppercase tracking-widest text-blue-600">Get started</div>' +
+    '<div class="text-xl font-black text-gray-900 mt-1">Three steps and your team is running</div>' +
+    '<div class="mt-3">' +
+      step(people > 1, 1, 'Add your team', 'Name, role and their manager — that becomes the approval chain.',
+           "STATE.tab='team'; renderTab(); setTimeout(function(){ openUser(); }, 600)", 'Add a person') +
+      step(false, 2, 'Assign the first job', 'A due date and a priority. Reminders go out by themselves.',
+           'openAssign()', 'Assign a job') +
+      step(false, 3, 'Show your team how it works', 'A printable manual with a picture of every screen.',
+           "window.open('/user-manual.pdf','_blank')", 'Open the manual') +
+    '</div></div>';
 }
 
 function taskCard(t) {

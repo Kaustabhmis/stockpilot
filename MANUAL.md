@@ -620,6 +620,18 @@ delivery. Only summary figures are sent to the model — never staff records.
 
 ## Billing
 
+### The free trial
+
+Every new workspace starts with the full **Growth** plan — up to 50 people,
+scoring, reports and appraisals — free for **14 days**, with no card. A bar at
+the top of the app says how many days are left, and the owner gets a note 3
+days, 1 day and on the last day.
+
+Choose a plan during the trial and the days you have left are added on. If the
+trial ends without one, the workspace moves to the **Free** plan: nothing is
+deleted, everybody can still sign in, and new people and tasks are held to the
+Free limits.
+
 **Plans** (from the account menu).
 
 | Plan | Users | Monthly | Yearly |

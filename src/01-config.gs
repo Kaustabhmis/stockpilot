@@ -45,6 +45,11 @@ function CFG() {
    a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
 var MAIL_FROM_NAME = 'Dome Box';
 
+/* Every new workspace starts on the full Growth plan for this many days, then
+   moves to Free unless it pays. Nothing is deleted when a trial ends. */
+var TRIAL_DAYS = 14;
+var TRIAL_PLAN = 'Growth';
+
 var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
             SETTINGS:'Settings', LEAVE:'Leave', DIRECTORY:'Directory',
             GLOBAL:'Global_Users', TOKENS:'Reset_Tokens', COOKIES:'Cookie_Points',

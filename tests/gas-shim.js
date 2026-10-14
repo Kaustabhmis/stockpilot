@@ -228,7 +228,22 @@ function build() {
     triggers, triggerHours,
     setExecUrl(u) { execUrl = u || ''; },
     makeSpreadsheet, makeSheet,
-    newFile(id, name) { FILES[id] = makeSpreadsheet(id, name); META[id] = { sharing: 'PRIVATE' }; return FILES[id]; } };
+    newFile(id, name) { FILES[id] = makeSpreadsheet(id, name); META[id] = { sharing: 'PRIVATE' }; return FILES[id]; },
+    /* New workspaces start on a 14-day Growth trial. A test about the Free
+       plan ends that trial first — exactly what happens on day 15. */
+    endTrial(email) {
+      const m = FILES[props.MASTER_DB_ID || 'MASTER'];
+      const dir = m && m.getSheetByName('Directory');
+      if (!dir) return false;
+      const d = dir.getDataRange().getValues();
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      for (let i = 1; i < d.length; i++) {
+        if (String(d[i][1]).toLowerCase() === String(email).toLowerCase()) {
+          dir.getRange(i + 1, 5).setValue(y.toISOString().slice(0, 10)); return true;
+        }
+      }
+      return false;
+    } };
 }
 
 module.exports = { build };

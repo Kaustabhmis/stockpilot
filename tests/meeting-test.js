@@ -23,6 +23,7 @@ const setPlan = (plan) => {
 };
 
 console.log('\n=== the plan ===');
+env.endTrial(email);   // a new workspace is on a Growth trial; this is about Free
 ok('meetings are a paid feature', /paid plan/.test(call({ action: 'getMeetings', token: A }).message || ''));
 setPlan('Growth');
 [['Sruti Charulata', 'sruti', 'HOD', ''], ['Payel S', 'payel', 'Doer', 'sruti'], ['Vikram R', 'vikram', 'Doer', 'sruti'],

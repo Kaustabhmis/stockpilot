@@ -49,7 +49,7 @@ const hit = (path) => new Promise((res, rej) =>
   await p.click('#btnLogin'); await p.waitForTimeout(1600);
 
   console.log('\n--- the manager sees what they are holding ---');
-  await p.click('text=See why');
+  await p.click('#statTiles >> text=See why');
   await p.waitForTimeout(600);
   const modal = await p.locator('#modal').textContent();
   ok('the score modal names the queue', /Work waiting on you/.test(modal));

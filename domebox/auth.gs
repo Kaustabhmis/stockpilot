@@ -139,6 +139,20 @@ function issueToken(sheetId, username, role) {
  * Returns the identity the token proves, or throws. Every protected route must
  * call this and use what it returns — never params.user.
  */
+/**
+ * A view-only session for the public demo: the same signature, a fifth field
+ * that says "read only", and a short life. Nothing a demo visitor does can
+ * change data, send an email or spend money — the router checks the flag
+ * before any handler runs.
+ */
+var DEMO_SESSION_HOURS = 2;
+function issueViewOnlyToken(sheetId, username, role) {
+  var exp = Date.now() + DEMO_SESSION_HOURS * 3600 * 1000;
+  var body = [sheetId, username, role, exp, 'ro'].join('|');
+  var sig = toHex_(Utilities.computeHmacSha256Signature(body, tokenSecret_()));
+  return Utilities.base64EncodeWebSafe(body) + '.' + sig;
+}
+
 function requireSession(token) {
   if (!token) throw new Error('Not signed in.');
   var bits = String(token).split('.');
@@ -151,10 +165,10 @@ function requireSession(token) {
   if (!safeEquals_(expect, bits[1])) throw new Error('Session is invalid. Please sign in again.');
 
   var f = body.split('|');
-  if (f.length !== 4) throw new Error('Session is invalid. Please sign in again.');
+  if (f.length !== 4 && !(f.length === 5 && f[4] === 'ro')) throw new Error('Session is invalid. Please sign in again.');
   if (Number(f[3]) < Date.now()) throw new Error('Session has expired. Please sign in again.');
 
-  return { sheetId: f[0], username: f[1], role: f[2], expires: Number(f[3]) };
+  return { sheetId: f[0], username: f[1], role: f[2], expires: Number(f[3]), viewOnly: f.length === 5 };
 }
 
 /** Routes that only an Admin may call. */
@@ -198,6 +212,8 @@ var PUBLIC_LIMITS = {
   forgotPasswordGlobal: { max: 60, windowMin: 60 },
   register:       { max: 3,  windowMin: 60 },
   contactSales:   { max: 5,  windowMin: 60 },
+  demo:           { max: 600, windowMin: 60 },
+  contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood   // the public demo, all visitors together
 };
 
 function throttle_(bucket, key, limit) {

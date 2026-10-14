@@ -447,11 +447,13 @@ function resetEmailHtml_(link) {
     'If you did not ask for it, you can ignore this email — nothing has changed.</p>');
 }
 
-function sendWelcome_(email, name, company) {
+function sendWelcome_(email, name, company, trialEnds) {
   sendEmail_(email, 'Welcome to Dome Box', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box. You are on the Free plan ' +
-    '— up to 5 people and 100 tasks a month, with 30 days to try everything.</p>' +
+    '<p><strong>' + esc_(company) + '</strong> is set up on Dome Box, with the full ' + TRIAL_PLAN +
+    ' plan free for ' + TRIAL_DAYS + ' days' + (trialEnds ? ' (until ' + esc_(trialEnds) + ')' : '') +
+    ' — up to 50 people, scoring, reports and appraisals included. No card needed. ' +
+    'After that it moves to the Free plan unless you choose one; nothing is deleted.</p>' +
     '<p>Add your team first, then assign the first task.</p>' + btn_('Open Dome Box', CFG().siteUrl)));
 }
 
@@ -477,12 +479,22 @@ function receiptHtml_(company, planName, paid, until) {
 
 function contactSales_(form) {
   form = form || {};
-  sendEmail_(CFG().mailFrom, 'Enterprise enquiry — ' + String(form.companyName || 'unknown'),
-    mailShell_('New enterprise enquiry', infoTable_([
-      ['Name', form.name || ''], ['Company', form.companyName || ''],
-      ['Email', form.email || ''], ['Phone', form.phone || '']]) +
-      '<p>' + esc_(form.message || '') + '</p>'));
-  return { status: 'success', message: 'Thanks — we will be in touch within one working day.' };
+  var clip = function (v, n) { return String(v == null ? '' : v).trim().slice(0, n || 200); };
+  var phone = clip(form.phone, 30), email = clip(form.email, 120);
+  if (!clip(form.name) || !clip(form.companyName)) throw new Error('Please give your name and company.');
+  if (phone.replace(/\D/g, '').length < 10 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new Error('Please give a phone number or an email we can reach you on.');
+  }
+  var callback = form.kind === 'callback';
+  /* Sent to us only — never to the address in the form, so this route cannot
+     be used to send mail to strangers. */
+  sendEmail_(CFG().mailFrom, (callback ? 'Call-back request — ' : 'Sales enquiry — ') + clip(form.companyName, 80),
+    mailShell_(callback ? 'Please call this prospect back' : 'New sales enquiry', infoTable_([
+      ['Name', clip(form.name)], ['Company', clip(form.companyName)],
+      ['Phone', phone], ['Email', email],
+      ['People', clip(form.size, 10)], ['Best time', clip(form.when, 40)]]) +
+      '<p>' + esc_(clip(form.message, 2000)) + '</p>'));
+  return { status: 'success', message: 'We will call you back within one working day.' };
 }
 
 function contactSupport_(ctx, form) {

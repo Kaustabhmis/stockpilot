@@ -100,7 +100,7 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   await p.fill('#liUser', 'payel' + RUN + '@acme.in'); await p.fill('#liPass', 'staffpass123');
   await p.click('#btnLogin'); await p.waitForTimeout(1800);
   await p.click('[data-tab="tasks"]'); await p.waitForTimeout(700);
-  await p.click('text=See why'); await p.waitForTimeout(800);
+  await p.click('#statTiles >> text=See why'); await p.waitForTimeout(800);
   const modal = await p.locator('#modal').textContent();
   ok('the score names the stage deadlines', /Project stage deadlines/.test(modal), modal.slice(0, 220));
   ok('counts the one they met', /1 met/.test(modal));

@@ -146,6 +146,9 @@ setInterval(function () {
     toast('Set API_URL at the top of this file to your Apps Script /exec URL.', 'err');
     return;
   }
+  /* ?demo=owner|manager|staff — an ad, a guide page or a sales email can
+     land somebody straight inside the live demo. */
+  if (params.get('demo')) { openDemo(params.get('demo')); return; }
   if (restoreSession()) {
     enterApp();
     return;

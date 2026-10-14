@@ -54,6 +54,7 @@ const signUp = (company, email, doer) => {
 const acme = signUp('Acme Forgings', 'rohan@acme.in', { name: 'Payel S', u: 'payel' });
 ok('a company signs up through the real API and gets a task', acme.r.status === 'success', JSON.stringify(acme.r));
 const free = call({ action: 'register', form: { companyName: 'Free Co', name: 'Free Owner', email: 'f@free.in', password: 'strongpass123' } }).token;
+env.endTrial('f@free.in');   // its 14-day trial is over, so it is on Free
 call({ action: 'addUser', token: free, form: { name: 'Free Doer', username: 'fd', email: 'fd@free.in', role: 'Doer', manager: '', jobProfile: 'X', password: 'staffpass123' } });
 call({ action: 'createTask', token: free, form: { title: 'Free task', assignTo: 'fd', dueDate: '2030-01-01', priority: 'High', jobCategory: 'General' } });
 const lapsed = signUp('Lapsed Ltd', 'l@lapsed.in', { name: 'Lapsed Doer', u: 'ld' });

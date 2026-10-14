@@ -8,10 +8,12 @@
  */
 module.exports = (C) => {
   const app = 'https://' + C.domain + '/?signup=1';
+  const demo = 'https://' + C.domain + '/?demo=owner';
   const cta = (line) =>
     `<div class="cta"><p><strong>${line}</strong></p>
-     <a class="btn" href="${app}">Start free — 5 users, no card</a>
-     <p class="fine">Set up in an afternoon. Nothing to install.</p></div>`;
+     <a class="btn" href="${app}">Start your free 14-day trial</a>
+     <a class="btn btn-ghost" href="${demo}">See the live demo</a>
+     <p class="fine">The full Growth plan for 14 days. No card, nothing to install.</p></div>`;
 
   return [
   /* ---------------------------------------------------------------- pricing */
@@ -19,10 +21,11 @@ module.exports = (C) => {
     slug: 'pricing',
     title: 'Pricing',
     h1: 'Pricing',
-    description: 'Dome Box pricing in INR: free for 5 users, then ₹2,499/month for 15, ₹5,999 for 50 and ₹12,999 for 150. Every paid plan includes the whole product.',
+    description: 'Dome Box pricing in INR: 14-day free trial, free for 5 users, then ₹2,499/month for 15, ₹5,999 for 50, ₹12,999 for 150. Every feature on every paid plan.',
     changefreq: 'monthly', priority: '0.9',
     faq: [
-      ['Is there a free plan?', 'Yes. Up to 5 users and 100 tasks a month, with no card and no time limit. It includes the board, approvals and reminders.'],
+      ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
+      ['Is there a free plan?', 'Yes. Up to 5 users and 100 tasks a month, with no card and no time limit. It includes the board, approvals and reminders. A trial that ends without a plan moves here — nothing is deleted.'],
       ['What is not included in the paid plans?', 'Nothing. Every paid plan carries the whole product — scoring, reports, KRA/KPI, appraisals, projects and WhatsApp alerts. You pay for the size of your team, not for features.'],
       ['Is GST included?', 'No. All prices are exclusive of 18% GST. A GST invoice is issued for every payment so you can claim input credit.'],
       ['What happens when my plan expires?', 'Your workspace stays fully usable for a week. After that it becomes read-only — nothing is ever deleted, and everything comes back the moment you renew.'],
@@ -57,7 +60,7 @@ becomes "how many people?", which you can answer in a second.</p>
 read-only. <strong>Nothing is deleted</strong> — your tasks, history, scores and
 appraisals are all still there, and they come straight back when you renew. You
 can export your data at any time, on any plan.</p>
-${cta('Start on the free plan and move up when it is earning its keep.')}`,
+${cta('Try the full product free for 14 days, then pick the size that fits.')}`,
   },
 
   /* --------------------------------------------------------------- features */
@@ -487,7 +490,7 @@ the working shown for every number.</li>
 <li>KRA, KPI and appraisal in the same place as the work they are measuring.</li>
 <li>Priced in INR, for team size, with every feature in every paid plan.</li>
 </ul>
-${cta('The free plan is enough to compare it properly.')}`,
+${cta('Fourteen days of the full product is enough to compare it properly.')}`,
   },
 
   /* ------------------------------------------------------------- guide index */

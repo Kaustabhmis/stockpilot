@@ -214,6 +214,28 @@ Every rule was recalculated on paper and checked against the engine
 - **The manual said five days late is zero.** At 10 points a working day it
   is 50; ten days is zero.
 
+### 4n. Selling without a salesperson
+
+- **14-day Growth trial** for every new workspace (registry Status `Trial`). When it ends the
+  workspace moves to Free — never read-only — and the owner gets trial notes at 3, 1 and 0
+  days instead of renewal notices. Paying during the trial adds the days left.
+- **A public live demo, view-only.** `openDemo` issues a two-hour token carrying a read-only
+  mark; the router allows only an explicit list of read routes for it, so anything that
+  writes, emails, pays or calls the AI is refused. A token with the mark removed fails its
+  signature. Visitors can switch between the owner, a manager and a team member.
+- **The home page** now shows the product (real screens, a nine-part tour), the demo, how it
+  works, an ROI calculator that uses only the visitor's own figures, a comparison with
+  WhatsApp and Excel, answers to buyers' questions and a call-back form (sent to us only,
+  throttled). No testimonials or customer claims.
+- **Found on the way:** during a trial the Plans window showed Growth as "Current plan" with
+  no Buy button, so a trialling customer could not buy the plan they were trying; and the app
+  kept the plan it saw at sign-in, so a trial ending or a payment landing did not show until
+  the next sign-in. Both fixed.
+- A new empty workspace shows a three-step start (add your team, assign a job, open the
+  manual) instead of "No tasks yet".
+
+Tests: `trial-test.js` (27) and `sales-ui-test.js` (32).
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

@@ -168,6 +168,7 @@ function showHome() {
   $('view-auth').classList.add('hidden');
   $('view-app').classList.add('hidden');
   renderHomePlans();
+  if (typeof initHome === 'function') initHome();
   window.scrollTo(0, 0);
 }
 
@@ -206,8 +207,10 @@ function renderHomePlans() {
           return '<li class="flex gap-2"><span class="material-icons text-[16px] text-emerald-600">check</span>' +
             '<span>' + esc(b) + '</span></li>'; }).join('') + '</ul>' +
       '<button class="btn ' + (lead ? 'btn-p' : 'btn-g') + ' w-full mt-5" ' +
-        'onclick="goAuth(\'signup\')">' +
-        (p.key === 'Enterprise' ? 'Talk to us' : p.key === 'Free' ? 'Start free' : 'Get ' + esc(p.name)) +
+        'onclick="' + (p.key === 'Enterprise'
+          ? 'document.getElementById(\'callback\').scrollIntoView({behavior:\'smooth\'})'
+          : 'goAuth(\'signup\')') + '">' +
+        (p.key === 'Enterprise' ? 'Talk to us' : p.key === 'Free' ? 'Start free' : 'Start free trial') +
       '</button></div>';
   }).join('');
 }

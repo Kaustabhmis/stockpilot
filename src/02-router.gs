@@ -50,7 +50,14 @@ function json_(o) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping'];
+var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo'];
+
+/* The only routes a view-only (demo) session may call. An allow-list, not a
+   block-list: a write route added later is closed to demo visitors by default. */
+var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getProjects','getOrgChart',
+  'getCookies','getAnalytics','getAccountability','getPerformanceReport','getAppraisalForm',
+  'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
+  'getMeetings','getMeeting','getLeave'];
 
 function route_(p) {
   var action = String(p.action || '');
@@ -75,15 +82,24 @@ function route_(p) {
         return forgotPassword_(p.email);
       case 'resetPassword':  return resetPassword_(p.token, p.password);
       case 'contactSales':
-        throttle_('cs', (p.form && p.form.email) || '', PUBLIC_LIMITS.contactSales);
+        throttle_('cs', (p.form && (p.form.phone || p.form.email)) || '', PUBLIC_LIMITS.contactSales);
+        throttle_('csall', 'global', PUBLIC_LIMITS.contactSalesGlobal);
         return contactSales_(p.form);
+      case 'openDemo':
+        throttle_('demo', 'global', PUBLIC_LIMITS.demo);
+        return openDemo_(p.as);
     }
   }
 
   /* Identity comes from the signed token, never from the request body. This one
      line is the difference between "knowing a sheetId" and "being authorised". */
   var S = requireSession(p.token);
+  if (S.viewOnly && VIEW_ONLY_ACTIONS.indexOf(action) < 0) {
+    throw new Error('This is the demo, so changes are switched off. Start your free 14-day trial to ' +
+                    'do this with your own team.');
+  }
   var ctx = tenantContext_(S);
+  ctx.viewOnly = !!S.viewOnly;
 
   switch (action) {
     /* --- read ------------------------------------------------------------ */
@@ -201,6 +217,7 @@ function tenantContext_(session) {
     actor: { username: me.username, role: me.role, name: me.name },
     company: reg ? reg.company : '', planName: normalizePlan(reg ? reg.plan : 'Free'),
     plan: plan, daysLeft: daysLeft,
+    trial: !!(reg && reg.trial), trialEnded: !!(reg && reg.trialEnded),
     // A lapsed paid plan keeps working for a week, then drops to read-only
     // rather than vanishing — nobody loses access to their own history.
     serviceStopped: (daysLeft !== null && daysLeft <= -7 && normalizePlan(reg ? reg.plan : 'Free') !== 'Free'),
