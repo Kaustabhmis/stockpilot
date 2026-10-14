@@ -61,7 +61,18 @@ export function createRouter(db, opts = {}) {
     'myMonth', 'monthAtt', 'punchState', 'punchLog', 'listUsers', 'payslipMailLog',
     'tally']);
 
-  return async function handle(body) {
+  /* A trusted, auth-free path for the eSSL push endpoint in index.ts: the
+     HTTP layer has already checked the device's push key, so this just feeds
+     the device's rows through the same ingest the file import and the LAN
+     agent use. Returns how many punches landed and how many days were built. */
+  async function ingest(punches, source) {
+    const dirty = {};
+    const res = await act.ingestPunches(punches, source || 'essl-push', dirty);
+    await api.bumpRevision(dirty);
+    return res;
+  }
+
+  const handle = async function handle(body) {
     const action = String((body && body.action) || '');
     const payload = (body && body.payload) || {};
     const token = (body && body.token) || '';
@@ -84,4 +95,7 @@ export function createRouter(db, opts = {}) {
       return { ok: false, error: msg };
     }
   };
+
+  handle.ingest = ingest;
+  return handle;
 }

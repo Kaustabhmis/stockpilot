@@ -75,6 +75,21 @@ async function signingKey(): Promise<string> {
 }
 const TOKEN_SECRET = await signingKey();
 
+/* A separate, simpler key for biometric devices that push punches straight in
+ * (eSSL "Push to Web API"). Stored in hrms.app_secrets like the signing key,
+ * or set as the ESSL_PUSH_KEY env var. Empty means the push endpoint is shut.
+ * It is not a session token: all it can ever do is add punches. */
+async function esslPushKey(): Promise<string> {
+  try {
+    const rows = await sql.unsafe(
+      `select value from hrms.app_secrets where key = 'essl_push_key'`);
+    const v = String((rows[0] as { value?: string } | undefined)?.value ?? '');
+    if (v) return v;
+  } catch (_e) { /* row may not exist yet */ }
+  return Deno.env.get('ESSL_PUSH_KEY') ?? '';
+}
+const ESSL_PUSH_KEY = await esslPushKey();
+
 /* The one method the API asks of a database. postgres.js returns the rows
    directly; the API expects { rows }, as node-postgres gives. */
 const db = {
@@ -108,8 +123,69 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
+/* -------------------- eSSL "Push to Web API" endpoint --------------------
+ * A biometric device (or eTimeTrackLite's push feature) POSTs new punches to
+ *   .../functions/v1/api/push?key=THE_PUSH_KEY
+ * and reads back a one-character status the way those devices expect:
+ *   1 = saved, 0 = nothing saved (e.g. all duplicates), 2 = rejected / error.
+ * The punch rows can be a bare array or wrapped in { data | logs | records |
+ * rows | Table | ... }; field names are matched leniently by the same
+ * normaliser the file import and LAN agent use, so UserId/EmployeeCode/PIN and
+ * LogDate/PunchTime/AttDateTime all work. The raw body is logged (first 500
+ * chars) so an unfamiliar shape can be read off the function logs and mapped.
+ * ------------------------------------------------------------------------ */
+function esslPickKey(req: Request, url: URL): string {
+  const h = req.headers;
+  const auth = h.get('authorization') || '';
+  return (url.searchParams.get('key') || url.searchParams.get('apikey') ||
+          h.get('x-api-key') || h.get('x-push-key') || h.get('push-key') ||
+          (auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '') ||
+          '').trim();
+}
+function esslRows(body: unknown): Record<string, unknown>[] {
+  if (Array.isArray(body)) return body as Record<string, unknown>[];
+  if (body && typeof body === 'object') {
+    const o = body as Record<string, unknown>;
+    for (const k of ['data', 'Data', 'logs', 'Logs', 'records', 'Records',
+                     'rows', 'Rows', 'punches', 'AttLogs', 'Table', 'table', 'result']) {
+      if (Array.isArray(o[k])) return o[k] as Record<string, unknown>[];
+    }
+    const keys = Object.keys(o).map(s => s.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    if (keys.some(k => ['empcode', 'employeecode', 'userid', 'usrid', 'pin',
+                        'employeeid', 'empid', 'staffcode', 'code'].includes(k))) return [o];
+  }
+  return [];
+}
+async function esslPush(req: Request, url: URL): Promise<Response> {
+  const reply = (code: number) => new Response(String(code),
+    { status: 200, headers: { ...CORS, 'Content-Type': 'text/plain' } });
+  try {
+    if (!ESSL_PUSH_KEY) { console.log('essl-push: no key configured'); return reply(2); }
+    if (esslPickKey(req, url) !== ESSL_PUSH_KEY) { console.log('essl-push: bad key'); return reply(2); }
+    const text = await req.text();
+    let body: unknown;
+    try { body = JSON.parse(text); }
+    catch (_e) { console.log('essl-push: non-JSON body:', text.slice(0, 300)); return reply(2); }
+    console.log('essl-push received:', JSON.stringify(body).slice(0, 500));
+    const rows = esslRows(body);
+    if (!rows.length) { console.log('essl-push: no rows in body'); return reply(0); }
+    // deno-lint-ignore no-explicit-any
+    const res = await (handle as any).ingest(rows, 'essl-push');
+    console.log('essl-push ingested:', JSON.stringify(res));
+    return reply(res && (Number(res.added) > 0 || Number(res.days) > 0) ? 1 : 0);
+  } catch (e) {
+    console.log('essl-push error:', String((e as Error)?.message ?? e));
+    return reply(2);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  const url = new URL(req.url);
+  if (req.method === 'POST' &&
+      (url.pathname.endsWith('/push') || url.searchParams.has('essl') || url.searchParams.has('push'))) {
+    return await esslPush(req, url);
+  }
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ ok: false, error: 'POST only' }),
       { status: 405, headers: { ...CORS, 'Content-Type': 'application/json' } });
