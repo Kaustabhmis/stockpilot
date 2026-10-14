@@ -71,7 +71,7 @@ function renderTour(key) {
       return '<div class="tour-point"><span class="material-icons">check_circle</span><span>' + esc(p) + '</span></div>';
     }).join('') +
     '<div class="flex flex-wrap gap-3 mt-6">' +
-      '<button class="btn btn-p" onclick="goAuth(\'signup\')">Start free trial</button>' +
+      '<button class="btn btn-gold" onclick="goAuth(\'signup\')">Start free trial</button>' +
       '<button class="btn btn-g" onclick="openDemo(\'owner\', this)">Try it in the live demo</button></div>';
 }
 
@@ -95,21 +95,21 @@ function roiCalc() {
   var plan = roiPlanFor(people);
   var half = cost / 2;
   out.innerHTML =
-    '<div class="text-[11px] font-black uppercase tracking-widest text-gray-400">Chasing, every month</div>' +
+    '<div class="text-[11px] font-black uppercase tracking-widest" style="color:#9fb3d1">Chasing, every month</div>' +
     '<div class="roi-big mt-1">' + Math.round(hours).toLocaleString('en-IN') + ' hours</div>' +
-    '<div class="text-gray-500 font-bold text-sm">of manager time, worth about <b class="text-gray-900">' + inr(cost) + '</b></div>' +
+    '<div class="font-bold text-sm" style="color:#c9d6ea">of manager time, worth about <b class="text-white">' + inr(cost) + '</b></div>' +
     '<div class="mt-5">' +
       '<div class="roi-row"><span>Half of that time back is worth</span><b>' + inr(half) + ' a month</b></div>' +
       (plan
         ? '<div class="roi-row"><span>Dome Box ' + esc(plan.name) + ' for ' + people + ' people</span><b>' + inr(plan.monthly) + ' a month</b></div>' +
-          '<div class="roi-row" style="border:0"><span>That is</span><b class="text-emerald-700">' +
+          '<div class="roi-row" style="border:0"><span>That is</span><b class="win">' +
             (plan.monthly ? (Math.round(half / plan.monthly * 10) / 10) + '× what it costs' : '—') + '</b></div>'
         : '<div class="roi-row" style="border:0"><span>For more than 150 people</span><b>Talk to us</b></div>') +
     '</div>' +
-    '<p class="text-[12px] font-semibold text-gray-400 mt-3 leading-relaxed">An estimate from your own figures: ' +
+    '<p class="fine text-[12px] font-semibold mt-3 leading-relaxed">An estimate from your own figures: ' +
       DAYS + ' working days of ' + HOURS + ' hours, plan price billed yearly, before GST. It counts only the ' +
       'chasing — not late deliveries, rework or appraisal time.</p>' +
-    '<button class="btn btn-p w-full mt-4" onclick="goAuth(\'signup\')">Start your free 14-day trial</button>';
+    '<button class="btn btn-gold w-full mt-4" onclick="goAuth(\'signup\')">Start your free 14-day trial</button>';
 }
 
 function sendCallback(e) {

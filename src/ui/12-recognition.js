@@ -192,8 +192,8 @@ function renderHomePlans() {
   el.innerHTML = PLAN_CARDS.map(function (p) {
     var lead = p.tag === 'Most popular';
     var L = planPriceLabel(p);
-    return '<div class="rounded-3xl border-2 p-5 flex flex-col ' +
-      (lead ? 'border-blue-600 shadow-lg' : 'border-gray-100') + '">' +
+    return '<div class="rounded-3xl border-2 p-5 flex flex-col bg-white ' +
+      (lead ? 'plan-lead' : 'border-gray-100 shadow-sm') + '">' +
       (p.tag ? '<div class="text-[10px] font-black uppercase tracking-widest mb-2 ' +
         (lead ? 'text-blue-600' : 'text-amber-600') + '">' + esc(p.tag) + '</div>'
        : '<div class="h-[18px] mb-2"></div>') +
@@ -206,7 +206,7 @@ function renderHomePlans() {
         p.bullets.map(function (b) {
           return '<li class="flex gap-2"><span class="material-icons text-[16px] text-emerald-600">check</span>' +
             '<span>' + esc(b) + '</span></li>'; }).join('') + '</ul>' +
-      '<button class="btn ' + (lead ? 'btn-p' : 'btn-g') + ' w-full mt-5" ' +
+      '<button class="btn ' + (lead ? 'btn-gold' : 'btn-g') + ' w-full mt-5" ' +
         'onclick="' + (p.key === 'Enterprise'
           ? 'document.getElementById(\'callback\').scrollIntoView({behavior:\'smooth\'})'
           : 'goAuth(\'signup\')') + '">' +

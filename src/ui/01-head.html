@@ -260,6 +260,77 @@
   .sticky-cta{position:fixed;left:0;right:0;bottom:0;z-index:45;display:flex;gap:8px;padding:10px 12px;
               background:rgba(255,255,255,.97);border-top:1px solid var(--line);box-shadow:0 -6px 18px -8px rgba(15,27,45,.2)}
 
+  /* ---------- home page colour: corporate navy, blue, teal, with gold to act on ----------
+     Gold is used for ONE thing — the button that starts a trial — so the eye
+     always finds the next step. Navy carries authority, teal the good news,
+     blue the product. Every text pair here clears WCAG AA. */
+  .btn-gold{background:#f5b301;color:#0f1b2d;box-shadow:0 10px 24px -8px rgba(245,179,1,.6)}
+  .btn-gold:hover{background:#ffc21a;box-shadow:0 14px 30px -8px rgba(245,179,1,.7)}
+  .btn-ghost-light{background:rgba(255,255,255,.08);color:#fff;border:1.5px solid rgba(255,255,255,.35)}
+  .btn-ghost-light:hover{background:rgba(255,255,255,.16)}
+  .hero-navy{position:relative;color:#fff;overflow:hidden;
+    background:radial-gradient(700px 420px at 85% 15%,rgba(46,111,228,.55) 0%,rgba(46,111,228,0) 65%),
+               radial-gradient(520px 360px at 5% 100%,rgba(15,143,132,.45) 0%,rgba(15,143,132,0) 65%),
+               linear-gradient(135deg,#0a1628 0%,#13294b 48%,#1a3f8f 100%)}
+  .hero-navy::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:24px 24px}
+  .hero-navy > *{position:relative;z-index:1}
+  .hero-navy .kicker{color:#7fb2ff}
+  .hero-navy .gold{color:#f5c542}
+  .hero-navy .lede{color:#c9d6ea}
+  .hero-navy .ticks li{color:#dbe6f7}
+  .hero-navy .ticks .material-icons{color:#3fd6b7}
+  .hero-navy .browser-frame{border-color:rgba(255,255,255,.18);box-shadow:0 40px 80px -24px rgba(0,0,0,.6),0 0 0 6px rgba(255,255,255,.06)}
+  .hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(245,197,66,.14);border:1px solid rgba(245,197,66,.45);
+    color:#f5c542;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800}
+  .proof{display:flex;align-items:center;gap:10px}
+  .proof .material-icons{width:38px;height:38px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .ic-blue{background:#e3ecfb;color:#1e4fbf} .ic-teal{background:#dcf3ef;color:#0c7a71} .ic-gold{background:#fdf1d0;color:#8a5d0c}
+  .ic-violet{background:#ece6fb;color:#5b3fc4} .ic-green{background:#dff3e7;color:#067647} .ic-red{background:#fde4e1;color:#b42318}
+  .pain{background:#fff;border-radius:20px;padding:22px;border:1px solid #e2e7ef;border-top:5px solid var(--c,#b42318);
+        box-shadow:0 12px 28px -18px rgba(15,27,45,.35)}
+  .pain h3{font-weight:900;color:var(--ink);margin:12px 0 6px} .pain p{font-size:14.5px;font-weight:600;color:var(--ink2);line-height:1.6}
+  .band-tint{background:linear-gradient(180deg,#f4f7fd 0%,#eaf0fb 100%)}
+  .band-teal{color:#fff;background:radial-gradient(600px 300px at 90% 0%,rgba(63,214,183,.35),rgba(63,214,183,0) 65%),
+             linear-gradient(135deg,#075e57 0%,#0c7a71 55%,#0f8f84 100%)}
+  .band-teal .soft{color:#ecfdf9}
+  .band-navy{color:#fff;background:linear-gradient(135deg,#0a1628 0%,#13294b 60%,#1c3d73 100%)}
+  .band-navy .soft{color:#c9d6ea}
+  .eyebrow{display:inline-block;font-size:11px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;
+           color:#1e4fbf;background:#e3ecfb;border-radius:999px;padding:5px 12px}
+  .band-teal .eyebrow,.band-navy .eyebrow{color:#f5c542;background:rgba(245,197,66,.14)}
+  .tour-tabs button .material-icons{color:#1e4fbf}
+  .tour-tabs button.on{background:linear-gradient(135deg,#13294b,#1e4fbf);border-color:transparent;color:#fff;
+                       box-shadow:0 8px 18px -8px rgba(30,79,191,.7)}
+  .tour-tabs button.on .material-icons{color:#f5c542}
+  .step{position:relative;overflow:hidden;border:0;box-shadow:0 14px 30px -20px rgba(15,27,45,.45)}
+  .step::before{content:'';position:absolute;left:0;right:0;top:0;height:5px;background:var(--c,#1e4fbf)}
+  .step span{background:var(--c,#1e4fbf)}
+  .roi-card{background:linear-gradient(160deg,#0a1628 0%,#13294b 70%,#1c3d73 100%);color:#fff;border-radius:24px;padding:26px;
+            box-shadow:0 30px 60px -28px rgba(15,27,45,.7)}
+  .roi-card .roi-big{color:#f5c542}
+  .roi-card .roi-row{color:#c9d6ea;border-color:rgba(255,255,255,.14)} .roi-card .roi-row b{color:#fff}
+  .roi-card .win{color:#3fd6b7 !important}
+  .roi-card .fine{color:#9fb3d1}
+  .formula-card{background:linear-gradient(135deg,#13294b,#1e4fbf);color:#fff;border-radius:24px;padding:24px}
+  .formula-card .soft{color:#dbe6f7}
+  .rule{display:flex;gap:12px;align-items:flex-start}
+  .rule .material-icons{width:36px;height:36px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+  .cmp-row span:nth-child(2){color:#b42318;font-weight:700}
+  .cmp-row span:nth-child(2)::before{content:'✕ ';font-weight:900}
+  .cmp-row span:last-child::before{content:'✓ ';font-weight:900}
+  .cmp-head span:nth-child(2)::before,.cmp-head span:last-child::before{content:''}
+  .cmp-head{background:linear-gradient(135deg,#13294b,#1e4fbf)}
+  .plan-lead{background:linear-gradient(160deg,#0a1628 0%,#13294b 60%,#1e4fbf 100%) !important;color:#fff;border-color:transparent !important;
+             box-shadow:0 30px 60px -24px rgba(19,41,75,.75) !important;transform:translateY(-6px)}
+  .plan-lead .text-gray-500,.plan-lead .text-gray-400,.plan-lead .text-gray-600{color:#c9d6ea !important}
+  .plan-lead .text-emerald-600{color:#3fd6b7 !important}
+  .plan-lead .text-blue-600{color:#f5c542 !important}
+  .faq details[open]{border-color:#bccfee;box-shadow:0 10px 24px -18px rgba(30,79,191,.6)}
+  .faq summary::marker{color:#1e4fbf}
+  .band-teal .in{background:#fff}
+  .demo-pick .material-icons{background:linear-gradient(135deg,#13294b,#1e4fbf)}
+
   /* ---------- the live-demo bar ------------------------------------------- */
   .demo-bar{background:#fff7e6;border-bottom:1px solid #f3d9a4;color:var(--ink)}
   .demo-tag{background:var(--gold);color:#fff;font-size:10px;font-weight:900;letter-spacing:.1em;

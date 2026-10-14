@@ -236,6 +236,23 @@ Every rule was recalculated on paper and checked against the engine
 
 Tests: `trial-test.js` (27) and `sales-ui-test.js` (32).
 
+### 4o. Home page colour
+
+Audit: four-fifths of the page was white or pale grey, every button was the same blue, and
+nothing drew the eye to the trial. Now, within the corporate palette:
+
+- a deep navy-to-blue hero with the promise picked out in gold;
+- **gold is reserved for one action** — Start free trial — in the header, hero, tour, ROI,
+  pricing, call-back and final call to action, so the next step is always the brightest thing
+  on screen;
+- alternating bands (navy, blue tint, teal, white) so each section reads as a section;
+- coloured icon tiles for the proof strip, the problems and the fairness rules; red ✕ against
+  green ✓ in the WhatsApp-vs-Dome Box comparison; a navy "Most popular" plan card;
+- every text and background pair checked: all clear WCAG AA (4.5:1) — the one that did not
+  (light text on teal, 4.4) uses near-white instead.
+
+Only the home page changed; the app keeps its own colours.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

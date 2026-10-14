@@ -22,9 +22,13 @@ const STATE_TAB = (t) => t === 'team';
 
   console.log('\n=== the first screen sells ===');
   ok('the headline says what it is', /Stop chasing work on WhatsApp/.test(await p.locator('#view-home h1').textContent()));
-  ok('the free trial is the main button', await p.locator('#view-home .hero-bg button.btn-p:has-text("free 14-day trial")').count() === 1);
-  ok('the live demo is one click away', await p.locator('#view-home .hero-bg button:has-text("See the live demo")').count() === 1);
-  ok('a real product screen is in the first view', await p.locator('.hero-bg img[src="/img/16-lead-board.jpg"]').evaluate((i) => i.complete && i.naturalWidth > 0));
+  ok('the free trial is the main button', await p.locator('#hero button.btn-gold:has-text("free 14-day trial")').count() === 1);
+  ok('the live demo is one click away', await p.locator('#hero button:has-text("See the live demo")').count() === 1);
+  ok('a real product screen is in the first view', await p.locator('#hero img[src="/img/16-lead-board.jpg"]').evaluate((i) => i.complete && i.naturalWidth > 0));
+  ok('one gold button in the first screen, and it starts the trial',
+     (await p.locator('#hero .btn-gold').allTextContents()).map((t) => t.trim()).join('|') === 'Start your free 14-day trial');
+  ok('the most popular plan stands out', await p.locator('#homePlans .plan-lead').count() === 1 &&
+     /Growth/.test(await p.locator('#homePlans .plan-lead').textContent()));
   if (SHOTS) await p.screenshot({ path: SHOTS + '/sales-01-hero.png' });
 
   console.log('\n=== the product tour ===');

@@ -23,33 +23,34 @@
       </nav>
       <span class="flex-1"></span>
       <button class="btn btn-g text-sm sm-up" onclick="goAuth('login')">Sign in</button>
-      <button class="btn btn-p text-sm" onclick="goAuth('signup')">Start free trial</button>
+      <button class="btn btn-gold text-sm" onclick="goAuth('signup')">Start free trial</button>
     </div>
   </header>
 
   <!-- ---------------------------------------------------------------- hero -->
-  <section class="hero-bg">
-    <div class="max-w-[1180px] mx-auto px-5 pt-12 pb-14 lg:pt-16 lg:pb-20 grid lg:grid-cols-[1fr_1.15fr] gap-10 items-center">
+  <section id="hero" class="hero-navy">
+    <div class="max-w-[1180px] mx-auto px-5 pt-12 pb-16 lg:pt-16 lg:pb-24 grid lg:grid-cols-[1fr_1.15fr] gap-10 items-center">
       <div>
-        <p class="text-xs font-black uppercase tracking-[0.2em] text-blue-600 mb-4">
+        <span class="hero-badge"><span class="material-icons text-[16px]">verified</span>14-day free trial · no card</span>
+        <p class="kicker text-xs font-black uppercase tracking-[0.2em] mt-5 mb-3">
           Task, team &amp; performance management for Indian MSMEs</p>
-        <h1 class="text-[2.35rem] lg:text-[3.2rem] font-black leading-[1.06] tracking-tight">
+        <h1 class="text-[2.35rem] lg:text-[3.3rem] font-black leading-[1.05] tracking-tight">
           Stop chasing work on WhatsApp.
-          <span class="text-blue-600">Know who delivered — and prove it.</span></h1>
-        <p class="text-lg text-gray-600 font-semibold mt-5 leading-relaxed">
+          <span class="gold">Know who delivered — and prove it.</span></h1>
+        <p class="lede text-lg font-semibold mt-5 leading-relaxed">
           Assign every job with a deadline, get it approved when it is really done, and see a
           fair performance score for every person at month end — with the working shown, task by
           task. Built for factories, trading houses and service firms of 5 to 300 people.</p>
-        <div class="flex flex-wrap gap-3 mt-7">
-          <button class="btn btn-p text-base px-6 py-3.5" onclick="goAuth('signup')">
+        <div class="flex flex-wrap gap-3 mt-8">
+          <button class="btn btn-gold text-base px-6 py-3.5" onclick="goAuth('signup')">
             Start your free 14-day trial</button>
-          <button class="btn btn-g text-base px-6 py-3.5" onclick="openDemo('owner', this)">
+          <button class="btn btn-ghost-light text-base px-6 py-3.5" onclick="openDemo('owner', this)">
             <span class="material-icons text-[20px] mr-1 align-[-4px]">play_circle</span>See the live demo</button>
         </div>
-        <ul class="flex flex-wrap gap-x-5 gap-y-1.5 mt-5 text-[13px] font-bold text-gray-500">
-          <li class="flex items-center gap-1"><span class="material-icons text-[16px] text-emerald-600">check_circle</span>Full Growth plan for 14 days</li>
-          <li class="flex items-center gap-1"><span class="material-icons text-[16px] text-emerald-600">check_circle</span>No card needed</li>
-          <li class="flex items-center gap-1"><span class="material-icons text-[16px] text-emerald-600">check_circle</span>Running the same afternoon</li>
+        <ul class="ticks flex flex-wrap gap-x-5 gap-y-1.5 mt-6 text-[13px] font-bold">
+          <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>Full Growth plan for 14 days</li>
+          <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>No card needed</li>
+          <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>Running the same afternoon</li>
         </ul>
       </div>
       <figure class="browser-frame">
@@ -60,34 +61,32 @@
   </section>
 
   <!-- honest proof strip: facts about the product, not claims about customers -->
-  <section class="bg-white border-y border-gray-100">
-    <div class="max-w-[1180px] mx-auto px-5 py-5 grid grid-cols-2 lg:grid-cols-5 gap-4 text-[13px] font-bold text-gray-600">
-      <div class="flex items-center gap-2"><span class="material-icons text-blue-600">smartphone</span>Works on any phone — no app to install</div>
-      <div class="flex items-center gap-2"><span class="material-icons text-blue-600">receipt_long</span>GST invoice with every payment</div>
-      <div class="flex items-center gap-2"><span class="material-icons text-blue-600">lock</span>A private workspace for each company</div>
-      <div class="flex items-center gap-2"><span class="material-icons text-blue-600">notifications_active</span>Email reminders at 9, 3 and 5</div>
-      <div class="flex items-center gap-2"><span class="material-icons text-blue-600">flag</span>Made and supported in India</div>
+  <section class="bg-white border-b border-gray-100">
+    <div class="max-w-[1180px] mx-auto px-5 py-6 grid grid-cols-2 lg:grid-cols-5 gap-4 text-[13px] font-bold text-gray-700">
+      <div class="proof"><span class="material-icons ic-blue">smartphone</span>Works on any phone — no app to install</div>
+      <div class="proof"><span class="material-icons ic-gold">receipt_long</span>GST invoice with every payment</div>
+      <div class="proof"><span class="material-icons ic-teal">lock</span>A private workspace for each company</div>
+      <div class="proof"><span class="material-icons ic-violet">notifications_active</span>Email reminders at 9, 3 and 5</div>
+      <div class="proof"><span class="material-icons ic-green">flag</span>Made and supported in India</div>
     </div>
   </section>
 
   <!-- ------------------------------------------------------------- problem -->
-  <section class="bg-slate-900 text-white dotted">
-    <div class="max-w-[1180px] mx-auto px-5 py-14">
-      <h2 class="text-2xl lg:text-3xl font-black tracking-tight max-w-2xl">
+  <section class="band-tint">
+    <div class="max-w-[1180px] mx-auto px-5 py-16">
+      <span class="eyebrow">Sound familiar?</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight max-w-3xl mt-3">
         You already know who is busy. You do not know who is delivering.</h2>
-      <div class="grid lg:grid-cols-3 gap-6 mt-8">
-        <div><div class="text-blue-300 font-black text-sm mb-1">Work lives in WhatsApp</div>
-          <p class="text-slate-300 text-[15px] font-semibold leading-relaxed">
-            Instructions scroll away. Nobody can say what was asked, when it was due, or whether
-            it was ever finished.</p></div>
-        <div><div class="text-blue-300 font-black text-sm mb-1">Appraisals are arguments</div>
-          <p class="text-slate-300 text-[15px] font-semibold leading-relaxed">
-            Once a year, from memory, usually about the last six weeks. The quiet performer loses
-            and everybody knows it.</p></div>
-        <div><div class="text-blue-300 font-black text-sm mb-1">Managers are never measured</div>
-          <p class="text-slate-300 text-[15px] font-semibold leading-relaxed">
-            Your team gets marked down for delays their own approvals caused. That is how a
-            workforce stops believing any number you show them.</p></div>
+      <div class="grid lg:grid-cols-3 gap-5 mt-8">
+        <div class="pain" style="--c:#b42318"><span class="material-icons ic-red rounded-xl p-2">forum</span>
+          <h3>Work lives in WhatsApp</h3>
+          <p>Instructions scroll away. Nobody can say what was asked, when it was due, or whether it was ever finished.</p></div>
+        <div class="pain" style="--c:#d4930f"><span class="material-icons ic-gold rounded-xl p-2">gavel</span>
+          <h3>Appraisals are arguments</h3>
+          <p>Once a year, from memory, usually about the last six weeks. The quiet performer loses and everybody knows it.</p></div>
+        <div class="pain" style="--c:#5b3fc4"><span class="material-icons ic-violet rounded-xl p-2">hourglass_bottom</span>
+          <h3>Managers are never measured</h3>
+          <p>Your team gets marked down for delays their own approvals caused. That is how a workforce stops believing any number you show them.</p></div>
       </div>
     </div>
   </section>
@@ -95,7 +94,7 @@
   <!-- --------------------------------------------------------- product tour -->
   <section id="tour" class="bg-white">
     <div class="max-w-[1180px] mx-auto px-5 py-16">
-      <p class="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Product tour</p>
+      <span class="eyebrow">Product tour</span>
       <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-2">One place for every job, every person, every week</h2>
       <p class="text-gray-500 font-semibold mt-2 max-w-2xl">Real screens from a demo factory. Everything shown is in
         the product today — not a roadmap.</p>
@@ -112,11 +111,12 @@
   </section>
 
   <!-- ------------------------------------------------------------ live demo -->
-  <section id="demo" class="bg-blue-50 border-y border-blue-100">
+  <section id="demo" class="band-teal">
     <div class="max-w-[1180px] mx-auto px-5 py-14 grid lg:grid-cols-[1.2fr_1fr] gap-8 items-center">
       <div>
-        <h2 class="text-2xl lg:text-3xl font-black tracking-tight">Look around a real factory’s workspace — right now</h2>
-        <p class="text-gray-600 font-semibold mt-2 leading-relaxed">Sharma Precision Works is a demo company with a
+        <span class="eyebrow">Live demo · no sign-up</span>
+        <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Look around a real factory’s workspace — right now</h2>
+        <p class="soft font-semibold mt-3 leading-relaxed">Sharma Precision Works is a demo company with a
           month of real work in it: tasks on the board, a project in stages, goals, a weekly meeting and
           every person’s score. No sign-up. Open anything — changes are switched off.</p>
       </div>
@@ -134,13 +134,14 @@
   <!-- --------------------------------------------------------- how it works -->
   <section class="bg-white">
     <div class="max-w-[1180px] mx-auto px-5 py-16">
-      <h2 class="text-2xl lg:text-3xl font-black tracking-tight">Running by this afternoon</h2>
+      <span class="eyebrow">How it works</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Running by this afternoon</h2>
       <div class="grid md:grid-cols-3 gap-5 mt-8">
-        <div class="step"><span>1</span><h3>Create your workspace</h3>
+        <div class="step" style="--c:#1e4fbf"><span>1</span><h3>Create your workspace</h3>
           <p>Company name, email, password. Two minutes. You get the full Growth plan free for 14 days.</p></div>
-        <div class="step"><span>2</span><h3>Add your team</h3>
+        <div class="step" style="--c:#0c7a71"><span>2</span><h3>Add your team</h3>
           <p>Name, role and manager for each person. Your reporting line becomes the approval chain and the org chart.</p></div>
-        <div class="step"><span>3</span><h3>Assign the first job</h3>
+        <div class="step" style="--c:#d4930f"><span>3</span><h3>Assign the first job</h3>
           <p>Due date, priority, done. Reminders go out by themselves, and the first scores appear as work is verified.</p></div>
       </div>
       <p class="text-[13px] font-semibold text-gray-500 mt-6">A printable user manual with a picture of every screen
@@ -149,10 +150,10 @@
   </section>
 
   <!-- ------------------------------------------------------- ROI calculator -->
-  <section id="roi" class="bg-gray-50 border-y border-gray-100">
+  <section id="roi" class="band-tint">
     <div class="max-w-[1180px] mx-auto px-5 py-16 grid lg:grid-cols-2 gap-10 items-start">
       <div>
-        <p class="text-xs font-black uppercase tracking-[0.2em] text-blue-600">What chasing costs you</p>
+        <span class="eyebrow">What chasing costs you</span>
         <h2 class="text-2xl lg:text-3xl font-black tracking-tight mt-2">Put in your own numbers</h2>
         <p class="text-gray-600 font-semibold mt-2 leading-relaxed">Every manager spends part of the day asking
           “is it done?”. Here is what that time costs you today, against what Dome Box costs for a team your size.</p>
@@ -163,22 +164,23 @@
           <label><span class="lb">A manager’s monthly salary (₹)</span><input id="roiPay" class="in" type="number" min="0" step="1000" value="45000" oninput="roiCalc()"></label>
         </div>
       </div>
-      <div class="bg-white rounded-3xl border-2 border-gray-200 p-6" id="roiOut"></div>
+      <div class="roi-card" id="roiOut"></div>
     </div>
   </section>
 
   <!-- -------------------------------------------------------------- scoring -->
   <section id="scoring" class="bg-white">
     <div class="max-w-[1180px] mx-auto px-5 py-16">
-      <h2 class="text-2xl lg:text-3xl font-black tracking-tight">A score your team will believe</h2>
+      <span class="eyebrow">Fair by design</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">A score your team will believe</h2>
       <p class="text-gray-600 font-semibold mt-2 max-w-2xl leading-relaxed">
         Most performance software produces a number nobody can argue with because nobody can see
         where it came from. Every figure here traces back to a named task, a date and a person.</p>
       <div class="grid lg:grid-cols-2 gap-5 mt-8">
-        <div class="bg-white rounded-3xl border-2 border-gray-200 p-6">
-          <div class="text-[11px] font-black uppercase tracking-widest text-gray-400">The formula</div>
+        <div class="formula-card">
+          <div class="text-[11px] font-black uppercase tracking-widest" style="color:#f5c542">The formula</div>
           <p class="text-xl font-black mt-2 leading-snug">Score = how well you delivered × how much you delivered</p>
-          <p class="text-[14px] text-gray-600 font-semibold mt-3 leading-relaxed">
+          <p class="soft text-[14px] font-semibold mt-3 leading-relaxed">
             On time 45%, right first time 30%, nothing left late 25% — each task weighted by its priority.
             Ten jobs with seven on time beats one easy job done well, because the rate is credited against
             the load actually carried. A working day late costs 10 points on that task; a send-back costs 25.</p>
@@ -186,23 +188,23 @@
             alt="See why: every part of a person's score with the tasks behind it"></figure>
         </div>
         <div class="bg-white rounded-3xl border-2 border-gray-200 p-6 space-y-4">
-          <div><div class="font-black text-sm">Managers are measured too</div>
+          <div class="rule"><span class="material-icons ic-blue">supervisor_account</span><div><div class="font-black text-sm">Managers are measured too</div>
             <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
               Sit on an approval past two working days and you lose score for it — counted from the moment it
-              reached your desk.</p></div>
-          <div><div class="font-black text-sm">Leave and weekends are never lateness</div>
+              reached your desk.</p></div></div>
+          <div class="rule"><span class="material-icons ic-teal">event_available</span><div><div class="font-black text-sm">Leave and weekends are never lateness</div>
             <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
-              Weekends and a person’s own approved leave are left out everywhere a day is counted.</p></div>
-          <div><div class="font-black text-sm">Nobody wears somebody else’s slip</div>
+              Weekends and a person’s own approved leave are left out everywhere a day is counted.</p></div></div>
+          <div class="rule"><span class="material-icons ic-violet">account_tree</span><div><div class="font-black text-sm">Nobody wears somebody else’s slip</div>
             <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
-              If the stage before yours overran, your deadline moves with it. You get back the days the plan gave you.</p></div>
-          <div><div class="font-black text-sm">A slow checker never costs the doer</div>
+              If the stage before yours overran, your deadline moves with it. You get back the days the plan gave you.</p></div></div>
+          <div class="rule"><span class="material-icons ic-gold">timer</span><div><div class="font-black text-sm">A slow checker never costs the doer</div>
             <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
-              You are timed until you hand the work in, not until somebody gets round to checking it.</p></div>
-          <div><div class="font-black text-sm">One score, everywhere</div>
+              You are timed until you hand the work in, not until somebody gets round to checking it.</p></div></div>
+          <div class="rule"><span class="material-icons ic-green">done_all</span><div><div class="font-black text-sm">One score, everywhere</div>
             <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
               The dashboard, the leaderboard, the reports and the appraisal all show the same number. Half of the
-              appraisal is the manager’s rating of KRAs and behaviour; half is this record.</p></div>
+              appraisal is the manager’s rating of KRAs and behaviour; half is this record.</p></div></div>
         </div>
       </div>
     </div>
@@ -211,7 +213,8 @@
   <!-- ----------------------------------------------------------- comparison -->
   <section class="bg-gray-50 border-y border-gray-100">
     <div class="max-w-[1180px] mx-auto px-5 py-16">
-      <h2 class="text-2xl lg:text-3xl font-black tracking-tight">What changes when you move off WhatsApp and Excel</h2>
+      <span class="eyebrow">Before and after</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">What changes when you move off WhatsApp and Excel</h2>
       <div class="cmp mt-8">
         <div class="cmp-row cmp-head"><span></span><span>WhatsApp + Excel</span><span>Dome Box</span></div>
         <div class="cmp-row"><span>Who was asked to do what, by when</span><span>Scrolled away in a group chat</span><span>A task with an owner, a due date and a priority</span></div>
@@ -227,7 +230,8 @@
   <!-- -------------------------------------------------------------- pricing -->
   <section id="pricing" class="bg-white">
     <div class="max-w-[1180px] mx-auto px-5 py-16">
-      <h2 class="text-2xl lg:text-4xl font-black tracking-tight">Simple pricing. Every feature on every paid plan.</h2>
+      <span class="eyebrow">Pricing</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Simple pricing. Every feature on every paid plan.</h2>
       <p class="text-gray-500 font-semibold mt-2 max-w-2xl">You pay for the size of your team, not for features, and
         the price per person falls as you grow. Start with 14 days of the full Growth plan, free — no card.</p>
       <div id="homeCycle" class="mt-5"></div>
@@ -240,9 +244,10 @@
   </section>
 
   <!-- ------------------------------------------------------------------ FAQ -->
-  <section id="faq" class="bg-gray-50 border-y border-gray-100">
+  <section id="faq" class="band-tint">
     <div class="max-w-[900px] mx-auto px-5 py-16">
-      <h2 class="text-2xl lg:text-3xl font-black tracking-tight">Questions buyers ask</h2>
+      <span class="eyebrow">Questions</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Questions buyers ask</h2>
       <div class="faq mt-6">
         <details><summary>How long does it take to set up?</summary>
           <p>An afternoon. Create the workspace, add your people with their manager, and assign the first jobs. There is
@@ -271,16 +276,17 @@
   </section>
 
   <!-- -------------------------------------------------------- call me back -->
-  <section id="callback" class="bg-white">
+  <section id="callback" class="band-navy">
     <div class="max-w-[1180px] mx-auto px-5 py-16 grid lg:grid-cols-2 gap-10 items-start">
       <div>
-        <h2 class="text-2xl lg:text-3xl font-black tracking-tight">Rather talk it through?</h2>
-        <p class="text-gray-600 font-semibold mt-2 leading-relaxed">Leave your number and we will call you back within
+        <span class="eyebrow">Talk to a person</span>
+        <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Rather talk it through?</h2>
+        <p class="soft font-semibold mt-3 leading-relaxed">Leave your number and we will call you back within
           one working day — to walk you through it with your own process in mind, or to set up a larger company.</p>
-        <p class="text-[13px] font-semibold text-gray-500 mt-4">Or write to
-          <a href="mailto:info@biscsindia.com" class="text-blue-600 font-bold">info@biscsindia.com</a>.</p>
+        <p class="soft text-[13px] font-semibold mt-4">Or write to
+          <a href="mailto:info@biscsindia.com" class="font-bold underline" style="color:#f5c542">info@biscsindia.com</a>.</p>
       </div>
-      <form id="formCallback" class="bg-gray-50 rounded-3xl border-2 border-gray-200 p-6 grid sm:grid-cols-2 gap-4" onsubmit="return sendCallback(event)">
+      <form id="formCallback" class="bg-white text-gray-900 rounded-3xl p-6 grid sm:grid-cols-2 gap-4 shadow-2xl" onsubmit="return sendCallback(event)">
         <label><span class="lb">Your name</span><input id="cbName" class="in" required autocomplete="name"></label>
         <label><span class="lb">Company</span><input id="cbCompany" class="in" required autocomplete="organization"></label>
         <label><span class="lb">Phone</span><input id="cbPhone" class="in" required type="tel" autocomplete="tel" placeholder="98300 00000"></label>
@@ -290,19 +296,19 @@
           <select id="cbWhen" class="in"><option>Any time</option><option>Morning</option><option>Afternoon</option><option>Evening</option></select></label>
         <label class="sm:col-span-2"><span class="lb">Anything we should know (optional)</span>
           <textarea id="cbNote" class="in" rows="2"></textarea></label>
-        <button id="btnCallback" class="btn btn-p sm:col-span-2" type="submit">Request a call back</button>
+        <button id="btnCallback" class="btn btn-gold sm:col-span-2" type="submit">Request a call back</button>
       </form>
     </div>
   </section>
 
   <!-- ------------------------------------------------------------ final CTA -->
-  <section class="bg-slate-900 text-white dotted">
-    <div class="max-w-[1180px] mx-auto px-5 py-14 text-center">
+  <section class="hero-navy">
+    <div class="max-w-[1180px] mx-auto px-5 py-16 text-center">
       <h2 class="text-2xl lg:text-4xl font-black tracking-tight">Start with your own team this week</h2>
-      <p class="text-slate-300 font-semibold mt-2">14 days of the full Growth plan, free. No card. Nothing to install.</p>
+      <p class="lede font-semibold mt-2">14 days of the full Growth plan, free. No card. Nothing to install.</p>
       <div class="flex flex-wrap justify-center gap-3 mt-6">
-        <button class="btn btn-p text-base px-6 py-3.5" onclick="goAuth('signup')">Start your free trial</button>
-        <button class="btn text-base px-6 py-3.5 bg-white/10 text-white border border-white/30" onclick="openDemo('owner', this)">See the live demo</button>
+        <button class="btn btn-gold text-base px-6 py-3.5" onclick="goAuth('signup')">Start your free trial</button>
+        <button class="btn btn-ghost-light text-base px-6 py-3.5" onclick="openDemo('owner', this)">See the live demo</button>
       </div>
     </div>
   </section>
@@ -324,6 +330,6 @@
   <!-- on a phone the next step is always one thumb away -->
   <div class="sticky-cta md-down">
     <button class="btn btn-g flex-1" onclick="openDemo('owner', this)">Live demo</button>
-    <button class="btn btn-p flex-1" onclick="goAuth('signup')">Start free trial</button>
+    <button class="btn btn-gold flex-1" onclick="goAuth('signup')">Start free trial</button>
   </div>
 </div>
