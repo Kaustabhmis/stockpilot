@@ -963,7 +963,7 @@ function renderCalendar() {
     '</div>' +
     '<div class="calsum">' +
       '<div class="c late"><b>' + m.late + '</b><span>Late</span></div>' +
-      '<div class="c pr"><b>' + m.presentFull + '</b><span>Present</span></div>' +
+      '<div class="c pr"><b>' + (Math.round(m.present * 2) / 2) + '</b><span>Present</span></div>' +
       '<div class="c ab"><b>' + m.absent + '</b><span>Absent</span></div>' +
       '<div class="c hd"><b>' + m.hd + '</b><span>HD</span></div>' +
       '<div class="c od"><b>' + m.od + '</b><span>OD</span></div>' +
