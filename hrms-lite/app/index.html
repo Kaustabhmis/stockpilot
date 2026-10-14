@@ -149,6 +149,20 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
    phone. The clamp lets the number shrink to fit the four-across tile. */
 .kpi b{display:block;white-space:nowrap;font-weight:800;letter-spacing:-.3px;
   font-size:clamp(.8rem,4vw,1.2rem);overflow:hidden;text-overflow:ellipsis;}
+
+/* Calendar summary: five small cards (Late, Present, Absent, HD, OD) that
+   must fit on one row even on a 320px phone, so the number shrinks to fit
+   and the label is tiny but legible. */
+.calsum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:12px;}
+.calsum .c{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:9px 3px;text-align:center;box-shadow:var(--shadow);min-width:0;}
+.calsum .c b{display:block;font-weight:800;line-height:1.05;letter-spacing:-.3px;
+  font-size:clamp(.85rem,4.2vw,1.15rem);}
+.calsum .c span{display:block;font-size:.5rem;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.2px;font-weight:700;margin-top:3px;white-space:nowrap;}
+.calsum .c.late b{color:var(--amber);} .calsum .c.pr b{color:var(--green);}
+.calsum .c.ab b{color:var(--red);} .calsum .c.hd b{color:#b45309;}
+.calsum .c.od b{color:#7c3aed;}
 .kpi span{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;
   font-weight:600;}
 
@@ -374,7 +388,7 @@ var API = '';   /* set below - the workspace this copy talks to */
 API = 'https://cquczxlfhrrrncbunbhy.supabase.co/functions/v1/api';
 
 var SESSION_KEY = 'biscs_app_session';
-var S = { user: null, me: null, sites: [], att: [], slips: [], leave: [], reqs: [], types: [], reqTypes: [],
+var S = { user: null, me: null, sites: [], shifts: [], att: [], slips: [], leave: [], reqs: [], types: [], reqTypes: [],
           holidays: [], notices: [], inbox: { isManager: false, team: [], teamLeave: [], teamRequests: [] },
           settings: {}, punch: null, cal: null, view: 'punch', busy: false };
 
@@ -608,6 +622,7 @@ function reload(given) {
     S.reqs = d.requests || [];
     S.types = d.leaveTypes || [];
     S.reqTypes = d.requestTypes || [];
+    S.shifts = d.shifts || [];
     S.holidays = d.holidays || [];
     S.notices = d.notices || [];
     S.inbox = d.inbox || { isManager: false, team: [], teamLeave: [], teamRequests: [] };
@@ -771,15 +786,40 @@ function renderPunch() {
   else el('geo').innerHTML = '';
 }
 
+/* The signed-in person's shift (their own, else the company default), so we
+   can tell a late arrival from an on-time one. Returns null if shifts were
+   not sent, in which case "late" simply stays 0 rather than guessing. */
+function myShift() {
+  var list = S.shifts || [];
+  if (!list.length) return null;
+  var byName = {};
+  list.forEach(function (x) { byName[String(x.name || '').trim().toLowerCase()] = x; });
+  var mine = String((S.me && S.me.shift) || '').trim().toLowerCase();
+  var def = String(S.settings.default_shift || '').trim().toLowerCase();
+  return byName[mine] || byName[def] || list[0] || null;
+}
+
 function monthStats(ym) {
   var dim = daysInMonth(ym), upTo = ym === thisMonth() ? new Date().getDate() : dim;
-  var s = { present: 0, leave: 0, absent: 0, minutes: 0, open: [] };
+  var s = { present: 0, leave: 0, absent: 0, minutes: 0, open: [],
+            presentFull: 0, hd: 0, od: 0, late: 0 };
+  var sh = myShift();
+  var lateAfter = sh ? (minutesOf(sh.start_time) + (num(sh.grace_minutes) || 0)) : null;
   for (var d = 1; d <= dim; d++) {
     var iso = dateStr(ym, d), st = statusFor(iso), rec = attFor(iso);
     if (st === 'P' || st === 'OD' || st === 'CO') s.present++;
     else if (st === 'HD') { s.present += 0.5; s.absent += 0.5; }
     else if (st === 'L') s.leave++;
     else if (st === 'A') s.absent++;
+    /* Distinct counts for the calendar summary cards. */
+    if (st === 'P') s.presentFull++;
+    else if (st === 'HD') s.hd++;
+    else if (st === 'OD' || st === 'CO') s.od++;
+    /* Late: arrived after shift start + grace on a day they were in. */
+    if (lateAfter !== null && (st === 'P' || st === 'HD') && rec && rec.in_time) {
+      var inM = minutesOf(rec.in_time);
+      if (inM && inM > lateAfter) s.late++;
+    }
     var w = workedMinutes(rec);
     if (w) s.minutes += w;
     if (rec && rec.in_time && !rec.out_time && d <= upTo && iso < today()) s.open.push(iso.slice(8));
@@ -921,11 +961,12 @@ function renderCalendar() {
         (S.monthBusy === ym ? ' <span class="cal-load">loading\u2026</span>' : '') + '</b>' +
       '<button onclick="shiftMonth(1)">&rsaquo;</button>' +
     '</div>' +
-    '<div class="kpis">' +
-      '<div class="kpi"><b>' + m.present + '</b><span>Present</span></div>' +
-      '<div class="kpi"><b>' + m.leave + '</b><span>Leave</span></div>' +
-      '<div class="kpi"><b>' + m.absent + '</b><span>Absent</span></div>' +
-      '<div class="kpi"><b>' + hoursText(m.minutes) + '</b><span>Hours</span></div>' +
+    '<div class="calsum">' +
+      '<div class="c late"><b>' + m.late + '</b><span>Late</span></div>' +
+      '<div class="c pr"><b>' + m.presentFull + '</b><span>Present</span></div>' +
+      '<div class="c ab"><b>' + m.absent + '</b><span>Absent</span></div>' +
+      '<div class="c hd"><b>' + m.hd + '</b><span>HD</span></div>' +
+      '<div class="c od"><b>' + m.od + '</b><span>OD</span></div>' +
     '</div>' +
     '<div class="cal">' +
       ['S','M','T','W','T','F','S'].map(function (x) { return '<div class="dow">' + x + '</div>'; }).join('') +
