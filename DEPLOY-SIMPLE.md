@@ -200,31 +200,32 @@ reminders and makes repeating tasks.
 
 > ❗ Never add the file `payments-secure.gs`. It is old and breaks payments.
 
-## Step 9 — Connect Razorpay (payments)
+## Step 9 — Connect Razorpay — in TEST mode
 
-1. **Razorpay Dashboard** → **Settings** → **API Keys** → **Regenerate**.
-   Copy the new **Key ID** and **Key Secret**. (The old keys were in the old code,
-   so they must be changed.)
-2. Make up a long password, for example `dbx-Hq27-Kolkata-91`. Write it in
-   Notepad as `Webhook secret = `.
-3. In the script: **⚙ Project Settings** → Script Properties → add:
+> ❗ **Do not regenerate your live keys now.** Your old system collects real
+> payments with them. Practise with Razorpay's **Test Mode** (pretend money,
+> separate keys). Live keys are only touched on switch day (Steps 18 and 20).
+
+1. Razorpay Dashboard → switch **Live Mode → Test Mode** (top of the screen).
+2. **Account & Settings** → **API Keys** → **Generate Test Key**. Copy the test
+   **Key ID** (`rzp_test_…`) and **Key Secret**.
+3. Make up a long password, e.g. `dbx-Hq27-Kolkata-91`. Notepad: `Webhook secret = `
+4. Script → **⚙ Project Settings** → Script Properties → add:
 
 | Property | Value |
 |---|---|
-| `RAZORPAY_KEY_ID` | the new Key ID |
-| `RAZORPAY_KEY_SECRET` | the new Key Secret |
+| `RAZORPAY_KEY_ID` | the **test** Key ID |
+| `RAZORPAY_KEY_SECRET` | the **test** Key Secret |
 | `RAZORPAY_WEBHOOK_SECRET` | the password you made up |
-| `SELLER_GSTIN` | your GST number (skip if you are not GST registered) |
+| `SELLER_GSTIN` | your GST number (skip if not GST registered) |
 
-4. In Razorpay: **Settings** → **Webhooks** → **Add New Webhook**:
-   - Webhook URL: your **API URL** (Step 7)
-   - Secret: the same made-up password
-   - Tick the event **payment.captured** → **Create**.
-5. Run **setupDomeBox** again.
+5. Still in Test Mode: **Webhooks** → **Add New Webhook** → URL = your **API URL**,
+   Secret = the made-up password, tick **payment.captured** → **Create**.
+6. Run **setupDomeBox** again.
 
 ![Razorpay webhook](docs/deploy-book/pictures/picture-09.png)
 
-- [ ] No Razorpay line says MISSING.
+- [ ] No Razorpay line says MISSING. Live keys untouched.
 
 ## Step 10 — Make a practice website on Netlify
 
@@ -329,7 +330,22 @@ Choose **migrateAllTenants** → **▶ Run**. Every company should be under
 
 - [ ] Every company is UPGRADED or ALREADY CURRENT.
 
-## Step 18 — Move www.domebox.in to the new website
+## Step 18 — Give the new script your CURRENT live Razorpay key
+
+The new script uses the same live key your old system uses today, so payments never stop.
+
+1. Open your **Master sheet** → **Extensions → Apps Script** (the OLD script).
+   **Ctrl + F** → search `rzp_live`. Copy the Key ID and the Key Secret next to
+   it. **Change nothing**, close the tab.
+2. **Dome Box NEW** → **⚙ Project Settings** → replace the test `RAZORPAY_KEY_ID`
+   and `RAZORPAY_KEY_SECRET` with these **live** ones. Save.
+3. Razorpay → **Live Mode** → **Webhooks** → **Add New Webhook**: URL = new
+   **API URL**, Secret = your made-up password, **payment.captured** → **Create**.
+4. Run **setupDomeBox**.
+
+- [ ] Live key in the new script; live webhook to the new API URL.
+
+## Step 19 — Move www.domebox.in to the new website
 
 1. Netlify → **OLD** site → **Domain management** → remove `www.domebox.in` and `domebox.in`.
 2. **NEW** site → **Domain management** → **Add a domain** → `www.domebox.in`, then `domebox.in`.
@@ -343,7 +359,27 @@ Choose **migrateAllTenants** → **▶ Run**. Every company should be under
 
 - [ ] www.domebox.in shows the new site and your old login works.
 
-## Step 19 — Close the old "anyone with the link" sharing
+## Step 20 — Replace the old Razorpay key with a new one
+
+The old key was written inside the old code, so it must be replaced — but only
+now, after the website has moved.
+
+1. Razorpay → **Live Mode** → **Account & Settings** → **API Keys** →
+   **Regenerate**. If asked when the old key should stop, **immediately** is fine
+   now — nothing uses it any more.
+2. Put the new **Key ID** and **Key Secret** into **Dome Box NEW** →
+   Script Properties. Save. Run **setupDomeBox**.
+3. Razorpay → **Webhooks**: if there is an old webhook pointing to the old
+   script's address, delete it.
+4. Buy the cheapest plan once on www.domebox.in with a real card, then refund it
+   from the Razorpay Dashboard.
+
+> Do this **after** Step 19, never before. Regenerating while the old site still
+> has the domain stops the old site's payments.
+
+- [ ] New live key in, old key replaced, one real payment worked.
+
+## Step 21 — Close the old "anyone with the link" sharing
 
 1. **Files +** → **Script** → name it `sharing`. Paste **domebox → remediate-sharing.gs**.
 2. At the top, `MASTER_DB_ID: '…'` must be your **real Master ID**. Save.
@@ -353,12 +389,12 @@ Choose **migrateAllTenants** → **▶ Run**. Every company should be under
 
 - [ ] Nothing shared publicly.
 
-## Step 20 — Tell your customers
+## Step 22 — Tell your customers
 
 Copy the ready email from **MIGRATING-CUSTOMERS.md** and send it. Same email,
 same password for them.
 
-## Step 21 — One week later
+## Step 23 — One week later
 
 1. **previewTaskArchive** → **archiveOldTasks** → **installTaskArchiveSchedule** (once).
 2. **createDemoAccount** for sales calls.

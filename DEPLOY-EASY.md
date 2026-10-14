@@ -131,8 +131,11 @@ more than a year ago move to a *Tasks_Archive* tab in the same file.
 
 ### 8. Connect Razorpay
 
-**First, make new keys** (the old ones were in the old code):
-Razorpay Dashboard → **Settings → API Keys → Regenerate Key**.
+**Do not regenerate your live keys yet** — your old site still takes payments
+with them, and regenerating can switch the old key off immediately. For now use
+**Test Mode** keys: Razorpay Dashboard → switch to **Test Mode** → **API Keys →
+Generate Test Key**. On switch day (step 11) you put the current live key in,
+move the domain, and only then regenerate. `DEPLOY-BOOK.pdf` Steps 18–20 show it.
 
 Add to Script Properties:
 
@@ -220,9 +223,17 @@ The new code reads them where they are and only *adds* new columns and tabs.
    to move it. Fix those, then run `previewMigration` again until that section
    is gone.
 4. Run **`migrateAllTenants`**.
-5. In Netlify: **Domain management → Add domain** → `domebox.in` and
+5. **Razorpay, live key:** copy the current `rzp_live_…` Key ID and Secret out of
+   the OLD script (change nothing there) into the new project's Script
+   Properties, replacing the test ones. In Razorpay **Live Mode → Webhooks**, add
+   one to the new API URL with the same secret and `payment.captured`.
+6. In Netlify: **Domain management → Add domain** → `domebox.in` and
    `www.domebox.in` → follow Netlify's DNS instructions. Wait until it shows a
    🔒 certificate.
+7. **Only now** regenerate the live key: Razorpay → Live Mode → **API Keys →
+   Regenerate** (ending the old key immediately is fine now). Put the new key into
+   Script Properties, delete any webhook pointing at the old script, and make one
+   real test payment.
 
 ✅ `migrateAllTenants` lists every customer under **UPGRADED** or **ALREADY
 CURRENT**, none under **NEEDS A LOOK**. www.domebox.in opens your new site, and

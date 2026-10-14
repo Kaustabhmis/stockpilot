@@ -325,31 +325,36 @@ var SCHED = {
 <div class="stop">❗ Never add the file <code>payments-secure.gs</code>. It is old and breaks payments.</div>
 <div class="tick">The log says: all scheduled jobs are installed (task reminders at 9, 15 and 17)</div>
 
-<h3><span class="n">9</span>Connect Razorpay (payments)</h3>
+<h3><span class="n">9</span>Connect Razorpay — in TEST mode</h3>
+<div class="stop">❗ <b>Do not regenerate your live keys now.</b> Your old system collects real payments with them.
+In the practice run you use Razorpay's <b>Test Mode</b> — pretend money, separate keys. Live keys are only touched on switch day (Steps 18 and 20).</div>
 <ol>
-<li><b>Razorpay Dashboard</b> → <b>Settings</b> → <b>API Keys</b> → <b>Regenerate</b>. Copy the new <b>Key ID</b> and <b>Key Secret</b>. (The old keys were inside the old code, so they must change.)</li>
+<li>Razorpay Dashboard → top of the screen, switch <b>Live Mode → Test Mode</b> <span class="num inl">1</span>.</li>
+<li><b>Account &amp; Settings</b> → <b>API Keys</b> → <b>Generate Test Key</b>. Copy the Test <b>Key ID</b> (starts with <code>rzp_test_</code>) and <b>Key Secret</b>.</li>
 <li>Make up a long password, e.g. <code>dbx-Hq27-Kolkata-91</code>. In Notepad: <code>Webhook secret = </code></li>
 <li>Script → <b>⚙ Project Settings</b> → Script Properties → add:</li>
 </ol>
 <table>
 <tr><th>Property</th><th>Value</th></tr>
-<tr><td><code>RAZORPAY_KEY_ID</code></td><td>the new Key ID</td></tr>
-<tr><td><code>RAZORPAY_KEY_SECRET</code></td><td>the new Key Secret</td></tr>
+<tr><td><code>RAZORPAY_KEY_ID</code></td><td>the <b>Test</b> Key ID (<code>rzp_test_…</code>)</td></tr>
+<tr><td><code>RAZORPAY_KEY_SECRET</code></td><td>the <b>Test</b> Key Secret</td></tr>
 <tr><td><code>RAZORPAY_WEBHOOK_SECRET</code></td><td>the password you made up</td></tr>
 <tr><td><code>SELLER_GSTIN</code></td><td>your GST number (skip if not GST registered)</td></tr>
 </table>
-<p>4. Razorpay → <b>Settings</b> → <b>Webhooks</b> → <b>Add New Webhook</b>: URL = your <b>API URL</b>, Secret = the same made-up password, tick <b>payment.captured</b>, <b>Create</b>.</p>
+<p>5. Still in <b>Test Mode</b>: <b>Webhooks</b> → <b>Add New Webhook</b> → URL = your <b>API URL</b>, Secret = the made-up password, tick <b>payment.captured</b>, <b>Create</b>.</p>
 <figure><div class="screen">
-  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Razorpay — Add New Webhook</div>
+  <div class="titlebar"><i></i><i></i><i></i>&nbsp; Razorpay Dashboard</div>
+  <div class="body" style="display:flex;gap:8px;align-items:center;border-bottom:1px solid #e3e1ee"><b>Razorpay</b><span style="margin-left:auto"></span><span class="num inl">1</span><span class="btnx hl">Test Mode ●</span></div>
   <div class="body">
+    <div class="lbl">Add New Webhook</div>
     <div class="lbl">Webhook URL</div><div class="field hl">https://script.google.com/macros/s/AKfy…/exec</div>
     <div class="lbl">Secret</div><div class="field hl">dbx-Hq27-Kolkata-91</div>
     <div class="lbl">Active events</div><div><span class="hl" style="padding:2px 6px">☑ payment.captured</span> &nbsp; ☐ payment.failed &nbsp; ☐ order.paid</div>
     <div style="margin-top:12px"><span class="btnx blue">Create Webhook</span></div>
   </div>
-</div><figcaption>Picture 9 — The webhook: your API URL, your made-up secret, one event.</figcaption></figure>
-<p>5. Run <b>setupDomeBox</b> again.</p>
-<div class="tick">No Razorpay line says MISSING.</div>
+</div><figcaption>Picture 9 — In Test Mode: your API URL, your made-up secret, one event.</figcaption></figure>
+<p>6. Run <b>setupDomeBox</b> again. In Step 11 you can buy a plan on the practice site with a Razorpay <b>test card</b> — no real money moves.</p>
+<div class="tick">No Razorpay line says MISSING. Test keys are in, live keys untouched.</div>
 
 <h3><span class="n">10</span>Make a practice website on Netlify</h3>
 <ol>
@@ -464,7 +469,17 @@ var SCHED = {
 <p>Customers keep their own sheets. Nothing is deleted. New columns and tabs are only <b>added</b>.</p>
 <div class="tick">Every company is UPGRADED or ALREADY CURRENT.</div>
 
-<h3><span class="n">18</span>Move www.domebox.in to the new website</h3>
+<h3><span class="n">18</span>Give the new script your CURRENT live Razorpay key</h3>
+<p>For the switch, the new script uses the same live key your old system uses today. Nothing changes in Razorpay yet, so payments never stop.</p>
+<ol>
+<li>Open your <b>Master sheet</b> → <b>Extensions → Apps Script</b> (the OLD script). Press <b>Ctrl + F</b> and search <code>rzp_live</code>. Copy the Key ID and the Key Secret next to it. <b>Change nothing</b>, close the tab.</li>
+<li><b>Dome Box NEW</b> → <b>⚙ Project Settings</b> → Script Properties → replace the <b>test</b> <code>RAZORPAY_KEY_ID</code> and <code>RAZORPAY_KEY_SECRET</code> with these <b>live</b> ones. <b>Save</b>.</li>
+<li>Razorpay Dashboard → switch to <b>Live Mode</b> → <b>Webhooks</b> → <b>Add New Webhook</b>: URL = your new <b>API URL</b>, Secret = your made-up password, tick <b>payment.captured</b>, <b>Create</b>.</li>
+<li>Run <b>setupDomeBox</b>.</li>
+</ol>
+<div class="tick">The new script has the live key. Razorpay has a live webhook to the new API URL.</div>
+
+<h3><span class="n">19</span>Move www.domebox.in to the new website</h3>
 <ol>
 <li>Netlify → your <b>OLD</b> site → <b>Domain management</b> → remove <code>www.domebox.in</code> and <code>domebox.in</code>.</li>
 <li>Your <b>NEW</b> site → <b>Domain management</b> → <b>Add a domain</b> → <code>www.domebox.in</code>, then <code>domebox.in</code>.</li>
@@ -479,7 +494,19 @@ var SCHED = {
 <div class="stop"><b>If something goes wrong:</b> put the domain back on the OLD site. Your old script is still there, untouched. Keep it for one week before deleting anything.</div>
 <div class="tick">www.domebox.in shows the new site, and your old login works.</div>
 
-<h3><span class="n">19</span>Close the old “anyone with the link” sharing</h3>
+<h3><span class="n">20</span>Replace the old Razorpay key with a new one</h3>
+<p>The old key was written inside the old code, so anyone who ever saw that code could use it. Now that the website runs on the new script, replace it.</p>
+<ol>
+<li>Razorpay Dashboard → <b>Live Mode</b> → <b>Account &amp; Settings</b> → <b>API Keys</b> → <b>Regenerate</b>. If Razorpay asks when the old key should stop, you may choose <b>immediately</b> — nothing uses it any more.</li>
+<li>Copy the new <b>Key ID</b> (<code>rzp_live_…</code>) and <b>Key Secret</b>.</li>
+<li><b>Dome Box NEW</b> → <b>⚙ Project Settings</b> → replace <code>RAZORPAY_KEY_ID</code> and <code>RAZORPAY_KEY_SECRET</code>. <b>Save</b>. Run <b>setupDomeBox</b>.</li>
+<li>Razorpay → <b>Webhooks</b>: if there is an old webhook pointing to the <b>old</b> script's address, delete it. Keep the new one.</li>
+<li>Buy the cheapest plan once on www.domebox.in with a real card to be sure, then refund it from the Razorpay Dashboard.</li>
+</ol>
+<div class="stop">Do this <b>after</b> Step 19, never before. If you regenerate while the old site still has the domain, the old site's payments stop.</div>
+<div class="tick">New live key in. Old key replaced. One real test payment worked.</div>
+
+<h3><span class="n">21</span>Close the old “anyone with the link” sharing</h3>
 <ol>
 <li><b>Files +</b> → <b>Script</b> → name it <code>sharing</code>. Paste all of <b>domebox → remediate-sharing.gs</b>.</li>
 <li>At the top find <code>MASTER_DB_ID: '…'</code>. Make sure the ID inside the quotes is your <b>real Master ID</b>. <b>Save</b>.</li>
@@ -489,11 +516,11 @@ var SCHED = {
 </ol>
 <div class="tick">auditSharing shows nothing shared publicly.</div>
 
-<h3><span class="n">20</span>Tell your customers</h3>
+<h3><span class="n">22</span>Tell your customers</h3>
 <p>Open <b>MIGRATING-CUSTOMERS.md</b> from the zip. Copy the ready email and send it. Customers log in with the <b>same email and password</b>.</p>
 <div class="tick">Email sent.</div>
 
-<h3><span class="n">21</span>One week later</h3>
+<h3><span class="n">23</span>One week later</h3>
 <ol>
 <li>Run <b>previewTaskArchive</b>, read it. Then <b>archiveOldTasks</b>. Then <b>installTaskArchiveSchedule</b> once. (Tasks finished over a year ago move to a tab called <i>Tasks_Archive</i> in each customer's own sheet.)</li>
 <li>Run <b>createDemoAccount</b> for sales calls. It prints the login.</li>

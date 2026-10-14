@@ -262,13 +262,26 @@ whose Tasks tab is on an old layout is skipped with a message — run
 
 ## Part 3 — payments and invoices
 
-### 3.1 Rotate your keys first
+### 3.1 Rotate your keys — but not before the switch
 
-Your old live source had Razorpay and Gemini keys in it. **Generate new ones
-and disable the old.** Anyone who has ever had that file can charge against
-your account.
+Your old live source had Razorpay and Gemini keys in it, so they must be
+replaced: anyone who has ever had that file can use them. **But your live site
+still takes payments with that Razorpay key until the switch.** Regenerating
+can stop the old key straight away (Razorpay lets you end it immediately or
+within 24 hours), which would stop today's payments.
 
-Razorpay Dashboard → **Settings → API Keys → Regenerate**.
+The safe order:
+
+1. **Practice** with Razorpay **Test Mode** keys (`rzp_test_…`) — separate keys,
+   pretend money, no effect on live payments.
+2. **On switch day**, put the **current** live key (copied from the old script)
+   into the new project's Script Properties, and add a live webhook to the new
+   API URL. Move the domain.
+3. **Then** Razorpay Dashboard → Live Mode → **Account & Settings → API Keys →
+   Regenerate**, put the new key in, and delete any webhook that points to the
+   old script.
+
+`DEPLOY-BOOK.pdf` Steps 9, 18 and 20 walk through exactly this.
 
 ### 3.2 Script Properties
 
