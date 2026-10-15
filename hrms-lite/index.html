@@ -890,13 +890,12 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <div class="toolbar">
             <label class="field">Effective from
               <input type="month" id="inc-from" onchange="renderIncrement()"></label>
-            <label class="field">Rise
+            <label class="field">Default rise for everyone
               <select id="inc-mode" onchange="renderIncrement()">
                 <option value="pct">a percentage of present gross</option>
                 <option value="amt">a flat amount per month</option>
-                <option value="each">typed in per person</option>
               </select></label>
-            <label class="field" id="inc-val-wrap">Value
+            <label class="field" id="inc-val-wrap">Default value
               <input type="number" id="inc-val" value="0" step="0.01" onchange="renderIncrement()"></label>
             <label class="field">Lands on
               <select id="inc-spread" onchange="renderIncrement()">
@@ -909,6 +908,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
                 <option value="all">everyone, wages included</option>
               </select></label>
             <span class="spacer"></span>
+            <button class="ghost sm adm" onclick="incResetAll()">Reset all to default</button>
             <button class="ghost sm" onclick="printIncrement()">&#128424; Print</button>
             <button class="adm" id="inc-apply" onclick="applyIncrement()">Apply revision</button>
           </div>
@@ -935,16 +935,17 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
       <div id="pay-pane-arrears" style="display:none">
         <div class="card">
           <div class="toolbar">
-            <label class="field">Revision effective from
+            <label class="field">From month
               <input type="month" id="arr-from" onchange="renderArrears()"></label>
-            <label class="field">Up to and including
+            <label class="field">To month (inclusive)
               <input type="month" id="arr-to" onchange="renderArrears()"></label>
-            <label class="field">Rise
+            <label class="field">Increment back pay
               <select id="arr-mode" onchange="renderArrears()">
                 <option value="rev">from a recorded revision</option>
                 <option value="pct">a percentage of present gross</option>
                 <option value="amt">a flat amount per month</option>
                 <option value="each">typed in per person</option>
+                <option value="none">none - no increment arrear</option>
               </select></label>
             <label class="field" id="arr-rev-wrap">Revision
               <select id="arr-rev" onchange="renderArrears()"></select></label>
@@ -953,6 +954,14 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             <span class="spacer"></span>
             <button class="ghost sm" onclick="printArrears()">&#128424; Print</button>
             <button class="adm" id="arr-post" onclick="postArrears()">Post to a month's payroll</button>
+          </div>
+          <div class="toolbar" style="gap:18px">
+            <label style="display:flex;align-items:center;gap:7px;font-size:.85rem;cursor:pointer">
+              <input type="checkbox" id="arr-pend" checked onchange="renderArrears()" style="width:auto">
+              Pending pay from payroll (missed or short-paid in a finalised run)</label>
+            <label style="display:flex;align-items:center;gap:7px;font-size:.85rem;cursor:pointer">
+              <input type="checkbox" id="arr-co" checked onchange="renderArrears()" style="width:auto">
+              Comp-off never adjusted or paid</label>
           </div>
           <div id="arr-paid-note"></div>
           <div class="kpis" id="arr-kpis"></div>
@@ -971,6 +980,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
               <input type="number" id="bonus-rate" step="0.01" min="8.33" max="20"
                      onchange="renderBonus()"></label>
             <span class="spacer"></span>
+            <button class="ghost sm adm" onclick="bonusResetAll()">Reset all to default</button>
             <button class="ghost sm" onclick="printBonus()">&#128424; Print register</button>
             <button class="ghost sm adm" id="bonus-generate" onclick="generateBonus()">&#9881; Work out bonus</button>
             <button class="adm" id="bonus-save" onclick="saveBonus()" disabled>Finalise bonus</button>
@@ -10430,12 +10440,22 @@ function incPeople() {
   });
 }
 
-/* The rise for one person, by whichever way HR chose to express it. */
+/* The rise for one person. The toolbar sets a default for everyone (say 8%);
+   any row can be switched to its own percentage or flat amount - the top
+   performers, the ones held back - without disturbing the rest. A person
+   with no override of their own always follows the default. */
+function incBasis(code) {
+  var o = (S.incEdit || {})[code];
+  if (o) return { type: o.type, value: num(o.value), custom: true };
+  return { type: el('inc-mode').value === 'amt' ? 'amt' : 'pct',
+           value: num(el('inc-val').value), custom: false };
+}
+function incBasisLabel(b) {
+  return b.type === 'pct' ? (Math.round(b.value * 1000) / 1000) + '%' : 'flat ' + cur() + money(b.value);
+}
 function incRiseFor(e) {
-  var mode = el('inc-mode').value, v = num(el('inc-val').value);
-  if (mode === 'pct') return presentGross(e) * v / 100;
-  if (mode === 'amt') return v;
-  return num((S.incEdit || {})[e.emp_code] || 0);
+  var b = incBasis(e.emp_code);
+  return b.type === 'pct' ? presentGross(e) * b.value / 100 : b.value;
 }
 
 /* Where the rise lands. Proportional keeps the shape of the package they
@@ -10461,34 +10481,53 @@ function incSplit(e, rise) {
   return out;
 }
 
-function incrementRows() {
+/* everyone: true keeps the people whose rise works out to nothing, so the
+   table can show them and HR can still give them an amount of their own. */
+function incrementRows(everyone) {
   return incPeople().map(function (e) {
-    var rise = incRiseFor(e);
+    var rise = incRiseFor(e), basis = incBasis(e.emp_code);
     var now = {}; INC_COMPONENTS.forEach(function (c) { now[c] = num(e[c]); });
     var next = incSplit(e, rise);
     var oldGross = presentGross(e);
     var newGross = INC_COMPONENTS.reduce(function (sx, c) { return sx + next[c]; }, 0);
     return { emp_code: e.emp_code, name: e.name, old: now, next: next,
              oldGross: oldGross, newGross: newGross,
-             rise: newGross - oldGross,
+             rise: newGross - oldGross, basis: basis,
              pct: oldGross ? ((newGross - oldGross) / oldGross) * 100 : 0 };
-  }).filter(function (r) { return Math.round(r.rise) !== 0; });
+  }).filter(function (r) { return everyone || Math.round(r.rise) !== 0; });
 }
 
-function incSet(code, value) {
+/* One person's override. Choosing "Default" drops it, so they follow the
+   toolbar again. Switching type starts from the default value, which is
+   usually the number HR wants to nudge rather than retype. */
+function incSet(code, field, value) {
   S.incEdit = S.incEdit || {};
-  S.incEdit[code] = num(value);
+  if (field === 'type' && value === 'default') {
+    delete S.incEdit[code];
+  } else {
+    var o = S.incEdit[code] || incBasis(code);
+    o = { type: o.type, value: num(o.value) };
+    if (field === 'type') o.type = value === 'amt' ? 'amt' : 'pct';
+    else o.value = num(value);
+    S.incEdit[code] = o;
+  }
+  renderIncrement();
+}
+
+function incResetAll() {
+  S.incEdit = {};
   renderIncrement();
 }
 
 function renderIncrement() {
   var f = el('inc-from');
   if (!f.value) f.value = thisMonth();
-  el('inc-val-wrap').style.display = el('inc-mode').value === 'each' ? 'none' : '';
   if (el('inc-apply')) el('inc-apply').style.display = isAdmin() ? '' : 'none';
 
-  var rows = incrementRows();
-  if (!isAdmin()) rows = rows.filter(function (r) { return String(r.emp_code) === myCode(); });
+  var all = incrementRows(true);
+  if (!isAdmin()) all = all.filter(function (r) { return String(r.emp_code) === myCode(); });
+  var rows = all.filter(function (r) { return Math.round(r.rise) !== 0; });
+  var customN = all.filter(function (r) { return r.basis.custom; }).length;
   var total = rows.reduce(function (sx, r) { return sx + r.rise; }, 0);
   var done = (S.increment || []).filter(function (i) {
     return String(i.effective_from).slice(0, 7) === f.value;
@@ -10506,34 +10545,47 @@ function renderIncrement() {
     kpi('Rise a year', cur() + money(total * 12), 'twelve months of it') +
     kpi('Average rise', rows.length
         ? (Math.round(rows.reduce(function (sx, r) { return sx + r.pct; }, 0) / rows.length * 10) / 10) + '%'
-        : '0%', 'across the people affected');
+        : '0%', customN ? customN + ' set individually' : 'everyone on the default');
 
-  if (!rows.length) {
-    el('inc-table').innerHTML = '<tbody><tr><td class="empty">Set a rise above to see what it ' +
-      'does to each package.</td></tr></tbody>';
+  if (!all.length) {
+    el('inc-table').innerHTML = '<tbody><tr><td class="empty">Nobody on the books for this ' +
+      'selection.</td></tr></tbody>';
     renderIncrementHistory();
     return;
   }
 
-  var each = el('inc-mode').value === 'each';
+  var defLabel = incBasisLabel(incBasis('\u0000no-override'));
   el('inc-table').innerHTML =
     '<thead><tr><th>Employee</th><th class="num-col">Present gross</th>' +
-    '<th class="num-col">Rise</th><th class="num-col">New gross</th><th class="num-col">%</th>' +
+    '<th>Rise basis</th><th class="num-col">Rise</th>' +
+    '<th class="num-col">New gross</th><th class="num-col">%</th>' +
     '<th class="num-col">Basic</th><th class="num-col">HRA</th>' +
     '<th class="num-col">Special</th><th class="num-col">Other</th></tr></thead><tbody>' +
-    rows.map(function (r) {
+    all.map(function (r) {
       var cell = function (c) {
         var moved = r.next[c] !== r.old[c];
         return '<td class="num-col">' + money(r.next[c]) +
           (moved ? '<br><small style="color:var(--text-muted)">was ' + money(r.old[c]) + '</small>' : '') +
           '</td>';
       };
-      return '<tr><td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) + '</small></td>' +
+      var code = esc(r.emp_code), b = r.basis;
+      var basisCell = isAdmin()
+        ? '<select class="grid-in" style="width:auto" onchange="incSet(\'' + code + '\',\'type\',this.value)">' +
+            '<option value="default"' + (b.custom ? '' : ' selected') + '>Default (' + esc(defLabel) + ')</option>' +
+            '<option value="pct"' + (b.custom && b.type === 'pct' ? ' selected' : '') + '>Percentage</option>' +
+            '<option value="amt"' + (b.custom && b.type === 'amt' ? ' selected' : '') + '>Flat amount</option>' +
+          '</select>' +
+          (b.custom
+            ? ' <input class="grid-in" type="number" step="0.01" style="width:90px" value="' + b.value +
+              '" onchange="incSet(\'' + code + '\',\'value\',this.value)"> ' +
+              (b.type === 'pct' ? '%' : cur() + '/month')
+            : '')
+        : esc(incBasisLabel(b));
+      return '<tr' + (b.custom ? ' style="background:#eff6ff"' : '') + '>' +
+        '<td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) + '</small></td>' +
         '<td class="num-col">' + money(r.oldGross) + '</td>' +
-        '<td class="num-col">' + (each
-          ? '<input class="grid-in" type="number" step="0.01" value="' + r.rise +
-            '" onchange="incSet(\'' + esc(r.emp_code) + '\',this.value)">'
-          : '<b>' + money(r.rise) + '</b>') + '</td>' +
+        '<td>' + basisCell + '</td>' +
+        '<td class="num-col"><b>' + money(r.rise) + '</b></td>' +
         '<td class="num-col"><b>' + money(r.newGross) + '</b></td>' +
         '<td class="num-col">' + (Math.round(r.pct * 10) / 10) + '%</td>' +
         INC_COMPONENTS.map(cell).join('') + '</tr>';
@@ -10584,7 +10636,8 @@ function applyIncrement() {
             new_other_allowance: r.next.other_allowance,
             old_gross: r.oldGross, new_gross: r.newGross,
             rise: r.rise, rise_pct: Math.round(r.pct * 1000) / 1000,
-            status: 'Applied', arrears_paid_upto: '', note: '',
+            status: 'Applied', arrears_paid_upto: '',
+            note: (r.basis.custom ? 'individual: ' : 'default: ') + incBasisLabel(r.basis),
             created_at: today(), created_by: (S.user && S.user.email) || ''
           };
         });
@@ -10689,10 +10742,12 @@ function printIncrement() {
   if (!rows.length) return toast('Nothing to print', 'bad');
   printTable('Proposed revision effective ' + monthLabel(el('inc-from').value || thisMonth()) +
              (el('inc-reason').value ? ' - ' + el('inc-reason').value : ''),
-    ['Employee', 'Code', 'Present gross', 'Rise', 'New gross', '%',
+    ['Employee', 'Code', 'Present gross', 'Basis', 'Rise', 'New gross', '%',
      'Basic', 'HRA', 'Special', 'Other'],
     rows.map(function (r) {
-      return [r.name, r.emp_code, money(r.oldGross), money(r.rise), money(r.newGross),
+      return [r.name, r.emp_code, money(r.oldGross),
+              (r.basis.custom ? 'individual ' : 'default ') + incBasisLabel(r.basis),
+              money(r.rise), money(r.newGross),
               (Math.round(r.pct * 10) / 10) + '%',
               money(r.next.basic), money(r.next.hra),
               money(r.next.special_allowance), money(r.next.other_allowance)];
@@ -10734,6 +10789,7 @@ function presentGross(e) {
    never theirs. The other three are for a rise that was never recorded. */
 function riseFor(e) {
   var mode = el('arr-mode').value, v = num(el('arr-val').value);
+  if (mode === 'none') return 0;
   if (mode === 'rev') {
     var month = el('arr-rev').value;
     var row = (S.increment || []).filter(function (i) {
@@ -10764,27 +10820,125 @@ function arrearsFromIncrement(month) {
   renderArrears();
 }
 
+/* How far back pay for a recorded revision has already been posted for this
+   person. Months up to and including it are never counted again, so posting
+   the same revision twice cannot pay the same months twice. */
+function arrRevPaidUpto(code) {
+  if (el('arr-mode').value !== 'rev') return '';
+  var month = el('arr-rev').value, upto = '';
+  (S.increment || []).forEach(function (i) {
+    if (String(i.effective_from).slice(0, 7) !== month || String(i.emp_code) !== String(code)) return;
+    var u = String(i.arrears_paid_upto || '');
+    if (u && u > upto) upto = u;
+  });
+  return upto;
+}
+
+/* What somebody's monthly gross was in a past month: today's pay, less every
+   revision that took effect after it. */
+function grossAt(e, ym) {
+  var g = presentGross(e);
+  (S.increment || []).forEach(function (i) {
+    if (String(i.emp_code) === String(e.emp_code) &&
+        String(i.effective_from).slice(0, 7) > ym) g -= num(i.rise);
+  });
+  return Math.max(0, g);
+}
+
+/* Days of pending pay already settled through arrears, per person and month,
+   kept in Settings so a second posting does not pay them again. */
+function arrearsLedger() {
+  try { return JSON.parse(S.settings.arrears_ledger || '{}') || {}; } catch (e) { return {}; }
+}
+
+/* Pending pay from a finalised run: a person who was on the books and marked
+   at work but left out of the run altogether, or paid for fewer days than the
+   register now shows. Paid at the rate they were on that month. */
+function pendingPay(e, ym) {
+  if (!runFinalised(ym)) return null;
+  var s = attStats(ym, e.emp_code);
+  var saved = savedRunFor(ym).filter(function (r) { return r.emp_code === e.emp_code; })[0];
+  var marked = s.P + s.HD + s.OD + s.CO + s.L;
+  if (!saved && !marked) return null;            /* not on this run and nothing to pay for */
+  var divisor = saved ? (num(saved.total_days) || daysInMonth(ym)) : payrollDivisor(ym, e.emp_code, s);
+  var owed = Math.max(0, divisor - s.lop);
+  var settled = num((arrearsLedger()[e.emp_code] || {})[ym]);
+  var paid = Math.max(saved ? num(saved.paid_days) : 0, settled);
+  var extra = Math.round((owed - paid) * 100) / 100;
+  if (extra <= 0) return null;
+  var earned = saved ? num(saved.basic) + num(saved.hra) + num(saved.special_allowance) +
+                       num(saved.other_allowance) : 0;
+  var perDay = saved && num(saved.paid_days) > 0 ? earned / num(saved.paid_days)
+                                                  : grossAt(e, ym) / divisor;
+  return { month: ym, days: extra, owed: owed, amount: perDay * extra,
+           why: saved ? 'paid ' + num(saved.paid_days) + ' of ' + owed + ' days' : 'left out of the run' };
+}
+
+/* Comp-off that was approved but never turned into anything: not set against
+   an absent day, and not paid - either no choice was recorded, or it was
+   approved for payout after that month's run had already been finalised. */
+function coUnsettled(r) {
+  if (r.mode === 'arrear') return false;
+  if (r.mode === 'adjust' && r.adjust_date) return false;
+  if (r.mode !== 'payout') return true;
+  var ym = String(r.decided_at || r.date).slice(0, 7);
+  if (!runFinalised(ym)) return false;            /* that month's run will still pay it */
+  var run = savedRunFor(ym).filter(function (x) { return String(x.emp_code) === String(r.emp_code); })[0];
+  return !run || String(run.generated_at || '') < String(r.decided_at || r.date);
+}
+function unpaidCompOff(e, toYm) {
+  var basis = String(S.settings.payroll_basis || 'calendar');
+  var list = (S.requests || []).filter(function (r) {
+    return String(r.emp_code) === String(e.emp_code) && r.status === 'Approved' &&
+      requestEffect(r.type) === 'comp_off' && String(r.date).slice(0, 7) <= toYm && coUnsettled(r);
+  });
+  var days = 0, amount = 0;
+  list.forEach(function (r) {
+    var ym = String(r.date).slice(0, 7), d = num(r.days) || 1;
+    var perDay = grossAt(e, ym) / (basis === 'fixed26' ? 26 : daysInMonth(ym));
+    days += d; amount += perDay * d;
+  });
+  return { requests: list, days: days, amount: amount };
+}
+
 function arrearRows() {
   var from = el('arr-from').value, to = el('arr-to').value;
   var months = monthsFromTo(from, to);
   if (!months.length) return { months: months, rows: [] };
+  var wantPend = el('arr-pend') ? el('arr-pend').checked : false;
+  var wantCo = el('arr-co') ? el('arr-co').checked : false;
 
   var rows = activeEmployees().filter(isSalaried).map(function (e) {
-    var rise = riseFor(e);
-    var per = [], total = 0;
+    var rise = riseFor(e), paidUpto = arrRevPaidUpto(e.emp_code);
+    var per = [], incTotal = 0, pend = [], pendTotal = 0;
     months.forEach(function (ym) {
       var saved = savedRunFor(ym).filter(function (r) { return r.emp_code === e.emp_code; })[0];
-      /* Only months that were actually run can carry an arrear. */
+      if (wantPend) {
+        var pp = pendingPay(e, ym);
+        if (pp) { pend.push(pp); pendTotal += pp.amount; }
+      }
+      /* Increment back pay: only months that were run, and not ones already paid. */
+      if (!rise) return;
+      if (paidUpto && ym <= paidUpto) { per.push({ month: ym, amount: 0, note: 'already paid' }); return; }
       if (!saved) { per.push({ month: ym, amount: 0, note: 'no run' }); return; }
       var divisor = num(saved.total_days) || daysInMonth(ym);
-      var factor = divisor ? num(saved.paid_days) / divisor : 0;
+      var days = num(saved.paid_days);
+      var pp2 = wantPend ? pendingPay(e, ym) : null;
+      if (pp2) days = pp2.owed;                     /* the rise is owed on the days now paid too */
+      var factor = divisor ? days / divisor : 0;
       var amount = rise * factor;
-      total += amount;
-      per.push({ month: ym, amount: amount, note: factor < 1 ? (num(saved.paid_days) + ' of ' + divisor + ' days') : '' });
+      incTotal += amount;
+      per.push({ month: ym, amount: amount, note: factor < 1 ? (days + ' of ' + divisor + ' days') : '' });
     });
+    var co = wantCo ? unpaidCompOff(e, to) : { requests: [], days: 0, amount: 0 };
+    var other = num((S.arrOther || {})[e.emp_code] || 0);
     return { emp_code: e.emp_code, name: e.name, present: presentGross(e),
-             rise: rise, months: per, total: total };
-  }).filter(function (r) { return r.rise !== 0; });
+             rise: rise, months: per, inc: incTotal, pend: pend, pendTotal: pendTotal,
+             co: co, other: other,
+             total: incTotal + pendTotal + co.amount + other };
+  }).filter(function (r) {
+    return Math.round(r.total) !== 0 || r.rise !== 0 || el('arr-mode').value === 'each';
+  });
 
   return { months: months, rows: rows };
 }
@@ -10801,18 +10955,14 @@ function renderArrears() {
   rev.innerHTML = groups.length
     ? groups.map(function (g) {
         return '<option value="' + esc(g.month) + '">' + esc(monthLabel(g.month)) +
-          ' \u00b7 ' + g.n + ' people' + (g.reason ? ' \u00b7 ' + esc(g.reason) : '') + '</option>';
+          ' · ' + g.n + ' people' + (g.reason ? ' · ' + esc(g.reason) : '') + '</option>';
       }).join('')
     : '<option value="">no revisions recorded yet</option>';
   if (keep && groups.some(function (g) { return g.month === keep; })) rev.value = keep;
 
   el('arr-rev-wrap').style.display = mode === 'rev' ? '' : 'none';
-  el('arr-val-wrap').style.display = (mode === 'each' || mode === 'rev') ? 'none' : '';
+  el('arr-val-wrap').style.display = (mode === 'pct' || mode === 'amt') ? '' : 'none';
 
-  /* Arrears paid twice is the expensive mistake here, and it is an easy one:
-     the revision is still on screen, the figures still look right, and
-     nothing about pressing Post a second time feels different. The Increment
-     row remembers how far it has been paid, so say so. */
   if (mode === 'rev' && rev.value) {
     var paidTo = '';
     (S.increment || []).forEach(function (i) {
@@ -10821,69 +10971,65 @@ function renderArrears() {
       if (u && (!paidTo || u > paidTo)) paidTo = u;
     });
     el('arr-paid-note').innerHTML = paidTo
-      ? '<div class="locked-note" style="background:#fef3c7;color:#92400e">&#9888; Arrears for ' +
-        'this revision have already been posted up to <b>' + esc(monthLabel(paidTo)) + '</b>. ' +
-        'Set "Up to and including" past that month, or you will pay the same months twice.</div>'
+      ? '<div class="locked-note" style="background:#fef3c7;color:#92400e">&#9888; Increment back pay ' +
+        'for this revision has already been posted up to <b>' + esc(monthLabel(paidTo)) + '</b>. ' +
+        'Those months are left out below, so they are not paid twice.</div>'
       : '';
   } else if (el('arr-paid-note')) {
     el('arr-paid-note').innerHTML = '';
-  }
-
-  if (mode === 'rev' && !groups.length) {
-    el('arr-kpis').innerHTML = '';
-    el('arr-table').innerHTML = '<tbody><tr><td class="empty">No revisions have been recorded ' +
-      'yet. Record one on the <b>Increment</b> tab and the arrears work themselves out from it - ' +
-      'or switch the Rise box above to a percentage if the rise was never recorded.</td></tr></tbody>';
-    return;
   }
 
   var months = monthsFromTo(f.value, t.value);
   if (needMonths(months, renderArrears)) return;
 
   var data = arrearRows();
-  var total = data.rows.reduce(function (sx, r) { return sx + r.total; }, 0);
-  var paidMonths = data.months.filter(function (ym) { return savedRunFor(ym).length; });
+  var sum = function (k) { return data.rows.reduce(function (sx, r) { return sx + (k === 'co' ? r.co.amount : r[k]); }, 0); };
+  var total = sum('total');
 
   el('arr-kpis').innerHTML =
-    kpi('Months covered', data.months.length,
-        paidMonths.length + ' of them have a finalised run') +
-    kpi('People affected', data.rows.length, 'everyone on salary with a rise') +
-    kpi('Arrears payable', cur() + money(total), 'before you post it to a month');
+    kpi('Increment back pay', cur() + money(sum('inc')), data.months.length + ' month(s)') +
+    kpi('Pending pay', cur() + money(sum('pendTotal')), 'missed or short-paid days') +
+    kpi('Unpaid comp-off', cur() + money(sum('co')),
+        data.rows.reduce(function (sx, r) { return sx + r.co.days; }, 0) + ' day(s)') +
+    kpi('Total arrears', cur() + money(total), data.rows.filter(function (r) {
+      return Math.round(r.total) !== 0; }).length + ' people, posted to payroll');
 
   if (!data.months.length) {
-    el('arr-table').innerHTML = '<tbody><tr><td class="empty">Pick the month the revision takes ' +
-      'effect from, and the last month to pay arrears for.</td></tr></tbody>';
-    return;
-  }
-  if (!paidMonths.length) {
-    el('arr-table').innerHTML = '<tbody><tr><td class="empty">None of those months has a finalised ' +
-      'payroll run, so there is nothing to compare against. Arrears are worked out against what was ' +
-      'actually paid.</td></tr></tbody>';
+    el('arr-table').innerHTML = '<tbody><tr><td class="empty">Pick the from and to months.</td></tr></tbody>';
     return;
   }
 
-  var head = '<thead><tr><th>Employee</th><th class="num-col">Present gross</th>' +
-    '<th class="num-col">Rise / month</th>' +
-    data.months.map(function (m) { return '<th class="num-col">' + esc(monthLabel(m)) + '</th>'; }).join('') +
-    '<th class="num-col">Arrears due</th></tr></thead>';
+  var head = '<thead><tr><th>Employee</th><th class="num-col">Rise / month</th>' +
+    '<th class="num-col">Increment back pay</th><th class="num-col">Pending pay</th>' +
+    '<th class="num-col">Comp-off</th><th class="num-col">Other</th>' +
+    '<th class="num-col">Total arrear</th></tr></thead>';
 
   var body = data.rows.map(function (r) {
-    return '<tr><td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) + '</small></td>' +
-      '<td class="num-col">' + money(r.present) + '</td>' +
+    var incNote = r.months.filter(function (m) { return m.amount; }).map(function (m) {
+      return esc(monthLabel(m.month)) + ' ' + money(m.amount) + (m.note ? ' (' + esc(m.note) + ')' : '');
+    }).join('<br>');
+    var pendNote = r.pend.map(function (p) {
+      return esc(monthLabel(p.month)) + ': ' + p.days + ' day(s), ' + esc(p.why);
+    }).join('<br>');
+    var code = esc(r.emp_code);
+    return '<tr><td><b>' + esc(r.name) + '</b><br><small>' + code + '</small></td>' +
       '<td class="num-col">' + (el('arr-mode').value === 'each'
-        ? '<input class="grid-in" type="number" step="0.01" value="' + r.rise +
-          '" onchange="arrSet(\'' + esc(r.emp_code) + '\',this.value)">'
+        ? '<input class="grid-in" type="number" step="0.01" style="width:90px" value="' + r.rise +
+          '" onchange="arrSet(\'' + code + '\',this.value)">'
         : money(r.rise)) + '</td>' +
-      r.months.map(function (m) {
-        return '<td class="num-col">' + (m.note === 'no run'
-          ? '<small style="color:var(--text-muted)">no run</small>'
-          : money(m.amount) + (m.note ? '<br><small>' + esc(m.note) + '</small>' : '')) + '</td>';
-      }).join('') +
+      '<td class="num-col"><b>' + money(r.inc) + '</b>' + (incNote ? '<br><small>' + incNote + '</small>' : '') + '</td>' +
+      '<td class="num-col"><b>' + money(r.pendTotal) + '</b>' + (pendNote ? '<br><small>' + pendNote + '</small>' : '') + '</td>' +
+      '<td class="num-col"><b>' + money(r.co.amount) + '</b>' +
+        (r.co.days ? '<br><small>' + r.co.days + ' day(s)</small>' : '') + '</td>' +
+      '<td class="num-col">' + (isAdmin()
+        ? '<input class="grid-in" type="number" step="0.01" style="width:90px" value="' + (r.other || 0) +
+          '" onchange="arrOtherSet(\'' + code + '\',this.value)">'
+        : money(r.other)) + '</td>' +
       '<td class="num-col"><b>' + money(r.total) + '</b></td></tr>';
   }).join('');
 
   el('arr-table').innerHTML = head + '<tbody>' + body +
-    (data.rows.length ? '' : '<tr><td class="empty">Set a rise above to work out what is owed.</td></tr>') +
+    (data.rows.length ? '' : '<tr><td class="empty">No arrears found for these months.</td></tr>') +
     '</tbody>';
 }
 
@@ -10892,9 +11038,18 @@ function arrSet(code, value) {
   S.arrEdit[code] = num(value);
   renderArrears();
 }
+/* Anything else owed that the system cannot see - typed in per person. */
+function arrOtherSet(code, value) {
+  S.arrOther = S.arrOther || {};
+  S.arrOther[code] = num(value);
+  renderArrears();
+}
 
-/* Posting writes the arrear into a month's draft run, where it is reviewed
-   and finalised like any other pay. It never writes to a finalised month. */
+/* Posting adds every arrear - increment back pay, pending pay, comp-off and
+   anything typed in - to the Arrears column of a month's draft run, where it
+   is reviewed and finalised like any other pay. It never writes to a
+   finalised month. Each source is then marked as settled so the next posting
+   cannot pay it again. */
 function postArrears() {
   if (!isAdmin()) return toast('Only HR administrators can post arrears', 'bad');
   var data = arrearRows();
@@ -10902,13 +11057,14 @@ function postArrears() {
   if (!owed.length) return toast('Nothing to post - no arrears worked out', 'bad');
 
   var into = thisMonth();
-  showModal('Post arrears to a month',
+  showModal('Post arrears to payroll',
     '<p><b>' + owed.length + '</b> people, <b>' + cur() +
     money(owed.reduce(function (sx, r) { return sx + r.total; }, 0)) + '</b> in total.</p>' +
     '<label class="field" style="margin-top:12px">Add to this month\'s payroll' +
     '<input type="month" id="arr-into" value="' + into + '"></label>' +
-    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">The amounts land in the ' +
-    'Arrears column of that month\'s draft run. Nothing is paid until you finalise that run.</p>', [
+    '<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted)">Added to the Arrears ' +
+    'column of that month\'s draft run, on top of anything already there. Nothing is paid until ' +
+    'you finalise that run.</p>', [
     { label: 'Cancel', cls: 'ghost', onClick: closeModal },
     { label: 'Post', onClick: function () {
         var ym = el('arr-into').value;
@@ -10920,7 +11076,6 @@ function postArrears() {
         var byCode = {};
         owed.forEach(function (r) { byCode[r.emp_code] = r.total; });
 
-        /* build the draft if there is not one yet, so the arrear has somewhere to go */
         if (!S.payDraft || S.payDraft.month !== ym) {
           var existing = {};
           savedRunFor(ym).forEach(function (r) { existing[r.emp_code] = r; });
@@ -10933,11 +11088,16 @@ function postArrears() {
           if (byCode[row.emp_code] === undefined) return row;
           hit++;
           var e = empByCode(row.emp_code);
-          var keep = Object.assign({}, row, { arrears: byCode[row.emp_code] });
+          var keep = Object.assign({}, row, { arrears: num(row.arrears) + byCode[row.emp_code] });
           return e ? computePay(e, ym, keep) : row;
         });
-        /* Remember how far this revision has now been paid, so posting it
-           again cannot quietly pay the same months a second time. */
+
+        var warn = function (what) {
+          return function () {
+            toast('Arrears posted, but ' + what + ' was not marked as paid - check before posting again.', 'bad');
+          };
+        };
+        /* 1. increment back pay: how far this revision is now paid */
         if (el('arr-mode').value === 'rev' && el('arr-rev').value) {
           var revMonth = el('arr-rev').value, upto = el('arr-to').value;
           var stamp = (S.increment || []).filter(function (i) {
@@ -10947,12 +11107,37 @@ function postArrears() {
           }).map(function (i) { return Object.assign({}, i, { arrears_paid_upto: upto }); });
           if (stamp.length) {
             writeRows('Increment', 'increment', stamp, null, function () { renderArrears(); })
-              .catch(function () {
-                toast('Arrears posted, but the revision was not marked as paid up to ' +
-                      monthLabel(upto) + ' - check before posting it again.', 'bad');
-              });
+              .catch(warn('the increment back pay'));
           }
         }
+        /* 2. pending pay: the days now settled, per person and month */
+        var ledger = arrearsLedger(), ledgerMoved = false;
+        owed.forEach(function (r) {
+          r.pend.forEach(function (p) {
+            ledger[r.emp_code] = ledger[r.emp_code] || {};
+            ledger[r.emp_code][p.month] = p.owed;
+            ledgerMoved = true;
+          });
+        });
+        if (ledgerMoved) {
+          var json = JSON.stringify(ledger);
+          api('saveSettings', { settings: { arrears_ledger: json } })
+            .then(function () { S.settings.arrears_ledger = json; })
+            .catch(warn('the pending pay'));
+        }
+        /* 3. comp-off: marked as paid through arrears */
+        var coRows = [];
+        owed.forEach(function (r) {
+          r.co.requests.forEach(function (q) {
+            coRows.push(Object.assign({}, q, { mode: 'arrear',
+              note: ((q.note ? q.note + ' | ' : '') + 'paid as arrear in ' + ym) }));
+          });
+        });
+        if (coRows.length) {
+          writeRows('Requests', 'requests', coRows, null, null).catch(warn('the comp-off'));
+        }
+        S.arrOther = {};
+
         el('pay-month').value = ym;
         payTab('salary');
         renderPayroll();
@@ -10964,15 +11149,15 @@ function postArrears() {
 
 function printArrears() {
   var data = arrearRows();
-  if (!data.rows.length) return toast('Nothing to print', 'bad');
-  var head = ['Employee', 'Code', 'Present gross', 'Rise/month']
-    .concat(data.months.map(monthLabel)).concat(['Arrears due']);
-  var body = data.rows.map(function (r) {
-    return [r.name, r.emp_code, money(r.present), money(r.rise)]
-      .concat(r.months.map(function (m) { return money(m.amount); }))
-      .concat([money(r.total)]);
-  });
-  printTable('Arrears - revision effective ' + monthLabel(data.months[0]), head, body);
+  var rows = data.rows.filter(function (r) { return Math.round(r.total) !== 0; });
+  if (!rows.length) return toast('Nothing to print', 'bad');
+  printTable('Arrears ' + monthLabel(data.months[0]) + ' to ' + monthLabel(data.months[data.months.length - 1]),
+    ['Employee', 'Code', 'Rise/month', 'Increment back pay', 'Pending pay', 'Comp-off days',
+     'Comp-off', 'Other', 'Total arrear'],
+    rows.map(function (r) {
+      return [r.name, r.emp_code, money(r.rise), money(r.inc), money(r.pendTotal),
+              r.co.days, money(r.co.amount), money(r.other), money(r.total)];
+    }));
 }
 
 
@@ -11044,14 +11229,59 @@ function bonusRows(fy) {
     }, 0);
     var base = Math.min(wage, cfg.calcCeiling);
     var eligible = wage <= cfg.eligibility && days >= cfg.minDays;
-    var amount = eligible ? base * (cfg.rate / 100) * served.length : 0;
+    /* The rate at the top is everyone's default; a person can be given a
+       rate of their own, or a flat amount instead. A flat amount is paid
+       whatever the Act's eligibility says - it is the company's own
+       decision, an ex-gratia, and the note on the row says so. */
+    var basis = bonusBasis(e.emp_code);
+    var rate = basis.type === 'pct' ? basis.value : 0;
+    var amount = eligible ? base * (rate / 100) * served.length : 0;
     var why = wage > cfg.eligibility
       ? 'draws over ' + cur() + money(cfg.eligibility)
       : (days < cfg.minDays ? 'worked ' + days + ' days, needs ' + cfg.minDays : '');
+    if (basis.type === 'amt') {
+      amount = basis.value;
+      eligible = amount > 0;
+      why = 'flat amount' + (why ? ' (statutory: ' + why + ')' : '');
+    } else if (basis.custom) {
+      why = 'individual rate ' + rate + '%' + (why ? '; ' + why : '');
+    }
     return { emp_code: e.emp_code, name: e.name, wage: wage, base: base,
-             months: served.length, days: days, eligible: eligible,
-             amount: Math.round(amount), why: why };
+             months: served.length, days: days, eligible: eligible, rate: rate,
+             basis: basis, amount: Math.round(amount), why: why };
   }).sort(function (a, b) { return (b.eligible - a.eligible) || a.name.localeCompare(b.name); });
+}
+
+/* One person's bonus basis: their own override, or the default rate. */
+function bonusBasis(code) {
+  var o = (S.bonusEdit || {})[code];
+  if (o) return { type: o.type, value: num(o.value), custom: true };
+  return { type: 'pct', value: bonusSettings().rate, custom: false };
+}
+function bonusSet(code, field, value) {
+  S.bonusEdit = S.bonusEdit || {};
+  if (field === 'type' && value === 'default') {
+    delete S.bonusEdit[code];
+  } else {
+    var o = S.bonusEdit[code] || bonusBasis(code);
+    o = { type: o.type, value: num(o.value) };
+    if (field === 'type') {
+      if (value === 'amt' && o.type !== 'amt') {
+        /* start the flat amount from what the default rate would have paid */
+        var r = (S.bonusDraft && S.bonusDraft.rows || []).filter(function (x) {
+          return String(x.emp_code) === String(code);
+        })[0];
+        o.value = r ? num(r.amount) : 0;
+      }
+      o.type = value === 'amt' ? 'amt' : 'pct';
+    } else o.value = num(value);
+    S.bonusEdit[code] = o;
+  }
+  renderBonus();
+}
+function bonusResetAll() {
+  S.bonusEdit = {};
+  renderBonus();
 }
 
 function savedBonus(fy) {
@@ -11110,6 +11340,9 @@ function renderBonus() {
   var cfg = bonusSettings();
 
   var saved = savedBonus(fy);
+  /* A draft is worked out again on every render, so a changed default rate or
+     one person's override shows at once instead of on the next "Work out". */
+  if (S.bonusDraft && S.bonusDraft.fy === fy) S.bonusDraft.rows = bonusRows(fy);
   var rows = (S.bonusDraft && S.bonusDraft.fy === fy) ? S.bonusDraft.rows : null;
   var draft = !!rows;
   if (!rows) {
@@ -11150,16 +11383,31 @@ function renderBonus() {
     return;
   }
 
+  var editable = draft && isAdmin();
   var head = '<thead><tr><th>Employee</th><th class="num-col">Basic + DA</th>' +
     '<th class="num-col">Worked on</th><th class="num-col">Months</th>' +
-    '<th class="num-col">Days worked</th><th class="num-col">Bonus</th><th>Note</th></tr></thead>';
+    '<th class="num-col">Days worked</th>' + (editable ? '<th>Bonus basis</th>' : '') +
+    '<th class="num-col">Bonus</th><th>Note</th></tr></thead>';
   var body = rows.map(function (r) {
-    return '<tr' + (r.eligible ? '' : ' style="opacity:.55"') + '>' +
+    var b = r.basis || { type: 'pct', value: cfg.rate, custom: false };
+    var code = esc(r.emp_code);
+    var basisCell = editable
+      ? '<td><select class="grid-in" style="width:auto" onchange="bonusSet(\'' + code + '\',\'type\',this.value)">' +
+          '<option value="default"' + (b.custom ? '' : ' selected') + '>Default (' + cfg.rate + '%)</option>' +
+          '<option value="pct"' + (b.custom && b.type === 'pct' ? ' selected' : '') + '>Percentage</option>' +
+          '<option value="amt"' + (b.custom && b.type === 'amt' ? ' selected' : '') + '>Flat amount</option>' +
+        '</select>' +
+        (b.custom
+          ? ' <input class="grid-in" type="number" step="0.01" style="width:90px" value="' + b.value +
+            '" onchange="bonusSet(\'' + code + '\',\'value\',this.value)"> ' + (b.type === 'pct' ? '%' : cur())
+          : '') + '</td>'
+      : '';
+    return '<tr' + (r.eligible ? (b.custom ? ' style="background:#eff6ff"' : '') : ' style="opacity:.55"') + '>' +
       '<td><b>' + esc(r.name) + '</b><br><small>' + esc(r.emp_code) + '</small></td>' +
       '<td class="num-col">' + money(r.wage) + '</td>' +
       '<td class="num-col">' + money(r.base) + '</td>' +
       '<td class="num-col">' + r.months + '</td>' +
-      '<td class="num-col">' + r.days + '</td>' +
+      '<td class="num-col">' + r.days + '</td>' + basisCell +
       '<td class="num-col"><b>' + (r.eligible ? money(r.amount) : '&mdash;') + '</b></td>' +
       '<td><small>' + esc(r.why || (r.eligible ? '' : 'not eligible')) + '</small></td></tr>';
   }).join('');
@@ -11192,8 +11440,10 @@ function saveBonus() {
     return {
       id: 'BON' + fy + '_' + r.emp_code, fy: fy, emp_code: r.emp_code, name: r.name,
       wage: r.wage, worked_on: r.base, months: r.months, days: r.days,
-      rate_pct: cfg.rate, amount: r.amount,
-      status: 'Finalised', note: '',
+      rate_pct: r.rate, amount: r.amount,
+      status: 'Finalised',
+      note: !r.basis || !r.basis.custom ? ''
+        : (r.basis.type === 'amt' ? 'flat amount' : 'individual rate ' + r.basis.value + '%'),
       generated_at: today(), generated_by: (S.user && S.user.email) || ''
     };
   });
@@ -11209,6 +11459,7 @@ function saveBonus() {
         closeModal();
         writeRows('Bonus', 'bonus', rows, 'bonus-save', function () {
           S.bonusDraft = null;
+          S.bonusEdit = {};
           toast('Bonus for ' + fy + ' written to the Bonus tab', 'good');
           renderBonus(); renderDashboard();
         });
@@ -11835,11 +12086,12 @@ function coLedger(code) {
     if (r.status === 'Pending') { pending += days; return; }
     if (r.status !== 'Approved') return;
     var age = Math.round((new Date(today()) - new Date(r.date)) / 86400000);
-    if (validity > 0 && age > validity && r.mode !== 'adjust' && r.mode !== 'payout') {
+    if (validity > 0 && age > validity && r.mode !== 'adjust' && r.mode !== 'payout' &&
+        r.mode !== 'arrear') {
       expired += days; return;
     }
     earned += days;
-    if (r.mode === 'payout') paid += days;
+    if (r.mode === 'payout' || r.mode === 'arrear') paid += days;
     else adjusted += days;
   });
   return { earned: earned, adjusted: adjusted, paid: paid, pending: pending, expired: expired };
@@ -11890,7 +12142,8 @@ function renderRequests() {
     if (requestEffect(r.type) === 'times') {
       detail = esc((hhmm(r.in_time) || '--') + ' to ' + (hhmm(r.out_time) || '--'));
     } else if (requestEffect(r.type) === 'comp_off') {
-      detail = r.mode === 'payout' ? '<span class="badge b-violet">pay out</span>'
+      detail = r.mode === 'arrear' ? '<span class="badge b-violet">paid as arrear</span>'
+        : r.mode === 'payout' ? '<span class="badge b-violet">pay out</span>'
         : 'adjust against ' + esc(r.adjust_date || '-');
     } else if (r.to_date && r.to_date !== r.date) {
       detail = esc(r.date + ' to ' + r.to_date);
