@@ -53,11 +53,14 @@ a printable book with a picture of every screen — handy for training a new joi
 | **Tasks** | The board. Everything, by status. |
 | **Priority** | One ranked list: what to do next, and why. |
 | **Projects** | Multi-stage work where each stage releases the next. |
-| **Team** | People, managers, leave, job categories. *(managers)* |
-| **Reports** | Scores, trends, accountability, appraisals. *(managers)* |
-| **Goals** | Purpose, values, year and quarter goals, key numbers. |
 | **Meetings** | The weekly review. |
-| **Board** | The leaderboard. |
+| **Goals** | Purpose, values, year and quarter goals, key numbers. |
+| **Leaderboard** | Top of the month to bottom. |
+| **Reports** | Scores, trends, accountability, appraisals. *(managers)* |
+| **Team** | People, managers, leave, job categories. *(managers)* |
+
+They run in the order you use them: today's work first, then the weekly
+meeting and the company's goals, then recognition, then the manager's tabs.
 
 ### The three roles
 
@@ -374,7 +377,7 @@ invisible.
 
 ## The leaderboard
 
-**Board** — top of the month to bottom, for a week, month, quarter or year.
+**Leaderboard** — top of the month to bottom, for a week, month, quarter or year.
 
 It ranks the same score your dashboard shows, so you cannot be first here and
 middling there. Three rules are built into the order:

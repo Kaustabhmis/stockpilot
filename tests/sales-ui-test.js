@@ -75,6 +75,11 @@ const STATE_TAB = (t) => t === 'team';
   ok('with a bar that says it is the demo', /Live demo/.test(await p.locator('#banner').textContent()) &&
      await p.locator('#banner button:has-text("free 14-day trial")').count() === 1);
   ok('and real work on the board', await p.locator('.card').count() > 3);
+  const ORDER = 'Tasks|Priority|Projects|Meetings|Goals|Leaderboard|Reports|Team';
+  ok('the tabs run in the order people use them: ' + ORDER.replace(/\|/g, ' · '),
+     (await p.locator('#navTabs button').allTextContents()).map((t) => t.trim()).join('|') === ORDER &&
+     (await p.locator('#navTabsMobile button').allTextContents()).map((t) => t.trim()).join('|') === ORDER,
+     (await p.locator('#navTabs button').allTextContents()).join('|'));
   if (SHOTS) await p.screenshot({ path: SHOTS + '/sales-02-demo.png' });
   const tries = await p.evaluate(async () => {
     const out = {};
