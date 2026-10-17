@@ -1117,6 +1117,12 @@ var HELP = {"sections":[{"id":"getting-started","title":"Getting started","html"
 'use strict';
 
 var API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';
+/* A site uploaded to Netlify by hand carries its address in domebox-config.js,
+   a small file edited in Notepad — no build step needed. */
+(function () {
+  var c = window.DOMEBOX_CONFIG, u = c && String(c.apiUrl || '').trim();
+  if (u && /^https:\/\/script\.google\.com\/.+\/exec$/.test(u)) API_URL = u;
+})();
 
 var $ = function (id) { return document.getElementById(id); };
 var esc = function (s) { return String(s == null ? '' : s)
@@ -5895,7 +5901,9 @@ setInterval(function () {
   /* Somebody following a reset link wants the form, not the sales page. */
   if (params.get('reset_token')) { goAuth('reset'); return; }
   if (API_URL.indexOf('PASTE_YOUR') === 0) {
-    toast('Set API_URL at the top of this file to your Apps Script /exec URL.', 'err');
+    /* Not connected yet: still show the home page, and say what is missing. */
+    showHome();
+    toast('This site is not connected yet: put your Apps Script /exec address into domebox-config.js.', 'err');
     return;
   }
   /* ?demo=owner|manager|staff — an ad, a guide page or a sales email can

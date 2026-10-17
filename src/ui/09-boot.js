@@ -143,7 +143,9 @@ setInterval(function () {
   /* Somebody following a reset link wants the form, not the sales page. */
   if (params.get('reset_token')) { goAuth('reset'); return; }
   if (API_URL.indexOf('PASTE_YOUR') === 0) {
-    toast('Set API_URL at the top of this file to your Apps Script /exec URL.', 'err');
+    /* Not connected yet: still show the home page, and say what is missing. */
+    showHome();
+    toast('This site is not connected yet: put your Apps Script /exec address into domebox-config.js.', 'err');
     return;
   }
   /* ?demo=owner|manager|staff — an ad, a guide page or a sales email can

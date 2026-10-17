@@ -5,7 +5,8 @@ Your one client signs up again on the new system, and you put them back on their
 with one line.
 
 You need: your Google account (the one that owns info@biscsindia.com), your Netlify login,
-and the files from **domebox-upload.zip → 1-apps-script**.
+and the files: **Code.gs**, **reminders.gs**, **backup.gs** and **domebox-netlify-website.zip**.
+No GitHub needed.
 
 Leave your **old** Apps Script and old sheets alone. They keep the current site running
 until step 6.
@@ -63,12 +64,25 @@ Use your **current** Razorpay live key here. Regenerate keys only after the swit
    missing under **WHAT IS LEFT**. Fix those, run it again until it says *Nothing*.
 4. Choose **createDemoAccount** → **▶ Run** (the website's live demo).
 
-## Step 6 — Point the website at it
+## Step 6 — Put the website on Netlify (drag and drop, no GitHub)
 
-1. Netlify → your site → **Site configuration** → **Environment variables** →
-   `API_URL` = the /exec URL from step 5.
-2. **Deploys** → **Trigger deploy**.
-3. Open www.domebox.in → **Start free trial** with a test email to check it works.
+1. Unzip **domebox-netlify-website.zip**. You get a folder **netlify-upload**.
+2. In that folder, open **domebox-config.js** in Notepad and fill in between the quotes:
+   - `apiUrl` → the **/exec** address from step 5
+   - your company details (address, phone, GSTIN, entity type, registration number,
+     grievance officer, city, state). They print on the Privacy, Terms, Refund and
+     Contact pages. Anything left blank shows on those pages as **[not set]**.
+   **Save.**
+3. Go to **app.netlify.com** → **Sites** → **Add new site** → **Deploy manually**.
+   Drag the whole **netlify-upload** folder onto the page.
+4. When it finishes, Netlify gives you a link ending **.netlify.app**. Open it, click
+   **See the live demo**, then **Start free trial** with a test email.
+5. To use **www.domebox.in**: Netlify → **Domain management** → **Add a domain**. (Remove
+   it from the old site first.)
+
+To change something later (for example a detail in domebox-config.js): edit the file,
+then Netlify → your site → **Deploys** → drag the folder onto **Drag and drop your site
+output folder here** again.
 
 ## Step 7 — Your client signs up again
 
@@ -91,5 +105,6 @@ Use your **current** Razorpay live key here. Regenerate keys only after the swit
 |---|---|
 | freshStart says **STOPPED** | This project already has sheets. It never replaces them. Use a new project. |
 | No emails at all | Gmail → Settings → Accounts → **Send mail as** → add and verify info@biscsindia.com, then run setupDomeBox. |
-| Website says it cannot reach the server | `API_URL` in Netlify is wrong, or you did not deploy as **Anyone**. |
+| Website says it is not connected | `apiUrl` in domebox-config.js is empty or wrong — it must be the address ending **/exec**. Fix it and drag the folder again. |
+| Login fails although the address is right | In Apps Script, the deployment must be **Who has access: Anyone**. |
 | Changed Code.gs later | **Deploy** → **Manage deployments** → ✏ → **New version** → **Deploy**. The URL stays the same. |
