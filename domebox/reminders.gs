@@ -25,7 +25,8 @@
  *                           exactly when the reminder mattered most.
  *
  * SETUP
- *   1. Set REG.SHEET_ID below (your registry spreadsheet).
+ *   1. Set REG.SHEET_ID below (your registry spreadsheet) — or nothing at all if the
+ *      project was set up with freshStart(), which saves it in Script Properties.
  *   2. Run previewDailyReminders() — sends nothing, logs exactly what would go out.
  *   3. Run installDomeBoxSchedules() once to create the daily triggers.
  *   4. Set DRY_RUN false when the preview looks right.
@@ -62,6 +63,18 @@ var SCHED = {
   RECURRING_CATCHUP_LIMIT: 12,  // matches domain.gs
   DIGEST_OWN_TASKS: false,      // own tasks now come from sendTaskReminders, three times a day
 };
+
+/* Read once per run. A project set up with freshStart() saves the Master
+   sheet's id and REMINDERS_LIVE in Script Properties, so this file can be
+   pasted in exactly as it is — no SHEET_ID to copy, no DRY_RUN to flip. A
+   value typed above still wins. */
+(function () {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    if (!REG.SHEET_ID) REG.SHEET_ID = props.getProperty('MASTER_DB_ID') || '';
+    if (props.getProperty('REMINDERS_LIVE') === 'yes') SCHED.DRY_RUN = false;
+  } catch (e) {}
+})();
 
 /* When open tasks are chased. Hours are the script's time zone — set it to
    (GMT+05:30) India Standard Time in Project Settings. Apps Script runs an

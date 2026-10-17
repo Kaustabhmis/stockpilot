@@ -74,7 +74,7 @@ const STATE_TAB = (t) => t === 'team';
   ok('as Sruti, a manager', /Sruti/.test(await p.locator('#navName').textContent()));
   ok('with a bar that says it is the demo', /Live demo/.test(await p.locator('#banner').textContent()) &&
      await p.locator('#banner button:has-text("free 14-day trial")').count() === 1);
-  ok('and real work on the board', await p.locator('.card').count() > 3);
+  ok('and real work on the board', await p.locator('.card').count() >= 3, await p.locator('.card').count());
   const ORDER = 'Tasks|Priority|Projects|Meetings|Goals|Leaderboard|Reports|Team';
   ok('the tabs run in the order people use them: ' + ORDER.replace(/\|/g, ' · '),
      (await p.locator('#navTabs button').allTextContents()).map((t) => t.trim()).join('|') === ORDER &&

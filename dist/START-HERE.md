@@ -5,13 +5,16 @@
 | `code.gs` | Into a **new** Apps Script project made at **script.google.com** — not inside your Master sheet, and not pasted over your old script. |
 | `index.html` | Nothing to do by hand. Netlify builds the website from the `netlify/` folder. |
 
-**How to deploy:** read **[`../DEPLOY-BOOK.pdf`](../DEPLOY-BOOK.pdf)** — simple words, a picture of every
+**Starting fresh (no customers to move)?** Read **[`../FRESH-START.md`](../FRESH-START.md)** —
+one function, `freshStart`, builds every sheet for you. Nothing to migrate.
+
+**Moving existing customers' data across:** read **[`../DEPLOY-BOOK.pdf`](../DEPLOY-BOOK.pdf)** — simple words, a picture of every
 screen. The same steps in text: [`../DEPLOY-SIMPLE.md`](../DEPLOY-SIMPLE.md).
 
 Your old script inside the Master sheet keeps running your live site until the switch in
 Part 2 of the book. Do not edit it.
 
-Tested: 1,937 checks across fifty suites — server rules and the
+Tested: 1,957 checks across fifty-one suites — server rules and the
 real page in a browser. See `tests/README.md`.
 
 ## Before you advertise the site

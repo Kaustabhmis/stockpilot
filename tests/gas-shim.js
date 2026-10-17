@@ -67,6 +67,8 @@ function makeSpreadsheet(id, name) {
     _id: id,
     getId: () => id, getName: () => name,
     getSheets: () => sheets.slice(),
+    getUrl: () => 'https://docs.google.com/spreadsheets/d/' + id + '/edit',
+    deleteSheet(sh) { const k = sheets.indexOf(sh); if (k > -1) sheets.splice(k, 1); },
     getSheetByName: n => sheets.find(s => s._name === n) || null,
     insertSheet(n) { const s = makeSheet(n); sheets.push(s); return s; },
     _clone(newId, newName) {
@@ -91,6 +93,14 @@ function build() {
       if (!FILES[id]) throw new Error('No item with the given ID could be found: ' + id);
       return FILES[id];
     },
+    /* A new spreadsheet comes with one empty tab, as in Sheets. */
+    create(name) {
+      const nid = 'SHEET_' + (++seq);
+      FILES[nid] = makeSpreadsheet(nid, name);
+      FILES[nid].insertSheet('Sheet1');
+      META[nid] = { sharing: 'PRIVATE' };
+      return FILES[nid];
+    },
   };
   G.DriveApp = {
     getFileById(id) {
@@ -108,6 +118,7 @@ function build() {
         },
         setSharing(a) { META[id] = { sharing: String(a) }; },
         getSharingAccess: () => (META[id] || {}).sharing || 'PRIVATE',
+        moveTo(folder) { if (folder && folder._ids && folder._ids.indexOf(id) < 0) folder._ids.push(id); return this; },
       };
     },
     /* Folders, enough for backup.gs: create, find by name or id, list files. */

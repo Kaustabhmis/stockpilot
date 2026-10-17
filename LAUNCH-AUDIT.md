@@ -266,6 +266,18 @@ Only the home page changed; the app keeps its own colours.
   (`trial-test`); the security headers allow the new pictures, the manual and the share
   image; no customer-visible "Dome Box" remains in any text, PDF or picture.
 
+### 4q. A fresh start instead of a migration
+
+With one existing client, who can sign up again, there is nothing worth migrating.
+`freshStart()` (in `src/19-fresh-start.gs`) builds the backend from an empty Apps Script
+project: a Domebox folder in Drive, the Master sheet with its registry tabs, the Template
+with every tab a company needs, and the ids and secret keys in Script Properties. It refuses
+to run where a working Master sheet already exists. `reminders.gs` now reads the Master id
+and a REMINDERS_LIVE switch from Script Properties, so it is pasted in unedited.
+`switchOnSchedules()` installs reminders, backups and the archive in one run, and
+`setCustomerPlan()` puts a returning customer back on their plan without a receipt or
+invoice. Guide: `FRESH-START.md`. Test: `fresh-start-test.js` (20).
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)
