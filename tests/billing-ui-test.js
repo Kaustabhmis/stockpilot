@@ -34,7 +34,14 @@ const post = (body) => new Promise((res, rej) => {
   await p.waitForTimeout(500);
   const plans = await p.locator('#modal').textContent();
   console.log('\n--- the plans screen says what will be charged ---');
-  ok('it warns that GST is added at checkout', /added at checkout/.test(plans));
+  /* The wording follows the same switch the checkout obeys. */
+  ok('not GST-registered: it says no GST is charged', /No GST is charged/.test(plans) && !/18%/.test(plans), plans.slice(0, 300));
+  await p.evaluate(() => closeModal());
+  await p.evaluate(() => fetch('/__gst?on=1'));
+  await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(1600);
+  await p.evaluate(() => openBilling()); await p.waitForTimeout(500);
+  ok('registered: it says 18% GST is added at checkout', /exclude 18% GST, which is added at checkout/.test(await p.locator('#modal').textContent()));
+  await p.evaluate(() => fetch('/__gst?on=0'));
   ok('it promises the invoice', /invoice is emailed/i.test(plans));
   ok('there is a way to the invoice list', await p.locator('#modal button:has-text("Invoices")').count() === 1);
   ok('and to the details behind it', await p.locator('#modal button:has-text("Invoice details")').count() === 1);

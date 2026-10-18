@@ -230,8 +230,8 @@ function openBilling() {
     '<div class="mt-5 flex flex-wrap gap-2">' +
       '<button class="btn btn-g" onclick="openInvoices()">Invoices</button>' +
       '<button class="btn btn-g" onclick="openBillingDetails()">Invoice details</button></div>' +
-    '<p class="text-xs text-gray-400 font-semibold mt-4">Prices exclude 18% GST, added at checkout. ' +
-    'A GST invoice is emailed the moment a payment goes through. ' +
+    '<p class="text-xs text-gray-400 font-semibold mt-4">' + gstSentence() + ' ' +
+    'An invoice is emailed the moment a payment goes through. ' +
       'Need a few more seats than a band allows? Extra seats are ' + inr(EXTRA_SEAT_PRICE) +
       ' per user a month — ' +
       '<button class="text-blue-600 font-black" onclick="openSupport(\'Extra seats\')">ask us</button>. ' +

@@ -648,8 +648,8 @@ Free limits.
 **Every paid plan carries the whole product.** You pay for the size of your
 team, not for features. Yearly is ten times monthly — two months free.
 
-Prices exclude 18% GST, which is added at checkout and shown before the payment
-sheet opens.
+If GST applies it is added at checkout and shown before the payment sheet opens;
+the Plans window says which, and the invoice shows the tax line.
 
 ### Invoices
 

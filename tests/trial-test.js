@@ -119,6 +119,15 @@ ok('an unknown view falls back to the owner', call({ action: 'openDemo', as: 'ro
   ok('or sends any email', env.mails.length === mails1);
 }
 
+console.log('\n=== what the website says about GST follows the checkout ===');
+let info = call({ action: 'getPublicInfo' });
+ok('not GST-registered: the site is told no GST is charged', info.status === 'success' && info.gstRegistered === false && info.gstRate === 0, JSON.stringify(info));
+env.props.SELLER_GSTIN = '19AABCB1234C1ZQ';
+info = call({ action: 'getPublicInfo' });
+ok('registered: the site is told 18% is added', info.gstRegistered === true && info.gstRate === 18, JSON.stringify(info));
+ok('and nothing private is in the answer', Object.keys(info).sort().join(',') === 'gstRate,gstRegistered,status', Object.keys(info).join(','));
+delete env.props.SELLER_GSTIN;
+
 console.log('\n=== the call-back form ===');
 const cb0 = env.mails.length;
 const cb = call({ action: 'contactSales', form: { kind: 'callback', name: 'Asha', companyName: 'Asha Traders', phone: '98300 11111', size: '30', when: 'Morning' } });

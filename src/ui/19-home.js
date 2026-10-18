@@ -107,7 +107,7 @@ function roiCalc() {
         : '<div class="roi-row" style="border:0"><span>For more than 150 people</span><b>Talk to us</b></div>') +
     '</div>' +
     '<p class="fine text-[12px] font-semibold mt-3 leading-relaxed">An estimate from your own figures: ' +
-      DAYS + ' working days of ' + HOURS + ' hours, plan price billed yearly, before GST. It counts only the ' +
+      DAYS + ' working days of ' + HOURS + ' hours, plan price billed yearly, before any tax. It counts only the ' +
       'chasing — not late deliveries, rework or appraisal time.</p>' +
     '<button class="btn btn-gold w-full mt-4" onclick="goAuth(\'signup\')">Start your free 14-day trial</button>';
 }
@@ -131,7 +131,25 @@ function sendCallback(e) {
   return false;
 }
 
+/* Tax wording, from the server: the same switch the checkout and the invoice
+   obey. Until it answers, nothing is claimed either way. */
+var PUBLIC_INFO = null;
+function gstSentence() {
+  if (!PUBLIC_INFO) return 'Any tax is shown before you pay.';
+  return PUBLIC_INFO.gstRegistered
+    ? 'Prices exclude ' + PUBLIC_INFO.gstRate + '% GST, which is added at checkout and shown before you pay.'
+    : 'No GST is charged — the price you see is the price you pay.';
+}
+function loadPublicInfo() {
+  if (PUBLIC_INFO || API_URL.indexOf('PASTE_YOUR') === 0) return;
+  api('getPublicInfo').then(function (r) {
+    PUBLIC_INFO = { gstRegistered: !!r.gstRegistered, gstRate: Number(r.gstRate) || 0 };
+    if ($('gstNote')) $('gstNote').textContent = gstSentence();
+  }).catch(function () {});
+}
+
 function initHome() {
   renderTour('board');
   roiCalc();
+  loadPublicInfo();
 }

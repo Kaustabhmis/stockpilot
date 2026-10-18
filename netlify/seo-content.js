@@ -27,7 +27,7 @@ module.exports = (C) => {
       ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
       ['Is there a free plan?', 'Yes. Up to 5 users and 100 tasks a month, with no card and no time limit. It includes the board, approvals and reminders. A trial that ends without a plan moves here — nothing is deleted.'],
       ['What is not included in the paid plans?', 'Nothing. Every paid plan carries the whole product — scoring, reports, KRA/KPI, appraisals, projects and WhatsApp alerts. You pay for the size of your team, not for features.'],
-      ['Is GST included?', 'No. All prices are exclusive of 18% GST. A GST invoice is issued for every payment so you can claim input credit.'],
+      ['Is GST extra?', 'If GST applies, it is added at checkout and shown before you pay, and the invoice shows it so a registered business can claim input credit. Every payment gets an invoice.'],
       ['What happens when my plan expires?', 'Your workspace stays fully usable for a week. After that it becomes read-only — nothing is ever deleted, and everything comes back the moment you renew.'],
       ['Can I pay monthly?', 'Yes. Yearly is ten times the monthly price, so two months are free if you pay for the year.'],
     ],
@@ -45,7 +45,7 @@ size of your team, and the price per person falls as you grow.</p>
 <tr><td><strong>Enterprise</strong></td><td>150+</td><td colspan="3">Custom — write to us</td></tr>
 </tbody></table>
 
-<p>Prices are in INR and exclude 18% GST. Yearly is exactly ten times monthly,
+<p>Prices are in INR. Any GST that applies is added at checkout and shown before you pay. Yearly is exactly ten times monthly,
 so paying for the year gives you two months free. Need a handful more seats than
 a band allows? Extra seats are ₹149 per user a month — ask us.</p>
 

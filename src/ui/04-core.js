@@ -262,6 +262,7 @@ function enterApp() {
   $('navName').textContent = STATE.user.name;
   $('navRole').textContent = STATE.user.role;
   $('navCompany').textContent = STATE.company;
+  if (typeof loadPublicInfo === 'function') loadPublicInfo();
   refresh();
   loadDirection().then(function () { if (STATE.data) { syncFilters(); if (STATE.tab === 'tasks') renderTasks(); } });
 }

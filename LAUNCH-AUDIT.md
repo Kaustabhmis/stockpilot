@@ -278,6 +278,21 @@ and a REMINDERS_LIVE switch from Script Properties, so it is pasted in unedited.
 `setCustomerPlan()` puts a returning customer back on their plan without a receipt or
 invoice. Guide: `FRESH-START.md`. Test: `fresh-start-test.js` (20).
 
+### 4r. Final audit: the tax on the price tag matched the tax at checkout only by luck
+
+The home page, the Plans window, the manual and the pricing page all said "prices exclude
+18% GST". The checkout and the invoice add GST only when SELLER_GSTIN is set. Unregistered,
+a customer was told one price, charged another, and got an invoice without the GST they had
+been promised. The wording now comes from the same switch: a public `getPublicInfo` route
+returns whether GST applies and at what rate (nothing else), and the home page and Plans
+window say either "Prices exclude 18% GST, added at checkout" or "No GST is charged — the
+price you see is the price you pay". Static text (manual, pricing page) uses wording true
+either way. Tested both ways (`trial-test`, `billing-ui-test`, `ui-test`, `sales-ui-test`).
+
+Also checked: no keys or secrets anywhere in the source or the upload package; `Code.gs`
+carries every source file verbatim; the only "Dome Box" left is the backup code that finds
+the old folder; the drag-and-drop site loads its config before anything else.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

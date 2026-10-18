@@ -96,6 +96,13 @@ const server = http.createServer((req, res) => {
     const done = env.endTrial(q.get('email'));
     res.writeHead(200, {'Content-Type':'application/json'}); res.end(JSON.stringify({ ok: done })); return;
   }
+  /* HARNESS ONLY — switch GST registration on (?on=1) or off, as the
+     SELLER_GSTIN Script Property does in production. */
+  if (req.url.startsWith('/__gst')) {
+    const on = new URL('http://x' + req.url).searchParams.get('on') === '1';
+    if (on) env.props.SELLER_GSTIN = '19AABCB1234C1ZQ'; else delete env.props.SELLER_GSTIN;
+    res.writeHead(200, {'Content-Type':'application/json'}); res.end(JSON.stringify({ ok: true, on })); return;
+  }
   if (req.url.startsWith('/__setplan')) {
     const q = new URL('http://x' + req.url).searchParams;
     const dir = env.FILES.MASTER.getSheetByName('Directory');

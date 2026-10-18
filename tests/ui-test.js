@@ -30,7 +30,8 @@ const { chromium } = require('playwright');
   ok('yearly is shown first, because it is the better deal',
      /Yearly — 2 months free/.test(await p.locator('#homeCycle').textContent()));
   ok('and the GST position is stated rather than left to be discovered',
-     /exclusive of 18% GST/.test(await p.locator('#pricing').textContent()));
+     /No GST is charged — the price you see is the price you pay/.test(await p.locator('#pricing').textContent()),
+     await p.locator('#gstNote').textContent());
   ok('the scoring argument is made', /how well you delivered × how much you delivered/
      .test(await p.locator('#view-home').textContent()));
 

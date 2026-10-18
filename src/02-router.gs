@@ -50,7 +50,7 @@ function json_(o) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo'];
+var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo','getPublicInfo'];
 
 /* The only routes a view-only (demo) session may call. An allow-list, not a
    block-list: a write route added later is closed to demo visitors by default. */
@@ -65,6 +65,11 @@ function route_(p) {
   if (PUBLIC_ACTIONS.indexOf(action) > -1) {
     switch (action) {
       case 'ping':           return { status: 'success', time: new Date().toISOString() };
+      /* What the website should say about tax: the same switch the checkout
+         and the invoice obey, so the page can never promise one price and
+         charge another. Nothing private — a rate and a yes or no. */
+      case 'getPublicInfo':  var si = sellerIdentity_();
+                             return { status: 'success', gstRegistered: si.registered, gstRate: si.rate };
       case 'register':
         throttle_('reg', (p.form && p.form.email) || '', PUBLIC_LIMITS.register);
         return registerCompany_(p.form);

@@ -57,6 +57,8 @@ const STATE_TAB = (t) => t === 'team';
   await p.fill('#roiPeople', '25'); await p.dispatchEvent('#roiPeople', 'input');
 
   console.log('\n=== pricing ===');
+  ok('the pricing note says what checkout will actually charge (not registered here: no GST)',
+     /No GST is charged/.test(await p.locator('#gstNote').textContent()), await p.locator('#gstNote').textContent());
   const cards = await p.locator('#homePlans button').allTextContents();
   ok('paid plans start a free trial; Enterprise talks to us', cards.filter((c) => /Start free trial/.test(c)).length === 3 &&
      cards.some((c) => /Talk to us/.test(c)), cards.join(' | '));
