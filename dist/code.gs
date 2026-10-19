@@ -655,6 +655,10 @@ function registerCompany_locked_(form) {
     }
   }
 
+  /* The password is hashed before anything is created, so a failure here can
+     never leave an orphaned copy of the template behind in Drive. */
+  var hash = makePasswordHash(String(form.password));
+
   var newId;
   try {
     var file = DriveApp.getFileById(c.templateId).makeCopy(company + ' — Domebox Data');
@@ -671,7 +675,6 @@ function registerCompany_locked_(form) {
   var ss = SpreadsheetApp.openById(newId);
   ensureTenantTabs_(ss);
 
-  var hash = makePasswordHash(String(form.password));
   var username = String(form.username || email.split('@')[0]).trim();
   var row = blankUserRow_();
   row[U['Name']] = String(form.name || company).trim();
@@ -6634,8 +6637,11 @@ function hashPassword_(password, salt) {
   var pepper = authPepper_();
   var acc = String(salt) + ':' + String(password) + ':' + pepper;
   var bytes = Utilities.computeHmacSha256Signature(acc, pepper);
+  /* Apps Script takes (String, String) or (Byte[], Byte[]) — never one of
+     each. From the second round the value is bytes, so the key must be too. */
+  var key = Utilities.newBlob(pepper).getBytes();
   for (var i = 1; i < AUTH.ITERATIONS; i++) {
-    bytes = Utilities.computeHmacSha256Signature(bytes, pepper);
+    bytes = Utilities.computeHmacSha256Signature(bytes, key);
   }
   return 'v1$' + AUTH.ITERATIONS + '$' + salt + '$' + toHex_(bytes);
 }

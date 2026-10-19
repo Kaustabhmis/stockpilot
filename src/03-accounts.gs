@@ -27,6 +27,10 @@ function registerCompany_locked_(form) {
     }
   }
 
+  /* The password is hashed before anything is created, so a failure here can
+     never leave an orphaned copy of the template behind in Drive. */
+  var hash = makePasswordHash(String(form.password));
+
   var newId;
   try {
     var file = DriveApp.getFileById(c.templateId).makeCopy(company + ' — Domebox Data');
@@ -43,7 +47,6 @@ function registerCompany_locked_(form) {
   var ss = SpreadsheetApp.openById(newId);
   ensureTenantTabs_(ss);
 
-  var hash = makePasswordHash(String(form.password));
   var username = String(form.username || email.split('@')[0]).trim();
   var row = blankUserRow_();
   row[U['Name']] = String(form.name || company).trim();

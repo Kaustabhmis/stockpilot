@@ -311,6 +311,21 @@ the old folder; the drag-and-drop site loads its config before anything else.
 - Tests: `payment-reconcile-test.js` (15), and `invoice-test.js` now drives the real, unsigned
   webhook path.
 
+### 4t. Found on the first real run: no password could ever be set
+
+`createDemoAccount` failed in Apps Script with "The parameters (number[],String) don't match
+the method signature for Utilities.computeHmacSha256Signature". Password hashing ran 1,000
+rounds of HMAC; from the second round it passed the previous result (bytes) with the pepper
+(text), and Apps Script accepts only text-with-text or bytes-with-bytes. Every signup,
+password change and reset would have failed. The key is now converted to bytes once.
+
+Why no test caught it: the three test stand-ins for Apps Script (`gas-shim.js`, and the
+private ones in `auth-test.js` and `pay-test.js`) accepted mixed arguments. All three now
+reject them exactly as Apps Script does, with the same message.
+
+Also: signup now hashes the password before copying the template, so a failure can no
+longer leave an orphaned spreadsheet in Drive.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

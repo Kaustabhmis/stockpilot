@@ -10,13 +10,20 @@ const sandbox = {
     get: k => cache[k] ?? null, put: (k,v) => cache[k]=v, remove: k => delete cache[k] }) },
   Utilities: {
     getUuid: () => crypto.randomUUID(),
+    /* As strict as Apps Script: (String, String) or (Byte[], Byte[]). */
     computeHmacSha256Signature: (data, key) => {
-      const d = Buffer.isBuffer(data) ? data : (Array.isArray(data) ? Buffer.from(data) : Buffer.from(String(data),'utf8'));
-      return [...crypto.createHmac('sha256', String(key)).update(d).digest()].map(b => b > 127 ? b - 256 : b);
+      const kind = (v) => Array.isArray(v) ? 'number[]' : 'String';
+      if (kind(data) !== kind(key)) throw new Error('The parameters (' + kind(data) + ',' + kind(key) +
+        ") don't match the method signature for Utilities.computeHmacSha256Signature.");
+      const bytes = (v) => Array.isArray(v) ? Buffer.from(v.map(x => x < 0 ? x + 256 : x)) : Buffer.from(String(v), 'utf8');
+      return [...crypto.createHmac('sha256', bytes(key)).update(bytes(data)).digest()].map(b => b > 127 ? b - 256 : b);
     },
     base64EncodeWebSafe: s => Buffer.from(String(s),'utf8').toString('base64url'),
     base64DecodeWebSafe: s => [...Buffer.from(String(s),'base64url')],
-    newBlob: b => ({ getDataAsString: () => Buffer.from(b.map(x=>x<0?x+256:x)).toString('utf8') }),
+    newBlob: b => {
+      const buf = Array.isArray(b) ? Buffer.from(b.map(x => x < 0 ? x + 256 : x)) : Buffer.from(String(b), 'utf8');
+      return { getDataAsString: () => buf.toString('utf8'), getBytes: () => [...buf].map(x => x > 127 ? x - 256 : x) };
+    },
   },
   Logger: { log: () => {} },
   SHARE: { MASTER_DB_ID: '' },

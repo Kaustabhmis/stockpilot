@@ -81,8 +81,11 @@ function hashPassword_(password, salt) {
   var pepper = authPepper_();
   var acc = String(salt) + ':' + String(password) + ':' + pepper;
   var bytes = Utilities.computeHmacSha256Signature(acc, pepper);
+  /* Apps Script takes (String, String) or (Byte[], Byte[]) — never one of
+     each. From the second round the value is bytes, so the key must be too. */
+  var key = Utilities.newBlob(pepper).getBytes();
   for (var i = 1; i < AUTH.ITERATIONS; i++) {
-    bytes = Utilities.computeHmacSha256Signature(bytes, pepper);
+    bytes = Utilities.computeHmacSha256Signature(bytes, key);
   }
   return 'v1$' + AUTH.ITERATIONS + '$' + salt + '$' + toHex_(bytes);
 }

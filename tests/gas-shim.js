@@ -167,17 +167,26 @@ function build() {
   })};
   G.Utilities = {
     getUuid: () => crypto.randomUUID(),
+    /* As strict as Apps Script: (String, String) or (Byte[], Byte[]) — never
+       one of each. Lenient here, a mixed call passed every test and failed on
+       the first real signup. */
     computeHmacSha256Signature(data, key) {
-      const d = Buffer.isBuffer(data) ? data
-        : Array.isArray(data) ? Buffer.from(data.map(x => x < 0 ? x + 256 : x))
-        : Buffer.from(String(data), 'utf8');
-      return [...crypto.createHmac('sha256', String(key)).update(d).digest()].map(b => b > 127 ? b - 256 : b);
+      const kind = (v) => Array.isArray(v) ? 'number[]' : 'String';
+      if (kind(data) !== kind(key)) {
+        throw new Error('Exception: The parameters (' + kind(data) + ',' + kind(key) +
+          ") don't match the method signature for Utilities.computeHmacSha256Signature.");
+      }
+      const bytes = (v) => Array.isArray(v) ? Buffer.from(v.map(x => x < 0 ? x + 256 : x)) : Buffer.from(String(v), 'utf8');
+      return [...crypto.createHmac('sha256', bytes(key)).update(bytes(data)).digest()].map(b => b > 127 ? b - 256 : b);
     },
     computeDigest: (alg, s) => [...crypto.createHash('sha256').update(String(s)).digest()].map(b => b > 127 ? b - 256 : b),
     base64Encode: s => Buffer.from(String(s), 'utf8').toString('base64'),
     base64EncodeWebSafe: s => Buffer.from(String(s), 'utf8').toString('base64url'),
     base64DecodeWebSafe: s => [...Buffer.from(String(s), 'base64url')],
-    newBlob: b => ({ getDataAsString: () => Buffer.from(b.map(x => x < 0 ? x + 256 : x)).toString('utf8') }),
+    newBlob: b => {
+      const buf = Array.isArray(b) ? Buffer.from(b.map(x => x < 0 ? x + 256 : x)) : Buffer.from(String(b), 'utf8');
+      return { getDataAsString: () => buf.toString('utf8'), getBytes: () => [...buf].map(x => x > 127 ? x - 256 : x) };
+    },
     formatDate: (d, tz, fmt) => new Date(d).toISOString(),
     DigestAlgorithm: { SHA_256: 'SHA_256' },
   };

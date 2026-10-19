@@ -3,7 +3,11 @@ const props={RAZORPAY_KEY_ID:'rzp_test_abc',RAZORPAY_KEY_SECRET:'testsecret123'}
 const sandbox={
   PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]||null})},
   Utilities:{
-    computeHmacSha256Signature:(d,k)=>[...crypto.createHmac('sha256',String(k)).update(String(d)).digest()].map(b=>b>127?b-256:b),
+    /* As strict as Apps Script: (String, String) or (Byte[], Byte[]). */
+    computeHmacSha256Signature:(d,k)=>{
+      if (Array.isArray(d) !== Array.isArray(k)) throw new Error("The parameters don't match the method signature for Utilities.computeHmacSha256Signature.");
+      const by=(v)=>Array.isArray(v)?Buffer.from(v.map(x=>x<0?x+256:x)):Buffer.from(String(v),'utf8');
+      return [...crypto.createHmac('sha256',by(k)).update(by(d)).digest()].map(b=>b>127?b-256:b); },
     base64Encode:s=>Buffer.from(String(s)).toString('base64')},
   UrlFetchApp:{fetch:()=>({getResponseCode:()=>200,getContentText:()=>'{}'})},
   SpreadsheetApp:{openById:()=>({getSheetByName:()=>null,insertSheet:()=>({appendRow:()=>{},setFrozenRows:()=>{}})})},
