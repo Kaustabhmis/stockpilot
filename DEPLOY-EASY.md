@@ -145,6 +145,8 @@ Add to Script Properties:
 | `RAZORPAY_KEY_SECRET` | your new Key Secret |
 | `RAZORPAY_WEBHOOK_SECRET` | make up a long password, e.g. `dbx-7Hq2…` — keep it |
 
+> **Not needed any more — skip the webhook.** Google Apps Script cannot check Razorpay's webhook signature, and Razorpay counts its replies as failures. Instead `switchOnSchedules` installs a payment check that asks Razorpay every 15 minutes and upgrades any company whose payment the page missed. Leave `RAZORPAY_WEBHOOK_SECRET` out.
+
 Then Razorpay Dashboard → **Settings → Webhooks → Add New Webhook**:
 - Webhook URL: **your API URL from step 6**
 - Secret: **the same password** you just made up

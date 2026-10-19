@@ -209,6 +209,8 @@ reminders and makes repeating tasks.
 1. Razorpay Dashboard → switch **Live Mode → Test Mode** (top of the screen).
 2. **Account & Settings** → **API Keys** → **Generate Test Key**. Copy the test
    **Key ID** (`rzp_test_…`) and **Key Secret**.
+> **Not needed any more — skip the webhook.** Google Apps Script cannot check Razorpay's webhook signature, and Razorpay counts its replies as failures. Instead `switchOnSchedules` installs a payment check that asks Razorpay every 15 minutes and upgrades any company whose payment the page missed. Leave `RAZORPAY_WEBHOOK_SECRET` out.
+
 3. Make up a long password, e.g. `dbx-Hq27-Kolkata-91`. Notepad: `Webhook secret = `
 4. Script → **⚙ Project Settings** → Script Properties → add:
 

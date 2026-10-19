@@ -108,6 +108,11 @@ function switchOnSchedules() {
   }
   installTaskArchiveSchedule();
   out.push('  ok      year-old work moves to the archive on the 1st of each month');
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'reconcilePayments') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
+  out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
   return say_(out);
 }
 

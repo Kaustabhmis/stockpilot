@@ -294,6 +294,9 @@ The safe order:
 
 ### 3.3 The webhook — the one people skip
 
+> **Not needed any more — skip the webhook.** Google Apps Script cannot check Razorpay's webhook signature, and Razorpay counts its replies as failures. Instead `switchOnSchedules` installs a payment check that asks Razorpay every 15 minutes and upgrades any company whose payment the page missed. Leave `RAZORPAY_WEBHOOK_SECRET` out.
+
+
 The browser confirms its own payment, and that path is sound: the signature is
 verified, then Razorpay's API is asked again whether the payment really
 captured, and only then is the plan granted.
@@ -530,7 +533,7 @@ Drive's bin for thirty days.
 ## Part 7 — the things only you can do
 
 - [ ] Rotate the Razorpay and Gemini keys from the old live source *(3.1)*
-- [ ] Set `RAZORPAY_WEBHOOK_SECRET` *(3.3)*
+- [ ] Run `switchOnSchedules` (it includes the 15-minute payment check) *(3.3)*
 - [ ] Verify `info@biscsindia.com` as a send-as alias *(1.5)*
 - [ ] Add `reminders.gs`, set `DRY_RUN = false`, run `installDomeBoxSchedules()` *(2.4)*
 - [ ] Fill the eight fields in `netlify/site-config.json` *(4.1)*
@@ -553,7 +556,7 @@ Drive's bin for thirty days.
 | Nobody can sign in on the live site | `API_URL` is wrong, or you saved the code without **Deploy → New version** |
 | No email is arriving at all | The send-as alias is not verified *(1.5)*, or the daily quota is spent *(2.5)* |
 | Nothing is being chased | `reminders.gs` not added, `DRY_RUN` still `true`, or `installDomeBoxSchedules()` never run *(Part 2)* |
-| A customer paid but is still on Free | `RAZORPAY_WEBHOOK_SECRET` is not set *(3.3)* |
+| A customer paid but is still on Free | Wait 15 minutes for the payment check, or run `reconcilePayments` by hand; if it never runs, run `switchOnSchedules` *(3.3)* |
 | The footer links 404 | The eight legal fields are blank *(4.1)* |
 | An invoice has no GST on it | `SELLER_GSTIN` is not set — correct until you are registered *(3.4)* |
 | The Netlify build fails | Read the log; it names the one thing that is missing |

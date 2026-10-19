@@ -227,6 +227,7 @@ function build() {
     newTrigger: (fn) => ({ timeBased: () => ({
       atHour: (h) => ({ everyDays: () => ({ create() { triggers.push(fn); triggerHours.push([fn, h]); } }) }),
       onMonthDay: (d) => ({ atHour: (h) => ({ create() { triggers.push(fn); triggerHours.push([fn, h, d]); } }) }),
+      everyMinutes: (m) => ({ create() { triggers.push(fn); triggerHours.push([fn, 'every', m]); } }),
     }) }),
     deleteTrigger(t) {
       const i = triggers.indexOf(t.getHandlerFunction());

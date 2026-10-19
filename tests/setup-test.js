@@ -162,11 +162,14 @@ console.log('\n=== payments ===');
 const keysNoHook = project({ MASTER_DB_ID: 'MASTER', RAZORPAY_KEY_ID: 'rzp_live_x',
   RAZORPAY_KEY_SECRET: 'secret' }, (env) => env.newFile('MASTER', 'R'));
 const r10 = keysNoHook.run();
-/* Live keys with no webhook secret is the state that costs money quietly. */
-ok('selling online without the webhook secret is a WARNING',
-   /WARNING online payment is live but RAZORPAY_WEBHOOK_SECRET is not set/.test(r10));
+/* Live keys with the payment check not switched on is the state that costs
+   money quietly: a customer who closes the tab mid-payment stays on Free. (A
+   webhook is no longer the answer — Apps Script cannot read its signature.) */
+ok('selling online without the payment check is a WARNING',
+   /WARNING online payment is set up but the payment check is not switched on/.test(r10), r10.slice(0, 400));
 ok('it says exactly what goes wrong', /charged and stays/.test(r10));
-ok('and it is in the list of what is left', /RAZORPAY_WEBHOOK_SECRET, or a customer/.test(r10));
+ok('and it is in the list of what is left', /Run switchOnSchedules, so a customer who closes the tab/.test(r10));
+ok('and it never asks for a webhook secret', !/RAZORPAY_WEBHOOK_SECRET/.test(r10));
 ok('missing Razorpay keys do not block setup, because not everyone sells online yet',
    !/1\. Set RAZORPAY_KEY_ID/.test(r5));
 
@@ -186,13 +189,13 @@ ok('and the next invoice number is shown before the first sale',
 console.log('\n=== a fully configured project says there is nothing left ===');
 const done = project({ MASTER_DB_ID: 'MASTER', TEMPLATE_ID: 'TEMPLATE',
   RAZORPAY_KEY_ID: 'rzp_live_x', RAZORPAY_KEY_SECRET: 'secret',
-  RAZORPAY_WEBHOOK_SECRET: 'hook', SELLER_ADDRESS: '7 Camac Street',
+  SELLER_ADDRESS: '7 Camac Street',
   SELLER_STATE: 'West Bengal' }, (env) => {
   env.newFile('MASTER', 'R');
   const t = env.newFile('TEMPLATE', 'T');
   ['Users', 'Tasks', 'Settings'].forEach((n) => t.insertSheet(n));
-  ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders', 'sendTaskReminders', 'sendTaskReminders']
-    .forEach((f) => env.triggers.push(f));
+  ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders', 'sendTaskReminders', 'sendTaskReminders',
+   'reconcilePayments'].forEach((f) => env.triggers.push(f));
   env.setExecUrl(EXEC);
 });
 const r12 = done.run();

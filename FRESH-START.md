@@ -48,10 +48,12 @@ Do not change anything inside them.
 | `SELLER_GSTIN` | only if registered for GST |
 | `RAZORPAY_KEY_ID` | your Razorpay key id |
 | `RAZORPAY_KEY_SECRET` | your Razorpay key secret |
-| `RAZORPAY_WEBHOOK_SECRET` | the secret you type when adding the webhook in Razorpay |
 
 The ones freshStart made (`MASTER_DB_ID`, `TEMPLATE_ID`, `AUTH_PEPPER`, `TOKEN_SECRET`,
 `REMINDERS_LIVE`) are already there. **Copy `AUTH_PEPPER` somewhere safe.**
+
+**No Razorpay webhook is needed.** Every 15 minutes the script asks Razorpay for recent
+payments and upgrades any company whose payment the page missed (switched on in step 5).
 
 Use your **current** Razorpay live key here. Regenerate keys only after the switch in step 6.
 

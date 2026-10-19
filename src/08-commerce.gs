@@ -124,6 +124,14 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
   var d = dir.getDataRange().getValues();
   for (var i = 1; i < d.length; i++) {
     if (String(d[i][5]).trim() !== String(sheetId).trim()) continue;
+    /* One payment, one term. The browser, the webhook and the reconciler can
+       all report the same payment; only the first one extends the plan and
+       sends a receipt. The invoice ledger is the record of what was granted. */
+    if (paid && paid.id && invoiceForPayment_(paid.id)) {
+      var had = d[i][4] instanceof Date ? ymd(d[i][4]) : String(d[i][4]);
+      logPayment_('ALREADY_GRANTED', sheetId, paid.id);
+      return had;
+    }
     var cur = new Date(d[i][4]);
     var base = (!isNaN(cur) && cur > new Date()) ? cur : new Date();
     /* The term comes from the plan, not from its name. Keying it off the word
@@ -507,22 +515,86 @@ function contactSupport_(ctx, form) {
   return { status: 'success', message: 'Sent. We reply within one working day.' };
 }
 
+/** A payment as Razorpay itself reports it, or null. */
+function fetchRazorpayPayment_(paymentId) {
+  var c = CFG();
+  if (!c.razorKey || !c.razorSecret) return null;
+  try {
+    var r = UrlFetchApp.fetch('https://api.razorpay.com/v1/payments/' + encodeURIComponent(paymentId), {
+      headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.razorKey + ':' + c.razorSecret) },
+      muteHttpExceptions: true });
+    return r.getResponseCode() === 200 ? JSON.parse(r.getContentText()) : null;
+  } catch (e) { logError_('razorpay:fetch', e.message); return null; }
+}
+
+/**
+ * Grants the plan a captured Domebox payment paid for. Safe to call any number
+ * of times for the same payment: grantPlan_ grants it once.
+ * Returns the plan granted, or '' when the payment is not ours or not paid.
+ */
+function grantFromPayment_(paid, via) {
+  if (!paid || paid.status !== 'captured') return '';
+  var notes = paid.notes || {};
+  if (!notes.sheetId) return '';                       // not a Domebox order (another site on this account)
+  if (!registryRow_(notes.sheetId)) return '';         // a company that is not in this registry
+  var plan = notes.plan || planForPaise_(paid.amount);
+  if (!plan || !PLANS[normalizePlan(plan)]) {
+    logPayment_('UNKNOWN_AMOUNT', notes.sheetId, paid.id + ' ' + paid.amount + ' paise');
+    return '';
+  }
+  var already = invoiceForPayment_(paid.id);
+  var until = grantPlan_(notes.sheetId, plan, paid, notes.company);
+  if (!already) logPayment_((via || 'GRANTED') + '_GRANTED', notes.sheetId, plan + ' until ' + until + ' via ' + paid.id);
+  return already ? '' : plan;
+}
+
+/**
+ * The safety net under online payment. Every 15 minutes, ask Razorpay for the
+ * last three days of captured payments and grant any Domebox payment that has
+ * not been granted yet — the customer who paid and closed the tab before the
+ * page could report it. No webhook is needed: Apps Script answers webhooks
+ * with a redirect, which Razorpay records as a failed delivery and eventually
+ * switches off, so polling is the reliable way round.
+ * Installed by switchOnSchedules().
+ */
+function reconcilePayments() {
+  var c = CFG(), out = ['', '=== PAYMENT CHECK ==='];
+  if (!c.razorKey || !c.razorSecret) { out.push('  Razorpay keys are not set — nothing to check.'); return say_(out); }
+  var from = Math.floor(Date.now() / 1000) - 3 * 86400, skip = 0, seen = 0, granted = 0;
+  for (var page = 0; page < 10; page++) {
+    var r;
+    try {
+      r = UrlFetchApp.fetch('https://api.razorpay.com/v1/payments?from=' + from + '&count=100&skip=' + skip, {
+        headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.razorKey + ':' + c.razorSecret) },
+        muteHttpExceptions: true });
+    } catch (e) { out.push('  Could not reach Razorpay: ' + e.message); break; }
+    if (r.getResponseCode() !== 200) { out.push('  Razorpay answered ' + r.getResponseCode() + ' — check the keys.'); break; }
+    var items = (JSON.parse(r.getContentText()).items) || [];
+    items.forEach(function (p) {
+      seen++;
+      try { if (grantFromPayment_(p, 'RECONCILED')) { granted++; out.push('  granted ' + p.id + ' for ' + (p.notes && p.notes.company || p.notes.sheetId)); } }
+      catch (e) { logError_('reconcile:' + p.id, e.message); }
+    });
+    if (items.length < 100) break;
+    skip += 100;
+  }
+  out.push('  Checked ' + seen + ' payment(s) from the last 3 days; granted ' + granted + ' that had been missed.');
+  return say_(out);
+}
+
 function handleRazorpayWebhook_(e, body) {
   /* The browser handler is not a source of truth: a customer who closes the tab
      mid-payment is charged and stays on Free. This fires from Razorpay. */
   try {
-    var secret = PropertiesService.getScriptProperties().getProperty('RAZORPAY_WEBHOOK_SECRET');
-    if (!secret) return json_({ status: 'ignored' });
-    var raw = e.postData.contents;
-    var sig = (e.parameter && e.parameter['x-razorpay-signature']) || '';
-    var expected = hex_(Utilities.computeHmacSha256Signature(raw, secret));
-    if (!eqConst_(expected, sig)) { logPayment_('WEBHOOK_REJECTED', '', 'bad signature'); return json_({ status: 'ignored' }); }
-
+    /* Apps Script cannot read request headers, so Razorpay's signature header
+       never arrives and cannot be checked. The body is therefore trusted for
+       one thing only — which payment to look at. Everything that decides a
+       grant (captured? how much? for whom?) is fetched from Razorpay itself
+       with our own key, so a forged webhook cannot grant anything. */
     var ent = ((body.payload || {}).payment || {}).entity || {};
-    if (body.event === 'payment.captured' && ent.notes && ent.notes.sheetId) {
-      var plan = ent.notes.plan || planForPaise_(ent.amount);
-      if (plan) { grantPlan_(ent.notes.sheetId, plan, ent, ent.notes.company);
-                  logPayment_('WEBHOOK_GRANTED', ent.notes.sheetId, plan); }
+    if ((body.event === 'payment.captured' || body.event === 'order.paid') && /^pay_[A-Za-z0-9_]+$/.test(String(ent.id || ''))) {
+      var real = fetchRazorpayPayment_(ent.id);
+      if (real) grantFromPayment_(real, 'WEBHOOK');
     }
   } catch (err) { logError_('webhook', err.message); }
   return json_({ status: 'ok' });

@@ -293,6 +293,24 @@ Also checked: no keys or secrets anywhere in the source or the upload package; `
 carries every source file verbatim; the only "Dome Box" left is the backup code that finds
 the old folder; the drag-and-drop site loads its config before anything else.
 
+### 4s. The payment safety net could never have worked
+
+- **The webhook was dead on arrival.** Razorpay signs a webhook in an HTTP header, and Google
+  Apps Script cannot read request headers. The handler looked for the signature in the URL
+  parameters, never found it, and rejected every webhook — so a customer who paid and closed
+  the tab stayed on Free. (The test passed only because it put the signature where no real
+  webhook does.) Worse, Apps Script answers every webhook with a redirect, which Razorpay
+  counts as a failure and eventually disables. Replaced by `reconcilePayments()`: every 15
+  minutes it asks Razorpay for the last three days of payments and grants any Domebox
+  payment not yet granted. Installed by `switchOnSchedules()`. No webhook, no webhook secret.
+  The webhook handler is kept, but now trusts the body only for a payment id and confirms
+  everything else with Razorpay.
+- **One payment could buy two terms.** The invoice was issued once per payment, but the plan
+  extension and the receipt were not guarded: with the page and any second path both
+  reporting a payment, a year paid became two. The grant now checks the invoice ledger first.
+- Tests: `payment-reconcile-test.js` (15), and `invoice-test.js` now drives the real, unsigned
+  webhook path.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

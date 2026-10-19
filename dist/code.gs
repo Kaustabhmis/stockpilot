@@ -143,24 +143,23 @@ function setupDomeBox() {
   [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
    ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
    ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
-   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online'],
-   ['RAZORPAY_WEBHOOK_SECRET', c.razorHook, 'the safety net under online payment']
+   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']
   ].forEach(function (r) {
     out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
     if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
   });
 
-  /* Selling online without the webhook secret is the quiet failure that costs
-     money: the browser handler only runs if the customer's tab survives the
-     payment. Razorpay's webhook is what catches the one who closes it, and
-     handleRazorpayWebhook_ ignores every event until this is set. */
-  if (c.razorKey && c.razorSecret && !c.razorHook) {
+  /* The safety net under online payment is reconcilePayments(), every 15
+     minutes — not a webhook, which Apps Script cannot verify (no request
+     headers) and answers with a redirect Razorpay counts as a failure. */
+  var reconcileOn = false;
+  try { reconcileOn = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === 'reconcilePayments'; }); } catch (e) {}
+  if (c.razorKey && c.razorSecret && !reconcileOn) {
     out.push('');
-    out.push('  WARNING online payment is live but RAZORPAY_WEBHOOK_SECRET is not set.');
+    out.push('  WARNING online payment is set up but the payment check is not switched on.');
     out.push('          A customer who closes the tab while paying is charged and stays');
-    out.push('          on Free. Razorpay Dashboard > Settings > Webhooks > Add: URL is');
-    out.push('          your /exec URL, event payment.captured, then paste the secret');
-    out.push('          you chose there into Script Properties under that name.');
+    out.push('          on Free until it runs. Fix: run switchOnSchedules once.');
   }
 
   /* The one check that cannot be done from a config value: whether this Google
@@ -307,7 +306,7 @@ function setupDomeBox() {
   /* Repeated down here on purpose. It is the step people skip: everything
      works the day they set it up, and nothing is chased from the day after. */
   if (schedulerTodo) todo.push(schedulerTodo);
-  if (c.razorKey && c.razorSecret && !c.razorHook) todo.push('Add RAZORPAY_WEBHOOK_SECRET, or a customer who closes the tab mid-payment is charged and stays on Free.');
+  if (c.razorKey && c.razorSecret && !reconcileOn) todo.push('Run switchOnSchedules, so a customer who closes the tab mid-payment still gets their plan within 15 minutes.');
   if (!todo.length) {
     out.push('  Nothing. This project is ready.');
   } else {
@@ -2722,6 +2721,14 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
   var d = dir.getDataRange().getValues();
   for (var i = 1; i < d.length; i++) {
     if (String(d[i][5]).trim() !== String(sheetId).trim()) continue;
+    /* One payment, one term. The browser, the webhook and the reconciler can
+       all report the same payment; only the first one extends the plan and
+       sends a receipt. The invoice ledger is the record of what was granted. */
+    if (paid && paid.id && invoiceForPayment_(paid.id)) {
+      var had = d[i][4] instanceof Date ? ymd(d[i][4]) : String(d[i][4]);
+      logPayment_('ALREADY_GRANTED', sheetId, paid.id);
+      return had;
+    }
     var cur = new Date(d[i][4]);
     var base = (!isNaN(cur) && cur > new Date()) ? cur : new Date();
     /* The term comes from the plan, not from its name. Keying it off the word
@@ -3105,22 +3112,86 @@ function contactSupport_(ctx, form) {
   return { status: 'success', message: 'Sent. We reply within one working day.' };
 }
 
+/** A payment as Razorpay itself reports it, or null. */
+function fetchRazorpayPayment_(paymentId) {
+  var c = CFG();
+  if (!c.razorKey || !c.razorSecret) return null;
+  try {
+    var r = UrlFetchApp.fetch('https://api.razorpay.com/v1/payments/' + encodeURIComponent(paymentId), {
+      headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.razorKey + ':' + c.razorSecret) },
+      muteHttpExceptions: true });
+    return r.getResponseCode() === 200 ? JSON.parse(r.getContentText()) : null;
+  } catch (e) { logError_('razorpay:fetch', e.message); return null; }
+}
+
+/**
+ * Grants the plan a captured Domebox payment paid for. Safe to call any number
+ * of times for the same payment: grantPlan_ grants it once.
+ * Returns the plan granted, or '' when the payment is not ours or not paid.
+ */
+function grantFromPayment_(paid, via) {
+  if (!paid || paid.status !== 'captured') return '';
+  var notes = paid.notes || {};
+  if (!notes.sheetId) return '';                       // not a Domebox order (another site on this account)
+  if (!registryRow_(notes.sheetId)) return '';         // a company that is not in this registry
+  var plan = notes.plan || planForPaise_(paid.amount);
+  if (!plan || !PLANS[normalizePlan(plan)]) {
+    logPayment_('UNKNOWN_AMOUNT', notes.sheetId, paid.id + ' ' + paid.amount + ' paise');
+    return '';
+  }
+  var already = invoiceForPayment_(paid.id);
+  var until = grantPlan_(notes.sheetId, plan, paid, notes.company);
+  if (!already) logPayment_((via || 'GRANTED') + '_GRANTED', notes.sheetId, plan + ' until ' + until + ' via ' + paid.id);
+  return already ? '' : plan;
+}
+
+/**
+ * The safety net under online payment. Every 15 minutes, ask Razorpay for the
+ * last three days of captured payments and grant any Domebox payment that has
+ * not been granted yet — the customer who paid and closed the tab before the
+ * page could report it. No webhook is needed: Apps Script answers webhooks
+ * with a redirect, which Razorpay records as a failed delivery and eventually
+ * switches off, so polling is the reliable way round.
+ * Installed by switchOnSchedules().
+ */
+function reconcilePayments() {
+  var c = CFG(), out = ['', '=== PAYMENT CHECK ==='];
+  if (!c.razorKey || !c.razorSecret) { out.push('  Razorpay keys are not set — nothing to check.'); return say_(out); }
+  var from = Math.floor(Date.now() / 1000) - 3 * 86400, skip = 0, seen = 0, granted = 0;
+  for (var page = 0; page < 10; page++) {
+    var r;
+    try {
+      r = UrlFetchApp.fetch('https://api.razorpay.com/v1/payments?from=' + from + '&count=100&skip=' + skip, {
+        headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.razorKey + ':' + c.razorSecret) },
+        muteHttpExceptions: true });
+    } catch (e) { out.push('  Could not reach Razorpay: ' + e.message); break; }
+    if (r.getResponseCode() !== 200) { out.push('  Razorpay answered ' + r.getResponseCode() + ' — check the keys.'); break; }
+    var items = (JSON.parse(r.getContentText()).items) || [];
+    items.forEach(function (p) {
+      seen++;
+      try { if (grantFromPayment_(p, 'RECONCILED')) { granted++; out.push('  granted ' + p.id + ' for ' + (p.notes && p.notes.company || p.notes.sheetId)); } }
+      catch (e) { logError_('reconcile:' + p.id, e.message); }
+    });
+    if (items.length < 100) break;
+    skip += 100;
+  }
+  out.push('  Checked ' + seen + ' payment(s) from the last 3 days; granted ' + granted + ' that had been missed.');
+  return say_(out);
+}
+
 function handleRazorpayWebhook_(e, body) {
   /* The browser handler is not a source of truth: a customer who closes the tab
      mid-payment is charged and stays on Free. This fires from Razorpay. */
   try {
-    var secret = PropertiesService.getScriptProperties().getProperty('RAZORPAY_WEBHOOK_SECRET');
-    if (!secret) return json_({ status: 'ignored' });
-    var raw = e.postData.contents;
-    var sig = (e.parameter && e.parameter['x-razorpay-signature']) || '';
-    var expected = hex_(Utilities.computeHmacSha256Signature(raw, secret));
-    if (!eqConst_(expected, sig)) { logPayment_('WEBHOOK_REJECTED', '', 'bad signature'); return json_({ status: 'ignored' }); }
-
+    /* Apps Script cannot read request headers, so Razorpay's signature header
+       never arrives and cannot be checked. The body is therefore trusted for
+       one thing only — which payment to look at. Everything that decides a
+       grant (captured? how much? for whom?) is fetched from Razorpay itself
+       with our own key, so a forged webhook cannot grant anything. */
     var ent = ((body.payload || {}).payment || {}).entity || {};
-    if (body.event === 'payment.captured' && ent.notes && ent.notes.sheetId) {
-      var plan = ent.notes.plan || planForPaise_(ent.amount);
-      if (plan) { grantPlan_(ent.notes.sheetId, plan, ent, ent.notes.company);
-                  logPayment_('WEBHOOK_GRANTED', ent.notes.sheetId, plan); }
+    if ((body.event === 'payment.captured' || body.event === 'order.paid') && /^pay_[A-Za-z0-9_]+$/.test(String(ent.id || ''))) {
+      var real = fetchRazorpayPayment_(ent.id);
+      if (real) grantFromPayment_(real, 'WEBHOOK');
     }
   } catch (err) { logError_('webhook', err.message); }
   return json_({ status: 'ok' });
@@ -6420,6 +6491,11 @@ function switchOnSchedules() {
   }
   installTaskArchiveSchedule();
   out.push('  ok      year-old work moves to the archive on the 1st of each month');
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'reconcilePayments') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
+  out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
   return say_(out);
 }
 

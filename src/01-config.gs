@@ -141,24 +141,23 @@ function setupDomeBox() {
   [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
    ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
    ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
-   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online'],
-   ['RAZORPAY_WEBHOOK_SECRET', c.razorHook, 'the safety net under online payment']
+   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']
   ].forEach(function (r) {
     out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
     if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
   });
 
-  /* Selling online without the webhook secret is the quiet failure that costs
-     money: the browser handler only runs if the customer's tab survives the
-     payment. Razorpay's webhook is what catches the one who closes it, and
-     handleRazorpayWebhook_ ignores every event until this is set. */
-  if (c.razorKey && c.razorSecret && !c.razorHook) {
+  /* The safety net under online payment is reconcilePayments(), every 15
+     minutes — not a webhook, which Apps Script cannot verify (no request
+     headers) and answers with a redirect Razorpay counts as a failure. */
+  var reconcileOn = false;
+  try { reconcileOn = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === 'reconcilePayments'; }); } catch (e) {}
+  if (c.razorKey && c.razorSecret && !reconcileOn) {
     out.push('');
-    out.push('  WARNING online payment is live but RAZORPAY_WEBHOOK_SECRET is not set.');
+    out.push('  WARNING online payment is set up but the payment check is not switched on.');
     out.push('          A customer who closes the tab while paying is charged and stays');
-    out.push('          on Free. Razorpay Dashboard > Settings > Webhooks > Add: URL is');
-    out.push('          your /exec URL, event payment.captured, then paste the secret');
-    out.push('          you chose there into Script Properties under that name.');
+    out.push('          on Free until it runs. Fix: run switchOnSchedules once.');
   }
 
   /* The one check that cannot be done from a config value: whether this Google
@@ -305,7 +304,7 @@ function setupDomeBox() {
   /* Repeated down here on purpose. It is the step people skip: everything
      works the day they set it up, and nothing is chased from the day after. */
   if (schedulerTodo) todo.push(schedulerTodo);
-  if (c.razorKey && c.razorSecret && !c.razorHook) todo.push('Add RAZORPAY_WEBHOOK_SECRET, or a customer who closes the tab mid-payment is charged and stays on Free.');
+  if (c.razorKey && c.razorSecret && !reconcileOn) todo.push('Run switchOnSchedules, so a customer who closes the tab mid-payment still gets their plan within 15 minutes.');
   if (!todo.length) {
     out.push('  Nothing. This project is ready.');
   } else {

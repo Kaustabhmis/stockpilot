@@ -14,23 +14,30 @@ let pass = 0, fail = 0;
 const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || !x ? '' : '  [' + String(x).slice(0, 170) + ']')); v ? pass++ : fail++; };
 
 const R = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
-const HOOK = 'webhook-secret-for-the-harness';
-env.props.RAZORPAY_WEBHOOK_SECRET = HOOK;
 env.props.SELLER_LEGAL_NAME = 'BISCS India';
 env.props.SELLER_ADDRESS = '12 Park Street, Kolkata 700016';
 env.props.SELLER_STATE = 'West Bengal';
 env.props.SELLER_GSTIN = '19AABCB1234C1ZQ';          // 19 = West Bengal
 env.props.SELLER_PAN = 'AABCB1234C';
 
-/* A signed payment.captured, exactly as Razorpay delivers it. */
+/* A payment.captured, exactly as Razorpay delivers it to Apps Script: the
+   signature travels in a header Apps Script cannot read, so the webhook is
+   unsigned here too, and the script confirms the payment with Razorpay. This
+   fake Razorpay has the payment on record as captured. */
+env.props.RAZORPAY_KEY_ID = 'rzp_test_HARNESS';
+env.props.RAZORPAY_KEY_SECRET = 'harness-secret';
+const RZP = {};
+env.G.UrlFetchApp.fetch = (url) => {
+  const m = String(url).match(/\/v1\/payments\/([^?]+)$/);
+  const p = m && RZP[decodeURIComponent(m[1])];
+  return { getResponseCode: () => (p ? 200 : 404), getContentText: () => JSON.stringify(p || {}) };
+};
 function pay(sheetId, plan, company, paise, id) {
-  const body = { event: 'payment.captured', payload: { payment: { entity: {
-    id: id, order_id: 'order_' + id, amount: paise, currency: 'INR',
-    notes: { sheetId, plan, company } } } } };
-  const raw = JSON.stringify(body);
-  const sig = crypto.createHmac('sha256', HOOK).update(raw).digest('hex');
-  const res = APP.doPost({ postData: { contents: raw },
-    parameter: { 'x-razorpay-signature': sig } });
+  const entity = { id: id, order_id: 'order_' + id, amount: paise, currency: 'INR', status: 'captured',
+    notes: { sheetId, plan, company } };
+  RZP[id] = entity;
+  const raw = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity } } });
+  const res = APP.doPost({ postData: { contents: raw }, parameter: {} });
   return JSON.parse(res.getContent());
 }
 
