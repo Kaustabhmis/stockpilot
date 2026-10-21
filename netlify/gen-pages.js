@@ -169,18 +169,18 @@ affecting the rest of the service:</p>
 </ul>
 
 <h2>4. Where your data is stored</h2>
-<p>${C.productName} is built on Google Workspace infrastructure. Each customer company
-gets its own separate spreadsheet-backed database, so one customer's data is not
-mixed with another's. Google may process and store this data on servers outside
-India. Where that happens, the transfer relies on Google's contractual safeguards as
-our sub-processor. Payments are handled by Razorpay, who receive only what is needed
+<p>${C.productName} runs on enterprise cloud infrastructure. Each customer company
+gets its own separate database, so one customer's data is not mixed with
+another's. Our cloud providers may process and store this data on servers outside
+India. Where that happens, the transfer relies on their contractual safeguards as
+our sub-processors. Payments are handled by Razorpay, who receive only what is needed
 to take the payment — we never see or store your full card details.</p>
 <h3>Sub-processors</h3>
 <table>
   <tr><th>Provider</th><th>Purpose</th></tr>
-  <tr><td>Google (Workspace, Apps Script, Drive)</td><td>Application hosting, database, email delivery, backups</td></tr>
+  <tr><td>Cloud infrastructure provider</td><td>Application hosting, database, email delivery, backups</td></tr>
   <tr><td>Razorpay</td><td>Payment processing and invoicing</td></tr>
-  <tr><td>Netlify</td><td>Hosting the public website</td></tr>
+  <tr><td>Content delivery provider</td><td>Hosting the public website</td></tr>
   <tr><td>Meta (WhatsApp Business Platform)</td><td>Delivering reminders, only where you opted in</td></tr>
 </table>
 
@@ -322,7 +322,7 @@ route to contest it.</p>
 
 <h2>8. Availability</h2>
 <p>We work to keep ${C.productName} available but do not guarantee uninterrupted
-service. It depends on third-party infrastructure, chiefly Google Workspace, and is
+service. It depends on third-party cloud infrastructure, and is
 subject to that platform's own limits and outages. We aim to give advance notice of
 planned maintenance.</p>
 

@@ -326,6 +326,21 @@ reject them exactly as Apps Script does, with the same message.
 Also: signup now hashes the password before copying the template, so a failure can no
 longer leave an orphaned spreadsheet in Drive.
 
+### 4u. A ₹999 plan for 10 people, and the site no longer says what it is built on
+
+**Team** (up to 10 users, ₹999 a month, ₹9,990 a year, the whole product) sits between Free
+and Starter. Free users who hit the 5-user cap are now pointed at Team. It is on the home
+page, in the Plans window, in the structured data, on /pricing and in the manual.
+
+The website folder is minified and every comment is removed, so View Source shows the
+product and not our build notes. The words visitors could read that named the stack
+(the "not connected" message, the config file's notes, the privacy and terms pages) are
+neutral now. The privacy page still lists each kind of sub-processor and what it does.
+`netlify-package-test.js` fails if any of those names come back.
+
+What cannot be hidden from a technical visitor without a proxy: the browser's Network tab
+shows each call going to the backend's own address, and the security header must allow it.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

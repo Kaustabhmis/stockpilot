@@ -36,6 +36,11 @@ var PLANS = {
   'Free':       { name:'Free Tier',  price:0,      termDays:365, users:5,    tasksPerMonth:100,
                   analytics:false, whatsapp:false, email:false, kraForms:false, offered:true },
 
+  'Team':           { name:'Team',    price:999,    termDays:30,  users:10,  tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+  'Team Yearly':    { name:'Team',    price:9990,   termDays:365, users:10,  tasksPerMonth:null,
+                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+
   'Starter':        { name:'Starter', price:2499,   termDays:30,  users:15,  tasksPerMonth:null,
                       analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
   'Starter Yearly': { name:'Starter', price:24990,  termDays:365, users:15,  tasksPerMonth:null,
@@ -74,6 +79,8 @@ var PLAN_ALIASES = {
   'monthly': 'Monthly', 'standard': 'Monthly', 'basic': 'Monthly',
   'yearly': 'Yearly', 'pro': 'Yearly', 'pro yearly': 'Yearly', 'proyearly': 'Yearly',
   'premium': 'Yearly', 'annual': 'Yearly',
+  'team': 'Team', 'team monthly': 'Team',
+  'team yearly': 'Team Yearly', 'teamyearly': 'Team Yearly',
   'starter': 'Starter', 'starter monthly': 'Starter',
   'starter yearly': 'Starter Yearly', 'starteryearly': 'Starter Yearly',
   'growth': 'Growth', 'growth monthly': 'Growth',
@@ -152,7 +159,7 @@ function planAllows(plan, feature) { return !!planLimits(plan)[feature]; }
 
 /* The ladder a customer is pushed up when they hit a cap. Legacy plans are not
    on it — nextPlanUp maps them onto the band that actually fits. */
-var PLAN_ORDER = ['Free', 'Starter', 'Growth', 'Scale', 'Enterprise'];
+var PLAN_ORDER = ['Free', 'Team', 'Starter', 'Growth', 'Scale', 'Enterprise'];
 var LEGACY_NEXT = { 'Monthly': 'Growth', 'Yearly': 'Enterprise' };
 function nextPlanUp(plan) {
   var cur = normalizePlan(plan);

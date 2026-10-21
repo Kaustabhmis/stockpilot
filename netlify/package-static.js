@@ -26,19 +26,36 @@ const rm = (p) => fs.rmSync(p, { recursive: true, force: true });
 const cp = (from, to) => fs.cpSync(from, to, { recursive: true });
 rm(OUT); fs.mkdirSync(OUT, { recursive: true });
 
+/* What a visitor can read with View Source is the product, not our build
+   notes: every comment comes out, and the code is minified. Behaviour is
+   unchanged — global names the page's onclick handlers call are kept. */
+const esbuild = require('esbuild');
+function shrink(html) {
+  html = html.replace(/(<script(?![^>]*\bsrc=)(?![^>]*application\/ld\+json)[^>]*>)([\s\S]*?)(<\/script>)/g, (m, a, js, b) =>
+    a + esbuild.transformSync(js, { minifyWhitespace: true, minifySyntax: true, legalComments: 'none', target: 'es2017' }).code.trim() + b);
+  html = html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (m, a, css, b) =>
+    a + esbuild.transformSync(css, { loader: 'css', minify: true, legalComments: 'none' }).code.trim() + b);
+  return html.replace(/<!--(?!\[if)[\s\S]*?-->/g, '');
+}
+const noHashComments = (f) => fs.writeFileSync(f, fs.readFileSync(f, 'utf8').split('\n')
+  .filter((l) => !/^\s*#/.test(l)).join('\n').replace(/\n{3,}/g, '\n\n'));
+
 /* ---- 1. the application page ------------------------------------------- */
 let app = fs.readFileSync(path.join(root, 'dist', 'index.html'), 'utf8');
 if (!/<style>[\s\S]{5000,}?<\/style>/.test(app)) throw new Error('dist/index.html has no compiled stylesheet — rebuild it first');
 app = app.replace('<head>', '<head>\n<script src="/domebox-config.js"></script>');
-fs.writeFileSync(path.join(OUT, 'index.html'), app);
+fs.writeFileSync(path.join(OUT, 'index.html'), shrink(app));
 
 /* ---- 2. the static pages and files, exactly as Netlify serves them ------ */
 const STATIC = fs.readdirSync(here).filter((f) =>
   /\.(html|svg|png|pdf|txt)$/.test(f) && f !== 'index.html' && !/^(privacy|terms|refund|contact|404)\.html$/.test(f));
-STATIC.forEach((f) => cp(path.join(here, f), path.join(OUT, f)));
+STATIC.forEach((f) => /\.html$/.test(f)
+  ? fs.writeFileSync(path.join(OUT, f), shrink(fs.readFileSync(path.join(here, f), 'utf8')))
+  : cp(path.join(here, f), path.join(OUT, f)));
 cp(path.join(here, 'img'), path.join(OUT, 'img'));
 cp(path.join(here, '_headers'), path.join(OUT, '_headers'));
 cp(path.join(here, '_redirects'), path.join(OUT, '_redirects'));
+noHashComments(path.join(OUT, '_headers')); noHashComments(path.join(OUT, '_redirects'));
 
 /* ---- 3. the legal pages, with the owner's details filled in the browser -- */
 const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dbx-legal-'));
@@ -56,12 +73,11 @@ legal.forEach((f) => {
   html = html.replace(/<title>([^<]*)<\/title>/, (m, t) => '<title>' + t.replace(/DBXFIELD\w+DBXEND/g, '') + '</title>');
   html = html.replace(/DBXFIELD(\w+)DBXEND/g, '<span data-cfg="$1"></span>');
   html = html.replace('</head>', '<script src="/domebox-config.js"></script>\n<script src="/domebox-fill.js" defer></script>\n</head>');
-  fs.writeFileSync(path.join(OUT, f), html);
+  fs.writeFileSync(path.join(OUT, f), shrink(html));
 });
 rm(tmp);
 
-fs.writeFileSync(path.join(OUT, 'domebox-fill.js'), `/* Fills the owner's details into the legal pages from domebox-config.js. */
-(function () {
+fs.writeFileSync(path.join(OUT, 'domebox-fill.js'), `(function () {
   var c = window.DOMEBOX_CONFIG || {};
   var nodes = document.querySelectorAll('[data-cfg]');
   for (var i = 0; i < nodes.length; i++) {
@@ -76,19 +92,11 @@ fs.writeFileSync(path.join(OUT, 'domebox-fill.js'), `/* Fills the owner's detail
 `);
 
 /* ---- 4. the one file the owner edits ------------------------------------ */
-fs.writeFileSync(path.join(OUT, 'domebox-config.js'), `/* =====================================================================
-   DOMEBOX — THE ONLY FILE YOU EDIT BEFORE UPLOADING TO NETLIFY
-   Open in Notepad. Fill in between the quotes. Save. Then drag the whole
-   folder onto Netlify (Sites > Add new site > Deploy manually).
-   ===================================================================== */
+fs.writeFileSync(path.join(OUT, 'domebox-config.js'), `/* Domebox site settings. Fill in between the quotes and save. */
 window.DOMEBOX_CONFIG = {
+  apiUrl: 'PASTE_YOUR_EXEC_URL_HERE',   // the address ending in /exec
 
-  /* 1. Your Apps Script web app address. In Apps Script: Deploy > Manage
-        deployments > copy the Web app URL. It ends in /exec.            */
-  apiUrl: 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE',
-
-  /* 2. Your company details, printed on the Privacy, Terms, Refund and
-        Contact pages (Razorpay checks these pages).                      */
+  /* Printed on the Privacy, Terms, Refund and Contact pages. */
   registeredAddress: '',      // full registered address
   phone: '',                  // e.g. +91 98300 00000
   gstin: '',                  // GSTIN, or write: Not registered

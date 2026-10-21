@@ -75,7 +75,7 @@ ok('the build succeeds', good.ok, good.log.slice(-300));
 ok('there is a homepage at all', fs.existsSync(path.join(OUT, 'index.html')));
 const idx = R('index.html', OUT);
 ok('the real API URL is in it', idx.indexOf(FAKE_API) > -1);
-ok('and the placeholder is gone', idx.indexOf('PASTE_YOUR_APPS_SCRIPT') < 0);
+ok('and the placeholder is gone', idx.indexOf('PASTE_YOUR_EXEC_URL') < 0);
 ok('the stylesheet is compiled in, not fetched', idx.indexOf('cdn.tailwindcss.com') < 0);
 ok('and it is actually there', /<style>[\s\S]{5000,}?<\/style>/.test(idx));
 ok('there is a 404 page', fs.existsSync(path.join(OUT, '404.html')));

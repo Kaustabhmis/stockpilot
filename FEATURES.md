@@ -335,6 +335,7 @@ state sees one short form, once.
 | Plan | Users | Monthly | Yearly (2 months free) | Per user/mo |
 |---|---|---|---|---|
 | Free | 5 | ₹0 | — | — |
+| Team | 10 | ₹999 | ₹9,990 | ₹100 |
 | Starter | 15 | ₹2,499 | ₹24,990 | ₹167 |
 | **Growth** | 50 | ₹5,999 | ₹59,990 | ₹120 |
 | Scale | 150 | ₹12,999 | ₹1,29,990 | ₹87 |
@@ -342,8 +343,8 @@ state sees one short form, once.
 
 Every paid band carries the whole product. A plan that withholds the scoring and
 the appraisals is selling a worse board, and it gives a buyer a reason to stay
-small rather than a reason to grow. Price per user falls as the band rises, so
-growing with us is rewarded and the bill still goes up. Extra seats beyond a
+small rather than a reason to grow. From Starter up, price per user falls as the band rises. Team (10 users, ₹999)
+is the low entry point for a small office. Extra seats beyond a
 band are ₹149 per user a month, arranged by hand.
 
 Prices exclude 18% GST, which is added at checkout and shown before the payment

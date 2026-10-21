@@ -14,13 +14,29 @@ execFileSync('node', [path.join(__dirname, '..', 'netlify', 'package-static.js')
 const PKG = path.join(__dirname, '..', 'dist', 'netlify-upload');
 const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
 
+/* What the site is built on is not something a visitor can read in it. The
+   address check and the CSP must name the backend host; nothing else may. */
+{
+  const STACK = /apps ?script|google ?sheets?|spreadsheet-backed|netlify|tailwind|google workspace/i;
+  const hits = [];
+  fs.readdirSync(PKG).filter((f) => /\.(html|js)$/.test(f)).forEach((f) => {
+    const t = fs.readFileSync(path.join(PKG, f), 'utf8');
+    const m = t.match(new RegExp('.{0,40}(' + STACK.source + ').{0,40}', 'gi'));
+    if (m) hits.push(f + ': ' + m.join(' | '));
+  });
+  ok('no page or script in the folder names what the site is built on', hits.length === 0, hits.join(' || '));
+  const idx = fs.readFileSync(path.join(PKG, 'index.html'), 'utf8');
+  ok('and no build comments ship: the code is minified', !/<!--/.test(idx) && !/\/\*[^!]/.test(idx.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '')),
+     (idx.match(/.{0,40}(<!--|\/\*).{0,40}/) || [''])[0]);
+}
+
 /* Two copies of the site: one as the owner fills it in, one left untouched. */
 const mk = (fill) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dbx-site-'));
   fs.cpSync(PKG, dir, { recursive: true });
   if (fill) {
     let c = fs.readFileSync(path.join(dir, 'domebox-config.js'), 'utf8');
-    c = c.replace("apiUrl: 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE'", "apiUrl: '" + EXEC + "'")
+    c = c.replace("apiUrl: 'PASTE_YOUR_EXEC_URL_HERE'", "apiUrl: '" + EXEC + "'")
          .replace("registeredAddress: ''", "registeredAddress: '12 Park Street, Kolkata 700016'")
          .replace("jurisdictionCity: ''", "jurisdictionCity: 'Kolkata'");     // gstin and the rest left blank
     fs.writeFileSync(path.join(dir, 'domebox-config.js'), c);

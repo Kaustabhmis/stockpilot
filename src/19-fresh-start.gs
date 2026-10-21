@@ -137,7 +137,7 @@ function dropBlankSheets_(ss) {
  *   setCustomerPlan('owner@client.com', 'Growth Yearly')        // a year from today
  *   setCustomerPlan('owner@client.com', 'Growth', '2027-03-31')  // until a date
  *
- * Plan names: Starter, Growth, Scale (monthly) or Starter Yearly, Growth Yearly,
+ * Plan names: Team, Starter, Growth, Scale (monthly) or Team Yearly, Starter Yearly, Growth Yearly,
  * Scale Yearly, or Enterprise.
  */
 function setCustomerPlan(email, planName, untilYmd) {

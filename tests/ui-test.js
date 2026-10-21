@@ -26,7 +26,7 @@ const { chromium } = require('playwright');
   ok('it says what the product is', /Stop chasing work on WhatsApp/
      .test(await p.locator('#view-home').textContent()));
   ok('and who it is for', /Indian MSMEs/.test(await p.locator('#view-home').textContent()));
-  ok('every band is priced on the page', (await p.locator('#homePlans > div').count()) === 5);
+  ok('every band is priced on the page', (await p.locator('#homePlans > div').count()) === 6);
   ok('yearly is shown first, because it is the better deal',
      /Yearly — 2 months free/.test(await p.locator('#homeCycle').textContent()));
   ok('and the GST position is stated rather than left to be discovered',
@@ -118,7 +118,7 @@ const { chromium } = require('playwright');
   ok('upgrade wall shown', /Pro feature/.test(await p.locator('#reportsLocked').textContent()));
   await p.click('#reportsLocked button'); await p.waitForTimeout(400);
   ok('plans modal opens', /Plans/.test(await p.locator('#modal').textContent()));
-  ok('every buyable band is offered', (await p.locator('#modal .buy').count())===3);
+  ok('every buyable band is offered', (await p.locator('#modal .buy').count())===4);
   ok('priced yearly by default', /\/year/.test(await p.locator('#billingPlans').textContent()));
   await p.click('#billingCycle button:has-text("Monthly")'); await p.waitForTimeout(300);
   ok('and the monthly price is one click away',

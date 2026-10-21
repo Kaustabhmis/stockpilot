@@ -21,7 +21,7 @@ module.exports = (C) => {
     slug: 'pricing',
     title: 'Pricing',
     h1: 'Pricing',
-    description: 'Domebox pricing in INR: 14-day free trial, free for 5 users, then ₹2,499/month for 15, ₹5,999 for 50, ₹12,999 for 150. Every feature on every paid plan.',
+    description: 'Domebox pricing in INR: 14-day free trial, free for 5 users, then ₹999/month for 10, ₹2,499 for 15, ₹5,999 for 50, ₹12,999 for 150. Every feature on every paid plan.',
     changefreq: 'monthly', priority: '0.9',
     faq: [
       ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
@@ -33,12 +33,13 @@ module.exports = (C) => {
     ],
     body: `
 <p class="lede">Every paid plan carries the whole product. What you pay for is the
-size of your team, and the price per person falls as you grow.</p>
+size of your team — from ₹999 a month for 10 people.</p>
 
 <table>
 <thead><tr><th>Plan</th><th>Users</th><th>Monthly</th><th>Yearly</th><th>Per user / month</th></tr></thead>
 <tbody>
 <tr><td><strong>Free</strong></td><td>5</td><td>₹0</td><td>—</td><td>—</td></tr>
+<tr><td><strong>Team</strong></td><td>10</td><td>₹999</td><td>₹9,990</td><td>₹100</td></tr>
 <tr><td><strong>Starter</strong></td><td>15</td><td>₹2,499</td><td>₹24,990</td><td>₹167</td></tr>
 <tr><td><strong>Growth</strong></td><td>50</td><td>₹5,999</td><td>₹59,990</td><td>₹120</td></tr>
 <tr><td><strong>Scale</strong></td><td>150</td><td>₹12,999</td><td>₹1,29,990</td><td>₹87</td></tr>

@@ -145,7 +145,7 @@ setInterval(function () {
   if (API_URL.indexOf('PASTE_YOUR') === 0) {
     /* Not connected yet: still show the home page, and say what is missing. */
     showHome();
-    toast('This site is not connected yet: put your Apps Script /exec address into domebox-config.js.', 'err');
+    toast('This site is not connected yet: add the /exec address to domebox-config.js.', 'err');
     return;
   }
   /* ?demo=owner|manager|staff — an ad, a guide page or a sales email can

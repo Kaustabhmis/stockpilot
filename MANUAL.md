@@ -640,6 +640,7 @@ Free limits.
 | Plan | Users | Monthly | Yearly |
 |---|---|---|---|
 | Free | 5 | ₹0 | — |
+| Team | 10 | ₹999 | ₹9,990 |
 | Starter | 15 | ₹2,499 | ₹24,990 |
 | **Growth** | 50 | ₹5,999 | ₹59,990 |
 | Scale | 150 | ₹12,999 | ₹1,29,990 |

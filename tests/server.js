@@ -45,9 +45,8 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (req.url === '/' || req.url.startsWith('/index.html') || req.url.startsWith('/?')) {
-    let html = fs.readFileSync('/home/user/stockpilot/dist/index.html', 'utf8');
-    html = html.replace("var API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';",
-                        "var API_URL = '/exec';");
+    let html = fs.readFileSync(process.env.DBX_HTML || '/home/user/stockpilot/dist/index.html', 'utf8');
+    html = html.replace(/(['"])PASTE_YOUR_EXEC_URL_HERE\1/, "'/exec'");
     /* The stylesheet is compiled into dist/index.html by the build, so there is
        nothing to substitute any more. Fail loudly if a CDN tag ever comes back:
        this sandbox blocks it, and a silently unstyled page would be mistaken

@@ -57,7 +57,7 @@ if (!/<style>[\s\S]{5000,}?<\/style>/.test(app)) {
    it looks completely fine — it renders, it is styled, the pricing is right —
    and then every login, signup and payment fails with a network error. A build
    that shipped that would be worse than one that did not run. */
-const PLACEHOLDER = "var API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';";
+const PLACEHOLDER = "var API_URL = 'PASTE_YOUR_EXEC_URL_HERE';";
 const apiUrl = (process.env.API_URL || '').trim();
 if (app.indexOf(PLACEHOLDER) > -1) {
   if (!apiUrl) {

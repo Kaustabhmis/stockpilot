@@ -60,7 +60,7 @@ const STATE_TAB = (t) => t === 'team';
   ok('the pricing note says what checkout will actually charge (not registered here: no GST)',
      /No GST is charged/.test(await p.locator('#gstNote').textContent()), await p.locator('#gstNote').textContent());
   const cards = await p.locator('#homePlans button').allTextContents();
-  ok('paid plans start a free trial; Enterprise talks to us', cards.filter((c) => /Start free trial/.test(c)).length === 3 &&
+  ok('paid plans start a free trial; Enterprise talks to us', cards.filter((c) => /Start free trial/.test(c)).length === 4 &&
      cards.some((c) => /Talk to us/.test(c)), cards.join(' | '));
 
   console.log('\n=== the call-back form ===');
@@ -144,7 +144,7 @@ const STATE_TAB = (t) => t === 'team';
   if (SHOTS) await p.screenshot({ path: SHOTS + '/sales-03-trial.png' });
   await p.click('#banner button:has-text("Choose a plan")'); await W(1200);
   const buys = await p.locator('#modal .buy').allTextContents();
-  ok('during the trial every plan can be bought — Growth included', buys.length === 3 && buys.some((t) => /Growth/.test(t)), buys.join(' | '));
+  ok('during the trial every plan can be bought — Growth included', buys.length === 4 && buys.some((t) => /Growth/.test(t)), buys.join(' | '));
   await p.evaluate(() => closeModal());
 
   console.log('\n=== on a phone ===');

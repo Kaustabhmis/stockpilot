@@ -98,14 +98,15 @@ const P = pm.exports;
 });
 ok('an unknown plan falls back to Free, never upward', P.normalizePlan('Platinum')==='Free');
 ok('and that fallback is a real key', P.planLimits('Platinum').users===5);
-ok('upgrade prompts name what the customer sees', P.nextPlanUp('Free')==='Starter', P.nextPlanUp('Free'));
+ok('upgrade prompts name what the customer sees', P.nextPlanUp('Free')==='Team', P.nextPlanUp('Free'));
+ok('and Team leads to Starter', P.nextPlanUp('Team')==='Starter', P.nextPlanUp('Team'));
 ok('a legacy plan still points somewhere that fits', P.nextPlanUp('Monthly')==='Growth', P.nextPlanUp('Monthly'));
 ok('and the largest legacy plan points at Enterprise', P.nextPlanUp('Yearly')==='Enterprise');
 
 /* The ladder has to stay honest. The old Standard at 2,499/mo was 29,988 a
    year next to a Pro at 19,999 with fifteen times the users, so nobody who did
    the arithmetic ever bought it. Yearly is exactly ten times monthly. */
-[['Starter','Starter Yearly',15],['Growth','Growth Yearly',50],['Scale','Scale Yearly',150]]
+[['Team','Team Yearly',10],['Starter','Starter Yearly',15],['Growth','Growth Yearly',50],['Scale','Scale Yearly',150]]
   .forEach(([m,y,users])=>{
   ok(m+': yearly is ten times monthly', P.PLANS[y].price === P.PLANS[m].price*10,
      P.PLANS[y].price+' vs '+P.PLANS[m].price);

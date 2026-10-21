@@ -4,7 +4,7 @@
    =========================================================================== */
 'use strict';
 
-var API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';
+var API_URL = 'PASTE_YOUR_EXEC_URL_HERE';
 /* A site uploaded to Netlify by hand carries its address in domebox-config.js,
    a small file edited in Notepad — no build step needed. */
 (function () {

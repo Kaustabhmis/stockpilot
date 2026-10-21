@@ -96,7 +96,7 @@ output folder here** again.
    function restoreClient() { setCustomerPlan('their@email.com', 'Growth Yearly'); }
    ```
 
-   Plans: `Starter`, `Growth`, `Scale` (monthly), `Starter Yearly`, `Growth Yearly`,
+   Plans: `Team`, `Starter`, `Growth`, `Scale` (monthly), `Team Yearly`, `Starter Yearly`, `Growth Yearly`,
    `Scale Yearly`, `Enterprise`. To end on a date: `setCustomerPlan('their@email.com', 'Growth', '2027-03-31')`.
    No receipt or invoice is sent.
 3. They add their team again and carry on.
