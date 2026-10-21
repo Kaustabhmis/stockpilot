@@ -152,6 +152,26 @@ const STATE_TAB = (t) => t === 'team';
   await m.goto('http://localhost:8095/', { waitUntil: 'networkidle' }); await m.waitForTimeout(500);
   ok('the next step is always one thumb away', await m.locator('.sticky-cta').isVisible());
   ok('without pushing the page sideways', await m.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  ok('a returning customer sees Sign in at the top of the phone screen', await m.locator('#homeSignIn').isVisible());
+  ok('and under the hero buttons', await m.locator('#hero .returning button:has-text("Sign in")').isVisible());
+  ok('the menu is closed until asked for', await m.locator('#homeMenuBtn').isVisible() && !(await m.locator('#homeMenu').isVisible()));
+  await m.click('#homeMenuBtn'); await m.waitForTimeout(200);
+  const links = (await m.locator('#homeMenu a').allTextContents()).map((t) => t.trim()).join('|');
+  ok('the menu opens with every section, plus sign in, sign up and the trial',
+     links === 'Product tour|Live demo|Pricing|Questions|Request a call-back' &&
+     await m.locator('#homeMenu button:has-text("Sign in")').isVisible() &&
+     await m.locator('#homeMenu button:has-text("Create an account")').isVisible() &&
+     await m.locator('#homeMenu button:has-text("Start free trial")').isVisible(), links);
+  if (SHOTS) await m.screenshot({ path: SHOTS + '/sales-05-phone-menu.png' });
+  await m.click('#homeMenu a:has-text("Pricing")'); await m.waitForTimeout(400);
+  ok('a menu link goes to its section and closes the menu', !(await m.locator('#homeMenu').isVisible()) &&
+     await m.evaluate(() => document.getElementById('pricing').getBoundingClientRect().top < innerHeight));
+  await m.click('#homeMenuBtn'); await m.click('#homeMenu button:has-text("Sign in")'); await m.waitForTimeout(400);
+  ok('Sign in from the menu opens the sign-in form', await m.locator('#formLogin').isVisible());
+  const dsk = await b.newPage({ viewport: { width: 1360, height: 800 } });
+  await dsk.goto('http://localhost:8095/', { waitUntil: 'networkidle' });
+  ok('on a computer: Sign in and the trial in the bar, no menu button',
+     await dsk.locator('#homeSignIn').isVisible() && !(await dsk.locator('#homeMenuBtn').isVisible()));
   if (SHOTS) await m.screenshot({ path: SHOTS + '/sales-04-phone.png' });
 
   ok('nothing threw', errs.length === 0, errs.join(' | '));

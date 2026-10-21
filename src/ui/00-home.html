@@ -22,8 +22,26 @@
         <a href="#faq" class="hover:text-gray-900">Questions</a>
       </nav>
       <span class="flex-1"></span>
-      <button class="btn btn-g text-sm sm-up" onclick="goAuth('login')">Sign in</button>
-      <button class="btn btn-gold text-sm" onclick="goAuth('signup')">Start free trial</button>
+      <!-- Returning customers need a way in on every screen size: Sign in is
+           never hidden, and on a phone the rest of the links live in a menu. -->
+      <button class="btn btn-g text-sm" id="homeSignIn" onclick="goAuth('login')">
+        <span class="material-icons text-[18px] mr-1 align-[-4px]">login</span>Sign in</button>
+      <button class="btn btn-gold text-sm sm-up" onclick="goAuth('signup')">Start free trial</button>
+      <button class="home-burger md-down" id="homeMenuBtn" type="button" aria-label="Menu"
+              aria-expanded="false" aria-controls="homeMenu" onclick="toggleHomeMenu()">
+        <span class="material-icons">menu</span></button>
+    </div>
+    <div id="homeMenu" class="home-menu md-down" hidden>
+      <a href="#tour" onclick="toggleHomeMenu(false)">Product tour</a>
+      <a href="#demo" onclick="toggleHomeMenu(false)">Live demo</a>
+      <a href="#pricing" onclick="toggleHomeMenu(false)">Pricing</a>
+      <a href="#faq" onclick="toggleHomeMenu(false)">Questions</a>
+      <a href="#callback" onclick="toggleHomeMenu(false)">Request a call-back</a>
+      <div class="home-menu-actions">
+        <button class="btn btn-g w-full" onclick="toggleHomeMenu(false); goAuth('login')">Sign in</button>
+        <button class="btn btn-g w-full" onclick="toggleHomeMenu(false); goAuth('signup')">Create an account</button>
+        <button class="btn btn-gold w-full" onclick="toggleHomeMenu(false); goAuth('signup')">Start free trial</button>
+      </div>
     </div>
   </header>
 
@@ -47,6 +65,8 @@
           <button class="btn btn-ghost-light text-base px-6 py-3.5" onclick="openDemo('owner', this)">
             <span class="material-icons text-[20px] mr-1 align-[-4px]">play_circle</span>See the live demo</button>
         </div>
+        <p class="returning text-sm font-bold mt-4">Already have an account?
+          <button class="underline underline-offset-2" onclick="goAuth('login')">Sign in</button></p>
         <ul class="ticks flex flex-wrap gap-x-5 gap-y-1.5 mt-6 text-[13px] font-bold">
           <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>Full Growth plan for 14 days</li>
           <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>No card needed</li>

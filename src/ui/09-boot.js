@@ -112,7 +112,7 @@ document.addEventListener('click', function (e) {
   if (!e.target.closest('#bellMenu') && !e.target.closest('#btnBell')) closeBell();
 });
 $('scrim').addEventListener('click', function (e) { if (e.target.id === 'scrim') closeModal(); });
-addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal(); closeDrawer(); closeBell(); } });
+addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal(); closeDrawer(); closeBell(); toggleHomeMenu(false); } });
 
 var rsz;
 addEventListener('resize', function () {

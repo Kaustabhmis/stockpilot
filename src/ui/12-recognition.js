@@ -164,12 +164,23 @@ function orgBranch(n) {
    it is for, and why the scoring can be trusted — then get out of the way.
    -------------------------------------------------------------------------- */
 function showHome() {
+  toggleHomeMenu(false);
   $('view-home').classList.remove('hidden');
   $('view-auth').classList.add('hidden');
   $('view-app').classList.add('hidden');
   renderHomePlans();
   if (typeof initHome === 'function') initHome();
   window.scrollTo(0, 0);
+}
+
+/** The phone menu on the landing page. No argument toggles; false closes. */
+function toggleHomeMenu(open) {
+  var m = $('homeMenu'), b = $('homeMenuBtn');
+  if (!m || !b) return;
+  var show = open === undefined ? m.hidden : !!open;
+  m.hidden = !show;
+  b.setAttribute('aria-expanded', show ? 'true' : 'false');
+  b.querySelector('.material-icons').textContent = show ? 'close' : 'menu';
 }
 
 /** Straight to the form, from any of the buttons on the landing page. */
