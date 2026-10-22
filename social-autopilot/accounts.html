@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Accounts · Social Autopilot</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <nav class="nav" aria-label="Main">
+    <span class="nav__brand">Social Autopilot</span>
+    <ul>
+      <li><a href="index.html">Dashboard</a></li>
+      <li><a href="compose.html">New post</a></li>
+      <li><a href="accounts.html">Accounts</a></li>
+    </ul>
+  </nav>
+  <header class="topbar">
+    <h1>Accounts</h1>
+    <button type="button" class="btn btn-ghost" id="logout">Log out</button>
+  </header>
+  <main id="main" class="page">
+    <p class="hint" id="accounts-loading">Loading accounts…</p>
+
+    <section class="card" aria-labelledby="meta-title">
+      <h2 id="meta-title">Facebook Pages and Instagram</h2>
+      <p class="hint">Connect your Facebook account and approve the Page permissions. Every Page you manage is added, and each Instagram account linked to a Page is added too.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="api/auth-meta/start">Connect Facebook &amp; Instagram</a>
+      </div>
+      <ul class="account-list" id="meta-list"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="linkedin-title">
+      <h2 id="linkedin-title">LinkedIn profile</h2>
+      <p class="hint">Posts go to your personal LinkedIn profile.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="api/auth-linkedin/start">Connect LinkedIn</a>
+      </div>
+      <ul class="account-list" id="linkedin-list"></ul>
+    </section>
+
+    <section class="card" id="org-section" aria-labelledby="org-title" hidden>
+      <h2 id="org-title">LinkedIn Company Pages</h2>
+      <p class="hint">Requires LinkedIn's Community Management API approval. Connect LinkedIn above after approval to load your Pages.</p>
+      <ul class="account-list" id="org-list"></ul>
+    </section>
+  </main>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script type="module" src="js/accounts.js"></script>
+</body>
+</html>

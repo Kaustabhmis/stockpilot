@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>New post · Social Autopilot</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <nav class="nav" aria-label="Main">
+    <span class="nav__brand">Social Autopilot</span>
+    <ul>
+      <li><a href="index.html">Dashboard</a></li>
+      <li><a href="compose.html">New post</a></li>
+      <li><a href="accounts.html">Accounts</a></li>
+    </ul>
+  </nav>
+  <header class="topbar">
+    <h1 id="page-title">New post</h1>
+    <button type="button" class="btn btn-ghost" id="logout">Log out</button>
+  </header>
+  <main id="main" class="page">
+    <p id="notice" class="notice" hidden></p>
+
+    <form id="composer" class="stack" novalidate aria-label="Post composer">
+      <section class="card" aria-labelledby="text-title">
+        <h2 id="text-title">Post text</h2>
+        <label for="master-text">Master text</label>
+        <p class="hint">Every platform starts from this text until you edit its caption below.</p>
+        <textarea id="master-text" rows="5" maxlength="20000" placeholder="What do you want to share?"></textarea>
+        <p class="counter" id="master-count" aria-live="polite"></p>
+      </section>
+
+      <section class="card" aria-labelledby="image-title">
+        <h2 id="image-title">Image</h2>
+        <label for="media-input">Choose a photo</label>
+        <input type="file" id="media-input" accept="image/*">
+        <p class="hint" id="media-status" aria-live="polite"></p>
+        <div class="media-box" id="media-box" hidden>
+          <img id="media-img" alt="Attached image preview">
+          <button type="button" class="btn btn-ghost btn-danger" id="media-remove">Remove image</button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="caption-title">
+        <h2 id="caption-title">Captions</h2>
+        <div class="tabs" id="caption-tabs" role="tablist" aria-label="Platform"></div>
+        <div id="caption-panel" role="tabpanel">
+          <label for="caption" id="caption-label">Facebook caption</label>
+          <textarea id="caption" rows="4"></textarea>
+          <p class="counter" id="caption-count" aria-live="polite"></p>
+        </div>
+        <p class="hint">Each caption is used for every selected account on that platform.</p>
+      </section>
+
+      <section class="card" aria-labelledby="accounts-title">
+        <h2 id="accounts-title">Publish to</h2>
+        <div id="accounts" class="check-list"></div>
+        <p class="hint" id="accounts-empty" hidden>No accounts are connected yet. <a href="accounts.html">Connect one first</a>.</p>
+      </section>
+
+      <section class="card preview-wrap" aria-labelledby="preview-title">
+        <h2 id="preview-title">Preview</h2>
+        <article class="preview" id="preview" aria-label="Post preview"></article>
+      </section>
+
+      <div class="btn-row">
+        <button type="button" class="btn" id="save-btn">Save draft</button>
+        <button type="button" class="btn btn-primary" id="publish-btn">Publish now</button>
+      </div>
+    </form>
+
+    <section class="card" id="results" aria-live="polite" hidden>
+      <h2>Results</h2>
+      <ul class="result-list" id="result-list"></ul>
+    </section>
+  </main>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script type="module" src="js/composer.js"></script>
+</body>
+</html>

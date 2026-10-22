@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Log in · Social Autopilot</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="no-nav">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <main id="main" class="login">
+    <div class="card login__card">
+      <h1>Social Autopilot</h1>
+      <form id="login-form" class="stack" novalidate>
+        <div>
+          <label for="password">Dashboard password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <p id="login-error" class="error-text" role="alert"></p>
+        <button id="login-submit" type="submit" class="btn btn-primary">Log in</button>
+      </form>
+    </div>
+  </main>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script type="module" src="js/login.js"></script>
+</body>
+</html>

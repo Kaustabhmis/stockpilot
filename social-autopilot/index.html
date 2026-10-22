@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Dashboard · Social Autopilot</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <nav class="nav" aria-label="Main">
+    <span class="nav__brand">Social Autopilot</span>
+    <ul>
+      <li><a href="index.html">Dashboard</a></li>
+      <li><a href="compose.html">New post</a></li>
+      <li><a href="accounts.html">Accounts</a></li>
+    </ul>
+  </nav>
+  <header class="topbar">
+    <h1>Dashboard</h1>
+    <button type="button" class="btn btn-ghost" id="logout">Log out</button>
+  </header>
+  <main id="main" class="page">
+    <section class="toolbar">
+      <p class="hint">Your latest posts. Tap one to open it.</p>
+      <a class="btn btn-primary" href="compose.html">New post</a>
+    </section>
+    <ul class="post-list" id="post-list" aria-live="polite"></ul>
+    <p class="empty" id="post-empty" hidden>No posts yet. Create your first post.</p>
+  </main>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script type="module" src="js/queue.js"></script>
+</body>
+</html>

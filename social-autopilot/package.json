@@ -1,0 +1,24 @@
+{
+  "name": "social-autopilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private social media automation for one business: AI drafts, approval, scheduled publishing.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup-sheet": "node --env-file=.env scripts/setup-sheet.js",
+    "secrets": "node scripts/generate-secrets.js",
+    "build": "node scripts/build-site.js",
+    "test": "node --test tests/lib.test.js tests/functions.test.js",
+    "dev": "netlify dev",
+    "deploy": "netlify deploy --prod"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^9.1.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+}
