@@ -183,7 +183,7 @@ function openProjectBuilder() {
 
   $('fProj').addEventListener('submit', function (e) {
     e.preventDefault();
-    if (!check()) { toast($('pMsg').textContent, 'err'); return; }
+    if (!check()) { toast($('pMsg').textContent, 'warn'); return; }
     var btn = e.target.querySelector('button[type=submit]');
     busy(btn, true, 'Creating…');
     api('createProject', { form: { name: $('pName').value, jobCategory: $('pCat').value,

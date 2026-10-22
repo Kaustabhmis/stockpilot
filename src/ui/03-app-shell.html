@@ -244,6 +244,9 @@
 <div id="scrim"><div id="modal" class="max-w-lg"></div></div>
 <div id="drawer"></div>
 <div id="toasts"></div>
+<div id="dlgScrim" onclick="if (event.target === this &amp;&amp; DLG.open &amp;&amp; DLG.open.kind === 'success') closeDialog(true)">
+  <div id="dlg" class="dlg" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgMsg"></div>
+</div>
 <div id="loadBar" aria-hidden="true"></div>
 <div id="loadPill" role="status" aria-live="polite"><span class="spinner spinner-sm"></span>Loading…</div>
 <div id="tip"></div>

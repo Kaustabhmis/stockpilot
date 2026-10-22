@@ -458,7 +458,7 @@ function delegateItem(itemId) {
   Object.keys(kinds).forEach(function (k) {
     (v[k] || []).forEach(function (i) { if (i.id === itemId) { found = i; kind = kinds[k]; } });
   });
-  if (!found) return toast('That point is no longer on the list.', 'err');
+  if (!found) return toast('That point is no longer on the list.', 'warn');
   openDelegate({ itemId: itemId, text: found.text, title: found.text.split('\n')[0].slice(0, 120),
     person: found.person, goal: found.goal, roadblock: kind === 'roadblock' && found.status !== 'cleared',
     done: found.tasks || [] });
@@ -498,7 +498,7 @@ function openDelegate(o) {
     e.preventDefault();
     var who = Array.prototype.filter.call(document.querySelectorAll('.dlWho'), function (c) { return c.checked; })
       .map(function (c) { return c.value; });
-    if (!who.length) return toast('Pick who it goes to.', 'err');
+    if (!who.length) return toast('Pick who it goes to.', 'warn');
     var btn = e.target.querySelector('button[type=submit]'); busy(btn, true);
     act('addMeetingAction', { form: { title: $('dlTitle').value, assignTo: who.join(','), dueDate: $('dlDue').value,
       priority: $('dlPri').value, goal: $('dlGoal').value, fromItem: o.itemId || '', context: o.itemId ? '' : o.text,
@@ -530,17 +530,26 @@ function openMinutes() {
 
 function endMeeting() {
   var r = MEET.v.meeting.ratings;
-  if (r.count < r.expected && !window.confirm(r.count + ' of ' + r.expected + ' have rated. End the meeting anyway?')) return;
-  api('endMeeting', { id: MEET.id }).then(function (res) {
-    stopMeetingPoll(); toast(res.message, 'ok');
-    return api('getMeeting', { id: MEET.id }).then(showEnded);
+  var ask = r.count < r.expected
+    ? confirmBox(r.count + ' of ' + r.expected + ' have rated. End the meeting anyway?',
+                 { title: 'End the meeting?', ok: 'End meeting', cancel: 'Keep it open' })
+    : Promise.resolve(true);
+  ask.then(function (yes) {
+    if (!yes) return;
+    return api('endMeeting', { id: MEET.id }).then(function (res) {
+      stopMeetingPoll(); toast(res.message, 'ok');
+      return api('getMeeting', { id: MEET.id }).then(showEnded);
+    });
   }).catch(function (e) { toast(e.message, 'err'); });
 }
 
 function cancelMeeting() {
-  if (!window.confirm('Cancel this meeting? Nothing is sent, and it is not kept in the history. Actions already created stay on people’s boards.')) return;
-  api('cancelMeeting', { id: MEET.id }).then(function (r) { toast(r.message, 'ok'); loadMeetings(); })
-    .catch(function (e) { toast(e.message, 'err'); });
+  confirmBox('Nothing is sent, and it is not kept in the history. Actions already created stay on people’s boards.',
+             { title: 'Cancel this meeting?', ok: 'Cancel meeting', cancel: 'Keep it', danger: true })
+    .then(function (yes) {
+      if (!yes) return;
+      return api('cancelMeeting', { id: MEET.id }).then(function (r) { toast(r.message, 'ok'); loadMeetings(); });
+    }).catch(function (e) { toast(e.message, 'err'); });
 }
 
 function summaryHtml(v) {

@@ -47,7 +47,7 @@ function openHelp(sectionId) {
       if (el.type === 'checkbox' || el.type === 'radio' || el.type === 'hidden') return el.checked && !el.defaultChecked;
       return el.value && el.value !== el.defaultValue;
     });
-    if (dirty) { toast('Finish or cancel this first — help would replace it.', 'info'); return; }
+    if (dirty) { toast('Finish or cancel this first — help would replace it.', 'warn'); return; }
   }
   var secs = helpSections();
   if (!secs.length) { openSupport(''); return; }      // a build without the manual still gets you to a person

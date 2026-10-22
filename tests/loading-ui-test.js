@@ -88,6 +88,7 @@ const SHOTS = process.argv[2];
 
   console.log('\n=== buttons ===');
   await p.evaluate(() => signOut(true)); await W(500);
+  await p.evaluate(() => closeDialog(true));
   await p.evaluate(() => goAuth('login')); await W(200);
   await p.fill('#liUser', 'nobody@example.com'); await p.fill('#liPass', 'wrongpass123');
   await p.click('#btnLogin'); await W(400);

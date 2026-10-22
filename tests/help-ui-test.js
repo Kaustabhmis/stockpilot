@@ -147,7 +147,8 @@ const post = (body) => new Promise((res, rej) => {
   await p.waitForTimeout(300);
   ok('help refuses to replace a form with something typed in it',
      await p.locator('#fAssign').count() === 1 && (await p.inputValue('#asTitle')) === 'Half-written task I care about');
-  ok('and says why', /help would replace it/.test(await p.locator('#toasts').textContent()));
+  ok('and says why', /help would replace it/.test(await p.locator('#dlg').textContent()) && await p.locator('#dlg.dlg-warning').isVisible());
+  await p.evaluate(() => closeDialog(true));
   await p.click('#asTitle'); await p.keyboard.press('?');
   ok('typing ? into a field types a ?', (await p.inputValue('#asTitle')).endsWith('?'));
   await p.evaluate(() => closeModal());

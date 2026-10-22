@@ -26,7 +26,7 @@ $('formForgot').addEventListener('submit', function (e) {
 
 $('formReset').addEventListener('submit', function (e) {
   e.preventDefault();
-  if ($('rsPass').value !== $('rsPass2').value) { toast('The two passwords do not match.', 'err'); return; }
+  if ($('rsPass').value !== $('rsPass2').value) { toast('The two passwords do not match.', 'warn'); return; }
   busy($('btnReset'), true, 'Saving…');
   var params = new URLSearchParams(location.search);
   api('resetPassword', { token: params.get('reset_token'), password: $('rsPass').value })
@@ -112,7 +112,13 @@ document.addEventListener('click', function (e) {
   if (!e.target.closest('#bellMenu') && !e.target.closest('#btnBell')) closeBell();
 });
 $('scrim').addEventListener('click', function (e) { if (e.target.id === 'scrim') closeModal(); });
-addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal(); closeDrawer(); closeBell(); toggleHomeMenu(false); } });
+addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  /* A dialog on top of a form closes first, and only the dialog. */
+  var was = DLG.open;
+  if (closeDialog(false) && was.kind !== 'success') { e.preventDefault(); return; }
+  closeModal(); closeDrawer(); closeBell(); toggleHomeMenu(false);
+});
 
 var rsz;
 addEventListener('resize', function () {
@@ -145,7 +151,7 @@ setInterval(function () {
   if (API_URL.indexOf('PASTE_YOUR') === 0) {
     /* Not connected yet: still show the home page, and say what is missing. */
     showHome();
-    toast('This site is not connected yet: add the /exec address to domebox-config.js.', 'err');
+    showDialog({ kind: 'error', title: 'Not connected yet', message: 'This site is not connected yet: add the /exec address to domebox-config.js.' });
     return;
   }
   /* ?demo=owner|manager|staff — an ad, a guide page or a sales email can

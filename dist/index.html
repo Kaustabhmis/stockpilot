@@ -279,6 +279,39 @@
   .hero-navy .kicker{color:#7fb2ff}
   .hero-navy .gold{color:#f5c542}
   .hero-navy .lede{color:#c9d6ea}
+  /* ---------- dialogs: error, warning, success, question ---------- */
+  #dlgScrim{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:16px;
+    background:rgba(15,27,45,.55);backdrop-filter:blur(2px)}
+  #dlgScrim.on{display:flex;animation:dlgFade .15s ease-out}
+  #dlgScrim.lite{background:transparent;backdrop-filter:none;pointer-events:none;align-items:flex-start;padding-top:84px}
+  #dlgScrim.lite .dlg{pointer-events:auto;max-width:380px;padding:22px 22px 18px}
+  .dlg{position:relative;width:100%;max-width:420px;background:#fff;border-radius:22px;padding:28px 26px 22px;text-align:center;
+    overflow:hidden;box-shadow:0 30px 70px -20px rgba(15,27,45,.55);
+    animation:dlgPop .2s cubic-bezier(.2,.9,.3,1.2)}
+  .dlg::before{content:'';position:absolute;top:0;left:0;right:0;height:6px;background:var(--dlg-c,#1e4fbf)}
+  .dlg-error{--dlg-c:#b42318;--dlg-bg:#fef3f2}
+  .dlg-warning{--dlg-c:#b54708;--dlg-bg:#fffaeb}
+  .dlg-success{--dlg-c:#067647;--dlg-bg:#ecfdf3}
+  .dlg-confirm{--dlg-c:#1e4fbf;--dlg-bg:#eef4ff}
+  .dlg-icon{width:64px;height:64px;margin:0 auto 14px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:var(--dlg-bg);color:var(--dlg-c);box-shadow:0 0 0 8px color-mix(in srgb,var(--dlg-bg) 55%,transparent)}
+  .dlg-icon .material-icons{font-size:36px}
+  .dlg-title{font-size:20px;font-weight:900;color:var(--ink);letter-spacing:-.01em}
+  .dlg-msg{margin-top:8px;font-size:14.5px;line-height:1.55;font-weight:600;color:var(--ink2);white-space:pre-line;word-break:break-word}
+  .dlg-actions{display:flex;gap:10px;justify-content:center;margin-top:22px}
+  .dlg-actions .btn{min-width:120px}
+  .dlg-error .dlg-actions .btn-p{background:#b42318}
+  .dlg-warning .dlg-actions .btn-p{background:#b54708}
+  .dlg-success .dlg-actions .btn-p{background:#067647}
+  .btn-danger{background:#b42318;color:#fff}
+  .btn-danger:hover{background:#912018}
+  .dlg-timer{position:absolute;left:0;bottom:0;height:4px;width:100%;background:var(--dlg-c);transform-origin:left;
+    animation:dlgTimer linear forwards}
+  @keyframes dlgTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+  @keyframes dlgFade{from{opacity:0}to{opacity:1}}
+  @keyframes dlgPop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){ .dlg,#dlgScrim.on{animation:none} }
+  @media (max-width:480px){ .dlg-actions{flex-direction:column-reverse} .dlg-actions .btn{width:100%} }
   /* ---------- loading: a bar at the top, a pill for slow calls, spinners in place ---------- */
   #loadBar{position:fixed;top:0;left:0;right:0;height:4px;z-index:100;overflow:hidden;opacity:0;transition:opacity .2s;pointer-events:none}
   #loadBar.on{opacity:1}
@@ -1160,6 +1193,9 @@
 <div id="scrim"><div id="modal" class="max-w-lg"></div></div>
 <div id="drawer"></div>
 <div id="toasts"></div>
+<div id="dlgScrim" onclick="if (event.target === this &amp;&amp; DLG.open &amp;&amp; DLG.open.kind === 'success') closeDialog(true)">
+  <div id="dlg" class="dlg" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgMsg"></div>
+</div>
 <div id="loadBar" aria-hidden="true"></div>
 <div id="loadPill" role="status" aria-live="polite"><span class="spinner spinner-sm"></span>Loading…</div>
 <div id="tip"></div>
@@ -1253,13 +1289,88 @@ function spin(label) {
 }
 
 /* ---------- small UI helpers --------------------------------------------- */
+/* Errors, warnings and successes open a proper dialog; 'info' stays a small
+   note in the corner for things that need no answer ("Starting payment…"). */
 function toast(msg, kind) {
+  /* Returns nothing, as it always has: code that carries on after a message
+     must not wait for somebody to close it. */
+  if (kind === 'err') { showDialog({ kind: 'error', message: msg }); return; }
+  if (kind === 'warn') { showDialog({ kind: 'warning', message: msg }); return; }
+  if (kind === 'ok' || kind === 'win') { showDialog({ kind: 'success', message: msg, autoClose: 2600 }); return; }
   var el = document.createElement('div');
   el.className = 'toast ' + (kind || 'info');
   el.textContent = msg;
   $('toasts').appendChild(el);
   setTimeout(function () { el.remove(); }, kind === 'err' ? 5500 : 3200);
 }
+/* ---------- dialogs -------------------------------------------------------
+   One box for every outcome: a red error, an amber warning, a green success,
+   or a question with two buttons. It sits above any open form, so an error
+   never throws away what somebody was typing. One at a time; the rest wait
+   their turn, and the same message twice in a row shows once. */
+var DLG = { open: null, queue: [], timer: null };
+var DLG_KINDS = {
+  error:   { icon: 'error',        title: 'Something went wrong' },
+  warning: { icon: 'warning',      title: 'Please check' },
+  success: { icon: 'check_circle', title: 'Done' },
+  confirm: { icon: 'help',         title: 'Are you sure?' }
+};
+function showDialog(o) {
+  return new Promise(function (resolve) {
+    o.resolve = resolve;
+    var last = DLG.open || DLG.queue[DLG.queue.length - 1];
+    if (last && last.kind === o.kind && last.message === o.message) return resolve(false);
+    /* A success note never holds up what comes after it. */
+    if (DLG.open && DLG.open.kind === 'success') closeDialog(true, true);
+    if (DLG.open) { DLG.queue.push(o); return; }
+    paintDialog(o);
+  });
+}
+function paintDialog(o) {
+  DLG.open = o;
+  var k = DLG_KINDS[o.kind] || DLG_KINDS.error;
+  var box = $('dlg');
+  box.className = 'dlg dlg-' + o.kind;
+  box.setAttribute('role', o.kind === 'success' ? 'status' : 'alertdialog');
+  box.innerHTML =
+    '<div class="dlg-icon"><span class="material-icons">' + k.icon + '</span></div>' +
+    '<h2 id="dlgTitle" class="dlg-title">' + esc(o.title || k.title) + '</h2>' +
+    '<p id="dlgMsg" class="dlg-msg">' + esc(o.message || '') + '</p>' +
+    '<div class="dlg-actions">' +
+      (o.kind === 'confirm'
+        ? '<button class="btn btn-g" data-a="no">' + esc(o.cancel || 'Cancel') + '</button>' +
+          '<button class="btn ' + (o.danger ? 'btn-danger' : 'btn-p') + '" data-a="yes">' + esc(o.ok || 'Yes') + '</button>'
+        : '<button class="btn btn-p" data-a="yes">' + esc(o.ok || 'OK') + '</button>') +
+    '</div>' +
+    (o.autoClose ? '<div class="dlg-timer" style="animation-duration:' + o.autoClose + 'ms"></div>' : '');
+  box.querySelectorAll('[data-a]').forEach(function (b) {
+    b.addEventListener('click', function () { closeDialog(b.dataset.a === 'yes'); });
+  });
+  /* Success floats without a backdrop, so work carries on underneath it;
+     anything that needs an answer dims the page and takes the focus. */
+  $('dlgScrim').classList.toggle('lite', o.kind === 'success');
+  $('dlgScrim').classList.add('on');
+  var focus = o.kind !== 'success' && box.querySelector('[data-a="' + (o.kind === 'confirm' && o.danger ? 'no' : 'yes') + '"]');
+  if (focus) { try { focus.focus(); } catch (e) {} }
+  clearTimeout(DLG.timer);
+  if (o.autoClose) DLG.timer = setTimeout(function () { if (DLG.open === o) closeDialog(true); }, o.autoClose);
+}
+function closeDialog(answer, keepQueue) {
+  var o = DLG.open;
+  if (!o) return false;
+  clearTimeout(DLG.timer);
+  DLG.open = null;
+  $('dlgScrim').classList.remove('on');
+  o.resolve(o.kind === 'confirm' ? !!answer : true);
+  var next = !keepQueue && DLG.queue.shift();
+  if (next) setTimeout(function () { paintDialog(next); }, 120);
+  return true;
+}
+/** A yes/no question. Resolves true only for the yes button. */
+function confirmBox(message, opts) {
+  return showDialog(Object.assign({ kind: 'confirm', message: message }, opts || {}));
+}
+
 function openModal(html, width) {
   $('modal').className = width || 'max-w-lg';
   $('modal').innerHTML = html;
@@ -1431,14 +1542,14 @@ function signOut(expired) {
      the demo and the trial are one click away. */
   if (wasDemo) {
     showHome();
-    if (expired) toast('The demo session ended. Open it again any time, or start your free trial.', 'info');
+    if (expired) showDialog({ kind: 'warning', title: 'The demo session ended', message: 'Open it again any time, or start your free trial.' });
     return;
   }
   /* Straight back to the sign-in form, because somebody who just signed out of
      their own workspace is far more likely to be switching accounts than
      reading the sales page. */
   goAuth('login');
-  if (expired) toast('Your session ended. Please sign in again.', 'info');
+  if (expired) showDialog({ kind: 'warning', title: 'You have been signed out', message: 'Your session ended. Please sign in again.' });
 }
 
 /**
@@ -2031,7 +2142,7 @@ function wireBoard() {
       if (!target || target.statuses.indexOf(t.status) > -1) return;
       var next = target.statuses[0];
       if (next === 'Awaiting Approval' || next === 'Delegation Proposed') {
-        toast('Approval is not something you can drag a task into.', 'err'); return; }
+        toast('Approval is not something you can drag a task into.', 'warn'); return; }
       if (next === 'In Progress' && t.status === 'For Review') { openStatus(t.id, 'In Progress'); return; }
       doTransition(t.id, next);
     });
@@ -2060,7 +2171,7 @@ function openTask(id) {
     return api('getArchive', { q: id, pageSize: 10 }).then(function (r) {
       openTask.fetching = false;
       var hit = (r.tasks || []).filter(function (x) { return String(x.id) === String(id); })[0];
-      if (!hit) return toast('That task is not one you can see.', 'err');
+      if (!hit) return toast('That task is not one you can see.', 'warn');
       STATE.arch = STATE.arch || { rows: [], total: 0, page: -1 };
       STATE.arch.rows.push(hit);
       openTask(id);
@@ -2242,7 +2353,7 @@ function openStatus(id, status) {
     e.preventDefault();
     var note = $('stNote').value.trim();
     var due = rework ? $('stDate').value : null;
-    if (rework && !due) { toast('Set a new deadline.', 'err'); return; }
+    if (rework && !due) { toast('Set a new deadline.', 'warn'); return; }
     busy(e.target.querySelector('button[type=submit]'), true);
     doTransition(id, status, note, due).then(closeModal);
   });
@@ -2251,7 +2362,7 @@ function openStatus(id, status) {
 function openDelegate(t) {
   var others = (STATE.data.staff || []).filter(function (u) {
     return u.username !== t.assignee && u.active !== false; });
-  if (!others.length) { toast('There is nobody else to hand it to.', 'err'); return; }
+  if (!others.length) { toast('There is nobody else to hand it to.', 'warn'); return; }
   openModal('<form id="fDel" class="p-6 lg:p-7">' +
     '<h2 class="text-xl font-black mb-1">Hand over "' + esc(t.title) + '"</h2>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">Unless you are an Admin, your manager approves the hand-off.</p>' +
@@ -2272,7 +2383,7 @@ function openBlocker(t) {
   var cands = (STATE.data.tasks || []).filter(function (x) {
     return x.id !== t.id && ['Verified','Rejected','Cancelled'].indexOf(x.status) < 0 &&
            (t.blockedBy || []).indexOf(x.id) < 0; });
-  if (!cands.length) { toast('No other open task could block this.', 'err'); return; }
+  if (!cands.length) { toast('No other open task could block this.', 'warn'); return; }
   openModal('<form id="fBlk" class="p-6 lg:p-7">' +
     '<h2 class="text-xl font-black mb-5">What is blocking "' + esc(t.title) + '"?</h2>' +
     '<select id="blkId" class="in mb-5">' + cands.map(function (x) {
@@ -2325,7 +2436,7 @@ function openEdit(t) {
 /* ---------- assign ------------------------------------------------------- */
 function openAssign() {
   var staff = (STATE.data.staff || []).filter(function (u) { return u.active !== false; });
-  if (!staff.length) { toast('Add a team member first.', 'err'); return; }
+  if (!staff.length) { toast('Add a team member first.', 'warn'); return; }
   var cats = STATE.data.categories || [];
   var u = STATE.usage;
   var left = (u.maxTasks == null) ? null : Math.max(0, u.maxTasks - u.tasks);
@@ -2432,7 +2543,7 @@ function openAssign() {
     e.preventDefault();
     var who = Array.prototype.slice.call(document.querySelectorAll('.asWho:checked'))
       .map(function (c) { return c.value; });
-    if (!who.length) { toast('Pick at least one person.', 'err'); return; }
+    if (!who.length) { toast('Pick at least one person.', 'warn'); return; }
     var btn = e.target.querySelector('button[type=submit]');
     busy(btn, true, 'Assigning…');
     api('createTask', { form: { title: $('asTitle').value, desc: $('asDesc').value,
@@ -2593,7 +2704,7 @@ function openUser(u) {
 
   $('fUser').addEventListener('submit', function (e) {
     e.preventDefault();
-    if (!checkKras()) { toast('Fix the KRA weights first.', 'err'); return; }
+    if (!checkKras()) { toast('Fix the KRA weights first.', 'warn'); return; }
     var rows = kras.filter(function (k) { return String(k.item || '').trim(); });
     var form = { name:$('uName').value, username:$('uUser').value, email:$('uMail').value,
       phone:$('uPhone').value, role:$('uRole').value, dept:$('uDept').value,
@@ -2763,7 +2874,7 @@ function openCategories() {
   $('priAdd').addEventListener('click', function () { levels.push({ name: '', weight: 2 }); drawPri(); });
 
   $('catSave').addEventListener('click', function () {
-    if (!checkPri()) { toast($('priMsg').textContent, 'err'); return; }
+    if (!checkPri()) { toast($('priMsg').textContent, 'warn'); return; }
     var btn = $('catSave');
     busy(btn, true, 'Saving…');
     api('updateCategories', { categories: cats.filter(function (c) { return String(c).trim(); }) })
@@ -3193,7 +3304,7 @@ function loadAppraisal(username) {
       var behs = Array.prototype.slice.call(document.querySelectorAll('.behR')).map(function (s) {
         return { rating: Number(s.value), weight: Number(s.dataset.w) || 1 }; });
       if (!kras.some(function (k) { return k.rating > 0; }) && !behs.some(function (b) { return b.rating > 0; })) {
-        toast('Rate at least one item before submitting.', 'err'); return;
+        toast('Rate at least one item before submitting.', 'warn'); return;
       }
       busy($('apSubmit'), true, 'Saving…');
       api('submitAppraisal', { data: { employee: username, delegationScore: f.delegationScore,
@@ -3403,7 +3514,7 @@ function payNow(planName, promo) {
             STATE.plan = res.plan; return refresh();
           }).catch(function (e) { toast(e.message, 'err'); });
         },
-        modal: { ondismiss: function () { toast('Payment cancelled.', 'info'); } }
+        modal: { ondismiss: function () { showDialog({ kind: 'warning', title: 'Payment cancelled', message: 'Nothing was charged. You can choose a plan again whenever you are ready.' }); } }
       });
       rz.open();
     })
@@ -3429,7 +3540,7 @@ function openAi() {
     b.addEventListener('click', function () { $('aiQ').value = b.textContent; $('aiGo').click(); }); });
   $('aiGo').addEventListener('click', function () {
     var q = $('aiQ').value.trim();
-    if (!q) { toast('Type a question first.', 'err'); return; }
+    if (!q) { toast('Type a question first.', 'warn'); return; }
     busy($('aiGo'), true, 'Thinking…');
     $('aiOut').innerHTML = '';
     api('aiInsight', { question: q })
@@ -3673,7 +3784,7 @@ function openKraEditor(username) {
 
     $('fKra').addEventListener('submit', function (e) {
       e.preventDefault();
-      if (!check()) { toast('Fix the weights first.', 'err'); return; }
+      if (!check()) { toast('Fix the weights first.', 'warn'); return; }
       var btn = e.target.querySelector('button[type=submit]');
       busy(btn, true, 'Saving…');
       api('saveKra', { data: { employee: emp.username,
@@ -3874,7 +3985,7 @@ function openProjectBuilder() {
 
   $('fProj').addEventListener('submit', function (e) {
     e.preventDefault();
-    if (!check()) { toast($('pMsg').textContent, 'err'); return; }
+    if (!check()) { toast($('pMsg').textContent, 'warn'); return; }
     var btn = e.target.querySelector('button[type=submit]');
     busy(btn, true, 'Creating…');
     api('createProject', { form: { name: $('pName').value, jobCategory: $('pCat').value,
@@ -3911,7 +4022,7 @@ function openCookie(preset) {
   });
 
   if (!staff.length) {
-    toast('Cookie points go to the people who report to you, and nobody does yet.', 'err');
+    toast('Cookie points go to the people who report to you, and nobody does yet.', 'warn');
     return;
   }
 
@@ -4651,7 +4762,7 @@ function openHelp(sectionId) {
       if (el.type === 'checkbox' || el.type === 'radio' || el.type === 'hidden') return el.checked && !el.defaultChecked;
       return el.value && el.value !== el.defaultValue;
     });
-    if (dirty) { toast('Finish or cancel this first — help would replace it.', 'info'); return; }
+    if (dirty) { toast('Finish or cancel this first — help would replace it.', 'warn'); return; }
   }
   var secs = helpSections();
   if (!secs.length) { openSupport(''); return; }      // a build without the manual still gets you to a person
@@ -5610,7 +5721,7 @@ function delegateItem(itemId) {
   Object.keys(kinds).forEach(function (k) {
     (v[k] || []).forEach(function (i) { if (i.id === itemId) { found = i; kind = kinds[k]; } });
   });
-  if (!found) return toast('That point is no longer on the list.', 'err');
+  if (!found) return toast('That point is no longer on the list.', 'warn');
   openDelegate({ itemId: itemId, text: found.text, title: found.text.split('\n')[0].slice(0, 120),
     person: found.person, goal: found.goal, roadblock: kind === 'roadblock' && found.status !== 'cleared',
     done: found.tasks || [] });
@@ -5650,7 +5761,7 @@ function openDelegate(o) {
     e.preventDefault();
     var who = Array.prototype.filter.call(document.querySelectorAll('.dlWho'), function (c) { return c.checked; })
       .map(function (c) { return c.value; });
-    if (!who.length) return toast('Pick who it goes to.', 'err');
+    if (!who.length) return toast('Pick who it goes to.', 'warn');
     var btn = e.target.querySelector('button[type=submit]'); busy(btn, true);
     act('addMeetingAction', { form: { title: $('dlTitle').value, assignTo: who.join(','), dueDate: $('dlDue').value,
       priority: $('dlPri').value, goal: $('dlGoal').value, fromItem: o.itemId || '', context: o.itemId ? '' : o.text,
@@ -5682,17 +5793,26 @@ function openMinutes() {
 
 function endMeeting() {
   var r = MEET.v.meeting.ratings;
-  if (r.count < r.expected && !window.confirm(r.count + ' of ' + r.expected + ' have rated. End the meeting anyway?')) return;
-  api('endMeeting', { id: MEET.id }).then(function (res) {
-    stopMeetingPoll(); toast(res.message, 'ok');
-    return api('getMeeting', { id: MEET.id }).then(showEnded);
+  var ask = r.count < r.expected
+    ? confirmBox(r.count + ' of ' + r.expected + ' have rated. End the meeting anyway?',
+                 { title: 'End the meeting?', ok: 'End meeting', cancel: 'Keep it open' })
+    : Promise.resolve(true);
+  ask.then(function (yes) {
+    if (!yes) return;
+    return api('endMeeting', { id: MEET.id }).then(function (res) {
+      stopMeetingPoll(); toast(res.message, 'ok');
+      return api('getMeeting', { id: MEET.id }).then(showEnded);
+    });
   }).catch(function (e) { toast(e.message, 'err'); });
 }
 
 function cancelMeeting() {
-  if (!window.confirm('Cancel this meeting? Nothing is sent, and it is not kept in the history. Actions already created stay on people’s boards.')) return;
-  api('cancelMeeting', { id: MEET.id }).then(function (r) { toast(r.message, 'ok'); loadMeetings(); })
-    .catch(function (e) { toast(e.message, 'err'); });
+  confirmBox('Nothing is sent, and it is not kept in the history. Actions already created stay on people’s boards.',
+             { title: 'Cancel this meeting?', ok: 'Cancel meeting', cancel: 'Keep it', danger: true })
+    .then(function (yes) {
+      if (!yes) return;
+      return api('cancelMeeting', { id: MEET.id }).then(function (r) { toast(r.message, 'ok'); loadMeetings(); });
+    }).catch(function (e) { toast(e.message, 'err'); });
 }
 
 function summaryHtml(v) {
@@ -5849,7 +5969,7 @@ function roiCalc() {
 function sendCallback(e) {
   e.preventDefault();
   var phone = String($('cbPhone').value || '').replace(/[^\d+]/g, '');
-  if (phone.replace(/\D/g, '').length < 10) { toast('Please enter a phone number we can call.', 'err'); return false; }
+  if (phone.replace(/\D/g, '').length < 10) { toast('Please enter a phone number we can call.', 'warn'); return false; }
   var btn = $('btnCallback');
   busy(btn, true, 'Sending…');
   api('contactSales', { form: {
@@ -5917,7 +6037,7 @@ $('formForgot').addEventListener('submit', function (e) {
 
 $('formReset').addEventListener('submit', function (e) {
   e.preventDefault();
-  if ($('rsPass').value !== $('rsPass2').value) { toast('The two passwords do not match.', 'err'); return; }
+  if ($('rsPass').value !== $('rsPass2').value) { toast('The two passwords do not match.', 'warn'); return; }
   busy($('btnReset'), true, 'Saving…');
   var params = new URLSearchParams(location.search);
   api('resetPassword', { token: params.get('reset_token'), password: $('rsPass').value })
@@ -6003,7 +6123,13 @@ document.addEventListener('click', function (e) {
   if (!e.target.closest('#bellMenu') && !e.target.closest('#btnBell')) closeBell();
 });
 $('scrim').addEventListener('click', function (e) { if (e.target.id === 'scrim') closeModal(); });
-addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal(); closeDrawer(); closeBell(); toggleHomeMenu(false); } });
+addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  /* A dialog on top of a form closes first, and only the dialog. */
+  var was = DLG.open;
+  if (closeDialog(false) && was.kind !== 'success') { e.preventDefault(); return; }
+  closeModal(); closeDrawer(); closeBell(); toggleHomeMenu(false);
+});
 
 var rsz;
 addEventListener('resize', function () {
@@ -6036,7 +6162,7 @@ setInterval(function () {
   if (API_URL.indexOf('PASTE_YOUR') === 0) {
     /* Not connected yet: still show the home page, and say what is missing. */
     showHome();
-    toast('This site is not connected yet: add the /exec address to domebox-config.js.', 'err');
+    showDialog({ kind: 'error', title: 'Not connected yet', message: 'This site is not connected yet: add the /exec address to domebox-config.js.' });
     return;
   }
   /* ?demo=owner|manager|staff — an ad, a guide page or a sales email can

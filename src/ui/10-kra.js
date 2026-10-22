@@ -182,7 +182,7 @@ function openKraEditor(username) {
 
     $('fKra').addEventListener('submit', function (e) {
       e.preventDefault();
-      if (!check()) { toast('Fix the weights first.', 'err'); return; }
+      if (!check()) { toast('Fix the weights first.', 'warn'); return; }
       var btn = e.target.querySelector('button[type=submit]');
       busy(btn, true, 'Saving…');
       api('saveKra', { data: { employee: emp.username,

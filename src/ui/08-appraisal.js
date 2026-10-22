@@ -110,7 +110,7 @@ function loadAppraisal(username) {
       var behs = Array.prototype.slice.call(document.querySelectorAll('.behR')).map(function (s) {
         return { rating: Number(s.value), weight: Number(s.dataset.w) || 1 }; });
       if (!kras.some(function (k) { return k.rating > 0; }) && !behs.some(function (b) { return b.rating > 0; })) {
-        toast('Rate at least one item before submitting.', 'err'); return;
+        toast('Rate at least one item before submitting.', 'warn'); return;
       }
       busy($('apSubmit'), true, 'Saving…');
       api('submitAppraisal', { data: { employee: username, delegationScore: f.delegationScore,
@@ -320,7 +320,7 @@ function payNow(planName, promo) {
             STATE.plan = res.plan; return refresh();
           }).catch(function (e) { toast(e.message, 'err'); });
         },
-        modal: { ondismiss: function () { toast('Payment cancelled.', 'info'); } }
+        modal: { ondismiss: function () { showDialog({ kind: 'warning', title: 'Payment cancelled', message: 'Nothing was charged. You can choose a plan again whenever you are ready.' }); } }
       });
       rz.open();
     })
@@ -346,7 +346,7 @@ function openAi() {
     b.addEventListener('click', function () { $('aiQ').value = b.textContent; $('aiGo').click(); }); });
   $('aiGo').addEventListener('click', function () {
     var q = $('aiQ').value.trim();
-    if (!q) { toast('Type a question first.', 'err'); return; }
+    if (!q) { toast('Type a question first.', 'warn'); return; }
     busy($('aiGo'), true, 'Thinking…');
     $('aiOut').innerHTML = '';
     api('aiInsight', { question: q })

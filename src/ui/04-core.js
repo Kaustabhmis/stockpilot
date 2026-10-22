@@ -84,13 +84,88 @@ function spin(label) {
 }
 
 /* ---------- small UI helpers --------------------------------------------- */
+/* Errors, warnings and successes open a proper dialog; 'info' stays a small
+   note in the corner for things that need no answer ("Starting payment…"). */
 function toast(msg, kind) {
+  /* Returns nothing, as it always has: code that carries on after a message
+     must not wait for somebody to close it. */
+  if (kind === 'err') { showDialog({ kind: 'error', message: msg }); return; }
+  if (kind === 'warn') { showDialog({ kind: 'warning', message: msg }); return; }
+  if (kind === 'ok' || kind === 'win') { showDialog({ kind: 'success', message: msg, autoClose: 2600 }); return; }
   var el = document.createElement('div');
   el.className = 'toast ' + (kind || 'info');
   el.textContent = msg;
   $('toasts').appendChild(el);
   setTimeout(function () { el.remove(); }, kind === 'err' ? 5500 : 3200);
 }
+/* ---------- dialogs -------------------------------------------------------
+   One box for every outcome: a red error, an amber warning, a green success,
+   or a question with two buttons. It sits above any open form, so an error
+   never throws away what somebody was typing. One at a time; the rest wait
+   their turn, and the same message twice in a row shows once. */
+var DLG = { open: null, queue: [], timer: null };
+var DLG_KINDS = {
+  error:   { icon: 'error',        title: 'Something went wrong' },
+  warning: { icon: 'warning',      title: 'Please check' },
+  success: { icon: 'check_circle', title: 'Done' },
+  confirm: { icon: 'help',         title: 'Are you sure?' }
+};
+function showDialog(o) {
+  return new Promise(function (resolve) {
+    o.resolve = resolve;
+    var last = DLG.open || DLG.queue[DLG.queue.length - 1];
+    if (last && last.kind === o.kind && last.message === o.message) return resolve(false);
+    /* A success note never holds up what comes after it. */
+    if (DLG.open && DLG.open.kind === 'success') closeDialog(true, true);
+    if (DLG.open) { DLG.queue.push(o); return; }
+    paintDialog(o);
+  });
+}
+function paintDialog(o) {
+  DLG.open = o;
+  var k = DLG_KINDS[o.kind] || DLG_KINDS.error;
+  var box = $('dlg');
+  box.className = 'dlg dlg-' + o.kind;
+  box.setAttribute('role', o.kind === 'success' ? 'status' : 'alertdialog');
+  box.innerHTML =
+    '<div class="dlg-icon"><span class="material-icons">' + k.icon + '</span></div>' +
+    '<h2 id="dlgTitle" class="dlg-title">' + esc(o.title || k.title) + '</h2>' +
+    '<p id="dlgMsg" class="dlg-msg">' + esc(o.message || '') + '</p>' +
+    '<div class="dlg-actions">' +
+      (o.kind === 'confirm'
+        ? '<button class="btn btn-g" data-a="no">' + esc(o.cancel || 'Cancel') + '</button>' +
+          '<button class="btn ' + (o.danger ? 'btn-danger' : 'btn-p') + '" data-a="yes">' + esc(o.ok || 'Yes') + '</button>'
+        : '<button class="btn btn-p" data-a="yes">' + esc(o.ok || 'OK') + '</button>') +
+    '</div>' +
+    (o.autoClose ? '<div class="dlg-timer" style="animation-duration:' + o.autoClose + 'ms"></div>' : '');
+  box.querySelectorAll('[data-a]').forEach(function (b) {
+    b.addEventListener('click', function () { closeDialog(b.dataset.a === 'yes'); });
+  });
+  /* Success floats without a backdrop, so work carries on underneath it;
+     anything that needs an answer dims the page and takes the focus. */
+  $('dlgScrim').classList.toggle('lite', o.kind === 'success');
+  $('dlgScrim').classList.add('on');
+  var focus = o.kind !== 'success' && box.querySelector('[data-a="' + (o.kind === 'confirm' && o.danger ? 'no' : 'yes') + '"]');
+  if (focus) { try { focus.focus(); } catch (e) {} }
+  clearTimeout(DLG.timer);
+  if (o.autoClose) DLG.timer = setTimeout(function () { if (DLG.open === o) closeDialog(true); }, o.autoClose);
+}
+function closeDialog(answer, keepQueue) {
+  var o = DLG.open;
+  if (!o) return false;
+  clearTimeout(DLG.timer);
+  DLG.open = null;
+  $('dlgScrim').classList.remove('on');
+  o.resolve(o.kind === 'confirm' ? !!answer : true);
+  var next = !keepQueue && DLG.queue.shift();
+  if (next) setTimeout(function () { paintDialog(next); }, 120);
+  return true;
+}
+/** A yes/no question. Resolves true only for the yes button. */
+function confirmBox(message, opts) {
+  return showDialog(Object.assign({ kind: 'confirm', message: message }, opts || {}));
+}
+
 function openModal(html, width) {
   $('modal').className = width || 'max-w-lg';
   $('modal').innerHTML = html;
@@ -262,14 +337,14 @@ function signOut(expired) {
      the demo and the trial are one click away. */
   if (wasDemo) {
     showHome();
-    if (expired) toast('The demo session ended. Open it again any time, or start your free trial.', 'info');
+    if (expired) showDialog({ kind: 'warning', title: 'The demo session ended', message: 'Open it again any time, or start your free trial.' });
     return;
   }
   /* Straight back to the sign-in form, because somebody who just signed out of
      their own workspace is far more likely to be switching accounts than
      reading the sales page. */
   goAuth('login');
-  if (expired) toast('Your session ended. Please sign in again.', 'info');
+  if (expired) showDialog({ kind: 'warning', title: 'You have been signed out', message: 'Your session ended. Please sign in again.' });
 }
 
 /**

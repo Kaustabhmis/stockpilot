@@ -341,6 +341,30 @@ neutral now. The privacy page still lists each kind of sub-processor and what it
 What cannot be hidden from a technical visitor without a proxy: the browser's Network tab
 shows each call going to the backend's own address, and the security header must allow it.
 
+### 4v. Loading animations, proper dialogs, and a final pass
+
+Every wait the person can see now shows something:
+- a bar across the top while any request is running
+- a "Loading…" label if the wait goes past about a second
+- spinners in buttons and in each panel
+- placeholder tiles on the first open
+
+Background refreshes stay silent.
+
+Errors (red), warnings (amber) and successes (green) open the app's own dialog
+instead of a small note in the corner. Two yes/no questions in Meetings used the
+browser's grey confirm box; they now use the same dialog. A success floats
+without dimming the page and closes by itself, so it never holds up work. An
+error replaces it at once. A dialog over an open form never loses what was typed.
+
+`loading-ui-test.js` and `dialog-ui-test.js` pin this. They found one real
+problem on the way: the message helper returned the dialog's promise, so code
+after it would have waited for the dialog to be closed. It returns nothing again.
+
+Final pass: all 55 suites pass. The browser suites were also run against the
+minified upload folder, and they pass there too. No secret, admin function or
+stack name is in the website folder.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

@@ -87,7 +87,7 @@ const serve = (dir, port) => new Promise((r) => {
   const p = await page('http://localhost:8101');
   await p.goto('http://localhost:8101/', { waitUntil: 'networkidle' }); await p.waitForTimeout(600);
   ok('the home page opens', await p.locator('#view-home').isVisible());
-  ok('and is connected (no "not connected" message)', !(await p.locator('#toasts').textContent()).includes('not connected'));
+  ok('and is connected (no "not connected" message)', !(await p.locator('#dlg').textContent()).includes('not connected'));
   ok('it took the address from domebox-config.js', await p.evaluate(() => API_URL) === EXEC);
   await p.locator('#demo button:has-text("as the owner")').click(); await p.waitForTimeout(3500);
   ok('the live demo opens through the backend', await p.locator('#view-app').isVisible() && /Live demo/.test(await p.locator('#banner').textContent()));
@@ -111,8 +111,8 @@ const serve = (dir, port) => new Promise((r) => {
   const q = await page('http://localhost:8102');
   await q.goto('http://localhost:8102/', { waitUntil: 'networkidle' }); await q.waitForTimeout(600);
   ok('the home page still shows', await q.locator('#view-home').isVisible());
-  ok('and says plainly what is missing', /not connected yet.*domebox-config\.js/.test(await q.locator('#toasts').textContent()),
-     await q.locator('#toasts').textContent());
+  ok('and says plainly what is missing', /not connected yet.*domebox-config\.js/.test(await q.locator('#dlg').textContent()) && await q.locator('#dlg.dlg-error').isVisible(),
+     await q.locator('#dlg').textContent());
 
   await b.close(); s1.close(); s2.close();
   console.log(`\n${pass} passed, ${fail} failed`);

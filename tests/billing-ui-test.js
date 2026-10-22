@@ -60,14 +60,15 @@ const post = (body) => new Promise((res, rej) => {
   await p.fill('#bGstin', 'NOTAGSTIN');
   await p.click('#bSave'); await p.waitForTimeout(800);
   ok('the form says so rather than saving it',
-     /does not look right/.test(await p.locator('#toasts').textContent()));
+     /does not look right/.test(await p.locator('#dlg').textContent()) && await p.locator('#dlg.dlg-error, #dlg.dlg-warning').isVisible());
+  await p.evaluate(() => closeDialog(true));
   ok('and the form is still open to correct', await p.locator('#bGstin').count() === 1);
 
   await p.fill('#bGstin', '19AABCB1234C1ZQ');
   await p.fill('#bAddr', '7 Camac Street'); await p.fill('#bCity', 'Kolkata');
   await p.fill('#bPin', '700017');
   await p.click('#bSave'); await p.waitForTimeout(900);
-  ok('a good one saves', /saved/i.test(await p.locator('#toasts').textContent()));
+  ok('a good one saves', /saved/i.test(await p.locator('#dlg').textContent()) && await p.locator('#dlg.dlg-success').isVisible());
   ok('the state was taken from the GSTIN',
      (await post({ action: 'getBilling', token: (await post({ action: 'login',
        username: email, password: 'strongpass123' })).token })).billing.state === 'West Bengal');

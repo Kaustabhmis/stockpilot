@@ -143,7 +143,7 @@ function openUser(u) {
 
   $('fUser').addEventListener('submit', function (e) {
     e.preventDefault();
-    if (!checkKras()) { toast('Fix the KRA weights first.', 'err'); return; }
+    if (!checkKras()) { toast('Fix the KRA weights first.', 'warn'); return; }
     var rows = kras.filter(function (k) { return String(k.item || '').trim(); });
     var form = { name:$('uName').value, username:$('uUser').value, email:$('uMail').value,
       phone:$('uPhone').value, role:$('uRole').value, dept:$('uDept').value,
@@ -313,7 +313,7 @@ function openCategories() {
   $('priAdd').addEventListener('click', function () { levels.push({ name: '', weight: 2 }); drawPri(); });
 
   $('catSave').addEventListener('click', function () {
-    if (!checkPri()) { toast($('priMsg').textContent, 'err'); return; }
+    if (!checkPri()) { toast($('priMsg').textContent, 'warn'); return; }
     var btn = $('catSave');
     busy(btn, true, 'Saving…');
     api('updateCategories', { categories: cats.filter(function (c) { return String(c).trim(); }) })

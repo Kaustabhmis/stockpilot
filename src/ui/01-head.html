@@ -279,6 +279,39 @@
   .hero-navy .kicker{color:#7fb2ff}
   .hero-navy .gold{color:#f5c542}
   .hero-navy .lede{color:#c9d6ea}
+  /* ---------- dialogs: error, warning, success, question ---------- */
+  #dlgScrim{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:16px;
+    background:rgba(15,27,45,.55);backdrop-filter:blur(2px)}
+  #dlgScrim.on{display:flex;animation:dlgFade .15s ease-out}
+  #dlgScrim.lite{background:transparent;backdrop-filter:none;pointer-events:none;align-items:flex-start;padding-top:84px}
+  #dlgScrim.lite .dlg{pointer-events:auto;max-width:380px;padding:22px 22px 18px}
+  .dlg{position:relative;width:100%;max-width:420px;background:#fff;border-radius:22px;padding:28px 26px 22px;text-align:center;
+    overflow:hidden;box-shadow:0 30px 70px -20px rgba(15,27,45,.55);
+    animation:dlgPop .2s cubic-bezier(.2,.9,.3,1.2)}
+  .dlg::before{content:'';position:absolute;top:0;left:0;right:0;height:6px;background:var(--dlg-c,#1e4fbf)}
+  .dlg-error{--dlg-c:#b42318;--dlg-bg:#fef3f2}
+  .dlg-warning{--dlg-c:#b54708;--dlg-bg:#fffaeb}
+  .dlg-success{--dlg-c:#067647;--dlg-bg:#ecfdf3}
+  .dlg-confirm{--dlg-c:#1e4fbf;--dlg-bg:#eef4ff}
+  .dlg-icon{width:64px;height:64px;margin:0 auto 14px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:var(--dlg-bg);color:var(--dlg-c);box-shadow:0 0 0 8px color-mix(in srgb,var(--dlg-bg) 55%,transparent)}
+  .dlg-icon .material-icons{font-size:36px}
+  .dlg-title{font-size:20px;font-weight:900;color:var(--ink);letter-spacing:-.01em}
+  .dlg-msg{margin-top:8px;font-size:14.5px;line-height:1.55;font-weight:600;color:var(--ink2);white-space:pre-line;word-break:break-word}
+  .dlg-actions{display:flex;gap:10px;justify-content:center;margin-top:22px}
+  .dlg-actions .btn{min-width:120px}
+  .dlg-error .dlg-actions .btn-p{background:#b42318}
+  .dlg-warning .dlg-actions .btn-p{background:#b54708}
+  .dlg-success .dlg-actions .btn-p{background:#067647}
+  .btn-danger{background:#b42318;color:#fff}
+  .btn-danger:hover{background:#912018}
+  .dlg-timer{position:absolute;left:0;bottom:0;height:4px;width:100%;background:var(--dlg-c);transform-origin:left;
+    animation:dlgTimer linear forwards}
+  @keyframes dlgTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+  @keyframes dlgFade{from{opacity:0}to{opacity:1}}
+  @keyframes dlgPop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){ .dlg,#dlgScrim.on{animation:none} }
+  @media (max-width:480px){ .dlg-actions{flex-direction:column-reverse} .dlg-actions .btn{width:100%} }
   /* ---------- loading: a bar at the top, a pill for slow calls, spinners in place ---------- */
   #loadBar{position:fixed;top:0;left:0;right:0;height:4px;z-index:100;overflow:hidden;opacity:0;transition:opacity .2s;pointer-events:none}
   #loadBar.on{opacity:1}

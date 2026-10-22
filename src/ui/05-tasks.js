@@ -283,7 +283,7 @@ function wireBoard() {
       if (!target || target.statuses.indexOf(t.status) > -1) return;
       var next = target.statuses[0];
       if (next === 'Awaiting Approval' || next === 'Delegation Proposed') {
-        toast('Approval is not something you can drag a task into.', 'err'); return; }
+        toast('Approval is not something you can drag a task into.', 'warn'); return; }
       if (next === 'In Progress' && t.status === 'For Review') { openStatus(t.id, 'In Progress'); return; }
       doTransition(t.id, next);
     });
@@ -312,7 +312,7 @@ function openTask(id) {
     return api('getArchive', { q: id, pageSize: 10 }).then(function (r) {
       openTask.fetching = false;
       var hit = (r.tasks || []).filter(function (x) { return String(x.id) === String(id); })[0];
-      if (!hit) return toast('That task is not one you can see.', 'err');
+      if (!hit) return toast('That task is not one you can see.', 'warn');
       STATE.arch = STATE.arch || { rows: [], total: 0, page: -1 };
       STATE.arch.rows.push(hit);
       openTask(id);
@@ -494,7 +494,7 @@ function openStatus(id, status) {
     e.preventDefault();
     var note = $('stNote').value.trim();
     var due = rework ? $('stDate').value : null;
-    if (rework && !due) { toast('Set a new deadline.', 'err'); return; }
+    if (rework && !due) { toast('Set a new deadline.', 'warn'); return; }
     busy(e.target.querySelector('button[type=submit]'), true);
     doTransition(id, status, note, due).then(closeModal);
   });
@@ -503,7 +503,7 @@ function openStatus(id, status) {
 function openDelegate(t) {
   var others = (STATE.data.staff || []).filter(function (u) {
     return u.username !== t.assignee && u.active !== false; });
-  if (!others.length) { toast('There is nobody else to hand it to.', 'err'); return; }
+  if (!others.length) { toast('There is nobody else to hand it to.', 'warn'); return; }
   openModal('<form id="fDel" class="p-6 lg:p-7">' +
     '<h2 class="text-xl font-black mb-1">Hand over "' + esc(t.title) + '"</h2>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">Unless you are an Admin, your manager approves the hand-off.</p>' +
@@ -524,7 +524,7 @@ function openBlocker(t) {
   var cands = (STATE.data.tasks || []).filter(function (x) {
     return x.id !== t.id && ['Verified','Rejected','Cancelled'].indexOf(x.status) < 0 &&
            (t.blockedBy || []).indexOf(x.id) < 0; });
-  if (!cands.length) { toast('No other open task could block this.', 'err'); return; }
+  if (!cands.length) { toast('No other open task could block this.', 'warn'); return; }
   openModal('<form id="fBlk" class="p-6 lg:p-7">' +
     '<h2 class="text-xl font-black mb-5">What is blocking "' + esc(t.title) + '"?</h2>' +
     '<select id="blkId" class="in mb-5">' + cands.map(function (x) {
@@ -577,7 +577,7 @@ function openEdit(t) {
 /* ---------- assign ------------------------------------------------------- */
 function openAssign() {
   var staff = (STATE.data.staff || []).filter(function (u) { return u.active !== false; });
-  if (!staff.length) { toast('Add a team member first.', 'err'); return; }
+  if (!staff.length) { toast('Add a team member first.', 'warn'); return; }
   var cats = STATE.data.categories || [];
   var u = STATE.usage;
   var left = (u.maxTasks == null) ? null : Math.max(0, u.maxTasks - u.tasks);
@@ -684,7 +684,7 @@ function openAssign() {
     e.preventDefault();
     var who = Array.prototype.slice.call(document.querySelectorAll('.asWho:checked'))
       .map(function (c) { return c.value; });
-    if (!who.length) { toast('Pick at least one person.', 'err'); return; }
+    if (!who.length) { toast('Pick at least one person.', 'warn'); return; }
     var btn = e.target.querySelector('button[type=submit]');
     busy(btn, true, 'Assigning…');
     api('createTask', { form: { title: $('asTitle').value, desc: $('asDesc').value,

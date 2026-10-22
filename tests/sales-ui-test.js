@@ -119,6 +119,9 @@ const STATE_TAB = (t) => t === 'team';
   });
   ok('a demo token with the read-only mark removed is rejected', /Session is invalid/.test(forged), forged);
   await p.evaluate(() => signOut(true)); await W(600);
+  ok('the visitor is told the demo ended, in a dialog they close themselves',
+     await p.locator('#dlg.dlg-warning').isVisible() && /demo session ended/i.test(await p.locator('#dlg').textContent()));
+  await p.click('#dlg button:has-text("OK")'); await W(200);
   ok('when the demo session ends the visitor goes home, not to a sign-in form they cannot use',
      await p.locator('#view-home').isVisible() && !(await p.locator('#view-auth').isVisible()));
   await p.locator('#demo button:has-text("as a team member")').click(); await W(3000);

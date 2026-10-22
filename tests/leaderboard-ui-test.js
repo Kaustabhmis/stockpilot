@@ -102,8 +102,8 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   ok('an Admin is offered the choice', await p.locator('#lbVisWrap.hidden').count() === 0);
   await p.selectOption('#lbVis', 'top');
   await p.waitForTimeout(1200);
-  ok('and is told what changed', /top 3/.test(await p.locator('#toasts').textContent()),
-     await p.locator('#toasts').textContent());
+  ok('and is told what changed', /top 3/.test(await p.locator('#dlg').textContent()),
+     await p.locator('#dlg').textContent());
 
   console.log('\n--- what a Doer then sees ---');
   await p.evaluate(() => signOut());

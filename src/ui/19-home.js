@@ -115,7 +115,7 @@ function roiCalc() {
 function sendCallback(e) {
   e.preventDefault();
   var phone = String($('cbPhone').value || '').replace(/[^\d+]/g, '');
-  if (phone.replace(/\D/g, '').length < 10) { toast('Please enter a phone number we can call.', 'err'); return false; }
+  if (phone.replace(/\D/g, '').length < 10) { toast('Please enter a phone number we can call.', 'warn'); return false; }
   var btn = $('btnCallback');
   busy(btn, true, 'Sending…');
   api('contactSales', { form: {

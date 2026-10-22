@@ -138,7 +138,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   await p.click('button:has-text("Next →")'); await p.waitForTimeout(1500);
   await p.fill('.mNum', '870'); await p.press('.mNum', 'Tab'); await p.waitForTimeout(1800);
   ok('a figure under target is flagged', await p.locator('.mNum.text-red-700').count() === 1 ||
-     /Below target/.test(await p.locator('#toasts').textContent()));
+     /Below target/.test(await p.locator('#dlg').textContent()));
   ok('a missed number offers Delegate', await p.locator('#segLive .mDelNum').count() === 1);
   await p.click('#segLive .mDelNum'); await p.waitForTimeout(400);
   ok('pre-filled to bring it back on target', /back on target/.test(await p.inputValue('#dlTitle')) &&
@@ -186,7 +186,10 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   ok('ratings are counted', /2 \/ 3/.test(await p.locator('#segLive').textContent()), await p.locator('#segLive').textContent());
   ok('the attendee sees only that theirs is in, no names', !/Sruti|Rohan/.test(await q.locator('#segLive').textContent()));
   await p.screenshot({ path: 'shot-44-meeting-close.png' });
-  await p.click('button:has-text("End meeting")'); await p.waitForTimeout(2200);
+  await p.click('#meetBody button:has-text("End meeting")'); await p.waitForTimeout(500);
+  ok('with one person still to rate, ending asks first — in the app’s own dialog',
+     await p.locator('#dlg.dlg-confirm').isVisible() && /2 of 3 have rated/.test(await p.locator('#dlg').textContent()));
+  await p.click('#dlg button:has-text("End meeting")'); await p.waitForTimeout(2200);
   const sum = await p.locator('#meetBody').textContent();
   ok('ending shows the summary', /Ended/.test(sum) && /New actions/.test(sum));
   ok('with the action agreed', /late by two weeks/.test(sum));

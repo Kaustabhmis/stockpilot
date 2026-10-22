@@ -12,7 +12,7 @@ function openCookie(preset) {
   });
 
   if (!staff.length) {
-    toast('Cookie points go to the people who report to you, and nobody does yet.', 'err');
+    toast('Cookie points go to the people who report to you, and nobody does yet.', 'warn');
     return;
   }
 

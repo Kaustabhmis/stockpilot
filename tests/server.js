@@ -68,6 +68,13 @@ const server = http.createServer((req, res) => {
                : f.endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg';
     res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(f)); return;
   }
+  /* The uploaded site loads its settings file first; serve the packaged one
+     (its apiUrl is still the placeholder, so the page keeps using /exec). */
+  if (req.url.split('?')[0] === '/domebox-config.js') {
+    const f = '/home/user/stockpilot/dist/netlify-upload/domebox-config.js';
+    res.writeHead(200, { 'Content-Type': 'text/javascript' });
+    res.end(fs.existsSync(f) ? fs.readFileSync(f) : 'window.DOMEBOX_CONFIG = {};'); return;
+  }
   if (req.url === '/fonts.css') {
     res.writeHead(200, {'Content-Type':'text/css'});
     res.end(fs.readFileSync(__dirname + '/fonts.css')); return;
