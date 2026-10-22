@@ -26,7 +26,7 @@ function isManager() { return STATE.user && STATE.user.role !== 'Doer'; }
 function loadMeetings() {
   stopMeetingPoll();
   MEET.id = null;
-  $('meetBody').innerHTML = '<div class="text-sm font-bold text-gray-400 py-10 text-center">Loading…</div>';
+  $('meetBody').innerHTML = spin();
   if (!STATE.dir) loadDirection();
   api('getMeetings', {}).then(renderMeetingList).catch(function (e) {
     $('meetBody').innerHTML = '<div class="max-w-[700px] mx-auto px-4 py-12 text-center">' +
@@ -140,7 +140,7 @@ function openMeeting(id) {
 
 function pollMeeting(first) {
   if (!MEET.id) return Promise.resolve();
-  return api('getMeeting', { id: MEET.id }).then(function (v) { showMeeting(v, first); })
+  return api('getMeeting', { id: MEET.id }, { quiet: !first }).then(function (v) { showMeeting(v, first); })
     .catch(function (e) { if (first) { toast(e.message, 'err'); loadMeetings(); } });
 }
 

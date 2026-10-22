@@ -128,7 +128,7 @@ addEventListener('resize', function () {
    per user burns through that before lunch. */
 setInterval(function () {
   if (document.hidden || !STATE.token || !STATE.data) return;
-  api('getDashboard').then(function (d) {
+  api('getDashboard', {}, { quiet: true }).then(function (d) {
     if (d.serviceStopped) { STATE.data = d; renderStopped(d); return; }
     var changed = JSON.stringify(d.tasks) !== JSON.stringify(STATE.data.tasks);
     STATE.data = d; STATE.usage = d.usage;

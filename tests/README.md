@@ -55,6 +55,7 @@ node manager-ui-test.js     # the held-review screens, end to end
 node kra-ui-test.js         # the KRA/KPI overview and editor
 node project-ui-test.js     # building a project and watching a stage release
 node recognition-ui-test.js # cookie points, the org chart, the load explanation
+node loading-ui-test.js     # the loading bar, spinners and placeholders on a slow line
 node seed.js                # prints the seeded owner's email
 node recurring-test.js <that-email>
 ```

@@ -74,7 +74,7 @@ function openCookieFeed() {
     '<h2 class="text-2xl font-black">Cookie points</h2>' +
     '<button onclick="closeModal()" class="text-gray-400 hover:text-gray-900">' +
     '<span class="material-icons">close</span></button></div>' +
-    '<div id="ckBody" class="text-sm text-gray-400 font-semibold mt-4">Loading…</div></div>', 'max-w-2xl');
+    '<div id="ckBody" class="text-sm text-gray-400 font-semibold mt-4">' + spin() + '</div></div>', 'max-w-2xl');
   api('getCookies').then(function (r) {
     $('ckBody').innerHTML =
       '<p class="text-sm text-gray-400 font-semibold mb-4">' + esc(r.month) +
@@ -108,7 +108,7 @@ function openOrgChart() {
     '<span class="material-icons">close</span></button></div>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">Built from who reports to whom. ' +
       'Change a person\'s manager on the Team tab and this changes with it.</p>' +
-    '<div id="orgBody" class="text-sm text-gray-400 font-semibold">Loading…</div></div>', 'max-w-3xl');
+    '<div id="orgBody" class="text-sm text-gray-400 font-semibold">' + spin() + '</div></div>', 'max-w-3xl');
 
   api('getOrgChart').then(function (r) {
     $('orgBody').innerHTML =

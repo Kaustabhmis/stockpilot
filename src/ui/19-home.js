@@ -142,7 +142,7 @@ function gstSentence() {
 }
 function loadPublicInfo() {
   if (PUBLIC_INFO || API_URL.indexOf('PASTE_YOUR') === 0) return;
-  api('getPublicInfo').then(function (r) {
+  api('getPublicInfo', {}, { quiet: true }).then(function (r) {
     PUBLIC_INFO = { gstRegistered: !!r.gstRegistered, gstRate: Number(r.gstRate) || 0 };
     if ($('gstNote')) $('gstNote').textContent = gstSentence();
   }).catch(function () {});

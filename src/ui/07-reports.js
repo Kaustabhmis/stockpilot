@@ -247,7 +247,7 @@ function openAccountability() {
   openModal('<div class="p-6 lg:p-7"><h2 class="text-xl font-black mb-1">Accountability</h2>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">Both sides of it: who is handing work ' +
     'back in, and who is holding it up.</p>' +
-    '<div id="accBody" class="text-sm text-gray-400 font-semibold">Loading…</div>' +
+    '<div id="accBody" class="text-sm text-gray-400 font-semibold">' + spin() + '</div>' +
     '<div class="mt-6"><button class="btn btn-g w-full" onclick="closeModal()">Close</button></div></div>', 'max-w-3xl');
   api('getAccountability').then(function (r) {
     var h = '<h3 class="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-2">Rework and lateness</h3>';
@@ -287,7 +287,7 @@ function openAccountability() {
 
 function openReviewHistory() {
   openModal('<div class="p-6 lg:p-7"><h2 class="text-xl font-black mb-5">Review history</h2>' +
-    '<div id="rhBody" class="text-sm text-gray-400 font-semibold">Loading…</div>' +
+    '<div id="rhBody" class="text-sm text-gray-400 font-semibold">' + spin() + '</div>' +
     '<div class="mt-6"><button class="btn btn-g w-full" onclick="closeModal()">Close</button></div></div>', 'max-w-2xl');
   api('getPerformanceReport').then(function (r) {
     $('rhBody').innerHTML = r.report.length ? '<table class="tbl"><thead><tr>' +

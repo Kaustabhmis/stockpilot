@@ -57,7 +57,7 @@ function progressBar(p) {
 }
 
 function loadGoals() {
-  $('goalsBody').innerHTML = '<div class="text-sm font-bold text-gray-400 py-10 text-center">Loading…</div>';
+  $('goalsBody').innerHTML = spin();
   loadDirection().then(function (d) {
     if (!d) { $('goalsBody').innerHTML = '<div class="text-sm font-bold text-gray-400 py-10 text-center">Could not load goals.</div>'; return; }
     if (!GOALS.quarter) GOALS.quarter = d.now.quarter;

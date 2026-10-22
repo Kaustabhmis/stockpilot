@@ -19,7 +19,7 @@ function openAppraisal() {
 }
 
 function loadAppraisal(username) {
-  $('apBody').innerHTML = '<p class="text-sm text-gray-400 font-semibold">Loading…</p>';
+  $('apBody').innerHTML = spin();
   api('getAppraisalForm', { username: username }).then(function (f) {
     $('apBody').innerHTML =
       '<div class="bg-gray-50 rounded-2xl p-4 mb-3 flex items-center gap-5">' +

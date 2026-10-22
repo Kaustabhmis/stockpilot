@@ -17,7 +17,7 @@ function openKraOverview() {
     '<span class="material-icons">close</span></button></div>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">What each person is answerable for, and ' +
       'the number that settles it.</p>' +
-    '<div id="kraBody" class="text-sm text-gray-400 font-semibold">Loading…</div></div>', 'max-w-4xl');
+    '<div id="kraBody" class="text-sm text-gray-400 font-semibold">' + spin() + '</div></div>', 'max-w-4xl');
   loadKraOverview();
 }
 

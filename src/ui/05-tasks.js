@@ -119,7 +119,7 @@ function renderTasks() {
     if ($('btnArchiveMore')) $('btnArchiveMore').onclick = function () { loadArchive(false); };
   }
   if (STATE.archive && (!STATE.arch || STATE.arch.page < 0)) {
-    $('tasksEmpty').classList.remove('hidden'); $('tasksEmpty').textContent = 'Loading closed work…';
+    $('tasksEmpty').classList.remove('hidden'); $('tasksEmpty').innerHTML = spin('Loading closed work…');
     $('board').classList.add('hidden'); $('list').classList.add('hidden');
     if (!STATE.arch || !STATE.arch.loading) loadArchive(true);
     return;

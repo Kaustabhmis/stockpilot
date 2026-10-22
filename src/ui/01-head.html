@@ -279,6 +279,30 @@
   .hero-navy .kicker{color:#7fb2ff}
   .hero-navy .gold{color:#f5c542}
   .hero-navy .lede{color:#c9d6ea}
+  /* ---------- loading: a bar at the top, a pill for slow calls, spinners in place ---------- */
+  #loadBar{position:fixed;top:0;left:0;right:0;height:4px;z-index:100;overflow:hidden;opacity:0;transition:opacity .2s;pointer-events:none}
+  #loadBar.on{opacity:1}
+  #loadBar::before{content:'';position:absolute;top:0;bottom:0;left:-40%;width:40%;
+    background:linear-gradient(90deg,transparent,#3b82f6 25%,#3fd6b7 60%,#f5b301 90%,transparent);animation:dbxBar 1.1s ease-in-out infinite}
+  @keyframes dbxBar{0%{left:-40%}100%{left:100%}}
+  #loadPill{position:fixed;top:14px;left:50%;transform:translate(-50%,-20px);z-index:100;display:flex;align-items:center;gap:8px;
+    padding:8px 16px;border-radius:999px;background:#13294b;color:#fff;font-size:13px;font-weight:800;
+    box-shadow:0 12px 28px -10px rgba(15,27,45,.55);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+  #loadPill.on{opacity:1;transform:translate(-50%,0)}
+  #loadPill .spinner{border-color:rgba(255,255,255,.3);border-top-color:#fff}
+  .spinner{display:inline-block;width:22px;height:22px;border-radius:50%;border:3px solid #dbe4f3;border-top-color:#1e4fbf;
+    animation:dbxSpin .75s linear infinite;flex:none;vertical-align:middle}
+  .spinner-sm{width:15px;height:15px;border-width:2px;margin-right:7px}
+  .btn .spinner{border-color:rgba(127,140,160,.35);border-top-color:currentColor}
+  @keyframes dbxSpin{to{transform:rotate(360deg)}}
+  .loading-block{display:flex;align-items:center;justify-content:center;gap:12px;padding:44px 12px;
+    color:#5b6b82;font-size:14px;font-weight:800}
+  .skeleton{border-radius:16px;border:1px solid #e1e7f0;background:linear-gradient(90deg,#e4eaf3 0%,#f4f7fb 50%,#e4eaf3 100%);
+    background-size:200% 100%;animation:dbxShimmer 1.2s ease-in-out infinite}
+  @keyframes dbxShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+  @media (prefers-reduced-motion: reduce){
+    #loadBar::before{animation-duration:2.5s} .spinner{animation-duration:1.6s} .skeleton{animation:none}
+  }
   .hero-navy .returning{color:#c9d6ea}
   .hero-navy .returning button{color:#fff;font-weight:900}
   .home-burger{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;

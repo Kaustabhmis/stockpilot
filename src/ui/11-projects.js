@@ -6,7 +6,7 @@
 var PROJECTS = [];
 
 function loadProjects() {
-  $('projectList').innerHTML = '<p class="text-sm text-gray-400 font-semibold">Loading…</p>';
+  $('projectList').innerHTML = spin();
   api('getProjects').then(function (r) { PROJECTS = r.projects || []; renderProjects(); })
     .catch(function (e) { $('projectList').innerHTML =
       '<p class="text-sm font-bold text-red-700">' + esc(e.message) + '</p>'; });

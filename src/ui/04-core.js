@@ -27,9 +27,13 @@ var FILTER = { q:'', assignee:'', status:'', category:'', goal:'', overdue:false
    Apps Script does not answer CORS preflight, so the request has to stay
    "simple": text/plain content type and no custom headers. The body is still
    JSON; only the declared type differs. */
-function api(action, params) {
+/* Every call the person is waiting on shows the loading bar; background
+   polls pass { quiet: true } so the bar never flickers on its own. */
+function api(action, params, opts) {
   var body = Object.assign({ action: action }, params || {});
   if (STATE.token) body.token = STATE.token;
+  var quiet = opts && opts.quiet;
+  if (!quiet) loadingStart();
 
   return fetch(API_URL, {
     method: 'POST', redirect: 'follow',
@@ -49,7 +53,34 @@ function api(action, params) {
       throw new Error(j.message || 'Something went wrong.');
     }
     return j;
-  });
+  }).then(function (j) { if (!quiet) loadingEnd(); return j; },
+          function (e) { if (!quiet) loadingEnd(); throw e; });
+}
+
+/* ---------- loading -------------------------------------------------------
+   A bar across the top while anything is in flight, and after a moment a
+   "Loading…" pill so a slow call never looks like a frozen screen. Shown
+   after a short delay, so a quick answer does not flash anything. */
+var LOADING = { n: 0, bar: null, pill: null };
+function loadingStart() {
+  LOADING.n++;
+  if (LOADING.n > 1) return;
+  clearTimeout(LOADING.bar); clearTimeout(LOADING.pill);
+  LOADING.bar = setTimeout(function () { var el = $('loadBar'); if (el) el.classList.add('on'); }, 120);
+  LOADING.pill = setTimeout(function () { var el = $('loadPill'); if (el) el.classList.add('on'); }, 900);
+}
+function loadingEnd() {
+  LOADING.n = Math.max(0, LOADING.n - 1);
+  if (LOADING.n) return;
+  clearTimeout(LOADING.bar); clearTimeout(LOADING.pill);
+  var b = $('loadBar'), p = $('loadPill');
+  if (b) b.classList.remove('on');
+  if (p) p.classList.remove('on');
+}
+/** The placeholder a panel shows until its data arrives. */
+function spin(label) {
+  return '<div class="loading-block" role="status"><span class="spinner"></span><span>' +
+    esc(label || 'Loading…') + '</span></div>';
 }
 
 /* ---------- small UI helpers --------------------------------------------- */
@@ -70,8 +101,10 @@ function openDrawer(html) { $('drawer').innerHTML = html; $('drawer').classList.
 function closeDrawer() { $('drawer').classList.remove('on'); }
 function busy(btn, on, label) {
   if (!btn) return;
-  if (on) { btn.dataset.label = btn.textContent; btn.disabled = true; btn.textContent = label || 'Working…'; }
-  else { btn.disabled = false; if (btn.dataset.label) btn.textContent = btn.dataset.label; }
+  if (on) {
+    btn.dataset.label = btn.textContent; btn.disabled = true;
+    btn.innerHTML = '<span class="spinner spinner-sm"></span>' + esc(label || 'Working…');
+  } else { btn.disabled = false; if (btn.dataset.label) btn.textContent = btn.dataset.label; }
 }
 
 var fmtDate = function (s) {
@@ -263,6 +296,13 @@ function enterApp() {
   $('navRole').textContent = STATE.user.role;
   $('navCompany').textContent = STATE.company;
   if (typeof loadPublicInfo === 'function') loadPublicInfo();
+  if (!STATE.data) {
+    /* First open: show the shape of the page while the work loads. */
+    $('statTiles').innerHTML = new Array(7).join('<div class="skeleton h-[84px]"></div>');
+    $('board').classList.add('hidden'); $('list').classList.add('hidden');
+    $('tasksEmpty').classList.remove('hidden');
+    $('tasksEmpty').innerHTML = spin('Loading your work…');
+  }
   refresh();
   loadDirection().then(function () { if (STATE.data) { syncFilters(); if (STATE.tab === 'tasks') renderTasks(); } });
 }
