@@ -40,6 +40,7 @@ node archive-test.js        # year-old work moves to Tasks_Archive: nothing lost
 node reminders-test.js      # open-task reminders: 9/3/5, assign day, 2 days before, urgent first
 node scheduler-live-test.js  # code.gs + reminders.gs + backup.gs together, on a registry the app made
 node demo-test.js           # the demo workspace, and that it demos something
+node identity-test.js       # one email per workspace, shared usernames, changing an email
 
 node server.js &            # then, for the browser tests:
 node ui-test.js
@@ -57,6 +58,7 @@ node project-ui-test.js     # building a project and watching a stage release
 node recognition-ui-test.js # cookie points, the org chart, the load explanation
 node loading-ui-test.js     # the loading bar, spinners and placeholders on a slow line
 node dialog-ui-test.js      # error, warning, success and question dialogs; no browser alert boxes
+node handover-ui-test.js    # Hand over from a task (owner and staff), and leaving the demo
 node seed.js                # prints the seeded owner's email
 node recurring-test.js <that-email>
 ```

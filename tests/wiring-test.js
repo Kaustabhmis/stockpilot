@@ -77,5 +77,19 @@ const sigs = {};
   ok(doc + ' only tells people to run things the Run button can run', bad.length === 0, bad.join(', '));
 });
 
+/* Every UI file shares one global scope in the page: a second function with
+   the same name silently replaces the first. That is how "Hand over" on a task
+   once opened the meeting's delegate form and did nothing. */
+{
+  const dir = __dirname + '/../src/ui/';
+  const seen = {}, dups = [];
+  fs.readdirSync(dir).filter((f) => f.endsWith('.js')).sort().forEach((f) => {
+    const re = /^(?:function\s+([A-Za-z_$][\w$]*)|var\s+([A-Za-z_$][\w$]*))/gm;
+    let m; const src = fs.readFileSync(dir + f, 'utf8');
+    while ((m = re.exec(src))) { const n = m[1] || m[2]; if (seen[n]) dups.push(n + ' (' + seen[n] + ' and ' + f + ')'); else seen[n] = f; }
+  });
+  ok('no two UI files define the same global name', dups.length === 0, dups.join(', '));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

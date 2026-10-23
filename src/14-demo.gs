@@ -639,11 +639,17 @@ function deleteDemoAccount(reallyDoIt, email) {
       catch (e) { out.push('  could not trash ' + h.sheetId + ': ' + e.message); }
       dir.deleteRow(h.row);
     });
+    /* Every sign-in that opened a removed company goes with it — the
+       owner's and the staff's. Leaving the staff rows behind pointed them at a
+       file in the bin, and made their emails look taken when the demo was
+       built again. */
+    var gone = {};
+    hits.forEach(function (h) { gone[String(h.sheetId).trim()] = true; });
     var g = master.getSheetByName(TAB.GLOBAL);
     if (g) {
       var gd = g.getDataRange().getValues();
       for (var k = gd.length - 1; k >= 1; k--) {
-        if (String(gd[k][0]).trim().toLowerCase() === email) g.deleteRow(k + 1);
+        if (String(gd[k][0]).trim().toLowerCase() === email || gone[String(gd[k][2]).trim()]) g.deleteRow(k + 1);
       }
     }
   });

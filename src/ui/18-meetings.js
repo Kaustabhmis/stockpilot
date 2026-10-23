@@ -444,11 +444,11 @@ function bindLive(key, v) {
   all('.mDel', ['click', function (el) { delegateItem(el.dataset.id); }]);
   all('.mDelGoal', ['click', function (el) {
     var g = MEET.v.goals.filter(function (x) { return x.id === el.dataset.id; })[0];
-    openDelegate({ text: 'Goal: ' + g.title + ' (' + g.status + ')', title: '', person: g.owner, goal: g.id }); }]);
+    openMeetingDelegate({ text: 'Goal: ' + g.title + ' (' + g.status + ')', title: '', person: g.owner, goal: g.id }); }]);
   all('.mDelNum', ['click', function (el) {
     var x = MEET.v.numbers.list.filter(function (n) { return n.id === el.dataset.id; })[0];
     var miss = x.weeks.slice().reverse().filter(function (w) { return w.hit === false; })[0] || {};
-    openDelegate({ text: x.name + ': ' + miss.value + ' ' + (x.unit || '') + ' against ' + (x.direction === 'at most' ? '≤ ' : '≥ ') + x.target,
+    openMeetingDelegate({ text: x.name + ': ' + miss.value + ' ' + (x.unit || '') + ' against ' + (x.direction === 'at most' ? '≤ ' : '≥ ') + x.target,
       title: 'Bring ' + x.name.toLowerCase() + ' back on target', person: x.owner, goal: x.goal }); }]);
   all('.rate', ['click', function (el) { act('rateMeeting', { score: Number(el.dataset.n) }, 'Rated ' + el.dataset.n + '.'); }]);
 }
@@ -459,7 +459,7 @@ function delegateItem(itemId) {
     (v[k] || []).forEach(function (i) { if (i.id === itemId) { found = i; kind = kinds[k]; } });
   });
   if (!found) return toast('That point is no longer on the list.', 'warn');
-  openDelegate({ itemId: itemId, text: found.text, title: found.text.split('\n')[0].slice(0, 120),
+  openMeetingDelegate({ itemId: itemId, text: found.text, title: found.text.split('\n')[0].slice(0, 120),
     person: found.person, goal: found.goal, roadblock: kind === 'roadblock' && found.status !== 'cleared',
     done: found.tasks || [] });
 }
@@ -470,7 +470,7 @@ function delegateItem(itemId) {
  * off course or a number that missed all end up the same way: on somebody's
  * board, with a due date, counted toward the goal it serves.
  */
-function openDelegate(o) {
+function openMeetingDelegate(o) {
   var staff = ((STATE.data && STATE.data.staff) || []).filter(function (u) { return u.active !== false; });
   var here = {}; (MEET.v.meeting.attendees || []).forEach(function (a) { here[a.u] = a.present; });
   staff.sort(function (a, b) { return (here[b.username] ? 1 : 0) - (here[a.username] ? 1 : 0) || a.name.localeCompare(b.name); });

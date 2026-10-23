@@ -96,11 +96,14 @@ function login_(emailOrUsername, password) {
     for (var i = 1; i < gd.length; i++) {
       var rowEmail = String(gd[i][0]).trim().toLowerCase();
       var rowUser  = String(gd[i][3] || '').trim().toLowerCase();
+      /* An email is unique, but a username like "payel" can exist in many
+         companies (the demo has one). Stopping at the first match locked
+         everyone else with that username out, so every match is tried and
+         the one whose password fits wins. */
       if (rowEmail === key || (rowUser && rowUser === key)) {
         var v = verifyPassword_(password, gd[i][1]);
         if (v.ok) { sheetId = String(gd[i][2]).trim(); storedAt = { sheet: global, row: i + 1, col: 2 };
-                    storedVal = gd[i][1]; }
-        break;
+                    storedVal = gd[i][1]; break; }
       }
     }
   }

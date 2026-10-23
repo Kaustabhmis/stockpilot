@@ -724,11 +724,14 @@ function login_(emailOrUsername, password) {
     for (var i = 1; i < gd.length; i++) {
       var rowEmail = String(gd[i][0]).trim().toLowerCase();
       var rowUser  = String(gd[i][3] || '').trim().toLowerCase();
+      /* An email is unique, but a username like "payel" can exist in many
+         companies (the demo has one). Stopping at the first match locked
+         everyone else with that username out, so every match is tried and
+         the one whose password fits wins. */
       if (rowEmail === key || (rowUser && rowUser === key)) {
         var v = verifyPassword_(password, gd[i][1]);
         if (v.ok) { sheetId = String(gd[i][2]).trim(); storedAt = { sheet: global, row: i + 1, col: 2 };
-                    storedVal = gd[i][1]; }
-        break;
+                    storedVal = gd[i][1]; break; }
       }
     }
   }
@@ -2053,6 +2056,10 @@ function addUser_locked_(ctx, form) {
     if (users[i].username.toLowerCase() === username.toLowerCase()) throw new Error('That username is taken.');
     if (users[i].email.toLowerCase() === email) throw new Error('That email is already in this workspace.');
   }
+  /* One email opens one workspace. Sign-up already refuses an email in use
+     anywhere; without the same rule here a second row is written, sign-in
+     always finds the first, and this person can never get into this company. */
+  if (emailInOtherWorkspace_(email, ctx.sheetId)) throw new Error(EMAIL_ELSEWHERE_MSG);
   // A Doer must not be able to mint an Admin.
   var role = ['Admin','HOD','Doer'].indexOf(form.role) > -1 ? form.role : 'Doer';
   if (role === 'Admin' && ctx.actor.role !== 'Admin') throw new Error('Only an Admin can create another Admin.');
@@ -2087,6 +2094,41 @@ function addUser_locked_(ctx, form) {
   return { status: 'success', message: form.name + ' added.' };
 }
 
+var EMAIL_ELSEWHERE_MSG = 'That email already signs in to another Domebox workspace. ' +
+  'Each email opens one workspace, so use a different email for this person, ' +
+  'or ask the other company to remove them first.';
+
+/** Is this email on the sign-in list for a company other than this one? */
+function emailInOtherWorkspace_(email, sheetId) {
+  var master = SpreadsheetApp.openById(CFG().masterId);
+  var g = master.getSheetByName(TAB.GLOBAL);
+  if (!g) return false;
+  /* Only companies that still exist count. A row left behind by a company
+     that was removed (an old demo, a test signup) must not make an email look
+     taken for ever. */
+  var live = {}, dir = master.getSheetByName(TAB.DIRECTORY);
+  if (dir) dir.getDataRange().getValues().slice(1).forEach(function (r) { live[String(r[5]).trim()] = true; });
+  var d = g.getDataRange().getValues(), key = String(email).trim().toLowerCase();
+  for (var i = 1; i < d.length; i++) {
+    var sid = String(d[i][2]).trim();
+    if (String(d[i][0]).trim().toLowerCase() === key && sid !== String(sheetId).trim() && live[sid]) return true;
+  }
+  return false;
+}
+
+function renameGlobalEmail_(oldEmail, newEmail, sheetId) {
+  try {
+    var g = SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.GLOBAL);
+    if (!g) return;
+    var d = g.getDataRange().getValues(), key = String(oldEmail).trim().toLowerCase();
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][0]).trim().toLowerCase() === key && String(d[i][2]).trim() === String(sheetId).trim()) {
+        g.getRange(i + 1, 1).setValue(newEmail);
+      }
+    }
+  } catch (e) { logError_('renameGlobalEmail', e.message); }
+}
+
 function updateUser_(ctx, form) {
   requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
@@ -2107,7 +2149,20 @@ function updateUser_(ctx, form) {
   };
 
   if (form.name) set('Name', String(form.name).trim());
-  if (form.email) set('Email', String(form.email).trim().toLowerCase());
+  var newEmail = form.email ? String(form.email).trim().toLowerCase() : '';
+  if (newEmail && newEmail !== String(target.email).toLowerCase()) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) throw new Error('That email does not look right.');
+    readUsers_(ctx).forEach(function (u) {
+      if (u.username !== target.username && String(u.email).toLowerCase() === newEmail) {
+        throw new Error('That email is already in this workspace.');
+      }
+    });
+    if (emailInOtherWorkspace_(newEmail, ctx.sheetId)) throw new Error(EMAIL_ELSEWHERE_MSG);
+    set('Email', newEmail);
+    /* The sign-in list is keyed by email: move it too, or they keep signing
+       in with the old address and a new password never reaches it. */
+    renameGlobalEmail_(target.email, newEmail, ctx.sheetId);
+  }
   if (form.role && ['Admin','HOD','Doer'].indexOf(form.role) > -1) set('Role', form.role);
   if (form.jobProfile !== undefined) set('Job Profile', String(form.jobProfile));
   if (form.dept !== undefined) set('Dept', String(form.dept));
@@ -2126,7 +2181,7 @@ function updateUser_(ctx, form) {
     if (String(form.password).length < 8) throw new Error('Password must be at least 8 characters.');
     var hash = makePasswordHash(String(form.password));
     set('Password', hash);
-    syncGlobalPassword_(form.email || target.email, ctx.sheetId, hash);
+    syncGlobalPassword_(newEmail || target.email, ctx.sheetId, hash);
   }
 
   if (form.active === false) return deactivateUser_(ctx, target, form.reassignTo);
@@ -5109,11 +5164,17 @@ function deleteDemoAccount(reallyDoIt, email) {
       catch (e) { out.push('  could not trash ' + h.sheetId + ': ' + e.message); }
       dir.deleteRow(h.row);
     });
+    /* Every sign-in that opened a removed company goes with it — the
+       owner's and the staff's. Leaving the staff rows behind pointed them at a
+       file in the bin, and made their emails look taken when the demo was
+       built again. */
+    var gone = {};
+    hits.forEach(function (h) { gone[String(h.sheetId).trim()] = true; });
     var g = master.getSheetByName(TAB.GLOBAL);
     if (g) {
       var gd = g.getDataRange().getValues();
       for (var k = gd.length - 1; k >= 1; k--) {
-        if (String(gd[k][0]).trim().toLowerCase() === email) g.deleteRow(k + 1);
+        if (String(gd[k][0]).trim().toLowerCase() === email || gone[String(gd[k][2]).trim()]) g.deleteRow(k + 1);
       }
     }
   });

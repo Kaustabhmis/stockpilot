@@ -365,6 +365,36 @@ Final pass: all 55 suites pass. The browser suites were also run against the
 minified upload folder, and they pass there too. No secret, admin function or
 stack name is in the website folder.
 
+### 4w. "Hand over" did nothing; the demo had no way out; four sign-in faults
+
+**Hand over.** Two UI files each defined a function called `openDelegate`: the task's
+hand-over form and the meeting's delegate form. The page has one global scope, so the
+meeting's version, loaded later, replaced the task's. Pressing Hand over then crashed
+quietly, because no meeting was open. The meeting's version is renamed, and
+`wiring-test.js` now fails if any two UI files define the same name. Forms opened from
+the task panel also sat half behind it; they now open in front.
+
+**Leaving the demo.** The demo bar has an **Exit demo** button, and the Domebox logo
+takes a demo visitor home. Exiting shows no "session ended" message.
+
+**Sign-in across companies** (found while testing the above; the old code fails 8 of
+the 21 checks in `identity-test.js`):
+- Adding a person whose email already signs in to another company wrote a second
+  sign-in row. Sign-in always found the first one, so that person could never get
+  into the new company. Now refused with a plain explanation, the same rule sign-up
+  already had.
+- Signing in by username stopped at the first company with that username. The demo
+  has a "payel", so a real customer's "payel" was refused. Every match is now tried.
+- Changing someone's email did not move their sign-in, and a password set afterwards
+  silently never took effect. Both now carry over.
+- Removing the demo left its staff's sign-in rows behind. With the rule above, building
+  it again would have failed. Removal now takes every row for that company, and rows
+  left by removed companies no longer count.
+
+**Not changed — a decision for the owner:** a manager sees only work they hold, raised,
+approve or are being handed. Work the owner gives directly to that manager's team is not
+visible to the manager. In the demo, the manager view shows 2–6 cards depending on the day.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

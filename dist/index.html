@@ -129,6 +129,7 @@
          display:none;align-items:center;justify-content:center;padding:1rem;
          backdrop-filter:blur(2px)}
   #scrim.on{display:flex}
+  #scrim.top{z-index:95}  /* a form opened from the task panel sits in front of it */
   #modal{background:#fff;border-radius:1.6rem;width:100%;max-height:90vh;overflow-y:auto;
          box-shadow:0 30px 60px -12px rgba(15,27,45,.4);animation:pop .22s ease-out}
   #drawer{position:fixed;top:0;right:0;height:100%;width:100%;max-width:520px;background:#fff;
@@ -404,6 +405,10 @@
 
   /* ---------- the live-demo bar ------------------------------------------- */
   .demo-bar{background:#fff7e6;border-bottom:1px solid #f3d9a4;color:var(--ink)}
+  .demo-exit{display:inline-flex;align-items:center;gap:4px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:900;
+    color:#7a4b00;background:#fff;border:1.5px solid #e9c77d;white-space:nowrap}
+  .demo-exit:hover{background:#fff1d6}
+  .demo-exit .material-icons{font-size:16px}
   .demo-tag{background:var(--gold);color:#fff;font-size:10px;font-weight:900;letter-spacing:.1em;
             text-transform:uppercase;border-radius:6px;padding:3px 8px}
   .demo-as{border:1.5px solid var(--line);background:#fff;border-radius:8px;padding:4px 10px;font-weight:800;
@@ -953,7 +958,7 @@
 
   <nav class="appbar bg-white border-b border-gray-100 sticky top-0 z-40">
     <div class="max-w-[1500px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-3">
-      <div class="flex items-center gap-2 min-w-0">
+      <div class="flex items-center gap-2 min-w-0 cursor-pointer" id="navBrand" onclick="brandClick()" title="Domebox">
         <svg width="28" height="28" viewBox="0 0 100 100" aria-hidden="true"><path class="logo-dome" d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#1e4fbf"/><path class="logo-tick" d="M35 55 L46 66 L67 42" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span class="brandname brand-word font-black text-lg whitespace-nowrap">Domebox</span>
         <span id="navCompany" class="sm-up text-xs font-bold text-gray-400 truncate ml-1"></span>
@@ -1374,6 +1379,9 @@ function confirmBox(message, opts) {
 function openModal(html, width) {
   $('modal').className = width || 'max-w-lg';
   $('modal').innerHTML = html;
+  /* Opened from the task panel ("Hand over…", "Add blocker…"): in front of
+     the panel, not half hidden behind it. */
+  $('scrim').classList.toggle('top', $('drawer').classList.contains('on'));
   $('scrim').classList.add('on');
 }
 function closeModal() { $('scrim').classList.remove('on'); $('modal').innerHTML = ''; }
@@ -1505,17 +1513,30 @@ function leaveDemoForTrial() {
   closeModal(); closeDrawer();
   goAuth('signup');
 }
+/** Leaves the demo for the home page, the way a visitor expects a logo or a
+ *  "back" button to work. Nothing to save: the demo is read-only. */
+function exitDemo() {
+  if (!STATE.demo) return;
+  signOut(false);
+}
+/** The logo: home for a demo visitor, the board for everybody signed in. */
+function brandClick() {
+  if (STATE.demo) return exitDemo();
+  if (STATE.token && STATE.tab !== 'tasks') { STATE.tab = 'tasks'; renderTab(); }
+}
 function renderDemoBanner() {
   var as = STATE.demoAs || 'owner';
   $('banner').className = '';
   $('banner').innerHTML = '<div class="demo-bar px-4 lg:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">' +
     '<span class="demo-tag">Live demo</span>' +
-    '<span class="font-bold">You are looking around a demo factory as ' + esc(DEMO_AS[as] || 'the owner') +
-      '. Open anything — changes are switched off.</span>' +
+    '<span class="font-bold">Demo factory, seen as ' + esc(DEMO_AS[as] || 'the owner') +
+      ' · changes are off</span>' +
     '<span class="flex items-center gap-1">' + Object.keys(DEMO_AS).map(function (k) {
       return '<button class="demo-as' + (k === as ? ' on' : '') + '" onclick="openDemo(\'' + k + '\')">' +
         ({ owner: 'Owner', manager: 'Manager', staff: 'Staff' })[k] + '</button>'; }).join('') + '</span>' +
     '<span class="flex-1"></span>' +
+    '<button class="demo-exit" id="btnExitDemo" onclick="exitDemo()">' +
+      '<span class="material-icons">arrow_back</span>Exit demo</button>' +
     '<button class="btn btn-a text-xs py-2" onclick="leaveDemoForTrial()">Start your free 14-day trial</button></div>';
 }
 function restoreSession() {
@@ -5707,11 +5728,11 @@ function bindLive(key, v) {
   all('.mDel', ['click', function (el) { delegateItem(el.dataset.id); }]);
   all('.mDelGoal', ['click', function (el) {
     var g = MEET.v.goals.filter(function (x) { return x.id === el.dataset.id; })[0];
-    openDelegate({ text: 'Goal: ' + g.title + ' (' + g.status + ')', title: '', person: g.owner, goal: g.id }); }]);
+    openMeetingDelegate({ text: 'Goal: ' + g.title + ' (' + g.status + ')', title: '', person: g.owner, goal: g.id }); }]);
   all('.mDelNum', ['click', function (el) {
     var x = MEET.v.numbers.list.filter(function (n) { return n.id === el.dataset.id; })[0];
     var miss = x.weeks.slice().reverse().filter(function (w) { return w.hit === false; })[0] || {};
-    openDelegate({ text: x.name + ': ' + miss.value + ' ' + (x.unit || '') + ' against ' + (x.direction === 'at most' ? '≤ ' : '≥ ') + x.target,
+    openMeetingDelegate({ text: x.name + ': ' + miss.value + ' ' + (x.unit || '') + ' against ' + (x.direction === 'at most' ? '≤ ' : '≥ ') + x.target,
       title: 'Bring ' + x.name.toLowerCase() + ' back on target', person: x.owner, goal: x.goal }); }]);
   all('.rate', ['click', function (el) { act('rateMeeting', { score: Number(el.dataset.n) }, 'Rated ' + el.dataset.n + '.'); }]);
 }
@@ -5722,7 +5743,7 @@ function delegateItem(itemId) {
     (v[k] || []).forEach(function (i) { if (i.id === itemId) { found = i; kind = kinds[k]; } });
   });
   if (!found) return toast('That point is no longer on the list.', 'warn');
-  openDelegate({ itemId: itemId, text: found.text, title: found.text.split('\n')[0].slice(0, 120),
+  openMeetingDelegate({ itemId: itemId, text: found.text, title: found.text.split('\n')[0].slice(0, 120),
     person: found.person, goal: found.goal, roadblock: kind === 'roadblock' && found.status !== 'cleared',
     done: found.tasks || [] });
 }
@@ -5733,7 +5754,7 @@ function delegateItem(itemId) {
  * off course or a number that missed all end up the same way: on somebody's
  * board, with a due date, counted toward the goal it serves.
  */
-function openDelegate(o) {
+function openMeetingDelegate(o) {
   var staff = ((STATE.data && STATE.data.staff) || []).filter(function (u) { return u.active !== false; });
   var here = {}; (MEET.v.meeting.attendees || []).forEach(function (a) { here[a.u] = a.present; });
   staff.sort(function (a, b) { return (here[b.username] ? 1 : 0) - (here[a.username] ? 1 : 0) || a.name.localeCompare(b.name); });

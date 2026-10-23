@@ -169,6 +169,9 @@ function confirmBox(message, opts) {
 function openModal(html, width) {
   $('modal').className = width || 'max-w-lg';
   $('modal').innerHTML = html;
+  /* Opened from the task panel ("Hand over…", "Add blocker…"): in front of
+     the panel, not half hidden behind it. */
+  $('scrim').classList.toggle('top', $('drawer').classList.contains('on'));
   $('scrim').classList.add('on');
 }
 function closeModal() { $('scrim').classList.remove('on'); $('modal').innerHTML = ''; }
@@ -300,17 +303,30 @@ function leaveDemoForTrial() {
   closeModal(); closeDrawer();
   goAuth('signup');
 }
+/** Leaves the demo for the home page, the way a visitor expects a logo or a
+ *  "back" button to work. Nothing to save: the demo is read-only. */
+function exitDemo() {
+  if (!STATE.demo) return;
+  signOut(false);
+}
+/** The logo: home for a demo visitor, the board for everybody signed in. */
+function brandClick() {
+  if (STATE.demo) return exitDemo();
+  if (STATE.token && STATE.tab !== 'tasks') { STATE.tab = 'tasks'; renderTab(); }
+}
 function renderDemoBanner() {
   var as = STATE.demoAs || 'owner';
   $('banner').className = '';
   $('banner').innerHTML = '<div class="demo-bar px-4 lg:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">' +
     '<span class="demo-tag">Live demo</span>' +
-    '<span class="font-bold">You are looking around a demo factory as ' + esc(DEMO_AS[as] || 'the owner') +
-      '. Open anything — changes are switched off.</span>' +
+    '<span class="font-bold">Demo factory, seen as ' + esc(DEMO_AS[as] || 'the owner') +
+      ' · changes are off</span>' +
     '<span class="flex items-center gap-1">' + Object.keys(DEMO_AS).map(function (k) {
       return '<button class="demo-as' + (k === as ? ' on' : '') + '" onclick="openDemo(\'' + k + '\')">' +
         ({ owner: 'Owner', manager: 'Manager', staff: 'Staff' })[k] + '</button>'; }).join('') + '</span>' +
     '<span class="flex-1"></span>' +
+    '<button class="demo-exit" id="btnExitDemo" onclick="exitDemo()">' +
+      '<span class="material-icons">arrow_back</span>Exit demo</button>' +
     '<button class="btn btn-a text-xs py-2" onclick="leaveDemoForTrial()">Start your free 14-day trial</button></div>';
 }
 function restoreSession() {

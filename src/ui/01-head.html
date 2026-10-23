@@ -129,6 +129,7 @@
          display:none;align-items:center;justify-content:center;padding:1rem;
          backdrop-filter:blur(2px)}
   #scrim.on{display:flex}
+  #scrim.top{z-index:95}  /* a form opened from the task panel sits in front of it */
   #modal{background:#fff;border-radius:1.6rem;width:100%;max-height:90vh;overflow-y:auto;
          box-shadow:0 30px 60px -12px rgba(15,27,45,.4);animation:pop .22s ease-out}
   #drawer{position:fixed;top:0;right:0;height:100%;width:100%;max-width:520px;background:#fff;
@@ -404,6 +405,10 @@
 
   /* ---------- the live-demo bar ------------------------------------------- */
   .demo-bar{background:#fff7e6;border-bottom:1px solid #f3d9a4;color:var(--ink)}
+  .demo-exit{display:inline-flex;align-items:center;gap:4px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:900;
+    color:#7a4b00;background:#fff;border:1.5px solid #e9c77d;white-space:nowrap}
+  .demo-exit:hover{background:#fff1d6}
+  .demo-exit .material-icons{font-size:16px}
   .demo-tag{background:var(--gold);color:#fff;font-size:10px;font-weight:900;letter-spacing:.1em;
             text-transform:uppercase;border-radius:6px;padding:3px 8px}
   .demo-as{border:1.5px solid var(--line);background:#fff;border-radius:8px;padding:4px 10px;font-weight:800;
