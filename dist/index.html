@@ -6188,6 +6188,15 @@ setInterval(function () {
   var params = new URLSearchParams(location.search);
   /* Somebody following a reset link wants the form, not the sales page. */
   if (params.get('reset_token')) { goAuth('reset'); return; }
+  if (window.DOMEBOX_CONFIG_ERROR) {
+    /* The settings file is there but has a slip in it, so nothing in it was
+       read — say that, not "no address", or the owner hunts for the wrong thing. */
+    showHome();
+    showDialog({ kind: 'error', title: 'domebox-config.js has a typing mistake',
+      message: 'Look near line ' + window.DOMEBOX_CONFIG_ERROR.line + '. Every value must sit between quotes, ' +
+        "like  phone: '+91 98300 00000',  — fix it in Notepad, save, and upload the website folder again." });
+    return;
+  }
   if (API_URL.indexOf('PASTE_YOUR') === 0) {
     /* Not connected yet: still show the home page, and say what is missing. */
     showHome();

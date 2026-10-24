@@ -43,7 +43,11 @@ const noHashComments = (f) => fs.writeFileSync(f, fs.readFileSync(f, 'utf8').spl
 /* ---- 1. the application page ------------------------------------------- */
 let app = fs.readFileSync(path.join(root, 'dist', 'index.html'), 'utf8');
 if (!/<style>[\s\S]{5000,}?<\/style>/.test(app)) throw new Error('dist/index.html has no compiled stylesheet — rebuild it first');
-app = app.replace('<head>', '<head>\n<script src="/domebox-config.js"></script>');
+/* A typing slip in domebox-config.js (a missing quote) stops the whole file
+   loading, which used to look exactly like "no address set". This catches it
+   and remembers the line, so the page can say what is actually wrong. */
+const CONFIG_CATCH = "<script>window.addEventListener('error',function(e){if(/domebox-config\\.js/.test(e.filename||''))window.DOMEBOX_CONFIG_ERROR={line:e.lineno||0};});</script>\n";
+app = app.replace('<head>', '<head>\n' + CONFIG_CATCH + '<script src="/domebox-config.js"></script>');
 fs.writeFileSync(path.join(OUT, 'index.html'), shrink(app));
 
 /* ---- 2. the static pages and files, exactly as Netlify serves them ------ */
@@ -72,19 +76,21 @@ legal.forEach((f) => {
   html = html.replace(/<[^>]*DBXFIELD[^>]*>/g, (tag) => tag.replace(/DBXFIELD(\w+)DBXEND/g, ''));
   html = html.replace(/<title>([^<]*)<\/title>/, (m, t) => '<title>' + t.replace(/DBXFIELD\w+DBXEND/g, '') + '</title>');
   html = html.replace(/DBXFIELD(\w+)DBXEND/g, '<span data-cfg="$1"></span>');
-  html = html.replace('</head>', '<script src="/domebox-config.js"></script>\n<script src="/domebox-fill.js" defer></script>\n</head>');
+  html = html.replace('</head>', CONFIG_CATCH + '<script src="/domebox-config.js"></script>\n<script src="/domebox-fill.js" defer></script>\n</head>');
   fs.writeFileSync(path.join(OUT, f), shrink(html));
 });
 rm(tmp);
 
 fs.writeFileSync(path.join(OUT, 'domebox-fill.js'), `(function () {
-  var c = window.DOMEBOX_CONFIG || {};
+  var c = window.DOMEBOX_CONFIG || {}, broken = window.DOMEBOX_CONFIG_ERROR;
   var nodes = document.querySelectorAll('[data-cfg]');
   for (var i = 0; i < nodes.length; i++) {
     var v = String(c[nodes[i].getAttribute('data-cfg')] || '').trim();
     if (v) { nodes[i].textContent = v; }
     else {
-      nodes[i].textContent = '[not set — add ' + nodes[i].getAttribute('data-cfg') + ' in domebox-config.js]';
+      nodes[i].textContent = broken
+        ? '[domebox-config.js has a typing mistake near line ' + broken.line + ' — a value is missing a quote]'
+        : '[not set — add ' + nodes[i].getAttribute('data-cfg') + ' in domebox-config.js]';
       nodes[i].style.cssText = 'background:#fff3cd;color:#7a4b00;padding:0 4px;border-radius:4px;font-weight:700';
     }
   }

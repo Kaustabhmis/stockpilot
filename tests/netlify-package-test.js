@@ -114,7 +114,24 @@ const serve = (dir, port) => new Promise((r) => {
   ok('and says plainly what is missing', /not connected yet.*domebox-config\.js/.test(await q.locator('#dlg').textContent()) && await q.locator('#dlg.dlg-error').isVisible(),
      await q.locator('#dlg').textContent());
 
-  await b.close(); s1.close(); s2.close();
+  console.log('\n=== a quote missed while editing the config (as happened on the live site) ===');
+  const bad = mk(true);
+  {
+    const f = path.join(bad, 'domebox-config.js');
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace("registeredAddress: '12 Park Street, Kolkata 700016'",
+      "registeredAddress:289 A Kalighat Road Kolkata 700026 ''"));
+  }
+  const s3 = await serve(bad, 8103);
+  const r = await page('http://localhost:8103');
+  await r.goto('http://localhost:8103/', { waitUntil: 'networkidle' }); await r.waitForTimeout(600);
+  const said = await r.locator('#dlg').textContent();
+  ok('the site says the settings file has a typing mistake — not “not connected”',
+     /typing mistake/.test(said) && /near line \d+/.test(said) && !/not connected/.test(said), said);
+  if (process.argv[2]) await r.screenshot({ path: process.argv[2] + '/config-typo.png' });
+  await r.goto('http://localhost:8103/privacy', { waitUntil: 'networkidle' });
+  ok('and the legal pages say the same, instead of “not set” everywhere', /typing mistake near line/.test(await r.locator('body').textContent()));
+
+  await b.close(); s1.close(); s2.close(); s3.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
