@@ -1,0 +1,355 @@
+<!-- ============================ HOME ============================
+     The page a prospect lands on, built to sell without a salesperson:
+     say what this is in one line, SHOW it (real screens, and a live demo one
+     click away), answer the objections a buyer actually has, put the price in
+     plain sight, and make starting free the easiest thing on the page.
+     No invented customers, no testimonials, no numbers we cannot stand
+     behind — the ROI calculator works only from the visitor's own figures and
+     says so.
+     ============================================================== -->
+<div id="view-home" class="hidden">
+
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-100">
+    <div class="max-w-[1180px] mx-auto px-5 h-16 flex items-center gap-3">
+      <span class="flex items-center gap-2">
+        <svg width="30" height="30" viewBox="0 0 100 100" aria-hidden="true"><path d="M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z" fill="#1e4fbf"/><path d="M35 55 L46 66 L67 42" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="brand-word font-black text-lg">Domebox</span>
+      </span>
+      <nav class="md-up flex items-center gap-6 ml-6 text-sm font-bold text-gray-500">
+        <a href="#tour" class="hover:text-gray-900">Product tour</a>
+        <a href="#demo" class="hover:text-gray-900">Live demo</a>
+        <a href="#pricing" class="hover:text-gray-900">Pricing</a>
+        <a href="#faq" class="hover:text-gray-900">Questions</a>
+      </nav>
+      <span class="flex-1"></span>
+      <!-- Returning customers need a way in on every screen size: Sign in is
+           never hidden, and on a phone the rest of the links live in a menu. -->
+      <button class="btn btn-g text-sm" id="homeSignIn" onclick="goAuth('login')">
+        <span class="material-icons text-[18px] mr-1 align-[-4px]">login</span>Sign in</button>
+      <button class="btn btn-gold text-sm sm-up" onclick="goAuth('signup')">Start free trial</button>
+      <button class="home-burger md-down" id="homeMenuBtn" type="button" aria-label="Menu"
+              aria-expanded="false" aria-controls="homeMenu" onclick="toggleHomeMenu()">
+        <span class="material-icons">menu</span></button>
+    </div>
+    <div id="homeMenu" class="home-menu md-down" hidden>
+      <a href="#tour" onclick="toggleHomeMenu(false)">Product tour</a>
+      <a href="#demo" onclick="toggleHomeMenu(false)">Live demo</a>
+      <a href="#pricing" onclick="toggleHomeMenu(false)">Pricing</a>
+      <a href="#faq" onclick="toggleHomeMenu(false)">Questions</a>
+      <a href="#callback" onclick="toggleHomeMenu(false)">Request a call-back</a>
+      <div class="home-menu-actions">
+        <button class="btn btn-g w-full" onclick="toggleHomeMenu(false); goAuth('login')">Sign in</button>
+        <button class="btn btn-g w-full" onclick="toggleHomeMenu(false); goAuth('signup')">Create an account</button>
+        <button class="btn btn-gold w-full" onclick="toggleHomeMenu(false); goAuth('signup')">Start free trial</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ---------------------------------------------------------------- hero -->
+  <section id="hero" class="hero-navy">
+    <div class="max-w-[1180px] mx-auto px-5 pt-12 pb-16 lg:pt-16 lg:pb-24 grid lg:grid-cols-[1fr_1.15fr] gap-10 items-center">
+      <div>
+        <span class="hero-badge"><span class="material-icons text-[16px]">verified</span>14-day free trial · no card</span>
+        <p class="kicker text-xs font-black uppercase tracking-[0.2em] mt-5 mb-3">
+          Task, team &amp; performance management for Indian MSMEs</p>
+        <h1 class="text-[2.35rem] lg:text-[3.3rem] font-black leading-[1.05] tracking-tight">
+          Stop chasing work on WhatsApp.
+          <span class="gold">Know who delivered — and prove it.</span></h1>
+        <p class="lede text-lg font-semibold mt-5 leading-relaxed">
+          Assign every job with a deadline, get it approved when it is really done, and see a
+          fair performance score for every person at month end — with the working shown, task by
+          task. Built for factories, trading houses and service firms of 5 to 300 people.</p>
+        <div class="flex flex-wrap gap-3 mt-8">
+          <button class="btn btn-gold text-base px-6 py-3.5" onclick="goAuth('signup')">
+            Start your free 14-day trial</button>
+          <button class="btn btn-ghost-light text-base px-6 py-3.5" onclick="openDemo('owner', this)">
+            <span class="material-icons text-[20px] mr-1 align-[-4px]">play_circle</span>See the live demo</button>
+        </div>
+        <p class="returning text-sm font-bold mt-4">Already have an account?
+          <button class="underline underline-offset-2" onclick="goAuth('login')">Sign in</button></p>
+        <ul class="ticks flex flex-wrap gap-x-5 gap-y-1.5 mt-6 text-[13px] font-bold">
+          <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>Full Growth plan for 14 days</li>
+          <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>No card needed</li>
+          <li class="flex items-center gap-1"><span class="material-icons text-[16px]">check_circle</span>Running the same afternoon</li>
+        </ul>
+      </div>
+      <figure class="browser-frame">
+        <div class="browser-bar"><i></i><i></i><i></i><span>www.domebox.in</span></div>
+        <img src="/img/16-lead-board.jpg" width="1800" height="1138" alt="The Domebox task board of a manager, with work moving from To do to Verified">
+      </figure>
+    </div>
+  </section>
+
+  <!-- honest proof strip: facts about the product, not claims about customers -->
+  <section class="bg-white border-b border-gray-100">
+    <div class="max-w-[1180px] mx-auto px-5 py-6 grid grid-cols-2 lg:grid-cols-5 gap-4 text-[13px] font-bold text-gray-700">
+      <div class="proof"><span class="material-icons ic-blue">smartphone</span>Works on any phone — no app to install</div>
+      <div class="proof"><span class="material-icons ic-gold">receipt_long</span>An invoice with every payment</div>
+      <div class="proof"><span class="material-icons ic-teal">lock</span>A private workspace for each company</div>
+      <div class="proof"><span class="material-icons ic-violet">notifications_active</span>Email reminders at 9, 3 and 5</div>
+      <div class="proof"><span class="material-icons ic-green">flag</span>Made and supported in India</div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- problem -->
+  <section class="band-tint">
+    <div class="max-w-[1180px] mx-auto px-5 py-16">
+      <span class="eyebrow">Sound familiar?</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight max-w-3xl mt-3">
+        You already know who is busy. You do not know who is delivering.</h2>
+      <div class="grid lg:grid-cols-3 gap-5 mt-8">
+        <div class="pain" style="--c:#b42318"><span class="material-icons ic-red rounded-xl p-2">forum</span>
+          <h3>Work lives in WhatsApp</h3>
+          <p>Instructions scroll away. Nobody can say what was asked, when it was due, or whether it was ever finished.</p></div>
+        <div class="pain" style="--c:#d4930f"><span class="material-icons ic-gold rounded-xl p-2">gavel</span>
+          <h3>Appraisals are arguments</h3>
+          <p>Once a year, from memory, usually about the last six weeks. The quiet performer loses and everybody knows it.</p></div>
+        <div class="pain" style="--c:#5b3fc4"><span class="material-icons ic-violet rounded-xl p-2">hourglass_bottom</span>
+          <h3>Managers are never measured</h3>
+          <p>Your team gets marked down for delays their own approvals caused. That is how a workforce stops believing any number you show them.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- product tour -->
+  <section id="tour" class="bg-white">
+    <div class="max-w-[1180px] mx-auto px-5 py-16">
+      <span class="eyebrow">Product tour</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-2">One place for every job, every person, every week</h2>
+      <p class="text-gray-500 font-semibold mt-2 max-w-2xl">Real screens from a demo factory. Everything shown is in
+        the product today — not a roadmap.</p>
+
+      <div class="tour-tabs mt-8" role="tablist" id="tourTabs"></div>
+      <div class="grid lg:grid-cols-[1.35fr_1fr] gap-8 items-start mt-6">
+        <figure class="browser-frame" id="tourFig">
+          <div class="browser-bar"><i></i><i></i><i></i><span>www.domebox.in</span></div>
+          <img id="tourImg" src="/img/16-lead-board.jpg" width="1800" height="1138" alt="" loading="lazy">
+        </figure>
+        <div id="tourText"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ live demo -->
+  <section id="demo" class="band-teal">
+    <div class="max-w-[1180px] mx-auto px-5 py-14 grid lg:grid-cols-[1.2fr_1fr] gap-8 items-center">
+      <div>
+        <span class="eyebrow">Live demo · no sign-up</span>
+        <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Look around a real factory’s workspace — right now</h2>
+        <p class="soft font-semibold mt-3 leading-relaxed">Sharma Precision Works is a demo company with a
+          month of real work in it: tasks on the board, a project in stages, goals, a weekly meeting and
+          every person’s score. No sign-up. Open anything — changes are switched off.</p>
+      </div>
+      <div class="grid gap-3">
+        <button class="demo-pick" onclick="openDemo('owner', this)"><span class="material-icons">business</span>
+          <span><b>See it as the owner</b><small>Every department, reports, goals and the leaderboard</small></span></button>
+        <button class="demo-pick" onclick="openDemo('manager', this)"><span class="material-icons">supervisor_account</span>
+          <span><b>See it as a manager</b><small>Approve, verify, send back, award cookie points</small></span></button>
+        <button class="demo-pick" onclick="openDemo('staff', this)"><span class="material-icons">person</span>
+          <span><b>See it as a team member</b><small>My jobs, what to do first, and my own score</small></span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- how it works -->
+  <section class="bg-white">
+    <div class="max-w-[1180px] mx-auto px-5 py-16">
+      <span class="eyebrow">How it works</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Running by this afternoon</h2>
+      <div class="grid md:grid-cols-3 gap-5 mt-8">
+        <div class="step" style="--c:#1e4fbf"><span>1</span><h3>Create your workspace</h3>
+          <p>Company name, email, password. Two minutes. You get the full Growth plan free for 14 days.</p></div>
+        <div class="step" style="--c:#0c7a71"><span>2</span><h3>Add your team</h3>
+          <p>Name, role and manager for each person. Your reporting line becomes the approval chain and the org chart.</p></div>
+        <div class="step" style="--c:#d4930f"><span>3</span><h3>Assign the first job</h3>
+          <p>Due date, priority, done. Reminders go out by themselves, and the first scores appear as work is verified.</p></div>
+      </div>
+      <p class="text-[13px] font-semibold text-gray-500 mt-6">A printable user manual with a picture of every screen
+        comes with it, for training your team: <a href="/user-manual.pdf" class="text-blue-600 font-bold" target="_blank" rel="noopener">download the user manual (PDF)</a>.</p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------- ROI calculator -->
+  <section id="roi" class="band-tint">
+    <div class="max-w-[1180px] mx-auto px-5 py-16 grid lg:grid-cols-2 gap-10 items-start">
+      <div>
+        <span class="eyebrow">What chasing costs you</span>
+        <h2 class="text-2xl lg:text-3xl font-black tracking-tight mt-2">Put in your own numbers</h2>
+        <p class="text-gray-600 font-semibold mt-2 leading-relaxed">Every manager spends part of the day asking
+          “is it done?”. Here is what that time costs you today, against what Domebox costs for a team your size.</p>
+        <div class="grid sm:grid-cols-2 gap-4 mt-6">
+          <label><span class="lb">People in your company</span><input id="roiPeople" class="in" type="number" min="1" value="25" oninput="roiCalc()"></label>
+          <label><span class="lb">Managers and supervisors</span><input id="roiMgrs" class="in" type="number" min="1" value="4" oninput="roiCalc()"></label>
+          <label><span class="lb">Minutes a day each spends chasing</span><input id="roiMins" class="in" type="number" min="0" value="45" oninput="roiCalc()"></label>
+          <label><span class="lb">A manager’s monthly salary (₹)</span><input id="roiPay" class="in" type="number" min="0" step="1000" value="45000" oninput="roiCalc()"></label>
+        </div>
+      </div>
+      <div class="roi-card" id="roiOut"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------------- scoring -->
+  <section id="scoring" class="bg-white">
+    <div class="max-w-[1180px] mx-auto px-5 py-16">
+      <span class="eyebrow">Fair by design</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">A score your team will believe</h2>
+      <p class="text-gray-600 font-semibold mt-2 max-w-2xl leading-relaxed">
+        Most performance software produces a number nobody can argue with because nobody can see
+        where it came from. Every figure here traces back to a named task, a date and a person.</p>
+      <div class="grid lg:grid-cols-2 gap-5 mt-8">
+        <div class="formula-card">
+          <div class="text-[11px] font-black uppercase tracking-widest" style="color:#f5c542">The formula</div>
+          <p class="text-xl font-black mt-2 leading-snug">Score = how well you delivered × how much you delivered</p>
+          <p class="soft text-[14px] font-semibold mt-3 leading-relaxed">
+            On time 45%, right first time 30%, nothing left late 25% — each task weighted by its priority.
+            Ten jobs with seven on time beats one easy job done well, because the rate is credited against
+            the load actually carried. A working day late costs 10 points on that task; a send-back costs 25.</p>
+          <figure class="browser-frame mt-5"><img src="/img/09-score-why.jpg" width="1800" height="1138" loading="lazy"
+            alt="See why: every part of a person's score with the tasks behind it"></figure>
+        </div>
+        <div class="bg-white rounded-3xl border-2 border-gray-200 p-6 space-y-4">
+          <div class="rule"><span class="material-icons ic-blue">supervisor_account</span><div><div class="font-black text-sm">Managers are measured too</div>
+            <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
+              Sit on an approval past two working days and you lose score for it — counted from the moment it
+              reached your desk.</p></div></div>
+          <div class="rule"><span class="material-icons ic-teal">event_available</span><div><div class="font-black text-sm">Leave and weekends are never lateness</div>
+            <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
+              Weekends and a person’s own approved leave are left out everywhere a day is counted.</p></div></div>
+          <div class="rule"><span class="material-icons ic-violet">account_tree</span><div><div class="font-black text-sm">Nobody wears somebody else’s slip</div>
+            <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
+              If the stage before yours overran, your deadline moves with it. You get back the days the plan gave you.</p></div></div>
+          <div class="rule"><span class="material-icons ic-gold">timer</span><div><div class="font-black text-sm">A slow checker never costs the doer</div>
+            <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
+              You are timed until you hand the work in, not until somebody gets round to checking it.</p></div></div>
+          <div class="rule"><span class="material-icons ic-green">done_all</span><div><div class="font-black text-sm">One score, everywhere</div>
+            <p class="text-[14px] text-gray-600 font-semibold mt-0.5 leading-relaxed">
+              The dashboard, the leaderboard, the reports and the appraisal all show the same number. Half of the
+              appraisal is the manager’s rating of KRAs and behaviour; half is this record.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- comparison -->
+  <section class="bg-gray-50 border-y border-gray-100">
+    <div class="max-w-[1180px] mx-auto px-5 py-16">
+      <span class="eyebrow">Before and after</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">What changes when you move off WhatsApp and Excel</h2>
+      <div class="cmp mt-8">
+        <div class="cmp-row cmp-head"><span></span><span>WhatsApp + Excel</span><span>Domebox</span></div>
+        <div class="cmp-row"><span>Who was asked to do what, by when</span><span>Scrolled away in a group chat</span><span>A task with an owner, a due date and a priority</span></div>
+        <div class="cmp-row"><span>Is it really done?</span><span>“Done” means somebody said so</span><span>Done only when the person who asked verifies it</span></div>
+        <div class="cmp-row"><span>Follow-ups</span><span>The manager chases, every day</span><span>Reminders go out at 9, 3 and 5 by themselves</span></div>
+        <div class="cmp-row"><span>Multi-step jobs</span><span>Someone has to remember to pass it on</span><span>Each stage opens the next and tells its owner</span></div>
+        <div class="cmp-row"><span>Month-end appraisal</span><span>From memory, and argued</span><span>A score with the working shown, task by task</span></div>
+        <div class="cmp-row"><span>The weekly meeting</span><span>Notes nobody reads</span><span>An agenda, minutes, and points delegated as real tasks</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------------- pricing -->
+  <section id="pricing" class="bg-white">
+    <div class="max-w-[1180px] mx-auto px-5 py-16">
+      <span class="eyebrow">Pricing</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Simple pricing. Every feature on every paid plan.</h2>
+      <p class="text-gray-500 font-semibold mt-2 max-w-2xl">You pay for the size of your team, not for features —
+        from ₹999 a month for 10 people. Start with 14 days of the full Growth plan, free — no card.</p>
+      <div id="homeCycle" class="mt-5"></div>
+      <div id="homePlans" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6"></div>
+      <p class="text-[13px] font-semibold text-gray-400 mt-5 max-w-3xl leading-relaxed">
+        Prices in INR. <span id="gstNote">Any tax is shown before you pay.</span> Upgrade any time during your trial and the
+        days you have left are added on. If the trial ends without a plan, the workspace moves to Free — nothing is
+        deleted. Need a few more seats than a band allows? Extra seats are ₹149 per user a month.</p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ FAQ -->
+  <section id="faq" class="band-tint">
+    <div class="max-w-[900px] mx-auto px-5 py-16">
+      <span class="eyebrow">Questions</span>
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Questions buyers ask</h2>
+      <div class="faq mt-6">
+        <details><summary>How long does it take to set up?</summary>
+          <p>An afternoon. Create the workspace, add your people with their manager, and assign the first jobs. There is
+            nothing to install — it runs in the browser on a computer or a phone.</p></details>
+        <details><summary>Will my team actually use it?</summary>
+          <p>Staff see only their own work, what to do first, and their own score, with reminders by email. A printable
+            manual with a picture of every screen comes with it, and Help inside the app opens on whatever page you are on.</p></details>
+        <details><summary>Is our data safe? Can other companies see it?</summary>
+          <p>Every company gets its own private workspace. Nothing is shared between workspaces and nothing is public.
+            Passwords are stored as secure hashes, and every change is recorded with a name and a time.</p></details>
+        <details><summary>What happens when the 14-day trial ends?</summary>
+          <p>If you choose a plan, nothing changes. If you do not, the workspace moves to the Free plan — 5 people and
+            100 tasks a month. Nothing is deleted and everybody can still sign in.</p></details>
+        <details><summary>Do we get an invoice?</summary>
+          <p>Yes. Fill in your company details (and GSTIN, if you have one) under Plans before paying, and an invoice is emailed the moment the payment goes
+            through. Every invoice stays under Plans → Invoices.</p></details>
+        <details><summary>Does it work on a phone?</summary>
+          <p>Yes, in any phone browser. The board, priority list, meetings and scores all work on a small screen.</p></details>
+        <details><summary>Can we change plans later?</summary>
+          <p>Yes. Move up as your team grows; renewing early adds to the time you already have rather than replacing it.</p></details>
+        <details><summary>How is the score kept fair?</summary>
+          <p>Lateness is counted in working days, approved leave is left out, a slow checker never counts against the doer,
+            and work handed in is never counted as late. Anyone can open “See why” and check every number.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------- call me back -->
+  <section id="callback" class="band-navy">
+    <div class="max-w-[1180px] mx-auto px-5 py-16 grid lg:grid-cols-2 gap-10 items-start">
+      <div>
+        <span class="eyebrow">Talk to a person</span>
+        <h2 class="text-2xl lg:text-4xl font-black tracking-tight mt-3">Rather talk it through?</h2>
+        <p class="soft font-semibold mt-3 leading-relaxed">Leave your number and we will call you back within
+          one working day — to walk you through it with your own process in mind, or to set up a larger company.</p>
+        <p class="soft text-[13px] font-semibold mt-4">Or write to
+          <a href="mailto:info@biscsindia.com" class="font-bold underline" style="color:#f5c542">info@biscsindia.com</a>.</p>
+      </div>
+      <form id="formCallback" class="bg-white text-gray-900 rounded-3xl p-6 grid sm:grid-cols-2 gap-4 shadow-2xl" onsubmit="return sendCallback(event)">
+        <label><span class="lb">Your name</span><input id="cbName" class="in" required autocomplete="name"></label>
+        <label><span class="lb">Company</span><input id="cbCompany" class="in" required autocomplete="organization"></label>
+        <label><span class="lb">Phone</span><input id="cbPhone" class="in" required type="tel" autocomplete="tel" placeholder="98300 00000"></label>
+        <label><span class="lb">Email</span><input id="cbEmail" class="in" type="email" autocomplete="email"></label>
+        <label><span class="lb">People in your company</span><input id="cbSize" class="in" type="number" min="1"></label>
+        <label><span class="lb">Best time to call</span>
+          <select id="cbWhen" class="in"><option>Any time</option><option>Morning</option><option>Afternoon</option><option>Evening</option></select></label>
+        <label class="sm:col-span-2"><span class="lb">Anything we should know (optional)</span>
+          <textarea id="cbNote" class="in" rows="2"></textarea></label>
+        <button id="btnCallback" class="btn btn-gold sm:col-span-2" type="submit">Request a call back</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ final CTA -->
+  <section class="hero-navy">
+    <div class="max-w-[1180px] mx-auto px-5 py-16 text-center">
+      <h2 class="text-2xl lg:text-4xl font-black tracking-tight">Start with your own team this week</h2>
+      <p class="lede font-semibold mt-2">14 days of the full Growth plan, free. No card. Nothing to install.</p>
+      <div class="flex flex-wrap justify-center gap-3 mt-6">
+        <button class="btn btn-gold text-base px-6 py-3.5" onclick="goAuth('signup')">Start your free trial</button>
+        <button class="btn btn-ghost-light text-base px-6 py-3.5" onclick="openDemo('owner', this)">See the live demo</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="bg-white border-t border-gray-100 pb-20 md:pb-0">
+    <div class="max-w-[1180px] mx-auto px-5 py-8 flex flex-wrap items-center gap-x-5 gap-y-2
+                text-[13px] font-bold text-gray-400">
+      <span class="text-gray-700 font-black">Domebox</span>
+      <span>by BISCS India</span>
+      <span class="flex-1"></span>
+      <a href="/privacy" class="hover:text-gray-900">Privacy</a>
+      <a href="/terms" class="hover:text-gray-900">Terms</a>
+      <a href="/refund" class="hover:text-gray-900">Refunds</a>
+      <a href="/contact" class="hover:text-gray-900">Contact</a>
+      <a href="mailto:info@biscsindia.com" class="hover:text-gray-900">info@biscsindia.com</a>
+    </div>
+  </footer>
+
+  <!-- on a phone the next step is always one thumb away -->
+  <div class="sticky-cta md-down">
+    <button class="btn btn-g flex-1" onclick="openDemo('owner', this)">Live demo</button>
+    <button class="btn btn-gold flex-1" onclick="goAuth('signup')">Start free trial</button>
+  </div>
+</div>

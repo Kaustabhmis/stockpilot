@@ -1,0 +1,513 @@
+// ===========================================================================
+// TASKS
+// ===========================================================================
+
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — a workspace slipping past its monthly task cap. */
+function createTask_(ctx, form) {
+  return withLock_(function () { return createTask_locked_(ctx,form); });
+}
+function createTask_locked_(ctx, form) {
+  /* Deliberately NOT requireManager_: a Doer may raise work upward, to their own
+     manager or to a department head. canAssignTo decides per recipient. */
+  blockIfStopped_(ctx);
+  form = form || {};
+
+  var title = String(form.title || '').trim();
+  if (!title) throw new Error('Give the task a title.');
+  var assignees = String(form.assignTo || '').split(',')
+    .map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+  if (!assignees.length) throw new Error('Pick at least one person.');
+
+  var users = readUsers_(ctx);
+  var byName = {};
+  users.forEach(function (u) { byName[u.username] = u; });
+
+  /* The published plan promises a monthly cap. Enforced here, on the server,
+     because a limit checked in the browser is a suggestion. */
+  var tasks = readTasks_(ctx);
+  var used = tasksCreatedInMonth(tasks, new Date());
+  var gate = canCreateTask(ctx.planName, used + assignees.length - 1);
+  if (!gate.ok) throw new Error(gate.reason + (gate.upgradeTo ? ' Upgrade to ' + gate.upgradeTo + '.' : ''));
+
+  /* Validated once, before anything is written, so a bad stop rule refuses the
+     whole assignment rather than leaving half the team with a runaway repeat. */
+  var stop = parseRepeatStop_(form);
+
+  /* The goal this work serves. Checked here rather than trusted, because a
+     task tagged to a goal that does not exist would count toward nothing and
+     still look as if it did. */
+  var goalId = String(form.goal || '').trim();
+  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
+  var raisedIn = String(form.raisedIn || '').trim();
+
+  var sheet = ctx.ss.getSheetByName(TAB.TASKS);
+  var created = [], routed = 0;
+
+  var refused = [];
+  assignees.forEach(function (username) {
+    var target = byName[username];
+    if (!target || target.active === false) return;
+
+    var allowed = canAssignTo(ctx.me, target);
+    if (!allowed.ok) { refused.push({ name: target.name, reason: allowed.reason }); return; }
+
+    // The engine decides who, if anyone, has to agree before this lands.
+    var route = initialStatusFor(target, ctx.me);
+    var id = newTaskId_();
+    var row = blankTaskRow_();
+    row[T['ID']] = id;
+    row[T['Date Created']] = new Date();
+    row[T['Due Date']] = form.dueDate || '';
+    row[T['Title']] = title;
+    row[T['Description']] = String(form.desc || '');
+    row[T['Assigned By']] = ctx.actor.username;
+    row[T['Assigned To']] = username;
+    row[T['Status']] = route.status;
+    row[T['KRA Tag']] = String(form.kra || 'General');
+    row[T['Priority']] = form.priority || 'Medium';
+    row[T['Frequency']] = form.frequency || 'One Time';
+    row[T['Repeat Until']] = stop.until;
+    row[T['Repeat Count']] = stop.count;
+    row[T['Repeat Made']] = stop.count || stop.until ? 1 : 0;
+    row[T['Goal']] = goalId;
+    row[T['Raised In']] = raisedIn;
+    row[T['Reworks']] = 0;
+    row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(),
+      status: route.status, user: ctx.actor.name, note: route.note }]);
+    row[T['Job Category']] = String(form.jobCategory || 'General');
+    row[T['Approver Manager']] = route.status === 'Awaiting Approval' ? route.approver : '';
+    row[T['Status']] = route.status;
+    row[T['Spawned By']] = '';
+    row[T['Blocked By']] = JSON.stringify([]);
+    row[T['Subtasks JSON']] = JSON.stringify(parseChecklist_(form.checklist));
+    row[T['Delegate To']] = '';
+    sheet.appendRow(row);
+    dropCache_(ctx);
+    created.push({ id: id, to: username });
+    if (route.status === 'Awaiting Approval') routed++;
+
+    try { notifyAssignment_(ctx, target, byName[route.approver], title, form.dueDate, id, route.status); }
+    catch (e) { logError_('createTask:notify', e.message); }
+  });
+
+  if (!created.length) {
+    throw new Error(refused.length ? refused[0].reason
+      : 'None of those people are active in this workspace.');
+  }
+  return { status: 'success', created: created.length, ids: created.map(function (c) { return c.id; }),
+    routedForApproval: routed,
+    refused: refused,
+    message: created.length + ' task(s) created' +
+      (routed ? ', ' + routed + ' sent for approval' : '') + '.' +
+      (refused.length ? ' Not sent to ' +
+        refused.map(function (r) { return r.name; }).join(', ') + '.' : '') };
+}
+
+/**
+ * How a repeat ends: on a date, after a number of occurrences, or never.
+ *
+ * Both may be set, and then whichever arrives first wins — "every Monday until
+ * March, but no more than ten" is a reasonable thing to mean. A stop rule on a
+ * one-off is refused rather than silently dropped, because it is always a sign
+ * the person thought they were setting up a repeat.
+ */
+function parseRepeatStop_(form) {
+  var freq = String((form && form.frequency) || 'One Time');
+  var until = String((form && form.repeatUntil) || '').trim();
+  var count = Number((form && form.repeatCount) || 0);
+
+  if (freq === 'One Time') {
+    if (until || count) throw new Error('A one-time task does not repeat, so it has nothing to stop. Pick how often it repeats first.');
+    return { until: '', count: 0 };
+  }
+  if (until) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) throw new Error('The repeat end date is not a date.');
+    var due = String((form && form.dueDate) || '');
+    if (due && until < due) throw new Error('The repeat cannot end before the first one is due.');
+  }
+  if (count) {
+    if (count < 1 || count !== Math.floor(count)) throw new Error('Repeat a whole number of times, or leave it blank for no limit.');
+    if (count > 500) throw new Error('That is more than 500 occurrences. Set an end date instead.');
+    if (count === 1) throw new Error('Repeating once is a one-time task — set it to One Time.');
+  }
+  return { until: until, count: count };
+}
+
+function parseChecklist_(raw) {
+  if (Array.isArray(raw)) return raw.map(function (x) {
+    return typeof x === 'string' ? { text: x, done: false } : { text: String(x.text||''), done: !!x.done }; });
+  return String(raw || '').split('\n').map(function (s) { return s.trim(); })
+    .filter(function (s) { return s; }).map(function (s) { return { text: s, done: false }; });
+}
+
+/**
+ * The single write path for a status change. Board, list and detail all route
+ * through here so the rework counter, the recurrence spawn and the audit trail
+ * cannot be skipped by taking a different path through the UI.
+ */
+function updateTask_(ctx, taskId, status, note, newDueDate) {
+  blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+
+  if (!canTransition(t, ctx.actor, status)) {
+    if (status === 'Verified' && t.assignee === ctx.actor.username) {
+      throw new Error('You cannot sign off your own work — it needs the person who raised it.');
+    }
+    throw new Error('Your role does not allow that move on this task.');
+  }
+
+  var all = readTasks_(ctx);
+
+  if (status === 'In Progress' && t.status === 'Pending') {
+    var blockers = openBlockers(t, all);
+    if (blockers.length) {
+      throw new Error('Blocked by: ' + blockers.map(function (b) { return b.title; }).join(', '));
+    }
+    var limit = wipLimitFor_(ctx, t.assignee);
+    var wip = wipStatus(all, t.assignee, limit);
+    if (wip.exceeded) {
+      throw new Error(nameOf_(ctx, t.assignee) + ' already has ' + wip.count +
+        ' tasks in progress (limit ' + wip.limit + ').');
+    }
+  }
+  if (status === 'For Review') {
+    var sub = subtaskProgress(t);
+    if (sub.total && sub.done < sub.total) {
+      throw new Error('Finish the checklist first (' + sub.done + '/' + sub.total + ').');
+    }
+  }
+
+  /* Rework is specifically review sending work BACK. The old build incremented
+     this on any move to In Progress, so simply starting a task cost five points
+     on the score. Only the For Review -> In Progress path counts. */
+  var isRework = (t.status === 'For Review' && status === 'In Progress');
+  if (isRework) writeTaskField_(hit, 'Reworks', Number(t.reworkCount || 0) + 1);
+
+  // An approved hand-off is where the new owner actually takes the task.
+  if (t.status === 'Delegation Proposed' && t.delegateTo && status !== 'Delegation Proposed') {
+    writeTaskField_(hit, 'Assigned To', t.delegateTo);
+    writeTaskField_(hit, 'Delegate To', '');
+  }
+
+  if (isRework && newDueDate) writeTaskField_(hit, 'Due Date', newDueDate);
+
+  writeTaskField_(hit, 'Status', status);
+  appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : ''),
+    isRework && newDueDate ? { setDate: newDueDate } : null);
+
+  var spawned = null;
+  if (status === 'Verified' && t.frequency && t.frequency !== 'One Time') {
+    spawned = spawnNextOccurrence_(ctx, hit, t);
+  }
+
+  /* Signing off a stage closes it, and a closed blocker stops blocking, so the
+     next stage releases itself. All that is left is to tell whoever it landed
+     on — silently unblocking work nobody is watching is how a project stalls
+     for a week between two people who were each waiting on the other. */
+  var released = null;
+  if (status === 'Verified' && t.projectId && t.stageGate !== 'parallel') {
+    var siblings = projectStages(readTasks_(ctx), t.projectId);
+    for (var si = 0; si < siblings.length; si++) {
+      if (Number(siblings[si].stageNo) === Number(t.stageNo) + 1 && isOpen(siblings[si].status)) {
+        released = siblings[si];
+        try { notifyStageReleased_(ctx, t.projectName, released); }
+        catch (e) { logError_('updateTask:stageRelease', e.message); }
+        break;
+      }
+    }
+  }
+
+  try { notifyStatus_(ctx, t, status, note); } catch (e) { logError_('updateTask:notify', e.message); }
+
+  return { status: 'success',
+    message: released
+             ? 'Verified. Stage ' + released.stageNo + ' is now open for ' +
+               nameOf_(ctx, released.assignee) + '.'
+           : spawned ? 'Verified. Next occurrence due ' + spawned
+           : isRework ? 'Sent back for rework.' : 'Moved to ' + status + '.',
+    spawnedDue: spawned,
+    releasedStage: released ? { id: released.id, stage: Number(released.stageNo),
+                                title: released.title, to: released.assignee } : null };
+}
+
+function spawnNextOccurrence_(ctx, hit, t) {
+  var next = nextOccurrence(t.frequency, t.due, {});
+  if (!next) return null;
+  var due = ymd(next);
+
+  /* The series ends here if it has run its course. Writing the stop onto the
+     task that just closed — rather than simply declining to create the next
+     one — is what makes it visible: the drawer stops offering "Stop
+     repeating", the history says why it ended, and nobody is left wondering
+     whether the schedule is broken or finished. */
+  var made = Number(t.repeatMade || 0) || 1;
+  var ended = '';
+  if (t.repeatCount && made >= Number(t.repeatCount)) {
+    ended = 'Repeat finished — all ' + t.repeatCount + ' occurrences done';
+  } else if (t.repeatUntil && due > t.repeatUntil) {
+    ended = 'Repeat finished — ran to ' + t.repeatUntil;
+  }
+  if (ended) {
+    writeTaskField_(hit, 'Frequency', 'One Time');
+    appendHistory_(hit, t.status, 'System', ended);
+    return null;
+  }
+
+  // Never create a second copy for a date that already has an open occurrence.
+  var existing = readTasks_(ctx);
+  for (var i = 0; i < existing.length; i++) {
+    var x = existing[i];
+    if (x.title === t.title && x.assignee === t.assignee && x.due === due && isOpen(x.status)) return null;
+  }
+
+  var row = blankTaskRow_();
+  row[T['ID']] = newTaskId_();
+  row[T['Date Created']] = new Date();
+  row[T['Due Date']] = due;
+  row[T['Title']] = t.title;
+  row[T['Description']] = t.desc;
+  row[T['Assigned By']] = t.by;
+  row[T['Assigned To']] = t.assignee;
+  row[T['Status']] = 'Pending';
+  row[T['KRA Tag']] = t.kra;
+  row[T['Priority']] = t.priority;
+  row[T['Frequency']] = t.frequency;
+  row[T['Repeat Until']] = t.repeatUntil || '';
+  row[T['Repeat Count']] = t.repeatCount || 0;
+  row[T['Repeat Made']] = made + 1;
+  row[T['Goal']] = t.goal || '';            // a repeating job keeps serving the same goal
+  row[T['Reworks']] = 0;
+  row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(), status: 'Pending',
+    user: 'System', note: 'Recurring occurrence of ' + t.id }]);
+  row[T['Job Category']] = t.jobCategory;
+  /* Marked system-generated so it does not spend the tenant's monthly task
+     quota — nobody chose to create it, and a Free customer with five daily
+     recurring jobs would otherwise burn all 50 in ten days. */
+  row[T['Spawned By']] = t.id;
+  row[T['Blocked By']] = JSON.stringify([]);
+  row[T['Subtasks JSON']] = JSON.stringify((t.subtasks || []).map(function (s) {
+    return { text: s.text, done: false }; }));
+  row[T['Delegate To']] = '';
+  ctx.ss.getSheetByName(TAB.TASKS).appendRow(row);
+  dropCache_(ctx);
+  return due;
+}
+
+function processApproval_(ctx, taskId, isApproved, remarks) {
+  blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+
+  if (t.status !== 'Awaiting Approval' && t.status !== 'Delegation Proposed') {
+    throw new Error('That task is not waiting for approval.');
+  }
+  if (t.approver !== ctx.actor.username && ctx.actor.role !== 'Admin') {
+    throw new Error('Only ' + nameOf_(ctx, t.approver) + ' can decide this one.');
+  }
+
+  /* A rejection without a reason is the thing people complain about: the task
+     vanishes and whoever raised it has to go and ask why. The remark is the
+     answer, recorded against the task. */
+  remarks = String(remarks || '').trim();
+  if (!isApproved && !remarks) {
+    throw new Error('Add a remark saying why you are rejecting it. ' +
+      'The person who raised it will see this.');
+  }
+
+  var next = isApproved ? 'Pending' : 'Rejected';
+  if (t.status === 'Delegation Proposed' && isApproved && t.delegateTo) {
+    writeTaskField_(hit, 'Assigned To', t.delegateTo);
+    writeTaskField_(hit, 'Delegate To', '');
+  }
+  writeTaskField_(hit, 'Status', next);
+  writeTaskField_(hit, 'Approver Manager', '');
+  appendHistory_(hit, next, ctx.actor.name,
+    (isApproved ? 'Approved' : 'Rejected') + (remarks ? ': ' + remarks : ''));
+
+  try { notifyDecision_(ctx, t, isApproved, remarks); }
+  catch (e) { logError_('processApproval:notify', e.message); }
+
+  return { status: 'success', remarks: remarks,
+    message: isApproved ? 'Approved — it is on their list now.'
+                        : 'Rejected, and ' + nameOf_(ctx, t.by) + ' has been told why.' };
+}
+
+function delegateTask_(ctx, taskId, toUsername) {
+  blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var target = findUser_(ctx.ss, toUsername);
+  if (!target) throw new Error('That person is not in this workspace.');
+
+  var r = proposeDelegation(hit.task, ctx.actor, target, ctx.me);
+  if (!r.ok) throw new Error(r.error);
+
+  writeTaskField_(hit, 'Status', r.status);
+  writeTaskField_(hit, 'Assigned To', r.assignee);
+  writeTaskField_(hit, 'Approver Manager', r.status === 'Delegation Proposed' ? r.approver : '');
+  writeTaskField_(hit, 'Delegate To', r.delegateTo || '');
+  appendHistory_(hit, r.status, ctx.actor.name, r.note);
+
+  return { status: 'success', message: r.note };
+}
+
+function addBlocker_(ctx, taskId, blockerId) {
+  blockIfStopped_(ctx);
+  var all = readTasks_(ctx);
+  var r = addDependency(taskId, blockerId, all);
+  if (!r.ok) throw new Error(r.error);          // refuses circular chains
+  var hit = findTaskRow_(ctx, taskId);
+  writeTaskField_(hit, 'Blocked By', JSON.stringify(r.blockedBy));
+  return { status: 'success', message: 'Blocker added.' };
+}
+
+function toggleSubtask_(ctx, taskId, index, done) {
+  blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (t.assignee !== ctx.actor.username && ctx.actor.role === 'Doer') {
+    throw new Error('Only the owner can tick off their checklist.');
+  }
+  var subs = t.subtasks || [];
+  if (index < 0 || index >= subs.length) throw new Error('No such checklist item.');
+  subs[index].done = !!done;
+  writeTaskField_(hit, 'Subtasks JSON', JSON.stringify(subs));
+  return { status: 'success', progress: subtaskProgress({ subtasks: subs }) };
+}
+
+function stopRecurring_(ctx, taskId) {
+  requireManager_(ctx); blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  writeTaskField_(hit, 'Frequency', 'One Time');
+  /* Clear the rule as well as the cadence. Leaving "until March" behind on a
+     stopped series means the count is already part-spent if anyone restarts
+     it, and they would have no way of seeing that. */
+  writeTaskField_(hit, 'Repeat Until', '');
+  writeTaskField_(hit, 'Repeat Count', 0);
+  writeTaskField_(hit, 'Repeat Made', 0);
+  appendHistory_(hit, hit.task.status, ctx.actor.name, 'Recurrence stopped');
+  return { status: 'success', message: 'This will not repeat again.' };
+}
+
+function editTask_(ctx, form) {
+  blockIfStopped_(ctx);
+  form = form || {};
+  var hit = findTaskRow_(ctx, form.taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+
+  var mayEdit = ctx.actor.role === 'Admin' || t.by === ctx.actor.username;
+  if (!mayEdit) throw new Error('Only an Admin or the person who raised it can edit this task.');
+
+  var changes = [];
+  [['title','Title'],['desc','Description'],['dueDate','Due Date'],
+   ['priority','Priority'],['kra','KRA Tag'],['jobCategory','Job Category']].forEach(function (pair) {
+    if (form[pair[0]] !== undefined && String(form[pair[0]]) !== String(hit.raw[T[pair[1]]])) {
+      writeTaskField_(hit, pair[1], form[pair[0]]);
+      changes.push(pair[1]);
+    }
+  });
+  /* The cadence and its stop rule move together: changing one without the
+     other is how you get "repeats weekly, stops after 3" on a task that has
+     already run eight times. Validated by the same parser as creation. */
+  if (form.frequency !== undefined || form.repeatUntil !== undefined || form.repeatCount !== undefined) {
+    var stop = parseRepeatStop_({
+      frequency: form.frequency !== undefined ? form.frequency : t.frequency,
+      repeatUntil: form.repeatUntil, repeatCount: form.repeatCount,
+      dueDate: form.dueDate !== undefined ? form.dueDate : t.due });
+    var freq = form.frequency !== undefined ? form.frequency : t.frequency;
+    if (freq !== t.frequency) { writeTaskField_(hit, 'Frequency', freq); changes.push('Frequency'); }
+    writeTaskField_(hit, 'Repeat Until', stop.until);
+    writeTaskField_(hit, 'Repeat Count', stop.count);
+    /* The count already spent is not reset by an edit — otherwise "stop after
+       five" could be renewed indefinitely by editing the task each time. */
+    if (!Number(t.repeatMade) && freq !== 'One Time') writeTaskField_(hit, 'Repeat Made', 1);
+    if (String(stop.until) !== String(t.repeatUntil || '') ||
+        Number(stop.count) !== Number(t.repeatCount || 0)) changes.push('Repeat rule');
+  }
+
+  if (form.goal !== undefined && String(form.goal) !== String(t.goal || '')) {
+    if (form.goal && !goalById_(ctx, form.goal)) throw new Error('That goal no longer exists.');
+    writeTaskField_(hit, 'Goal', String(form.goal || ''));
+    changes.push('Goal');
+  }
+
+  if (form.status && form.status !== t.status && ctx.actor.role === 'Admin') {
+    writeTaskField_(hit, 'Status', form.status);
+    changes.push('Status');
+  }
+  if (changes.length) appendHistory_(hit, form.status || t.status, ctx.actor.name,
+    'Edited: ' + changes.join(', '));
+  return { status: 'success', message: changes.length ? 'Saved.' : 'Nothing changed.' };
+}
+
+function wipLimitFor_(ctx, username) {
+  var u = findUser_(ctx.ss, username);
+  return (u && u.wipLimit != null && !isNaN(u.wipLimit)) ? u.wipLimit : DEFAULT_WIP_LIMIT;
+}
+function nameOf_(ctx, username) {
+  var u = findUser_(ctx.ss, username);
+  return u ? u.name : (username || 'someone');
+}
+
+/**
+ * The priority list: what this person should do next, in order, with the
+ * reason each item is where it is.
+ *
+ * A manager may ask for somebody else's list — that is most of the value of it
+ * for them — but a Doer only ever gets their own.
+ */
+function getPriorityList_(ctx, username, horizon) {
+  var who = String(username || '').trim() || ctx.me.username;
+  if (ctx.me.role === ROLE.DOER && who !== ctx.me.username) {
+    throw new Error('You can only see your own list.');
+  }
+  var target = findUser_(ctx.ss, who);
+  if (!target) throw new Error('That person is not in this workspace.');
+
+  var want = String(horizon || 'week');
+  var known = HORIZONS.some(function (h) { return h.key === want; });
+  var q = priorityQueue(readTasks_(ctx), who, new Date(), leaveCalendar_(ctx),
+                        { horizon: known ? want : 'week' });
+  return { status: 'success', employee: { username: target.username, name: target.name },
+    priorities: readPriorities_(ctx), horizons: HORIZONS,
+    horizon: q.horizon, horizonEnd: q.horizonEnd, counts: q.counts,
+    doNow: q.doNow, next: q.next, later: q.later, waiting: q.waiting,
+    decisions: q.decisions, handedIn: q.handedIn,
+    total: q.total, overdue: q.overdue, undated: q.undated };
+}
+
+/**
+ * Closed work, a page at a time, newest first. Filtered and searched here,
+ * on the server, so the browser never holds a company's whole history.
+ */
+function getArchive_(ctx, p) {
+  p = p || {};
+  var size = Math.min(100, Math.max(10, Math.floor(Number(p.pageSize)) || 50));
+  var page = Math.max(0, Math.floor(Number(p.page)) || 0);
+  var q = String(p.q || '').toLowerCase().trim();
+  var closedAt = function (t) {
+    var h = t.history || [];
+    var d = h.length ? new Date(h[h.length - 1].date) : new Date(t.createdDate);
+    return isNaN(d) ? 0 : d.getTime();
+  };
+  var rows = visibleTasks_(ctx, readAllTasks_(ctx)).filter(function (t) {
+    if (!t.isArchived) return false;
+    if (p.assignee && t.assignee !== p.assignee) return false;
+    if (p.status && t.status !== p.status) return false;
+    if (p.category && t.jobCategory !== p.category) return false;
+    if (p.goal && t.goal !== p.goal) return false;
+    if (q && (t.title + ' ' + t.desc + ' ' + t.kra + ' ' + t.jobCategory + ' ' + t.id)
+          .toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+  rows.sort(function (a, b) { return closedAt(b) - closedAt(a); });
+  return { status: 'success', tasks: rows.slice(page * size, (page + 1) * size),
+           total: rows.length, page: page, pageSize: size };
+}

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Domebox — Task &amp; Team Management Software for Indian MSMEs</title>
+<meta name="description" content="Stop chasing work on WhatsApp. Assign every job with a deadline, approve it when it is done, and get a fair monthly performance score for every person. Task management, KRA/KPI and appraisals for Indian MSMEs. 14-day free trial, live demo, no card.">
+<!-- This page is the landing page as well as the app. It used to carry
+     noindex, from when it was only a login box — which kept the whole domain
+     out of Google. The app itself is behind a token and has no crawlable URL,
+     so there is nothing here for a crawler to reach that it should not. -->
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://www.domebox.in/">
+<meta name="author" content="BISCS India">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Domebox">
+<meta property="og:locale" content="en_IN">
+<meta property="og:url" content="https://www.domebox.in/">
+<meta property="og:title" content="Stop chasing work on WhatsApp. Know who delivered — and prove it.">
+<meta property="og:description" content="Task, team and performance management for Indian MSMEs. Try the live demo, or start a 14-day free trial of the full Growth plan — no card.">
+<meta property="og:image" content="https://www.domebox.in/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Domebox — task &amp; team management for Indian MSMEs">
+<meta name="twitter:description" content="Assign work, chase nothing, and get a performance score your team can see the working for.">
+<meta name="twitter:image" content="https://www.domebox.in/og-cover.png">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"Organization","@id":"https://www.domebox.in/#org","name":"BISCS India",
+  "url":"https://www.domebox.in/","email":"info@biscsindia.com",
+  "logo":"https://www.domebox.in/og-cover.png",
+  "address":{"@type":"PostalAddress","addressCountry":"IN"}},
+ {"@type":"WebSite","@id":"https://www.domebox.in/#site","url":"https://www.domebox.in/",
+  "name":"Domebox","publisher":{"@id":"https://www.domebox.in/#org"},"inLanguage":"en-IN"},
+ {"@type":"SoftwareApplication","name":"Domebox",
+  "applicationCategory":"BusinessApplication","operatingSystem":"Web browser",
+  "url":"https://www.domebox.in/","publisher":{"@id":"https://www.domebox.in/#org"},
+  "description":"Task and team management for Indian MSMEs, with delegation scoring, KRA/KPI tracking and appraisals.",
+  "featureList":"Task board, multi-stage projects, recurring jobs, multi-level approvals, KRA and KPI tracking, appraisals, delegation scoring, org chart",
+  "offers":[
+   {"@type":"Offer","name":"Free","price":"0","priceCurrency":"INR"},
+   {"@type":"Offer","name":"Team","price":"9990","priceCurrency":"INR"},
+   {"@type":"Offer","name":"Starter","price":"24990","priceCurrency":"INR"},
+   {"@type":"Offer","name":"Growth","price":"59990","priceCurrency":"INR"},
+   {"@type":"Offer","name":"Scale","price":"129990","priceCurrency":"INR"}]}
+ ]}
+</script>
+<!-- No Review or AggregateRating is emitted anywhere on this site. Google
+     requires those to be genuine, collected reviews; inventing them to win a
+     star rating in the results is a manual-action risk and a lie to a buyer. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M12 52 A38 38 0 0 1 88 52 L88 76 A12 12 0 0 1 76 88 L24 88 A12 12 0 0 1 12 76 Z' fill='%231e4fbf'/%3E%3Cpath d='M35 55 L46 66 L67 42' fill='none' stroke='%23fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+<script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+<style>
+  :root{
+    /* Chart series. Validated for the categorical job against this surface:
+       lightness band, chroma floor, CVD separation, normal-vision floor and
+       3:1 contrast all pass. Status colours are reserved steps, never reused as
+       a fourth series, and every status still carries a word or a letter so
+       colour never has to be read on its own. */
+    --s1:#1e4fbf; --s2:#d97706; --s3:#0f8f84; --s4:#9333ea;
+    --good:#067647; --warn:#b54708; --bad:#b42318;
+    /* Sequential ramp for the heatmap: one hue, light to dark, monotonic. */
+    --r1:#e6eefb; --r2:#a9c1ec; --r3:#4f7fd1; --r4:#17366f;
+
+    /* Corporate palette: navy, blue, teal, with gold only as decoration. */
+    --navy:#13294b; --brand:#1e4fbf; --brand-dark:#183f99; --accent:#0c7a71; --gold:#d4930f;
+    --surface:#fff; --surface2:#eef1f6; --paper:#f4f6fa; --line:#e2e7ef;
+    --ink:#0f1b2d; --ink2:#475467; --muted:#667085;
+    --lift:0 10px 24px -8px rgba(15,27,45,.16), 0 2px 6px -2px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box}
+  body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+       background:var(--paper);color:var(--ink);margin:0}
+  .hidden{display:none !important}
+  .material-icons{vertical-align:middle}
+
+  .fade{animation:fade .25s ease-out forwards;opacity:0;transform:translateY(6px)}
+  @keyframes fade{to{opacity:1;transform:none}}
+  @keyframes pop{0%{transform:scale(.92);opacity:0}60%{transform:scale(1.03)}100%{transform:none;opacity:1}}
+  .pop{animation:pop .28s cubic-bezier(.2,1.1,.4,1) forwards}
+
+  /* A board column reads as a tray the cards sit in, with the warm surface
+     rather than cold grey — the difference between "spreadsheet" and
+     "somewhere you want to spend the morning". */
+  .col{background:var(--surface2);border-radius:1.15rem;padding:.75rem;min-height:140px;
+       border:1px solid var(--line)}
+  .col.over{outline:2px dashed var(--brand);outline-offset:-5px;background:#eaf0fb}
+
+  .card{background:#fff;border-radius:.9rem;padding:.8rem;margin-bottom:.55rem;
+        border:1px solid var(--line);cursor:grab;box-shadow:0 1px 2px rgba(15,27,45,.05);
+        transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
+  .card:hover{transform:translateY(-2px);box-shadow:var(--lift);border-color:#c3cddc}
+  .card:active{cursor:grabbing;transform:none}
+  .card.drag{opacity:.4;transform:rotate(-1.5deg)}
+  /* Priority as a chunky spine down the left: visible at a glance across a full
+     board, and paired with the word on the card so it is never colour alone. */
+  .card.p-High{border-left:5px solid var(--bad)}
+  .card.p-Medium{border-left:5px solid var(--warn)}
+  .card.p-Low{border-left:5px solid var(--brand)}
+
+  .chip{display:inline-flex;align-items:center;gap:.25rem;font-size:10px;font-weight:800;
+        text-transform:uppercase;letter-spacing:.06em;padding:.2rem .5rem;border-radius:.55rem}
+
+  .in{width:100%;border:1.5px solid var(--line);background:#fbfcfe;border-radius:.8rem;
+      padding:.7rem .85rem;font-size:14px;outline:none;font-family:inherit;color:var(--ink);
+      transition:border-color .14s ease,box-shadow .14s ease,background .14s ease}
+  .in:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(30,79,191,.13)}
+  .lb{display:block;font-size:10px;font-weight:800;text-transform:uppercase;
+      letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem}
+
+  .btn{padding:.7rem 1.3rem;border-radius:.8rem;font-weight:800;font-size:14px;
+       border:none;cursor:pointer;font-family:inherit;
+       transition:transform .1s ease,box-shadow .14s ease,background .14s ease}
+  .btn:active{transform:translateY(1px)}
+  .btn-p{background:var(--brand);color:#fff;box-shadow:0 6px 16px -4px rgba(30,79,191,.5)}
+  .btn-p:hover{background:var(--brand-dark);box-shadow:0 10px 22px -6px rgba(30,79,191,.55)}
+  .btn-g{background:#fff;color:var(--ink2);border:1.5px solid var(--line)}
+  .btn-g:hover{border-color:#c3cddc;background:#fbfcfe}
+  .btn-a{background:var(--accent);color:#fff;box-shadow:0 6px 16px -4px rgba(15,143,132,.4)}
+  .btn-a:hover{background:#0b625b}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+  #scrim{position:fixed;inset:0;background:rgba(15,27,45,.5);z-index:80;
+         display:none;align-items:center;justify-content:center;padding:1rem;
+         backdrop-filter:blur(2px)}
+  #scrim.on{display:flex}
+  #scrim.top{z-index:95}  /* a form opened from the task panel sits in front of it */
+  #modal{background:#fff;border-radius:1.6rem;width:100%;max-height:90vh;overflow-y:auto;
+         box-shadow:0 30px 60px -12px rgba(15,27,45,.4);animation:pop .22s ease-out}
+  #drawer{position:fixed;top:0;right:0;height:100%;width:100%;max-width:520px;background:#fff;
+          z-index:90;box-shadow:-20px 0 50px rgba(15,27,45,.22);overflow-y:auto;
+          transform:translateX(100%);transition:transform .22s cubic-bezier(.3,1,.4,1)}
+  #drawer.on{transform:translateX(0)}
+
+  #toasts{position:fixed;bottom:1.25rem;right:1.25rem;z-index:9999;display:flex;
+          flex-direction:column;gap:.5rem;pointer-events:none}
+  .toast{padding:.8rem 1.1rem;border-radius:.9rem;font-weight:700;font-size:13px;color:#fff;
+         box-shadow:0 14px 30px rgba(15,27,45,.28);max-width:360px;animation:pop .24s ease-out}
+  .toast.ok{background:var(--good)} .toast.err{background:var(--bad)}
+  .toast.info{background:var(--ink)} .toast.win{background:var(--accent)}
+
+  .gridline{stroke:var(--line);stroke-width:1}
+  text.axis{font-size:11px;fill:var(--muted);font-weight:600}
+  text.dlabel{font-size:11px;fill:var(--ink);font-weight:800}
+  #chartHeat{overflow-x:auto}
+  .empty{padding:28px 4px;color:var(--muted);font-size:13px;font-weight:600}
+
+  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--ink);
+       color:#fff;border-radius:12px;padding:10px 12px;font-size:12px;z-index:9999;
+       box-shadow:0 14px 30px rgba(15,27,45,.3);min-width:150px}
+  #tip .t{font-weight:800;margin-bottom:6px}
+  #tip .r{display:flex;justify-content:space-between;gap:18px;padding:2px 0;color:#c3cddc}
+  #tip .r b{color:#fff}
+
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;
+          color:var(--muted);font-weight:800;padding:10px 14px;border-bottom:1.5px solid var(--line);
+          white-space:nowrap}
+  .tbl td{padding:11px 14px;border-bottom:1px solid #eef1f6;color:var(--ink2)}
+  .tbl tbody tr:hover{background:#f6f8fb}
+
+  .seg{border:1px solid var(--line)}
+  .seg button{padding:8px 16px;border-radius:10px;font-weight:800;font-size:13px;color:var(--ink2);
+              border:none;background:none;cursor:pointer;font-family:inherit;transition:all .14s ease}
+  .seg button.on{background:var(--brand);color:#fff;box-shadow:0 3px 10px -2px rgba(30,79,191,.5)}
+
+  /* A dot grid on the dark sections, so a full-width band of colour has some
+     texture to it instead of reading as a slab. */
+  .dotted{background-image:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1px);
+          background-size:22px 22px}
+
+  /* ---------- the tint set -------------------------------------------------
+     Ten light surfaces, each with an ink from the same hue. Every pair clears
+     4.5:1, so a tint is always a readable label and never just decoration.
+     They are assigned from a hash of the thing's name, so a category or a
+     person keeps the same colour on every screen, forever — a colour that
+     moves between renders is worse than no colour at all. */
+  .t-violet{background:#efecfe;color:#4a3bc4} .t-coral{background:#fdeee8;color:#a33616}
+  .t-teal  {background:#e4f5f2;color:#0b6f64} .t-amber{background:#fdf1dc;color:#8a5d0c}
+  .t-rose  {background:#fdeaf0;color:#a01443} .t-sky  {background:#e5f1fd;color:#1d5fa8}
+  .t-lime  {background:#eef6dd;color:#4f6b14} .t-plum {background:#f4ebfa;color:#6b2e8f}
+  .t-slate {background:#eeedf2;color:#44405a} .t-rust {background:#fbeee4;color:#8a4a12}
+
+  /* Solid versions, for an avatar or a counter that needs to carry weight. */
+  .s-violet{background:#5b4bdb} .s-coral{background:#d4541f} .s-teal{background:#0e8f80}
+  .s-amber {background:#b07d12} .s-rose {background:#c2185b} .s-sky {background:#2a74c9}
+  .s-lime  {background:#6b8f1a} .s-plum {background:#8e3fb8} .s-slate{background:#5e5873}
+  .s-rust  {background:#a9591a}
+  .av{color:#fff;font-weight:900;display:inline-flex;align-items:center;justify-content:center;
+      border-radius:999px;flex-shrink:0;letter-spacing:.02em}
+
+  /* ---------- the board, read left to right -------------------------------
+     Each column carries the colour of the state it holds, so the eye learns
+     the flow instead of re-reading five identical beige trays. The stripe is
+     at the top of the tray, never the only signal: the heading still says the
+     word. */
+  .col{position:relative;padding-top:1rem}
+  .col::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;
+               border-radius:1rem 1rem 0 0;background:var(--col-tone,#c3cddc)}
+  .colhead{display:inline-flex;align-items:center;gap:6px}
+  .coldot{width:9px;height:9px;border-radius:999px;background:var(--col-tone,#c3cddc);flex-shrink:0}
+
+  /* ---------- stat tiles --------------------------------------------------- */
+  .tile{background:#fff;border:1.5px solid var(--line);border-radius:1.15rem;padding:1rem;
+        position:relative;overflow:hidden;transition:transform .14s ease,box-shadow .14s ease}
+  .tile:hover{transform:translateY(-2px);box-shadow:var(--lift)}
+  .tile .tv{font-size:1.9rem;font-weight:900;line-height:1.1;margin-top:.15rem}
+  .tile .tk{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;
+            color:var(--muted)}
+  .tile .ts{font-size:11px;font-weight:700;color:var(--muted);margin-top:.1rem}
+  .tile .ti{position:absolute;right:.7rem;top:.7rem;opacity:.9}
+  .tile.lead{cursor:pointer}
+  .tile.lead:hover{border-color:#a9c1ec}
+  /* A thin brand rule along the top of every stat tile — the dashboard reads as
+     one set of instruments rather than loose white boxes. */
+  .tile::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--tile-tone,var(--brand))}
+
+  /* ---------- the home page: built to sell ------------------------------- */
+  .hero-bg{background:radial-gradient(900px 460px at 92% -10%,#dfe9fb 0%,rgba(223,233,251,0) 62%),
+                      radial-gradient(640px 380px at 0% 10%,#e2f4f1 0%,rgba(226,244,241,0) 60%),#fff}
+  .browser-frame{margin:0;border-radius:14px;overflow:hidden;background:#fff;border:1px solid #d5dce8;
+                 box-shadow:0 24px 50px -18px rgba(15,27,45,.35),0 4px 12px -4px rgba(15,27,45,.12)}
+  .browser-frame img{display:block;width:100%;height:auto}
+  .browser-bar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#eef1f6;border-bottom:1px solid #dde3ec}
+  .browser-bar i{width:9px;height:9px;border-radius:50%;background:#c3cddc;display:inline-block}
+  .browser-bar span{margin-left:10px;font-size:11px;font-weight:700;color:#667085;background:#fff;border-radius:6px;padding:2px 10px}
+  .tour-tabs{display:flex;flex-wrap:wrap;gap:8px}
+  .tour-tabs button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:8px 16px;font-weight:800;
+                    font-size:13px;color:var(--ink2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+  .tour-tabs button .material-icons{font-size:18px}
+  .tour-tabs button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+  .tour-point{display:flex;gap:10px;margin-top:12px;font-size:14.5px;font-weight:600;color:var(--ink2);line-height:1.55}
+  .tour-point .material-icons{color:var(--accent);font-size:20px;flex-shrink:0;margin-top:1px}
+  .demo-pick{display:flex;align-items:center;gap:14px;text-align:left;background:#fff;border:1.5px solid #c9d7ef;
+             border-radius:16px;padding:14px 16px;cursor:pointer;font-family:inherit;transition:box-shadow .14s ease,transform .14s ease}
+  .demo-pick:hover{box-shadow:var(--lift);transform:translateY(-1px)}
+  .demo-pick .material-icons{background:var(--navy);color:#fff;border-radius:12px;padding:8px}
+  .demo-pick b{display:block;font-weight:900;color:var(--ink)} .demo-pick small{display:block;font-weight:600;color:var(--ink2);font-size:13px}
+  .step{border:1.5px solid var(--line);border-radius:20px;padding:20px;background:#fff}
+  .step span{display:inline-flex;width:34px;height:34px;border-radius:10px;background:var(--brand);color:#fff;font-weight:900;
+             align-items:center;justify-content:center}
+  .step h3{font-weight:900;margin:10px 0 4px} .step p{font-size:14px;font-weight:600;color:var(--ink2);line-height:1.55}
+  .roi-big{font-size:2.1rem;font-weight:900;line-height:1.1;color:var(--ink)}
+  .roi-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-weight:700;font-size:14px;color:var(--ink2)}
+  .roi-row b{color:var(--ink)}
+  .cmp{border:1.5px solid var(--line);border-radius:18px;overflow:hidden;background:#fff}
+  .cmp-row{display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:12px;padding:13px 18px;border-top:1px solid var(--line);
+           font-size:14px;font-weight:600;color:var(--ink2)}
+  .cmp-row span:first-child{font-weight:800;color:var(--ink)}
+  .cmp-row span:last-child{color:#067647;font-weight:800}
+  .cmp-head{border-top:0;background:var(--navy);color:#fff !important;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  .cmp-head span{color:#fff !important}
+  @media(max-width:640px){ .cmp-row{grid-template-columns:1fr} .cmp-head{display:none} }
+  .faq details{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 18px;margin:8px 0}
+  .faq summary{font-weight:800;cursor:pointer;color:var(--ink)}
+  .faq p{margin:8px 0 0;font-size:14.5px;font-weight:600;color:var(--ink2);line-height:1.6}
+  .sticky-cta{position:fixed;left:0;right:0;bottom:0;z-index:45;display:flex;gap:8px;padding:10px 12px;
+              background:rgba(255,255,255,.97);border-top:1px solid var(--line);box-shadow:0 -6px 18px -8px rgba(15,27,45,.2)}
+
+  /* ---------- home page colour: corporate navy, blue, teal, with gold to act on ----------
+     Gold is used for ONE thing — the button that starts a trial — so the eye
+     always finds the next step. Navy carries authority, teal the good news,
+     blue the product. Every text pair here clears WCAG AA. */
+  .btn-gold{background:#f5b301;color:#0f1b2d;box-shadow:0 10px 24px -8px rgba(245,179,1,.6)}
+  .btn-gold:hover{background:#ffc21a;box-shadow:0 14px 30px -8px rgba(245,179,1,.7)}
+  .btn-ghost-light{background:rgba(255,255,255,.08);color:#fff;border:1.5px solid rgba(255,255,255,.35)}
+  .btn-ghost-light:hover{background:rgba(255,255,255,.16)}
+  .hero-navy{position:relative;color:#fff;overflow:hidden;
+    background:radial-gradient(700px 420px at 85% 15%,rgba(46,111,228,.55) 0%,rgba(46,111,228,0) 65%),
+               radial-gradient(520px 360px at 5% 100%,rgba(15,143,132,.45) 0%,rgba(15,143,132,0) 65%),
+               linear-gradient(135deg,#0a1628 0%,#13294b 48%,#1a3f8f 100%)}
+  .hero-navy::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:24px 24px}
+  .hero-navy > *{position:relative;z-index:1}
+  .hero-navy .kicker{color:#7fb2ff}
+  .hero-navy .gold{color:#f5c542}
+  .hero-navy .lede{color:#c9d6ea}
+  /* ---------- dialogs: error, warning, success, question ---------- */
+  #dlgScrim{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:16px;
+    background:rgba(15,27,45,.55);backdrop-filter:blur(2px)}
+  #dlgScrim.on{display:flex;animation:dlgFade .15s ease-out}
+  #dlgScrim.lite{background:transparent;backdrop-filter:none;pointer-events:none;align-items:flex-start;padding-top:84px}
+  #dlgScrim.lite .dlg{pointer-events:auto;max-width:380px;padding:22px 22px 18px}
+  .dlg{position:relative;width:100%;max-width:420px;background:#fff;border-radius:22px;padding:28px 26px 22px;text-align:center;
+    overflow:hidden;box-shadow:0 30px 70px -20px rgba(15,27,45,.55);
+    animation:dlgPop .2s cubic-bezier(.2,.9,.3,1.2)}
+  .dlg::before{content:'';position:absolute;top:0;left:0;right:0;height:6px;background:var(--dlg-c,#1e4fbf)}
+  .dlg-error{--dlg-c:#b42318;--dlg-bg:#fef3f2}
+  .dlg-warning{--dlg-c:#b54708;--dlg-bg:#fffaeb}
+  .dlg-success{--dlg-c:#067647;--dlg-bg:#ecfdf3}
+  .dlg-confirm{--dlg-c:#1e4fbf;--dlg-bg:#eef4ff}
+  .dlg-icon{width:64px;height:64px;margin:0 auto 14px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:var(--dlg-bg);color:var(--dlg-c);box-shadow:0 0 0 8px color-mix(in srgb,var(--dlg-bg) 55%,transparent)}
+  .dlg-icon .material-icons{font-size:36px}
+  .dlg-title{font-size:20px;font-weight:900;color:var(--ink);letter-spacing:-.01em}
+  .dlg-msg{margin-top:8px;font-size:14.5px;line-height:1.55;font-weight:600;color:var(--ink2);white-space:pre-line;word-break:break-word}
+  .dlg-actions{display:flex;gap:10px;justify-content:center;margin-top:22px}
+  .dlg-actions .btn{min-width:120px}
+  .dlg-error .dlg-actions .btn-p{background:#b42318}
+  .dlg-warning .dlg-actions .btn-p{background:#b54708}
+  .dlg-success .dlg-actions .btn-p{background:#067647}
+  .btn-danger{background:#b42318;color:#fff}
+  .btn-danger:hover{background:#912018}
+  .dlg-timer{position:absolute;left:0;bottom:0;height:4px;width:100%;background:var(--dlg-c);transform-origin:left;
+    animation:dlgTimer linear forwards}
+  @keyframes dlgTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+  @keyframes dlgFade{from{opacity:0}to{opacity:1}}
+  @keyframes dlgPop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){ .dlg,#dlgScrim.on{animation:none} }
+  @media (max-width:480px){ .dlg-actions{flex-direction:column-reverse} .dlg-actions .btn{width:100%} }
+  /* ---------- loading: a bar at the top, a pill for slow calls, spinners in place ---------- */
+  #loadBar{position:fixed;top:0;left:0;right:0;height:4px;z-index:100;overflow:hidden;opacity:0;transition:opacity .2s;pointer-events:none}
+  #loadBar.on{opacity:1}
+  #loadBar::before{content:'';position:absolute;top:0;bottom:0;left:-40%;width:40%;
+    background:linear-gradient(90deg,transparent,#3b82f6 25%,#3fd6b7 60%,#f5b301 90%,transparent);animation:dbxBar 1.1s ease-in-out infinite}
+  @keyframes dbxBar{0%{left:-40%}100%{left:100%}}
+  #loadPill{position:fixed;top:14px;left:50%;transform:translate(-50%,-20px);z-index:100;display:flex;align-items:center;gap:8px;
+    padding:8px 16px;border-radius:999px;background:#13294b;color:#fff;font-size:13px;font-weight:800;
+    box-shadow:0 12px 28px -10px rgba(15,27,45,.55);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+  #loadPill.on{opacity:1;transform:translate(-50%,0)}
+  #loadPill .spinner{border-color:rgba(255,255,255,.3);border-top-color:#fff}
+  .spinner{display:inline-block;width:22px;height:22px;border-radius:50%;border:3px solid #dbe4f3;border-top-color:#1e4fbf;
+    animation:dbxSpin .75s linear infinite;flex:none;vertical-align:middle}
+  .spinner-sm{width:15px;height:15px;border-width:2px;margin-right:7px}
+  .btn .spinner{border-color:rgba(127,140,160,.35);border-top-color:currentColor}
+  @keyframes dbxSpin{to{transform:rotate(360deg)}}
+  .loading-block{display:flex;align-items:center;justify-content:center;gap:12px;padding:44px 12px;
+    color:#5b6b82;font-size:14px;font-weight:800}
+  .skeleton{border-radius:16px;border:1px solid #e1e7f0;background:linear-gradient(90deg,#e4eaf3 0%,#f4f7fb 50%,#e4eaf3 100%);
+    background-size:200% 100%;animation:dbxShimmer 1.2s ease-in-out infinite}
+  @keyframes dbxShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+  @media (prefers-reduced-motion: reduce){
+    #loadBar::before{animation-duration:2.5s} .spinner{animation-duration:1.6s} .skeleton{animation:none}
+  }
+  .hero-navy .returning{color:#c9d6ea}
+  .hero-navy .returning button{color:#fff;font-weight:900}
+  .home-burger{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;
+               border-radius:12px;border:1.5px solid var(--line);color:var(--ink);background:#fff}
+  .home-burger[aria-expanded="true"]{background:#eef3fc;border-color:#1e4fbf;color:#1e4fbf}
+  .home-menu{display:flex;flex-direction:column;padding:6px 20px 18px;border-top:1px solid var(--line);
+             background:#fff;box-shadow:0 18px 30px -18px rgba(15,27,45,.35);max-height:calc(100vh - 64px);overflow:auto}
+  .home-menu[hidden]{display:none}
+  .home-menu > a{padding:13px 2px;font-weight:800;color:var(--ink);border-bottom:1px solid var(--line)}
+  .home-menu-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+  .hero-navy .ticks li{color:#dbe6f7}
+  .hero-navy .ticks .material-icons{color:#3fd6b7}
+  .hero-navy .browser-frame{border-color:rgba(255,255,255,.18);box-shadow:0 40px 80px -24px rgba(0,0,0,.6),0 0 0 6px rgba(255,255,255,.06)}
+  .hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(245,197,66,.14);border:1px solid rgba(245,197,66,.45);
+    color:#f5c542;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800}
+  .proof{display:flex;align-items:center;gap:10px}
+  .proof .material-icons{width:38px;height:38px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .ic-blue{background:#e3ecfb;color:#1e4fbf} .ic-teal{background:#dcf3ef;color:#0c7a71} .ic-gold{background:#fdf1d0;color:#8a5d0c}
+  .ic-violet{background:#ece6fb;color:#5b3fc4} .ic-green{background:#dff3e7;color:#067647} .ic-red{background:#fde4e1;color:#b42318}
+  .pain{background:#fff;border-radius:20px;padding:22px;border:1px solid #e2e7ef;border-top:5px solid var(--c,#b42318);
+        box-shadow:0 12px 28px -18px rgba(15,27,45,.35)}
+  .pain h3{font-weight:900;color:var(--ink);margin:12px 0 6px} .pain p{font-size:14.5px;font-weight:600;color:var(--ink2);line-height:1.6}
+  .band-tint{background:linear-gradient(180deg,#f4f7fd 0%,#eaf0fb 100%)}
+  .band-teal{color:#fff;background:radial-gradient(600px 300px at 90% 0%,rgba(63,214,183,.35),rgba(63,214,183,0) 65%),
+             linear-gradient(135deg,#075e57 0%,#0c7a71 55%,#0f8f84 100%)}
+  .band-teal .soft{color:#ecfdf9}
+  .band-navy{color:#fff;background:linear-gradient(135deg,#0a1628 0%,#13294b 60%,#1c3d73 100%)}
+  .band-navy .soft{color:#c9d6ea}
+  .eyebrow{display:inline-block;font-size:11px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;
+           color:#1e4fbf;background:#e3ecfb;border-radius:999px;padding:5px 12px}
+  .band-teal .eyebrow,.band-navy .eyebrow{color:#f5c542;background:rgba(245,197,66,.14)}
+  .tour-tabs button .material-icons{color:#1e4fbf}
+  .tour-tabs button.on{background:linear-gradient(135deg,#13294b,#1e4fbf);border-color:transparent;color:#fff;
+                       box-shadow:0 8px 18px -8px rgba(30,79,191,.7)}
+  .tour-tabs button.on .material-icons{color:#f5c542}
+  .step{position:relative;overflow:hidden;border:0;box-shadow:0 14px 30px -20px rgba(15,27,45,.45)}
+  .step::before{content:'';position:absolute;left:0;right:0;top:0;height:5px;background:var(--c,#1e4fbf)}
+  .step span{background:var(--c,#1e4fbf)}
+  .roi-card{background:linear-gradient(160deg,#0a1628 0%,#13294b 70%,#1c3d73 100%);color:#fff;border-radius:24px;padding:26px;
+            box-shadow:0 30px 60px -28px rgba(15,27,45,.7)}
+  .roi-card .roi-big{color:#f5c542}
+  .roi-card .roi-row{color:#c9d6ea;border-color:rgba(255,255,255,.14)} .roi-card .roi-row b{color:#fff}
+  .roi-card .win{color:#3fd6b7 !important}
+  .roi-card .fine{color:#9fb3d1}
+  .formula-card{background:linear-gradient(135deg,#13294b,#1e4fbf);color:#fff;border-radius:24px;padding:24px}
+  .formula-card .soft{color:#dbe6f7}
+  .rule{display:flex;gap:12px;align-items:flex-start}
+  .rule .material-icons{width:36px;height:36px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+  .cmp-row span:nth-child(2){color:#b42318;font-weight:700}
+  .cmp-row span:nth-child(2)::before{content:'✕ ';font-weight:900}
+  .cmp-row span:last-child::before{content:'✓ ';font-weight:900}
+  .cmp-head span:nth-child(2)::before,.cmp-head span:last-child::before{content:''}
+  .cmp-head{background:linear-gradient(135deg,#13294b,#1e4fbf)}
+  .plan-lead{background:linear-gradient(160deg,#0a1628 0%,#13294b 60%,#1e4fbf 100%) !important;color:#fff;border-color:transparent !important;
+             box-shadow:0 30px 60px -24px rgba(19,41,75,.75) !important;transform:translateY(-6px)}
+  .plan-lead .text-gray-500,.plan-lead .text-gray-400,.plan-lead .text-gray-600{color:#c9d6ea !important}
+  .plan-lead .text-emerald-600{color:#3fd6b7 !important}
+  .plan-lead .text-blue-600{color:#f5c542 !important}
+  .faq details[open]{border-color:#bccfee;box-shadow:0 10px 24px -18px rgba(30,79,191,.6)}
+  .faq summary::marker{color:#1e4fbf}
+  .band-teal .in{background:#fff}
+  .demo-pick .material-icons{background:linear-gradient(135deg,#13294b,#1e4fbf)}
+
+  /* The logotype: one word, Domebox. */
+  .brand-word{letter-spacing:-.01em}
+
+  /* ---------- the live-demo bar ------------------------------------------- */
+  .demo-bar{background:#fff7e6;border-bottom:1px solid #f3d9a4;color:var(--ink)}
+  .demo-exit{display:inline-flex;align-items:center;gap:4px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:900;
+    color:#7a4b00;background:#fff;border:1.5px solid #e9c77d;white-space:nowrap}
+  .demo-exit:hover{background:#fff1d6}
+  .demo-exit .material-icons{font-size:16px}
+  .demo-tag{background:var(--gold);color:#fff;font-size:10px;font-weight:900;letter-spacing:.1em;
+            text-transform:uppercase;border-radius:6px;padding:3px 8px}
+  .demo-as{border:1.5px solid var(--line);background:#fff;border-radius:8px;padding:4px 10px;font-weight:800;
+           font-size:12px;color:var(--ink2);cursor:pointer;font-family:inherit}
+  .demo-as.on{background:var(--navy);border-color:var(--navy);color:#fff}
+
+  /* ---------- the app bar: navy, the corporate anchor of every screen ------- */
+  .appbar{background:var(--navy) !important;border-bottom:3px solid var(--brand) !important}
+  .appbar .brandname{color:#fff}
+  .appbar .logo-dome{fill:#fff} .appbar .logo-tick{stroke:var(--navy)}
+  .appbar #navCompany{color:#9fb3d1}
+  .appbar #navName{color:#fff}
+  .appbar #navRole{color:#f2c25b}
+  .appbar .barbtn{color:#c9d6ea}
+  .appbar .barbtn:hover{background:rgba(255,255,255,.1);color:#fff}
+  .appbar .bardiv{background:rgba(255,255,255,.2)}
+  .appbar #bellCount{border-color:var(--navy)}
+  .appbar .seg{background:rgba(255,255,255,.07) !important;border-color:rgba(255,255,255,.12)}
+  .appbar .seg button{color:#c9d6ea}
+  .appbar .seg button:hover{color:#fff}
+  .appbar .seg button.on{background:#fff;color:var(--navy);box-shadow:0 2px 8px -2px rgba(0,0,0,.35)}
+
+  @media(max-width:900px){ .card-12{grid-column:span 12 !important} }
+
+  /* ---- Help Centre ---------------------------------------------------
+     A two-pane reader inside the modal: sections and search on the left, the
+     article on the right. The modal scrolls as a whole on a phone, where the
+     panes stack; on a desktop each pane scrolls on its own, so the list stays
+     put while you read. */
+  #modal.hc-modal{overflow:hidden;padding:0}
+  .hc{display:grid;grid-template-columns:260px 1fr;height:min(84vh,780px)}
+  .hc-side{border-right:1px solid var(--line);background:var(--paper);padding:22px 14px;overflow-y:auto}
+  .hc-main{padding:18px 36px 28px;overflow-y:auto}
+  .hc-searchicon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--muted)}
+  .hc-search{padding-left:36px !important}
+  .hc-nav{display:flex;flex-direction:column;gap:2px}
+  .hc-group{font-size:10px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:12px 10px 4px}
+  .hc-item{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;
+           padding:8px 10px;border-radius:10px;font-size:13px;font-weight:700;color:var(--ink2)}
+  .hc-item:hover{background:#fff}
+  .hc-item.on{background:#fff;color:var(--brand);box-shadow:var(--lift)}
+  .hc-count{font-size:10px;font-weight:900;background:var(--brand);color:#fff;border-radius:99px;padding:1px 7px}
+  .hc-tag{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);
+          background:var(--surface2);border-radius:6px;padding:2px 6px}
+  .hc-body{max-width:68ch;color:var(--ink2);font-size:14.5px;line-height:1.7}
+  .hc-h1{font-size:28px;font-weight:900;color:var(--ink);letter-spacing:-.02em;margin:0 0 14px}
+  .hc-h3{font-size:16px;font-weight:900;color:var(--ink);margin:26px 0 8px}
+  .hc-h4{font-size:14px;font-weight:900;color:var(--ink);margin:20px 0 6px}
+  .hc-body p{margin:0 0 12px}
+  .hc-body strong{color:var(--ink);font-weight:800}
+  .hc-body code{font-size:12.5px;background:var(--surface2);border-radius:5px;padding:1px 5px;color:var(--ink)}
+  .hc-body mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
+  .hc-list{margin:0 0 14px;padding-left:20px}
+  .hc-list li{margin:4px 0}
+  ul.hc-list{list-style:disc} ol.hc-list{list-style:decimal}
+  .hc-pre{background:var(--ink);color:#e6ebf3;border-radius:12px;padding:14px 16px;font-size:12.5px;
+          line-height:1.55;overflow-x:auto;margin:0 0 14px;white-space:pre}
+  .hc-note{border-left:3px solid var(--brand);background:#eef3fb;border-radius:0 10px 10px 0;
+           padding:10px 14px;margin:0 0 14px;font-size:13.5px}
+  .hc-tablewrap{overflow-x:auto;margin:0 0 16px;border:1px solid var(--line);border-radius:12px}
+  .hc-table{width:100%;border-collapse:collapse;font-size:13px}
+  .hc-table th{text-align:left;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;
+               color:var(--muted);background:var(--paper);padding:9px 12px;border-bottom:1px solid var(--line)}
+  .hc-table td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
+  .hc-table tbody tr:first-child td{border-top:0}
+  .hc-q{font-weight:900;color:var(--ink);margin:18px 0 4px !important}
+  .hc-a{margin-top:0 !important}
+  .hc-link{color:var(--brand);font-weight:800;font-size:13px}
+  .hc-link:hover{text-decoration:underline}
+  .hc-pager{display:flex;justify-content:space-between;gap:12px;margin:28px 0 18px;padding-top:16px;
+            border-top:1px solid var(--line)}
+  .hc-stuck{display:flex;justify-content:space-between;align-items:center;gap:14px;background:var(--paper);
+            border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+  @media(max-width:767px){
+    #modal.hc-modal{overflow-y:auto}
+    .hc{display:block;height:auto}
+    .hc-side{border-right:0;border-bottom:1px solid var(--line);padding:18px 16px}
+    .hc-nav{flex-direction:row;flex-wrap:wrap}
+    .hc-item{padding:6px 10px;font-size:12px;background:#fff;border:1px solid var(--line)}
+    .hc-group{width:100%}
+    .hc-main{padding:18px 16px 24px}
+    .hc-h1{font-size:23px}
+    .hc-stuck{flex-direction:column;align-items:stretch;text-align:left}
+  }
+
+  /* Own responsive helpers rather than Tailwind's `hidden md:flex`. The .hidden
+     rule above carries !important so a view stays closed even if the stylesheet
+     changes under it — but that same !important also beats `md:flex`, which
+     would have left half the nav permanently invisible. These hide without
+     .hidden, so the element's natural display survives. */
+  @media(max-width:639px){ .sm-up{display:none !important} }
+  @media(max-width:767px){ .md-up{display:none !important} }
+  @media(min-width:768px){ .md-down{display:none !important} }
+</style>
+</head>
+<body class="antialiased">
