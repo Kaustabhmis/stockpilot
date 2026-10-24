@@ -115,7 +115,7 @@ const { chromium } = require('playwright');
   await p.evaluate((e) => fetch('/__endtrial?email=' + encodeURIComponent(e)), EMAIL);
   await p.evaluate(() => refresh()); await p.waitForTimeout(600);
   await p.click('button[data-tab="reports"]'); await p.waitForTimeout(700);
-  ok('upgrade wall shown', /Pro feature/.test(await p.locator('#reportsLocked').textContent()));
+  ok('upgrade wall shown', /not switched on/.test(await p.locator('#reportsLocked').textContent()));
   await p.click('#reportsLocked button'); await p.waitForTimeout(400);
   ok('plans modal opens', /Plans/.test(await p.locator('#modal').textContent()));
   ok('every buyable band is offered', (await p.locator('#modal .buy').count())===4);

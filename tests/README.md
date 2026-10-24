@@ -60,6 +60,7 @@ node recognition-ui-test.js # cookie points, the org chart, the load explanation
 node loading-ui-test.js     # the loading bar, spinners and placeholders on a slow line
 node dialog-ui-test.js      # error, warning, success and question dialogs; no browser alert boxes
 node handover-ui-test.js    # Hand over from a task (owner and staff), and leaving the demo
+node staff-billing-ui-test.js # managers and staff see no plan, trial or billing; the owner keeps it all
 node seed.js                # prints the seeded owner's email
 node recurring-test.js <that-email>
 ```

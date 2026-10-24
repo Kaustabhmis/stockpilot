@@ -636,7 +636,7 @@ function openAssign() {
         '<textarea id="asChk" rows="2" class="in" placeholder="Collect quotes&#10;Compare rates"></textarea></div>' +
     '</div>' +
     (left !== null ? '<div class="text-[11px] font-bold mt-3 ' + (left <= 5 ? 'text-amber-700' : 'text-gray-400') + '">' +
-      left + ' of ' + u.maxTasks + ' tasks left this month on ' + esc(u.planName) + '.</div>' : '') +
+      left + ' of ' + u.maxTasks + ' tasks left this month' + (isAdmin() && u.planName ? ' on ' + esc(u.planName) : '') + '.</div>' : '') +
     '<div class="flex gap-3 mt-6">' +
     '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
     '<button type="submit" class="btn btn-p flex-1">Assign</button></div></form>');

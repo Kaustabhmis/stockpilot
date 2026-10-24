@@ -417,15 +417,21 @@ function refresh() {
 function renderStopped(d) {
   $('banner').className = '';
   $('banner').innerHTML = '<div class="bg-red-50 border-b border-red-200 px-4 py-4 text-center">' +
-    '<div class="font-black text-red-900">Your subscription lapsed</div>' +
+    '<div class="font-black text-red-900">' + (isAdmin() ? 'Your subscription lapsed' : 'Read-only for now') + '</div>' +
     '<div class="text-sm text-red-800 mt-1">' + esc(d.message) + '</div>' +
-    '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button></div>';
+    (isAdmin() ? '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button>' : '') + '</div>';
   ['tab-tasks','tab-team','tab-reports'].forEach(function (id) { $(id).classList.add('hidden'); });
 }
+
+/** Plans, prices and billing are for the company's Admin only. */
+function isAdmin() { return !!(STATE.user && STATE.user.role === 'Admin'); }
 
 function renderBanner() {
   if (STATE.demo) { renderDemoBanner(); return; }
   var u = STATE.usage, b = $('banner');
+  /* Staff are not shown the plan, the trial or renewal dates — nothing in it
+     is theirs to act on. */
+  if (!isAdmin()) { b.className = 'hidden'; b.innerHTML = ''; return; }
   var msgs = [];
   /* A trial is said as a trial: how long is left, and what happens after. */
   if (u.trial) {

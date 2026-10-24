@@ -4,10 +4,12 @@
 
 function getDashboard_(ctx) {
   if (ctx.serviceStopped) {
+    var owner = ctx.actor.role === 'Admin';
     return { status: 'success', serviceStopped: true,
-      usage: { planName: ctx.plan.name || ctx.planName, daysLeft: ctx.daysLeft },
-      message: 'Your subscription lapsed more than a week ago. Your data is safe and ' +
-               'still here — renew to start writing again.' };
+      usage: owner ? { planName: ctx.plan.name || ctx.planName, daysLeft: ctx.daysLeft } : staffUsage_(),
+      message: owner
+        ? 'Your subscription lapsed more than a week ago. Your data is safe and still here — renew to start writing again.'
+        : 'Your company’s subscription has lapsed. Your data is safe and still here — your administrator can renew it.' };
   }
 
   var tasks = readTasks_(ctx);
@@ -121,7 +123,7 @@ function getDashboard_(ctx) {
                   : 'No appraisal yet, so this is the delegation score alone.' },
     },
     notifications: buildNotifications_(digest, me),
-    usage: {
+    usage: me.role !== 'Admin' ? staffUsage_(ctx, usedTasks) : {
       planName: ctx.plan.name || ctx.planName, plan: ctx.planName,
       users: activeUsers, maxUsers: ctx.plan.users,
       tasks: usedTasks, maxTasks: ctx.plan.tasksPerMonth,
@@ -131,6 +133,18 @@ function getDashboard_(ctx) {
       trial: !!ctx.trial, trialEnded: !!ctx.trialEnded,
     },
   };
+}
+
+/**
+ * What a non-Admin is told about the subscription: only what changes what
+ * they can do (are reports on, how many tasks are left to assign) — never the
+ * plan, the price, the renewal date or the trial. Billing is the owner's.
+ */
+function staffUsage_(ctx, usedTasks) {
+  return { planName: '', plan: '', users: null, maxUsers: null,
+    tasks: ctx ? usedTasks : null, maxTasks: ctx ? ctx.plan.tasksPerMonth : null,
+    allowReports: ctx ? !!ctx.plan.analytics : false, allowWhatsapp: ctx ? !!ctx.plan.whatsapp : false,
+    daysLeft: null, warnings: [], trial: false, trialEnded: false };
 }
 
 /** The bell. Ordered by urgency, because a list nobody can triage gets ignored. */

@@ -221,6 +221,7 @@ function cycleToggle(id) {
 }
 
 function openBilling() {
+  if (!isAdmin()) { toast('Plans and billing are managed by your company’s Admin.', 'warn'); return; }
   var u = STATE.usage;
   openModal('<div class="p-6 lg:p-7">' +
     '<div class="flex justify-between items-start mb-1"><h2 class="text-2xl font-black">Plans</h2>' +
@@ -392,7 +393,7 @@ function openAccount() {
       '<input id="pwNew" type="password" class="in" autocomplete="new-password" minlength="8" required></div>' +
       '<button type="submit" class="btn btn-p w-full">Change password</button></form>' +
     '<div class="flex gap-3 border-t border-gray-100 pt-5">' +
-      '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' +
+      (isAdmin() ? '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' : '') +
       /* The ? button in the top bar is hidden on a phone to save room, so this
          is the way into help there — and a reasonable second way everywhere. */
       '<button class="btn btn-g flex-1" onclick="closeModal();openHelp()">Help</button>' +

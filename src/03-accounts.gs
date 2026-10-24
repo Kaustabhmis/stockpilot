@@ -153,7 +153,8 @@ function login_(emailOrUsername, password) {
     token: issueToken(sheetId, me.username, me.role),
     user: { name: me.name, username: me.username, role: me.role, email: me.email,
             phone: me.phone, manager: me.manager, jobProfile: me.jobProfile, dept: me.dept },
-    company: reg ? reg.company : '', plan: normalizePlan(reg ? reg.plan : 'Free'),
+    company: reg ? reg.company : '',
+    plan: me.role === 'Admin' ? normalizePlan(reg ? reg.plan : 'Free') : '',   // billing is the owner's business
   };
 }
 

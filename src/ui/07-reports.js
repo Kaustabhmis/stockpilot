@@ -154,10 +154,11 @@ function loadReports() {
     $('reportsLocked').innerHTML = '<div class="bg-white rounded-3xl border border-gray-100 p-12 text-center">' +
       '<div class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-5">' +
       '<span class="material-icons text-2xl">lock</span></div>' +
-      '<h3 class="text-2xl font-black mb-2">Reports are a Pro feature</h3>' +
+      '<h3 class="text-2xl font-black mb-2">Reports are not switched on</h3>' +
       '<p class="text-sm text-gray-500 font-semibold mb-6 max-w-md mx-auto">Trends, per-person scoring, ' +
-        'KRA breakdowns and the delivery heatmap are included from the Pro plan up.</p>' +
-      '<button class="btn btn-p" onclick="openBilling()">See plans</button></div>';
+        'KRA breakdowns and the delivery heatmap are part of every paid plan.' +
+        (isAdmin() ? '' : ' Your company’s Admin can switch them on.') + '</p>' +
+      (isAdmin() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
     return;
   }
   $('reportsLocked').classList.add('hidden');

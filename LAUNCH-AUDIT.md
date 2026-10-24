@@ -415,6 +415,27 @@ Changes:
 
 `payment-config-test.js` pins each case.
 
+### 4y. Staff could see the plan and the billing buttons
+
+Reported by the owner. Every role saw:
+- the plan banner, with the trial countdown and an Upgrade / Choose a plan button
+- "Plan & billing" in the account panel
+- "See plans" on the Reports lock
+
+The dashboard and sign-in also sent the plan name, renewal date and trial state to
+everyone. The server already refused billing details, invoices and payment to anyone
+but an Admin, so nothing could be bought or changed. But the plan was visible, and
+the buttons invited people to try.
+
+Now:
+- Only an Admin gets plan data or sees any billing control.
+- Staff get only what changes their own work: whether reports are on, and how many
+  tasks are left to assign this month.
+- A lapsed subscription tells staff their data is safe and that the Admin can renew.
+
+`staff-billing-ui-test.js` checks the owner, a manager and a team member, on screen
+and in what the server sends.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)
