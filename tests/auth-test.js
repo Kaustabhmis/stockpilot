@@ -5,7 +5,7 @@ const props = { AUTH_PEPPER: 'test-pepper-aaaa-bbbb', TOKEN_SECRET: 'test-token-
 const cache = {};
 const sandbox = {
   PropertiesService: { getScriptProperties: () => ({
-    getProperty: k => props[k] || null, setProperty: (k,v) => props[k]=v }) },
+    getProperty: k => props[k] || null, setProperty: (k,v) => props[k]=v, getProperties: () => Object.assign({}, props) }) },
   CacheService: { getScriptCache: () => ({
     get: k => cache[k] ?? null, put: (k,v) => cache[k]=v, remove: k => delete cache[k] }) },
   Utilities: {

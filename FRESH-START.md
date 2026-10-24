@@ -109,4 +109,5 @@ output folder here** again.
 | No emails at all | Gmail → Settings → Accounts → **Send mail as** → add and verify info@biscsindia.com, then run setupDomeBox. |
 | Website says it is not connected | `apiUrl` in domebox-config.js is empty or wrong — it must be the address ending **/exec**. Fix it and drag the folder again. |
 | Login fails although the address is right | In Apps Script, the deployment must be **Who has access: Anyone**. |
+| A plan's buy button says payment is not available | In Apps Script choose **checkPayments** → **▶ Run**. It tells you whether the Razorpay keys are missing from **this** project, mistyped, swapped, or refused by Razorpay. It also prints this project's address, which must match `apiUrl` in domebox-config.js. Property changes work straight away, with no new deployment. |
 | Changed Code.gs later | **Deploy** → **Manage deployments** → ✏ → **New version** → **Deploy**. The URL stays the same. |

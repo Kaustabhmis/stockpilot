@@ -144,6 +144,7 @@ function build() {
   G.PropertiesService = { getScriptProperties: () => ({
     getProperty: k => (k in props ? props[k] : null),
     setProperty: (k, v) => { props[k] = v; },
+    getProperties: () => Object.assign({}, props),
   })};
   /* One script-wide lock, as Apps Script has. Single-threaded here, so the
      lock can never actually be contended — but the calls have to exist or the

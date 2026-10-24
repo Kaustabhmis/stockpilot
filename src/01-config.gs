@@ -26,6 +26,25 @@
  * =============================================================================
  */
 
+/**
+ * A Script Property typed by hand: "RAZORPAY_KEY_ID " with a trailing space,
+ * "razorpay_key_id" in lower case, or "RAZORPAY KEY ID" with spaces all look
+ * right in the editor and are not found by an exact lookup. The exact name
+ * wins; otherwise any name that matches once spaces, dashes and case are
+ * ignored. The value is trimmed: a key pasted with a newline fails at Razorpay.
+ */
+function propLoose_(p, name) {
+  var v = p.getProperty(name);
+  if (v == null || String(v).trim() === '') {
+    var want = name.replace(/[\s_-]+/g, '').toUpperCase();
+    var all = p.getProperties() || {};
+    for (var k in all) {
+      if (String(k).replace(/[\s_-]+/g, '').toUpperCase() === want && String(all[k]).trim()) { v = all[k]; break; }
+    }
+  }
+  return String(v == null ? '' : v).trim();
+}
+
 /** Everything configurable, read from Script Properties so nothing is hardcoded. */
 function CFG() {
   var p = PropertiesService.getScriptProperties();
@@ -34,8 +53,8 @@ function CFG() {
     templateId: p.getProperty('TEMPLATE_ID') || '',
     siteUrl:    p.getProperty('SITE_URL') || 'https://www.domebox.in',
     mailFrom:   p.getProperty('MAIL_FROM') || 'info@biscsindia.com',
-    razorKey:   p.getProperty('RAZORPAY_KEY_ID') || '',
-    razorSecret:p.getProperty('RAZORPAY_KEY_SECRET') || '',
+    razorKey:   propLoose_(p, 'RAZORPAY_KEY_ID'),
+    razorSecret:propLoose_(p, 'RAZORPAY_KEY_SECRET'),
     razorHook:  p.getProperty('RAZORPAY_WEBHOOK_SECRET') || '',
   };
 }

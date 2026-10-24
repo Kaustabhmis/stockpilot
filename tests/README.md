@@ -41,6 +41,7 @@ node reminders-test.js      # open-task reminders: 9/3/5, assign day, 2 days bef
 node scheduler-live-test.js  # code.gs + reminders.gs + backup.gs together, on a registry the app made
 node demo-test.js           # the demo workspace, and that it demos something
 node identity-test.js       # one email per workspace, shared usernames, changing an email
+node payment-config-test.js # Razorpay keys missing, mistyped or wrong: what the customer, owner and checkPayments see
 
 node server.js &            # then, for the browser tests:
 node ui-test.js

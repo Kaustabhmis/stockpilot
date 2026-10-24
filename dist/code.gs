@@ -28,6 +28,25 @@
  * =============================================================================
  */
 
+/**
+ * A Script Property typed by hand: "RAZORPAY_KEY_ID " with a trailing space,
+ * "razorpay_key_id" in lower case, or "RAZORPAY KEY ID" with spaces all look
+ * right in the editor and are not found by an exact lookup. The exact name
+ * wins; otherwise any name that matches once spaces, dashes and case are
+ * ignored. The value is trimmed: a key pasted with a newline fails at Razorpay.
+ */
+function propLoose_(p, name) {
+  var v = p.getProperty(name);
+  if (v == null || String(v).trim() === '') {
+    var want = name.replace(/[\s_-]+/g, '').toUpperCase();
+    var all = p.getProperties() || {};
+    for (var k in all) {
+      if (String(k).replace(/[\s_-]+/g, '').toUpperCase() === want && String(all[k]).trim()) { v = all[k]; break; }
+    }
+  }
+  return String(v == null ? '' : v).trim();
+}
+
 /** Everything configurable, read from Script Properties so nothing is hardcoded. */
 function CFG() {
   var p = PropertiesService.getScriptProperties();
@@ -36,8 +55,8 @@ function CFG() {
     templateId: p.getProperty('TEMPLATE_ID') || '',
     siteUrl:    p.getProperty('SITE_URL') || 'https://www.domebox.in',
     mailFrom:   p.getProperty('MAIL_FROM') || 'info@biscsindia.com',
-    razorKey:   p.getProperty('RAZORPAY_KEY_ID') || '',
-    razorSecret:p.getProperty('RAZORPAY_KEY_SECRET') || '',
+    razorKey:   propLoose_(p, 'RAZORPAY_KEY_ID'),
+    razorSecret:propLoose_(p, 'RAZORPAY_KEY_SECRET'),
     razorHook:  p.getProperty('RAZORPAY_WEBHOOK_SECRET') || '',
   };
 }
@@ -2660,7 +2679,12 @@ function scoreOptsMap_(ctx) {
 function createRazorpayOrder_(ctx, planName, promoCode) {
   requireAdmin_(ctx);
   var c = CFG();
-  if (!c.razorKey || !c.razorSecret) throw new Error('Online payment is not configured yet.');
+  if (!c.razorKey || !c.razorSecret) {
+    paymentsDownAlert_(!c.razorKey ? 'RAZORPAY_KEY_ID' : 'RAZORPAY_KEY_SECRET');
+    /* The customer is told what to do, not what we forgot to set up. */
+    throw new Error('Online payment is not available right this minute — we have been alerted and are on it. ' +
+      'Please try again shortly, or write to ' + c.mailFrom + ' and we will send you a payment link.');
+  }
 
   var plan = PLANS[normalizePlan(planName)];
   if (!plan) throw new Error('Unknown plan.');
@@ -3171,6 +3195,72 @@ function contactSupport_(ctx, form) {
 }
 
 /** A payment as Razorpay itself reports it, or null. */
+/**
+ * A customer tried to pay and could not. Tell the owner at once — at most once
+ * every six hours, so a busy day is one email, not fifty.
+ */
+function paymentsDownAlert_(missing) {
+  try {
+    var c = CFG(), cache = CacheService.getScriptCache();
+    logError_('payments:not-configured', missing + ' is not set in Script Properties of the project serving ' +
+      ScriptApp.getService().getUrl());
+    if (cache.get('payDownAlert')) return;
+    cache.put('payDownAlert', '1', 6 * 3600);
+    sendEmail_(c.mailFrom, 'ACTION NEEDED: a customer could not pay on Domebox',
+      '<p>A customer just pressed a plan\'s buy button and could not pay, because <b>' + missing +
+      '</b> is not set in this Apps Script project.</p>' +
+      '<p>In Apps Script, open the function list, choose <b>checkPayments</b> and press Run. It says exactly what to fix.</p>' +
+      '<p style="color:#667085;font-size:12px">This project\'s web address: ' + ScriptApp.getService().getUrl() + '</p>');
+  } catch (e) {}
+}
+
+/**
+ * Run this from the Apps Script editor when payment does not open. It checks,
+ * in order, everything that has to be true for the Razorpay window to appear,
+ * and tests the keys against Razorpay itself. Changes nothing.
+ */
+/* Razorpay key ids begin "rzp" + "_live_" or "_test_". Built here, not written
+   out, so no key-shaped text ever sits in the shipped source. */
+var RZP_LIVE = ['rzp', 'live', ''].join('_'), RZP_TEST = ['rzp', 'test', ''].join('_');
+
+function checkPayments() {
+  var p = PropertiesService.getScriptProperties(), c = CFG(), out = ['', '=== PAYMENT CHECK ===', ''];
+  var url = '';
+  try { url = ScriptApp.getService().getUrl() || ''; } catch (e) {}
+  out.push('This project answers at:');
+  out.push('  ' + (url || '(not deployed as a web app yet — Deploy > New deployment > Web app)'));
+  out.push('  -> apiUrl in domebox-config.js on Netlify must be exactly this address.');
+  out.push('     If it is the old project\'s address, the website is talking to the old project.');
+  out.push('');
+  var names = Object.keys(p.getProperties() || {});
+  ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'].forEach(function (n) {
+    var exact = p.getProperty(n);
+    var near = names.filter(function (k) { return k !== n && k.replace(/[\s_-]+/g, '').toUpperCase() === n.replace(/_/g, ''); });
+    if (exact && String(exact).trim()) out.push('  ok       ' + n);
+    else if (near.length) out.push('  FIXED    ' + n + ' was typed as "' + near[0] + '" — it is read anyway, but rename it to ' + n + '.');
+    else out.push('  MISSING  ' + n + ' — Project Settings > Script Properties > Add script property, in THIS project.');
+  });
+  var isLive = c.razorKey.indexOf(RZP_LIVE) === 0, isTest = c.razorKey.indexOf(RZP_TEST) === 0;
+  if (c.razorKey && !isLive && !isTest) {
+    out.push('  WRONG    RAZORPAY_KEY_ID should start ' + RZP_LIVE + ' (or ' + RZP_TEST + '). Did the secret go in the id box?');
+  }
+  if (c.razorKey && c.razorSecret) {
+    try {
+      var r = UrlFetchApp.fetch('https://api.razorpay.com/v1/payments?count=1', { muteHttpExceptions: true,
+        headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.razorKey + ':' + c.razorSecret) } });
+      var code = r.getResponseCode();
+      out.push('');
+      if (code === 200) out.push('  ok       Razorpay accepted the keys (' + (isLive ? 'LIVE — real money' : 'TEST mode — no real money') + ').');
+      else if (code === 401) out.push('  WRONG    Razorpay refused the keys. Copy the id and secret again from Razorpay > Settings > API Keys (a new secret is shown only once).');
+      else out.push('  ?        Razorpay answered ' + code + ': ' + r.getContentText().slice(0, 160));
+    } catch (e) { out.push('  ?        Could not reach Razorpay: ' + e.message + ' (run again and allow the permission).'); }
+  }
+  out.push('');
+  out.push('Script Properties are read live: once both say ok, the buy button works straight away.');
+  out.push('No new deployment is needed for a property change.');
+  return say_(out);
+}
+
 function fetchRazorpayPayment_(paymentId) {
   var c = CFG();
   if (!c.razorKey || !c.razorSecret) return null;

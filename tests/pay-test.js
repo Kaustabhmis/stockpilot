@@ -1,7 +1,7 @@
 const crypto=require('crypto'), fs=require('fs');
 const props={RAZORPAY_KEY_ID:'rzp_test_abc',RAZORPAY_KEY_SECRET:'testsecret123'};
 const sandbox={
-  PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]||null})},
+  PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]||null,getProperties:()=>Object.assign({},props)})},
   Utilities:{
     /* As strict as Apps Script: (String, String) or (Byte[], Byte[]). */
     computeHmacSha256Signature:(d,k)=>{

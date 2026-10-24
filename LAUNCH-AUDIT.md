@@ -395,6 +395,26 @@ the 21 checks in `identity-test.js`):
 approve or are being handed. Work the owner gives directly to that manager's team is not
 visible to the manager. In the demo, the manager view shows 2–6 cards depending on the day.
 
+### 4x. Live site: "Online payment is not configured yet"
+
+Reported from a phone on www.domebox.in when buying a plan. The server answers this
+when the Apps Script project serving the site has no `RAZORPAY_KEY_ID` or
+`RAZORPAY_KEY_SECRET`. The usual causes:
+- the keys were added to the old project
+- a property name was typed with a space or in lower case
+- `apiUrl` still points at the old project
+
+Changes:
+- Key names are matched ignoring case, spaces and dashes, and the values are trimmed.
+- The customer is told to try again shortly or write in for a payment link. The
+  technical message is no longer shown.
+- The owner gets an "ACTION NEEDED" email, at most once every six hours.
+- New `checkPayments()`, run from the editor. It prints this project's address (to
+  compare with `apiUrl`), says which key is missing, mistyped or swapped, and tests the
+  keys against Razorpay.
+
+`payment-config-test.js` pins each case.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)
