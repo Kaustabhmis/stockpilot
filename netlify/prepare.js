@@ -134,7 +134,7 @@ const headTags = `
   <meta name="twitter:title" content="Domebox — Task &amp; Team Management for Indian MSMEs">
   <meta name="twitter:description" content="Automate accountability with delegation scoring, KRA/KPI tracking and performance appraisals.">
   <meta name="twitter:image" content="${ORIGIN}/og-cover.png">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon-192.png" type="image/png" sizes="192x192"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 `;
 if (!html.includes('rel="canonical"')) {

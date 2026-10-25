@@ -26,6 +26,20 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
   });
   ok('no page or script in the folder names what the site is built on', hits.length === 0, hits.join(' || '));
   const idx = fs.readFileSync(path.join(PKG, 'index.html'), 'utf8');
+  /* Google shows a site's icon in search results only if the home page
+     declares one it can fetch by URL (not a data: URI), sized a multiple of
+     48px. Without it, results show a grey globe. */
+  const pages = fs.readdirSync(PKG).filter((f) => f.endsWith('.html'));
+  const noIcon = pages.filter((f) => !/<link rel="icon" href="\/favicon\.ico" sizes="48x48">/.test(fs.readFileSync(path.join(PKG, f), 'utf8')));
+  ok('every page declares /favicon.ico for search results', noIcon.length === 0, noIcon.join(', '));
+  ok('the home page has no data: icon, which Google ignores', !/rel="icon" href="data:/.test(idx));
+  const ico = fs.readFileSync(path.join(PKG, 'favicon.ico'));
+  ok('favicon.ico is a real icon file holding a 48px image', ico.readUInt16LE(2) === 1 && [...Array(ico.readUInt16LE(4)).keys()].some((i) => ico[6 + 16 * i] === 48));
+  ['favicon.svg', 'favicon-192.png', 'apple-touch-icon.png', 'logo-512.png'].forEach((f) =>
+    ok(f + ' is in the folder', fs.existsSync(path.join(PKG, f))));
+  const png = fs.readFileSync(path.join(PKG, 'logo-512.png'));
+  ok('the logo in the structured data is square, 512px', png.readUInt32BE(16) === 512 && png.readUInt32BE(20) === 512 &&
+     /"logo":"https:\/\/www\.domebox\.in\/logo-512\.png"/.test(idx));
   ok('and no build comments ship: the code is minified', !/<!--/.test(idx) && !/\/\*[^!]/.test(idx.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '')),
      (idx.match(/.{0,40}(<!--|\/\*).{0,40}/) || [''])[0]);
 }

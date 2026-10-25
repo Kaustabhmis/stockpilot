@@ -151,7 +151,7 @@ if (!fs.existsSync(notFound)) {
   fs.writeFileSync(notFound, '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="robots" content="noindex"><title>Page not found — Domebox</title>' +
-    '<link rel="icon" href="/favicon.svg"><style>' +
+    '<link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon-192.png" type="image/png" sizes="192x192"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>' +
     'body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f6fa;' +
     'color:#1d2939;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
     'text-align:center;padding:24px}h1{font-size:clamp(28px,6vw,44px);margin:0 0 8px}' +

@@ -52,7 +52,7 @@ fs.writeFileSync(path.join(OUT, 'index.html'), shrink(app));
 
 /* ---- 2. the static pages and files, exactly as Netlify serves them ------ */
 const STATIC = fs.readdirSync(here).filter((f) =>
-  /\.(html|svg|png|pdf|txt)$/.test(f) && f !== 'index.html' && !/^(privacy|terms|refund|contact|404)\.html$/.test(f));
+  /\.(html|svg|png|ico|pdf|txt)$/.test(f) && f !== 'index.html' && !/^(privacy|terms|refund|contact|404)\.html$/.test(f));
 STATIC.forEach((f) => /\.html$/.test(f)
   ? fs.writeFileSync(path.join(OUT, f), shrink(fs.readFileSync(path.join(here, f), 'utf8')))
   : cp(path.join(here, f), path.join(OUT, f)));
