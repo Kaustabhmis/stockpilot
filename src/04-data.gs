@@ -383,17 +383,78 @@ function readCategories_(ctx) {
 });
 }
 
-function updateCategories_(ctx, categories) {
+function updateCategories_(ctx, categories, renames) {
   requireManager_(ctx); blockIfStopped_(ctx);
-  var list = (categories || []).map(function (c) { return String(c).trim(); })
-                               .filter(function (c) { return c; });
+  var list = [], seen = {};
+  (categories || []).forEach(function (c) {
+    c = String(c).trim();
+    if (c && !seen[c.toLowerCase()]) { seen[c.toLowerCase()] = true; list.push(c); }
+  });
   var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
   /* Column A only. This used to clear the whole sheet, which would now take the
      priority levels in B and C with it. */
   clearColumn_(sh, 1);
   if (list.length) sh.getRange(1, 1, list.length, 1).setValues(list.map(function (c) { return [c]; }));
+  /* A rename is a rename: the tasks filed under the old name move with it,
+     or the board's category filter would split one kind of work in two. */
+  var moved = 0;
+  (renames || []).forEach(function (r) {
+    var from = String(r && r.from || '').trim(), to = String(r && r.to || '').trim();
+    if (from && to && from !== to) moved += renameCategoryOnTasks_(ctx, from, to);
+  });
   dropCache_(ctx);
-  return { status: 'success', categories: list };
+  return { status: 'success', categories: list, tasksMoved: moved };
+}
+
+function renameCategoryOnTasks_(ctx, from, to) {
+  var sh = ctx.ss.getSheetByName(TAB.TASKS);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  var col = T['Job Category'] + 1, n = sh.getLastRow() - 1;
+  var vals = sh.getRange(2, col, n, 1).getValues(), changed = 0;
+  vals.forEach(function (v) { if (String(v[0]).trim() === from) { v[0] = to; changed++; } });
+  if (changed) { sh.getRange(2, col, n, 1).setValues(vals); dropCache_(ctx); }
+  return changed;
+}
+
+/** A manager who types a new category while assigning adds it to the list. */
+function learnCategory_(ctx, name) {
+  name = String(name || '').trim();
+  if (!name || (ctx.actor.role !== 'Admin' && ctx.actor.role !== 'HOD')) return;
+  var cats = readCategories_(ctx);
+  if (cats.some(function (c) { return c.toLowerCase() === name.toLowerCase(); })) return;
+  var sh = ctx.ss.getSheetByName(TAB.SETTINGS) || ctx.ss.insertSheet(TAB.SETTINGS);
+  var colA = sh.getLastRow() ? sh.getRange(1, 1, sh.getLastRow(), 1).getValues() : [];
+  var at = colA.length;
+  while (at > 0 && !String(colA[at - 1][0] || '').trim()) at--;
+  /* An empty column A reads as the default list; keep those when adding one. */
+  if (at === 0) { cats.forEach(function (c, i) { sh.getRange(i + 1, 1).setValue(c); }); at = cats.length; }
+  sh.getRange(at + 1, 1).setValue(name);
+  dropCache_(ctx);
+}
+
+/* ---------- the tab bar, as the company's Admin arranges it ---------------- */
+var TAB_KEYS = ['tasks','priority','projects','meetings','goals','board','reports','team'];
+var TAB_ALWAYS = ['tasks','team'];   // the board, and the way to manage people and settings
+
+function readTabLayout_(ctx) {
+  var raw = safeJson_(readSetting_(ctx, 'tabLayout', ''), {});
+  return cleanTabLayout_(raw);
+}
+
+function cleanTabLayout_(raw) {
+  var order = [], seen = {};
+  (raw && raw.order || []).forEach(function (k) { if (TAB_KEYS.indexOf(k) > -1 && !seen[k]) { seen[k] = true; order.push(k); } });
+  TAB_KEYS.forEach(function (k) { if (!seen[k]) order.push(k); });
+  var hidden = (raw && raw.hidden || []).filter(function (k, i, a) {
+    return TAB_KEYS.indexOf(k) > -1 && TAB_ALWAYS.indexOf(k) < 0 && a.indexOf(k) === i; });
+  return { order: order, hidden: hidden };
+}
+
+function saveTabLayout_(ctx, layout) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var clean = cleanTabLayout_(layout || {});
+  writeSetting_(ctx, 'tabLayout', JSON.stringify(clean));
+  return { status: 'success', layout: clean, message: 'Tabs saved for everybody in the company.' };
 }
 
 function clearColumn_(sh, col) {

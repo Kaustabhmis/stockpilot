@@ -78,6 +78,7 @@ $('btnNewTask').addEventListener('click', openAssign);
 $('btnNewUser').addEventListener('click', function () { openUser(null); });
 $('btnLeave').addEventListener('click', openLeave);
 $('btnCategories').addEventListener('click', openCategories);
+$('btnTabs').addEventListener('click', openTabLayout);
 $('btnKra').addEventListener('click', openKraOverview);
 $('btnNewProject').addEventListener('click', openProjectBuilder);
 $('btnOrg').addEventListener('click', openOrgChart);

@@ -66,6 +66,7 @@ function getDashboard_(ctx) {
     tasks: active,
     archivedCount: visible.length - active.length,
     categories: readCategories_(ctx),
+    layout: readTabLayout_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return { name: u.name, username: u.username, role: u.role, email: u.email,

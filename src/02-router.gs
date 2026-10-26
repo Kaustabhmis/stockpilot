@@ -155,7 +155,8 @@ function route_(p) {
     case 'addUser':             return addUser_(ctx, p.form);
     case 'updateUser':          return updateUser_(ctx, p.form);
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
-    case 'updateCategories':    return updateCategories_(ctx, p.categories);
+    case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);
+    case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
     case 'getLeave':            return { status:'success', leave: readLeave_(ctx) };

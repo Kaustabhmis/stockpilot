@@ -91,10 +91,10 @@ waiting on their approval, or offered to them in a hand-over.
 |---|---|
 | **Task** | What needs doing. Specific enough to verify. |
 | **Detail** | Context, and what "done" looks like. |
-| **Assign to** | **Tick several people and each gets their own copy.** |
+| **Assign to** | **Tick several people and each gets their own copy.** Type in the search box to find someone by name, role or department; Enter ticks the first match. |
 | **Due date** | Required. Everything about scoring hangs on this. |
 | **Priority** | Critical / High / Medium / Low. Weights the score — see [Scores](#scores). |
-| **Job category** | Your own list, editable under Team. |
+| **Job category** | Your own list, editable under Team. Managers can pick **＋ New category…** and type one in; it joins the list. |
 | **Repeats** | See [Repeating work](#repeating-work). |
 | **KRA tag** | Links this job to a responsibility area, for appraisals. |
 | **Checklist** | One per line. The holder ticks them off. |
@@ -558,8 +558,16 @@ of lateness.
 
 ### Job categories and priority levels
 
-Both are yours to edit. Priority levels carry a weight that feeds the score. A
-level still in use on open work cannot be deleted.
+Both are yours to edit, under **Team → Categories & priorities** (Admins also find
+**Job categories** in their account menu). Renaming a category moves every task
+filed under it to the new name. Priority levels carry a weight that feeds the
+score. A level still in use on open work cannot be deleted.
+
+### Arranging the tabs
+
+An Admin can choose the order of the tabs and hide the ones the company does not
+use: **Team → Arrange tabs**, or **Arrange tabs** in the account menu. The change
+applies to everybody in the company. **Tasks** and **Team** always stay.
 
 ### Removing someone
 

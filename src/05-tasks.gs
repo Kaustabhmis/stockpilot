@@ -33,6 +33,7 @@ function createTask_locked_(ctx, form) {
   /* Validated once, before anything is written, so a bad stop rule refuses the
      whole assignment rather than leaving half the team with a runaway repeat. */
   var stop = parseRepeatStop_(form);
+  learnCategory_(ctx, form.jobCategory);
 
   /* The goal this work serves. Checked here rather than trusted, because a
      task tagged to a goal that does not exist would count toward nothing and
@@ -75,7 +76,7 @@ function createTask_locked_(ctx, form) {
     row[T['Reworks']] = 0;
     row[T['History JSON']] = JSON.stringify([{ date: new Date().toISOString(),
       status: route.status, user: ctx.actor.name, note: route.note }]);
-    row[T['Job Category']] = String(form.jobCategory || 'General');
+    row[T['Job Category']] = String(form.jobCategory || 'General').trim() || 'General';
     row[T['Approver Manager']] = route.status === 'Awaiting Approval' ? route.approver : '';
     row[T['Status']] = route.status;
     row[T['Spawned By']] = '';
@@ -404,6 +405,10 @@ function editTask_(ctx, form) {
 
   var mayEdit = ctx.actor.role === 'Admin' || t.by === ctx.actor.username;
   if (!mayEdit) throw new Error('Only an Admin or the person who raised it can edit this task.');
+  if (form.jobCategory !== undefined) {
+    form.jobCategory = String(form.jobCategory).trim() || t.jobCategory;
+    learnCategory_(ctx, form.jobCategory);
+  }
 
   var changes = [];
   [['title','Title'],['desc','Description'],['dueDate','Due Date'],

@@ -7,6 +7,7 @@ function loadTeam() {
 }
 
 function renderTeam() {
+  $('btnTabs').classList.toggle('hidden', !isAdmin());
   var active = TEAM.filter(function (u) { return u.active !== false; });
   var u = STATE.usage;
   var tile = function (k, v, icon, colour, tone) {
@@ -227,7 +228,9 @@ function openLeave() {
 }
 
 function openCategories() {
-  var cats = (STATE.data.categories || []).slice();
+  /* Each row remembers the name it started with, so a rename can carry the
+     tasks already filed under it across. */
+  var cats = (STATE.data.categories || []).map(function (c) { return { name: c, orig: c }; });
   var levels = (STATE.data.priorities || []).map(function (p) {
     return { name: p.name, weight: p.weight }; });
 
@@ -238,6 +241,7 @@ function openCategories() {
       'piece counts towards a score.</p>' +
 
     '<div class="lb">Job categories</div>' +
+    '<p class="text-xs font-semibold text-gray-400 mb-2">Rename one and every task filed under it moves with it.</p>' +
     '<div id="catList" class="space-y-2 max-h-48 overflow-y-auto mb-2"></div>' +
     '<button type="button" id="catAdd" class="text-blue-600 font-black text-xs mb-6">+ Add category</button>' +
 
@@ -254,12 +258,12 @@ function openCategories() {
 
   function draw() {
     $('catList').innerHTML = cats.map(function (c, i) {
-      return '<div class="flex gap-2"><input class="in cIn" data-i="' + i + '" value="' + esc(c) + '">' +
+      return '<div class="flex gap-2"><input class="in cIn" data-i="' + i + '" value="' + esc(c.name) + '">' +
         '<button type="button" class="cDel px-3 text-gray-400 hover:text-red-600" data-i="' + i + '">' +
         '<span class="material-icons text-base">delete</span></button></div>';
     }).join('');
     $('catList').querySelectorAll('.cIn').forEach(function (el) {
-      el.addEventListener('input', function () { cats[+el.dataset.i] = el.value; }); });
+      el.addEventListener('input', function () { cats[+el.dataset.i].name = el.value; }); });
     $('catList').querySelectorAll('.cDel').forEach(function (el) {
       el.addEventListener('click', function () { cats.splice(+el.dataset.i, 1); draw(); }); });
   }
@@ -309,20 +313,30 @@ function openCategories() {
   }
 
   draw(); drawPri();
-  $('catAdd').addEventListener('click', function () { cats.push(''); draw(); });
+  $('catAdd').addEventListener('click', function () {
+    cats.push({ name: '', orig: '' }); draw();
+    var ins = $('catList').querySelectorAll('.cIn'); if (ins.length) ins[ins.length - 1].focus();
+  });
   $('priAdd').addEventListener('click', function () { levels.push({ name: '', weight: 2 }); drawPri(); });
 
   $('catSave').addEventListener('click', function () {
     if (!checkPri()) { toast($('priMsg').textContent, 'warn'); return; }
     var btn = $('catSave');
     busy(btn, true, 'Saving…');
-    api('updateCategories', { categories: cats.filter(function (c) { return String(c).trim(); }) })
-      .then(function () {
+    var moved = 0;
+    api('updateCategories', {
+      categories: cats.map(function (c) { return String(c.name).trim(); }).filter(Boolean),
+      renames: cats.filter(function (c) { return c.orig && String(c.name).trim() && String(c.name).trim() !== c.orig; })
+                   .map(function (c) { return { from: c.orig, to: String(c.name).trim() }; }) })
+      .then(function (r) {
+        moved = r.tasksMoved || 0;
         return api('updatePriorities', { priorities: levels
           .filter(function (l) { return String(l.name).trim(); })
           .map(function (l) { return { name: String(l.name).trim(), weight: Number(l.weight) }; }) });
       })
-      .then(function () { toast('Categories and priorities saved.', 'ok'); closeModal(); return refresh(); })
+      .then(function () {
+        toast('Categories and priorities saved.' + (moved ? ' ' + moved + ' task(s) moved to the new name.' : ''), 'ok');
+        closeModal(); return refresh(); })
       .catch(function (e) { busy(btn, false); toast(e.message, 'err'); });
   });
 }

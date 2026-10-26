@@ -411,6 +411,7 @@ function refresh() {
     renderTiles();
     renderBell();
     syncFilters();
+    applyTabLayout();
     renderTab();
   }).catch(function (e) { toast(e.message, 'err'); });
 }

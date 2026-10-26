@@ -43,6 +43,7 @@ node demo-test.js           # the demo workspace, and that it demos something
 node identity-test.js       # one email per workspace, shared usernames, changing an email
 node payment-config-test.js # Razorpay keys missing, mistyped or wrong: what the customer, owner and checkPayments see
 node lite-test.js           # Domebox Lite on the server: one company, Growth for good, nothing to buy — and the full edition untouched
+node customise-test.js      # tab order and hidden tabs (Admin only), category renames and new categories — both editions
 
 node server.js &            # then, for the browser tests:
 node ui-test.js
@@ -65,6 +66,7 @@ node staff-billing-ui-test.js # managers and staff see no plan, trial or billing
 # Domebox Lite in a browser, against a Lite server on 8096:
 #   DBX_PORT=8096 DBX_CODE=../dist/lite/Code.gs DBX_HTML=../dist/lite-upload/index.html DBX_SITE=../dist/lite-upload node server.js &
 node lite-ui-test.js
+node customise-ui-test.js - http://localhost:8095/   # Assign search, new category in place, Arrange tabs (also run with :8096 for Lite)
 node seed.js                # prints the seeded owner's email
 node recurring-test.js <that-email>
 ```

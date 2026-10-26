@@ -64,6 +64,83 @@ function priorityNames(current) {
   return names;
 }
 
+/* ---------- the tab bar, as the company's Admin arranged it ----------------
+   Order and hidden tabs come from the server with the dashboard, so everyone in
+   the company sees the same bar. Tasks and Team can never be hidden. */
+var TAB_ALWAYS = ['tasks', 'team'];
+function tabLayout() {
+  var l = (STATE.data && STATE.data.layout) || {};
+  return { order: l.order || ['tasks','priority','projects','meetings','goals','board','reports','team'],
+           hidden: l.hidden || [] };
+}
+function applyTabLayout() {
+  var l = tabLayout();
+  ['navTabs', 'navTabsMobile'].forEach(function (id) {
+    var bar = $(id);
+    if (!bar) return;
+    l.order.forEach(function (k) {
+      var b = bar.querySelector('button[data-tab="' + k + '"]');
+      if (b) { bar.appendChild(b); b.classList.toggle('hidden', l.hidden.indexOf(k) > -1); }
+    });
+  });
+  if (l.hidden.indexOf(STATE.tab) > -1) STATE.tab = 'tasks';
+}
+function tabLabel(k) {
+  var b = document.querySelector('#navTabs button[data-tab="' + k + '"]');
+  return b ? b.textContent.trim() : k;
+}
+
+function openTabLayout() {
+  if (!isAdmin()) { toast('Only an Admin can arrange the tabs.', 'warn'); return; }
+  var l = tabLayout(), order = l.order.slice(), hidden = l.hidden.slice();
+  openModal('<div class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Arrange tabs</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Put the tabs in the order your company uses them, ' +
+      'and hide the ones you do not need. This changes the bar for everybody. Tasks and Team always stay.</p>' +
+    '<div id="tlList" class="space-y-2"></div>' +
+    '<div class="flex flex-wrap gap-3 mt-6">' +
+      '<button class="btn btn-g" id="tlReset">Reset to default</button><span class="flex-1"></span>' +
+      '<button class="btn btn-g" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-p" id="tlSave">Save</button></div></div>', 'max-w-lg');
+  function draw() {
+    $('tlList').innerHTML = order.map(function (k, i) {
+      var locked = TAB_ALWAYS.indexOf(k) > -1, off = hidden.indexOf(k) > -1;
+      return '<div class="tlRow flex items-center gap-2 rounded-xl border-2 px-3 py-2 ' +
+          (off ? 'border-gray-100 bg-gray-50' : 'border-blue-100 bg-white') + '" data-k="' + k + '">' +
+        '<span class="w-5 text-xs font-black text-gray-400">' + (i + 1) + '</span>' +
+        '<span class="flex-1 font-black ' + (off ? 'text-gray-400 line-through' : '') + '">' + esc(tabLabel(k)) + '</span>' +
+        '<button type="button" class="tlUp barbtn w-8 h-8 rounded-lg" data-i="' + i + '" aria-label="Move ' + esc(tabLabel(k)) + ' up"' +
+          (i === 0 ? ' disabled style="opacity:.3"' : '') + '><span class="material-icons text-[20px]">arrow_upward</span></button>' +
+        '<button type="button" class="tlDown barbtn w-8 h-8 rounded-lg" data-i="' + i + '" aria-label="Move ' + esc(tabLabel(k)) + ' down"' +
+          (i === order.length - 1 ? ' disabled style="opacity:.3"' : '') + '><span class="material-icons text-[20px]">arrow_downward</span></button>' +
+        (locked ? '<span class="text-[11px] font-black text-gray-400 w-20 text-center">Always on</span>'
+          : '<button type="button" class="tlToggle btn ' + (off ? 'btn-g' : 'btn-p') + ' text-xs py-1.5 w-20" data-k="' + k + '">' +
+            (off ? 'Hidden' : 'Shown') + '</button>') +
+        '</div>';
+    }).join('');
+    $('tlList').querySelectorAll('.tlUp').forEach(function (b) { b.addEventListener('click', function () {
+      var i = +b.dataset.i; if (i > 0) { order.splice(i - 1, 0, order.splice(i, 1)[0]); draw(); } }); });
+    $('tlList').querySelectorAll('.tlDown').forEach(function (b) { b.addEventListener('click', function () {
+      var i = +b.dataset.i; if (i < order.length - 1) { order.splice(i + 1, 0, order.splice(i, 1)[0]); draw(); } }); });
+    $('tlList').querySelectorAll('.tlToggle').forEach(function (b) { b.addEventListener('click', function () {
+      var k = b.dataset.k, at = hidden.indexOf(k);
+      if (at > -1) hidden.splice(at, 1); else hidden.push(k);
+      draw(); }); });
+  }
+  draw();
+  $('tlReset').addEventListener('click', function () {
+    order = ['tasks','priority','projects','meetings','goals','board','reports','team']; hidden = []; draw(); });
+  $('tlSave').addEventListener('click', function () {
+    var btn = $('tlSave'); busy(btn, true, 'Saving…');
+    api('saveTabLayout', { layout: { order: order, hidden: hidden } })
+      .then(function (r) {
+        STATE.data.layout = r.layout; applyTabLayout(); renderTab();
+        toast(r.message, 'ok'); closeModal();
+      })
+      .catch(function (e) { busy(btn, false); toast(e.message, 'err'); });
+  });
+}
+
 function renderTab() {
   ['tasks','priority','projects','team','reports','board','goals','meetings'].forEach(function (t) {
     $('tab-' + t).classList.toggle('hidden', t !== STATE.tab); });
@@ -542,7 +619,6 @@ function openBlocker(t) {
 }
 
 function openEdit(t) {
-  var cats = STATE.data.categories || [];
   openModal('<form id="fEdit" class="p-6 lg:p-7">' +
     '<h2 class="text-xl font-black mb-5">Edit task</h2><div class="space-y-4">' +
     '<div><label class="lb" for="edTitle">Title</label><input id="edTitle" class="in" required value="' + esc(t.title) + '"></div>' +
@@ -554,9 +630,7 @@ function openEdit(t) {
           return '<option' + (p === t.priority ? ' selected' : '') + '>' + esc(p) + '</option>'; }).join('') +
       '</select></div></div>' +
     '<div class="grid grid-cols-2 gap-4">' +
-      '<div><label class="lb" for="edCat">Category</label><select id="edCat" class="in">' +
-        cats.map(function (c) { return '<option' + (c === t.jobCategory ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') +
-      '</select></div>' +
+      '<div><label class="lb" for="edCat">Category</label>' + catPickerHtml('edCat', t.jobCategory) + '</div>' +
       '<div><label class="lb" for="edKra">KRA tag</label><input id="edKra" class="in" value="' + esc(t.kra) + '"></div></div>' +
     (STATE.user.role === 'Admin' ? '<div><label class="lb" for="edStatus">Status</label><select id="edStatus" class="in">' +
       STATUS_LIST.map(function (s) { return '<option' + (s === t.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') +
@@ -564,10 +638,13 @@ function openEdit(t) {
     '</div><div class="flex gap-3 mt-6">' +
     '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
     '<button type="submit" class="btn btn-p flex-1">Save</button></div></form>');
+  bindCatPicker('edCat');
   $('fEdit').addEventListener('submit', function (e) {
     e.preventDefault();
+    var cat = readCatPicker('edCat');
+    if (cat === null) return;
     api('editTask', { form: { taskId: t.id, title: $('edTitle').value, desc: $('edDesc').value,
-      dueDate: $('edDue').value, priority: $('edPri').value, jobCategory: $('edCat').value,
+      dueDate: $('edDue').value, priority: $('edPri').value, jobCategory: cat,
       kra: $('edKra').value, status: $('edStatus') ? $('edStatus').value : undefined } })
       .then(function (r) { toast(r.message, 'ok'); closeModal(); closeDrawer(); return refresh(); })
       .catch(function (err) { toast(err.message, 'err'); });
@@ -575,6 +652,44 @@ function openEdit(t) {
 }
 
 /* ---------- assign ------------------------------------------------------- */
+/* ---------- job category picker -----------------------------------------
+   Managers can type a new category right where they need it; the server adds
+   it to the company's list. A task's current category is always offered, even
+   if it has since been renamed or removed, so editing never changes it
+   silently. */
+function canManageCats() { return !!(STATE.user && (STATE.user.role === 'Admin' || STATE.user.role === 'HOD')); }
+function catPickerHtml(id, current) {
+  var cats = (STATE.data.categories || []).slice();
+  if (current && cats.indexOf(current) < 0) cats.unshift(current);
+  return '<select id="' + id + '" class="in">' +
+    cats.map(function (c) { return '<option' + (c === current ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') +
+    (canManageCats() ? '<option value="__new__">＋ New category…</option>' : '') + '</select>' +
+    '<input id="' + id + 'New" class="in mt-2 hidden" maxlength="60" placeholder="New category name">';
+}
+function bindCatPicker(id) {
+  var sel = $(id), box = $(id + 'New');
+  if (!sel || !box) return;
+  sel.addEventListener('change', function () {
+    var on = sel.value === '__new__';
+    box.classList.toggle('hidden', !on);
+    if (on) box.focus();
+  });
+}
+/** The chosen category, or null (with a warning) when "new" was picked but left empty. */
+function readCatPicker(id) {
+  var sel = $(id);
+  if (!sel) return '';
+  if (sel.value !== '__new__') return sel.value;
+  var v = $(id + 'New').value.trim();
+  if (!v) { toast('Type the new category name, or pick one from the list.', 'warn'); return null; }
+  return v;
+}
+
+/* ---------- finding people in a long list --------------------------------- */
+function personSearchText(s) {
+  return [s.name, s.username, s.role, s.dept, s.jobProfile].join(' ').toLowerCase();
+}
+
 function openAssign() {
   var staff = (STATE.data.staff || []).filter(function (u) { return u.active !== false; });
   if (!staff.length) { toast('Add a team member first.', 'warn'); return; }
@@ -588,14 +703,22 @@ function openAssign() {
     '<div class="space-y-4">' +
       '<div><label class="lb" for="asTitle">Task</label><input id="asTitle" class="in" required placeholder="What needs doing?"></div>' +
       '<div><label class="lb" for="asDesc">Detail</label><textarea id="asDesc" rows="2" class="in" placeholder="Context, what done looks like…"></textarea></div>' +
-      '<div><label class="lb">Assign to</label>' +
-        '<div class="border border-gray-200 rounded-xl max-h-40 overflow-y-auto bg-gray-50 p-1">' +
+      '<div><div class="flex items-end justify-between"><label class="lb" for="asWhoQ">Assign to</label>' +
+          '<span id="asWhoCount" class="text-[11px] font-black text-gray-400 mb-1"></span></div>' +
+        /* With a team of fifty, scrolling a list of names is how the wrong
+           person gets ticked. Search by name, role, department or job. */
+        '<div class="relative mb-2"><span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>' +
+          '<input id="asWhoQ" class="in" style="padding-left:2.4rem" autocomplete="off" ' +
+          'placeholder="Search by name, role or department"></div>' +
+        '<div id="asWhoList" class="border border-gray-200 rounded-xl max-h-48 overflow-y-auto bg-gray-50 p-1">' +
         staff.map(function (s) {
-          return '<label class="flex items-center gap-2 px-2 py-1.5 hover:bg-white rounded-lg cursor-pointer">' +
+          return '<label class="asWhoRow flex items-center gap-2 px-2 py-1.5 hover:bg-white rounded-lg cursor-pointer" ' +
+            'data-q="' + esc(personSearchText(s)) + '">' +
             '<input type="checkbox" class="asWho w-4 h-4 accent-blue-600" value="' + esc(s.username) + '">' +
             '<span class="text-sm font-semibold">' + esc(s.name) + '</span>' +
-            '<span class="text-xs text-gray-400">' + esc(s.role) + '</span></label>';
-        }).join('') + '</div>' +
+            '<span class="text-xs text-gray-400">' + esc(s.role) + (s.dept ? ' · ' + esc(s.dept) : '') + '</span></label>';
+        }).join('') +
+        '<div id="asWhoNone" class="hidden text-xs font-bold text-gray-400 px-2 py-3">Nobody matches that.</div></div>' +
         '<div id="asRoute" class="text-[11px] font-bold mt-2 text-blue-700"></div></div>' +
       '<div class="grid grid-cols-2 gap-4">' +
         '<div><label class="lb" for="asDue">Due date</label><input id="asDue" type="date" class="in" required value="' + addDaysYmd(7) + '"></div>' +
@@ -604,8 +727,7 @@ function openAssign() {
             return '<option' + (i === Math.min(1, priorityNames().length - 1) ? ' selected' : '') +
               '>' + esc(p) + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="grid grid-cols-2 gap-4">' +
-        '<div><label class="lb" for="asCat">Job category</label><select id="asCat" class="in">' +
-          cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
+        '<div><label class="lb" for="asCat">Job category</label>' + catPickerHtml('asCat', '') + '</div>' +
         '<div><label class="lb" for="asFreq">Repeats</label><select id="asFreq" class="in">' +
           ['One Time','Daily','Weekdays','Weekly','Fortnightly','Monthly','Quarterly','Half-Yearly','Yearly']
             .map(function (f) { return '<option>' + f + '</option>'; }).join('') + '</select></div></div>' +
@@ -643,6 +765,7 @@ function openAssign() {
 
   var routeNote = function () {
     var picked = Array.prototype.slice.call(document.querySelectorAll('.asWho:checked'));
+    $('asWhoCount').textContent = picked.length ? picked.length + ' selected' : '';
     if (!picked.length) { $('asRoute').textContent = ''; return; }
     var needApproval = picked.filter(function (c) {
       var s = staff.filter(function (x) { return x.username === c.value; })[0];
@@ -654,6 +777,24 @@ function openAssign() {
   };
   document.querySelectorAll('.asWho').forEach(function (c) {
     c.addEventListener('change', routeNote); });
+  /* Ticked people stay ticked while the search hides them. Enter ticks the
+     first match instead of submitting a half-filled form. */
+  var filterWho = function () {
+    var q = $('asWhoQ').value.trim().toLowerCase(), shown = 0;
+    document.querySelectorAll('.asWhoRow').forEach(function (r) {
+      var hit = !q || q.split(/\s+/).every(function (w) { return r.dataset.q.indexOf(w) > -1; });
+      r.classList.toggle('hidden', !hit); if (hit) shown++;
+    });
+    $('asWhoNone').classList.toggle('hidden', shown > 0);
+  };
+  $('asWhoQ').addEventListener('input', filterWho);
+  $('asWhoQ').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var first = document.querySelector('.asWhoRow:not(.hidden) .asWho:not(:checked)');
+    if (first) { first.checked = true; routeNote(); $('asWhoQ').value = ''; filterWho(); }
+  });
+  bindCatPicker('asCat');
 
   /* One mode at a time, and the note says in words what was chosen — a date
      field and a count field both filled in is a rule nobody can predict. */
@@ -685,11 +826,13 @@ function openAssign() {
     var who = Array.prototype.slice.call(document.querySelectorAll('.asWho:checked'))
       .map(function (c) { return c.value; });
     if (!who.length) { toast('Pick at least one person.', 'warn'); return; }
+    var cat = readCatPicker('asCat');
+    if (cat === null) return;
     var btn = e.target.querySelector('button[type=submit]');
     busy(btn, true, 'Assigning…');
     api('createTask', { form: { title: $('asTitle').value, desc: $('asDesc').value,
       assignTo: who.join(','), dueDate: $('asDue').value, priority: $('asPri').value,
-      jobCategory: $('asCat').value, frequency: $('asFreq').value, kra: $('asKra').value,
+      jobCategory: cat, frequency: $('asFreq').value, kra: $('asKra').value,
       goal: $('asGoal') ? $('asGoal').value : '',
       repeatUntil: stopMode === 'date' ? $('asUntil').value : '',
       repeatCount: stopMode === 'count' ? Number($('asTimes').value || 0) : 0,
