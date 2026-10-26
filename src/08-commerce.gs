@@ -461,6 +461,14 @@ function resetEmailHtml_(link) {
 }
 
 function sendWelcome_(email, name, company, trialEnds) {
+  if (isLite_()) {
+    sendEmail_(email, 'Welcome to Domebox Lite', mailShell_('Your workspace is ready',
+      '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
+      '<p><strong>' + esc_(company) + '</strong> is set up on Domebox Lite — up to 50 people, with ' +
+      'scoring, reports and appraisals included.</p>' +
+      '<p>Add your team first, then assign the first task.</p>' + btn_('Open Domebox Lite', CFG().siteUrl)));
+    return;
+  }
   sendEmail_(email, 'Welcome to Domebox', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
     '<p><strong>' + esc_(company) + '</strong> is set up on Domebox, with the full ' + TRIAL_PLAN +
@@ -471,9 +479,10 @@ function sendWelcome_(email, name, company, trialEnds) {
 }
 
 function sendWelcomeStaff_(email, name, company, username) {
-  sendEmail_(email, 'You have been added to Domebox', mailShell_('Welcome to the team',
+  var brand = isLite_() ? 'Domebox Lite' : 'Domebox';
+  sendEmail_(email, 'You have been added to ' + brand, mailShell_('Welcome to the team',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p>You have been added to <strong>' + esc_(company) + '</strong> on Domebox.</p>' +
+    '<p>You have been added to <strong>' + esc_(company) + '</strong> on ' + brand + '.</p>' +
     infoTable_([['Sign in with', email], ['Username', username]]) +
     '<p>Your manager has set your password. Change it after your first sign-in.</p>' +
     btn_('Sign in', CFG().siteUrl)));

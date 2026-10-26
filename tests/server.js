@@ -3,7 +3,7 @@
 const http = require('http'), fs = require('fs'), { build } = require('./gas-shim');
 
 const env = build();
-const src = fs.readFileSync('/home/user/stockpilot/dist/code.gs', 'utf8');
+const src = fs.readFileSync(process.env.DBX_CODE || '/home/user/stockpilot/dist/code.gs', 'utf8');
 const names = Object.keys(env.G);
 const APP = new Function(...names, src + '\n;return { doPost: doPost, doGet: doGet, setupDomeBox: setupDomeBox, '
         + 'ensureRegistry: ensureRegistry, createDemoAccount: createDemoAccount, removeDemoAccount: removeDemoAccount, reissueFlaggedInvoices: reissueFlaggedInvoices, __env: 1, '
@@ -71,7 +71,7 @@ const server = http.createServer((req, res) => {
   /* The uploaded site loads its settings file first; serve the packaged one
      (its apiUrl is still the placeholder, so the page keeps using /exec). */
   if (req.url.split('?')[0] === '/domebox-config.js') {
-    const f = '/home/user/stockpilot/dist/netlify-upload/domebox-config.js';
+    const f = process.env.DBX_SITE ? process.env.DBX_SITE + '/domebox-config.js' : '/home/user/stockpilot/dist/netlify-upload/domebox-config.js';
     res.writeHead(200, { 'Content-Type': 'text/javascript' });
     res.end(fs.existsSync(f) ? fs.readFileSync(f) : 'window.DOMEBOX_CONFIG = {};'); return;
   }
@@ -207,4 +207,5 @@ const server = http.createServer((req, res) => {
 });
 
 module.exports = { call, env, APP, server };
-if (require.main === module) server.listen(8095, () => console.log('harness on 8095'));
+const PORT = Number(process.env.DBX_PORT || 8095);
+if (require.main === module) server.listen(PORT, () => console.log('harness on ' + PORT));

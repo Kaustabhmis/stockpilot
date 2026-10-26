@@ -288,6 +288,7 @@ function saveSession(res) {
    anything that would change it says so and points at the free trial. */
 var DEMO_AS = { owner: 'the owner', manager: 'a manager (Sruti)', staff: 'a team member (Payel)' };
 function openDemo(as, btn) {
+  if (LITE) return goAuth('login');
   if (btn) busy(btn, true, 'Opening the demo…');
   return api('openDemo', { as: as || 'owner' }).then(function (res) {
     STATE.demoAs = as || 'owner';
@@ -417,21 +418,25 @@ function refresh() {
 function renderStopped(d) {
   $('banner').className = '';
   $('banner').innerHTML = '<div class="bg-red-50 border-b border-red-200 px-4 py-4 text-center">' +
-    '<div class="font-black text-red-900">' + (isAdmin() ? 'Your subscription lapsed' : 'Read-only for now') + '</div>' +
+    '<div class="font-black text-red-900">' + (canBill() ? 'Your subscription lapsed' : 'Read-only for now') + '</div>' +
     '<div class="text-sm text-red-800 mt-1">' + esc(d.message) + '</div>' +
-    (isAdmin() ? '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button>' : '') + '</div>';
+    (canBill() ? '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button>' : '') + '</div>';
   ['tab-tasks','tab-team','tab-reports'].forEach(function (id) { $(id).classList.add('hidden'); });
 }
 
 /** Plans, prices and billing are for the company's Admin only. */
 function isAdmin() { return !!(STATE.user && STATE.user.role === 'Admin'); }
+/* Domebox Lite (the Lite build sets DOMEBOX_EDITION) has no plans or billing
+   at all — not even for its Admin. */
+var LITE = window.DOMEBOX_EDITION === 'lite';
+function canBill() { return isAdmin() && !LITE; }
 
 function renderBanner() {
   if (STATE.demo) { renderDemoBanner(); return; }
   var u = STATE.usage, b = $('banner');
   /* Staff are not shown the plan, the trial or renewal dates — nothing in it
      is theirs to act on. */
-  if (!isAdmin()) { b.className = 'hidden'; b.innerHTML = ''; return; }
+  if (!canBill()) { b.className = 'hidden'; b.innerHTML = ''; return; }
   var msgs = [];
   /* A trial is said as a trial: how long is left, and what happens after. */
   if (u.trial) {

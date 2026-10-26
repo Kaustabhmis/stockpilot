@@ -22,7 +22,7 @@
 // setCustomerPlan() puts a company on a plan by hand — for a customer who paid
 // on the old system and has signed up again here.
 
-var FRESH_FOLDER_NAME = 'Domebox';
+var FRESH_FOLDER_NAME = isLite_() ? 'Domebox Lite' : 'Domebox';
 
 function freshStart() {
   var p = PropertiesService.getScriptProperties();
@@ -50,13 +50,13 @@ function freshStart() {
   };
 
   /* ---- the Master sheet ---------------------------------------------- */
-  var master = put(SpreadsheetApp.create('Domebox Master'));
+  var master = put(SpreadsheetApp.create(FRESH_FOLDER_NAME + ' Master'));
   p.setProperty('MASTER_DB_ID', master.getId());
   ensureRegistry();
   dropBlankSheets_(master);
 
   /* ---- the Template sheet -------------------------------------------- */
-  var tpl = put(SpreadsheetApp.create('Domebox Template'));
+  var tpl = put(SpreadsheetApp.create(FRESH_FOLDER_NAME + ' Template'));
   ensureTenantTabs_(tpl);
   dropBlankSheets_(tpl);
   p.setProperty('TEMPLATE_ID', tpl.getId());
@@ -69,8 +69,8 @@ function freshStart() {
   p.setProperty('REMINDERS_LIVE', 'yes');
 
   out.push('Created in your Google Drive, folder "' + FRESH_FOLDER_NAME + '":');
-  out.push('  Domebox Master    ' + master.getUrl());
-  out.push('  Domebox Template  ' + tpl.getUrl());
+  out.push('  ' + FRESH_FOLDER_NAME + ' Master    ' + master.getUrl());
+  out.push('  ' + FRESH_FOLDER_NAME + ' Template  ' + tpl.getUrl());
   out.push('');
   out.push('Saved in Script Properties: MASTER_DB_ID, TEMPLATE_ID, AUTH_PEPPER, TOKEN_SECRET, REMINDERS_LIVE.');
   out.push('Do not rename, move to another account, or delete these two sheets.');
@@ -80,7 +80,8 @@ function freshStart() {
   out.push('  2. Run switchOnSchedules once.');
   out.push('  3. Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone).');
   out.push('  4. Run setupDomeBox — it prints your /exec URL and anything still missing.');
-  out.push('  5. Run createDemoAccount, so the live demo on the website works.');
+  if (isLite_()) out.push('  5. Add the Script Property SITE_URL = the Lite website address, so emails link to it.');
+  else out.push('  5. Run createDemoAccount, so the live demo on the website works.');
   out.push('');
   out.push('Back up AUTH_PEPPER (Project Settings > Script Properties) somewhere safe.');
   return say_(out);
@@ -111,8 +112,10 @@ function switchOnSchedules() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'reconcilePayments') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
-  out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
+  if (!isLite_()) {
+    ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
+    out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
+  }
   return say_(out);
 }
 

@@ -91,6 +91,7 @@ function openDemo_(as) {
  * @param {string=} password  defaults to DEMO_PASSWORD, minimum 8 characters
  */
 function createDemoAccount(email, password) {
+  if (isLite_()) { Logger.log('Domebox Lite has no demo — nothing was created.'); return 'Domebox Lite has no demo — nothing was created.'; }
   var out = ['', '=== DOMEBOX DEMO ACCOUNT ===', ''];
   email = String(email || DEMO_EMAIL).trim().toLowerCase();
   password = String(password || DEMO_PASSWORD);

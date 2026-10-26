@@ -32,7 +32,7 @@ function loadMeetings() {
     $('meetBody').innerHTML = '<div class="max-w-[700px] mx-auto px-4 py-12 text-center">' +
       '<div class="text-xl font-black mb-2">Weekly reviews</div>' +
       '<p class="text-sm font-semibold text-gray-500 mb-5">' + esc(e.message) + '</p>' +
-      (/paid plan/.test(e.message) && isAdmin() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
+      (/paid plan/.test(e.message) && canBill() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
   });
 }
 

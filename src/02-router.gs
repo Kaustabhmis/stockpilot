@@ -59,8 +59,15 @@ var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getP
   'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
   'getMeetings','getMeeting','getLeave'];
 
+/* In Domebox Lite there is nothing to buy and nothing to demo. */
+var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
+                    'saveBilling','getInvoices'];
+
 function route_(p) {
   var action = String(p.action || '');
+  if (isLite_() && LITE_REFUSED.indexOf(action) > -1) {
+    throw new Error('Plans and billing are not part of Domebox Lite.');
+  }
 
   if (PUBLIC_ACTIONS.indexOf(action) > -1) {
     switch (action) {

@@ -436,6 +436,35 @@ Now:
 `staff-billing-ui-test.js` checks the owner, a manager and a team member, on screen
 and in what the server sends.
 
+### 4z. Domebox Lite — a second edition from the same code
+
+The owner's own company gets **Domebox Lite**: the full Growth plan permanently, with
+no plans, prices, trial, billing, payment, sales page or demo. It is one line in
+`Code.gs` (`var EDITION = 'lite'`) and one flag in the page (`DOMEBOX_EDITION`). Both
+are written by `netlify/package-static.js` into `dist/lite/` and `dist/lite-upload/`
+on every build, so every fix reaches both editions and the full edition is built
+exactly as before.
+
+On the server, Lite:
+- holds a single company
+- reads the plan as Growth until 2099, whatever the registry says
+- refuses payment, billing, invoice, demo and sales routes
+- schedules no payment check and creates no demo
+- names its Drive folder, sheets and backups "Domebox Lite" so they never mix with
+  Domebox's
+
+On screen, Lite:
+- leaves the sales page out of the page entirely
+- tells search engines not to list it
+- shows no plan or billing control, even to its Admin, and no Billing help section
+
+`lite-test.js` and `lite-ui-test.js` cover it, and also check that the full edition
+still starts a trial, takes many companies and reaches billing. Setup is in
+`LITE-SETUP.md`.
+
+While here, the sign-up form's "Free for 5 people and 50 tasks a month" was out of date;
+it now says the full Growth plan is free for 14 days.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

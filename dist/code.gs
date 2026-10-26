@@ -64,7 +64,15 @@ function CFG() {
 /* The only address customer mail ever leaves from, and the name beside it.
    MAIL_FROM itself is a Script Property so it can be pointed somewhere else in
    a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
-var MAIL_FROM_NAME = 'Domebox';
+/* EDITION — 'full' is Domebox as sold. The Domebox Lite build (build-lite.js)
+   rewrites this one line to 'lite': one company, the whole Growth plan for
+   good, and no plans, prices, trial, billing, payment or demo anywhere. Same
+   code otherwise, so every fix reaches both. */
+var EDITION = 'full';
+function isLite_() { return EDITION === 'lite'; }
+var LITE_PLAN = 'Growth', LITE_UNTIL = '2099-12-31';
+
+var MAIL_FROM_NAME = isLite_() ? 'Domebox Lite' : 'Domebox';
 
 /* Every new workspace starts on the full Growth plan for this many days, then
    moves to Free unless it pays. Nothing is deleted when a trial ends. */
@@ -159,11 +167,16 @@ function setupDomeBox() {
   if (made.length) out.push('Created secrets: ' + made.join(', '));
 
   var c = CFG(), missing = [];
-  [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
-   ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
-   ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
-   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']
-  ].forEach(function (r) {
+  (isLite_()
+    ? [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
+       ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
+       ['SITE_URL', PropertiesService.getScriptProperties().getProperty('SITE_URL'),
+        'the Lite website address, e.g. https://domebox-lite.netlify.app — emails link to it']]
+    : [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
+       ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
+       ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
+       ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']]
+  ).forEach(function (r) {
     out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
     if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
   });
@@ -174,7 +187,7 @@ function setupDomeBox() {
   var reconcileOn = false;
   try { reconcileOn = ScriptApp.getProjectTriggers().some(function (t) {
     return t.getHandlerFunction() === 'reconcilePayments'; }); } catch (e) {}
-  if (c.razorKey && c.razorSecret && !reconcileOn) {
+  if (!isLite_() && c.razorKey && c.razorSecret && !reconcileOn) {
     out.push('');
     out.push('  WARNING online payment is set up but the payment check is not switched on.');
     out.push('          A customer who closes the tab while paying is charged and stays');
@@ -435,8 +448,15 @@ var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getP
   'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
   'getMeetings','getMeeting','getLeave'];
 
+/* In Domebox Lite there is nothing to buy and nothing to demo. */
+var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
+                    'saveBilling','getInvoices'];
+
 function route_(p) {
   var action = String(p.action || '');
+  if (isLite_() && LITE_REFUSED.indexOf(action) > -1) {
+    throw new Error('Plans and billing are not part of Domebox Lite.');
+  }
 
   if (PUBLIC_ACTIONS.indexOf(action) > -1) {
     switch (action) {
@@ -673,6 +693,15 @@ function registerCompany_locked_(form) {
       throw new Error('That email is already registered. Try signing in, or use Forgot Password.');
     }
   }
+  /* Domebox Lite is one company's own copy: the first sign-up creates it, and
+     anybody else who finds the address is turned away. */
+  if (isLite_()) {
+    var liteDir = master.getSheetByName(TAB.DIRECTORY);
+    if (liteDir && liteDir.getLastRow() > 1) {
+      throw new Error('This Domebox Lite is already set up for ' + liteDir.getRange(2, 1).getValue() +
+        '. Ask its Admin to add you.');
+    }
+  }
 
   /* The password is hashed before anything is created, so a failure here can
      never leave an orphaned copy of the template behind in Drive. */
@@ -712,17 +741,19 @@ function registerCompany_locked_(form) {
      sees the scoring, reports and appraisals with their own people before they
      are asked to pay. When it ends they drop to Free — never to read-only. */
   var expiry = new Date(); expiry.setDate(expiry.getDate() + TRIAL_DAYS);
+  var lite = isLite_();
   mkTab_(master, TAB.DIRECTORY, ['Company','Email','Password','Plan','Valid Until','SheetID','Status','Created'])
-    .appendRow([company, email, '', TRIAL_PLAN, ymd(expiry), newId, 'Trial', new Date()]);
+    .appendRow(lite ? [company, email, '', LITE_PLAN, LITE_UNTIL, newId, 'Active', new Date()]
+                    : [company, email, '', TRIAL_PLAN, ymd(expiry), newId, 'Trial', new Date()]);
   global.appendRow([email, hash, newId, username]);
 
-  try { sendWelcome_(email, form.name || company, company, ymd(expiry)); } catch (e) {}
+  try { sendWelcome_(email, form.name || company, company, lite ? '' : ymd(expiry)); } catch (e) {}
 
   return {
     status: 'success',
     token: issueToken(newId, username, 'Admin'),
     user: { name: row[U['Name']], username: username, role: 'Admin', email: email },
-    company: company, plan: TRIAL_PLAN, trialEnds: ymd(expiry),
+    company: company, plan: lite ? '' : TRIAL_PLAN, trialEnds: lite ? '' : ymd(expiry),
   };
 }
 
@@ -801,7 +832,7 @@ function login_(emailOrUsername, password) {
     user: { name: me.name, username: me.username, role: me.role, email: me.email,
             phone: me.phone, manager: me.manager, jobProfile: me.jobProfile, dept: me.dept },
     company: reg ? reg.company : '',
-    plan: me.role === 'Admin' ? normalizePlan(reg ? reg.plan : 'Free') : '',   // billing is the owner's business
+    plan: me.role === 'Admin' && !isLite_() ? normalizePlan(reg ? reg.plan : 'Free') : '',   // billing is the owner's business
   };
 }
 
@@ -920,6 +951,9 @@ function registryRow_(sheetId) {
         var until = d[i][4] ? new Date(d[i][4]) : null;
         if (until && !isNaN(until)) until.setHours(23, 59, 59, 999);
         var trialOver = trial && until && !isNaN(until) && until < new Date();
+        /* Lite: the Growth plan for good, whatever the sheet says. */
+        if (isLite_()) return { company: d[i][0], email: d[i][1], plan: LITE_PLAN, validUntil: LITE_UNTIL,
+          sheetId: d[i][5], row: i + 1, trial: false, trialEnded: false, trialPlan: '' };
         return { company: d[i][0], email: d[i][1], plan: trialOver ? 'Free' : d[i][3],
                  validUntil: trialOver ? '' : d[i][4], sheetId: d[i][5], row: i + 1,
                  trial: trial && !trialOver, trialEnded: !!trialOver, trialPlan: trial ? d[i][3] : '' };
@@ -3150,6 +3184,14 @@ function resetEmailHtml_(link) {
 }
 
 function sendWelcome_(email, name, company, trialEnds) {
+  if (isLite_()) {
+    sendEmail_(email, 'Welcome to Domebox Lite', mailShell_('Your workspace is ready',
+      '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
+      '<p><strong>' + esc_(company) + '</strong> is set up on Domebox Lite — up to 50 people, with ' +
+      'scoring, reports and appraisals included.</p>' +
+      '<p>Add your team first, then assign the first task.</p>' + btn_('Open Domebox Lite', CFG().siteUrl)));
+    return;
+  }
   sendEmail_(email, 'Welcome to Domebox', mailShell_('Your workspace is ready',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
     '<p><strong>' + esc_(company) + '</strong> is set up on Domebox, with the full ' + TRIAL_PLAN +
@@ -3160,9 +3202,10 @@ function sendWelcome_(email, name, company, trialEnds) {
 }
 
 function sendWelcomeStaff_(email, name, company, username) {
-  sendEmail_(email, 'You have been added to Domebox', mailShell_('Welcome to the team',
+  var brand = isLite_() ? 'Domebox Lite' : 'Domebox';
+  sendEmail_(email, 'You have been added to ' + brand, mailShell_('Welcome to the team',
     '<p>Hi <strong>' + esc_(name) + '</strong>,</p>' +
-    '<p>You have been added to <strong>' + esc_(company) + '</strong> on Domebox.</p>' +
+    '<p>You have been added to <strong>' + esc_(company) + '</strong> on ' + brand + '.</p>' +
     infoTable_([['Sign in with', email], ['Username', username]]) +
     '<p>Your manager has set your password. Change it after your first sign-in.</p>' +
     btn_('Sign in', CFG().siteUrl)));
@@ -4721,6 +4764,7 @@ function openDemo_(as) {
  * @param {string=} password  defaults to DEMO_PASSWORD, minimum 8 characters
  */
 function createDemoAccount(email, password) {
+  if (isLite_()) { Logger.log('Domebox Lite has no demo — nothing was created.'); return 'Domebox Lite has no demo — nothing was created.'; }
   var out = ['', '=== DOMEBOX DEMO ACCOUNT ===', ''];
   email = String(email || DEMO_EMAIL).trim().toLowerCase();
   password = String(password || DEMO_PASSWORD);
@@ -6574,7 +6618,7 @@ function readAllTasks_(ctx) {
 // setCustomerPlan() puts a company on a plan by hand — for a customer who paid
 // on the old system and has signed up again here.
 
-var FRESH_FOLDER_NAME = 'Domebox';
+var FRESH_FOLDER_NAME = isLite_() ? 'Domebox Lite' : 'Domebox';
 
 function freshStart() {
   var p = PropertiesService.getScriptProperties();
@@ -6602,13 +6646,13 @@ function freshStart() {
   };
 
   /* ---- the Master sheet ---------------------------------------------- */
-  var master = put(SpreadsheetApp.create('Domebox Master'));
+  var master = put(SpreadsheetApp.create(FRESH_FOLDER_NAME + ' Master'));
   p.setProperty('MASTER_DB_ID', master.getId());
   ensureRegistry();
   dropBlankSheets_(master);
 
   /* ---- the Template sheet -------------------------------------------- */
-  var tpl = put(SpreadsheetApp.create('Domebox Template'));
+  var tpl = put(SpreadsheetApp.create(FRESH_FOLDER_NAME + ' Template'));
   ensureTenantTabs_(tpl);
   dropBlankSheets_(tpl);
   p.setProperty('TEMPLATE_ID', tpl.getId());
@@ -6621,8 +6665,8 @@ function freshStart() {
   p.setProperty('REMINDERS_LIVE', 'yes');
 
   out.push('Created in your Google Drive, folder "' + FRESH_FOLDER_NAME + '":');
-  out.push('  Domebox Master    ' + master.getUrl());
-  out.push('  Domebox Template  ' + tpl.getUrl());
+  out.push('  ' + FRESH_FOLDER_NAME + ' Master    ' + master.getUrl());
+  out.push('  ' + FRESH_FOLDER_NAME + ' Template  ' + tpl.getUrl());
   out.push('');
   out.push('Saved in Script Properties: MASTER_DB_ID, TEMPLATE_ID, AUTH_PEPPER, TOKEN_SECRET, REMINDERS_LIVE.');
   out.push('Do not rename, move to another account, or delete these two sheets.');
@@ -6632,7 +6676,8 @@ function freshStart() {
   out.push('  2. Run switchOnSchedules once.');
   out.push('  3. Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone).');
   out.push('  4. Run setupDomeBox — it prints your /exec URL and anything still missing.');
-  out.push('  5. Run createDemoAccount, so the live demo on the website works.');
+  if (isLite_()) out.push('  5. Add the Script Property SITE_URL = the Lite website address, so emails link to it.');
+  else out.push('  5. Run createDemoAccount, so the live demo on the website works.');
   out.push('');
   out.push('Back up AUTH_PEPPER (Project Settings > Script Properties) somewhere safe.');
   return say_(out);
@@ -6663,8 +6708,10 @@ function switchOnSchedules() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'reconcilePayments') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
-  out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
+  if (!isLite_()) {
+    ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
+    out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
+  }
   return say_(out);
 }
 

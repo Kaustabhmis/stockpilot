@@ -26,6 +26,15 @@ function registerCompany_locked_(form) {
       throw new Error('That email is already registered. Try signing in, or use Forgot Password.');
     }
   }
+  /* Domebox Lite is one company's own copy: the first sign-up creates it, and
+     anybody else who finds the address is turned away. */
+  if (isLite_()) {
+    var liteDir = master.getSheetByName(TAB.DIRECTORY);
+    if (liteDir && liteDir.getLastRow() > 1) {
+      throw new Error('This Domebox Lite is already set up for ' + liteDir.getRange(2, 1).getValue() +
+        '. Ask its Admin to add you.');
+    }
+  }
 
   /* The password is hashed before anything is created, so a failure here can
      never leave an orphaned copy of the template behind in Drive. */
@@ -65,17 +74,19 @@ function registerCompany_locked_(form) {
      sees the scoring, reports and appraisals with their own people before they
      are asked to pay. When it ends they drop to Free — never to read-only. */
   var expiry = new Date(); expiry.setDate(expiry.getDate() + TRIAL_DAYS);
+  var lite = isLite_();
   mkTab_(master, TAB.DIRECTORY, ['Company','Email','Password','Plan','Valid Until','SheetID','Status','Created'])
-    .appendRow([company, email, '', TRIAL_PLAN, ymd(expiry), newId, 'Trial', new Date()]);
+    .appendRow(lite ? [company, email, '', LITE_PLAN, LITE_UNTIL, newId, 'Active', new Date()]
+                    : [company, email, '', TRIAL_PLAN, ymd(expiry), newId, 'Trial', new Date()]);
   global.appendRow([email, hash, newId, username]);
 
-  try { sendWelcome_(email, form.name || company, company, ymd(expiry)); } catch (e) {}
+  try { sendWelcome_(email, form.name || company, company, lite ? '' : ymd(expiry)); } catch (e) {}
 
   return {
     status: 'success',
     token: issueToken(newId, username, 'Admin'),
     user: { name: row[U['Name']], username: username, role: 'Admin', email: email },
-    company: company, plan: TRIAL_PLAN, trialEnds: ymd(expiry),
+    company: company, plan: lite ? '' : TRIAL_PLAN, trialEnds: lite ? '' : ymd(expiry),
   };
 }
 
@@ -154,7 +165,7 @@ function login_(emailOrUsername, password) {
     user: { name: me.name, username: me.username, role: me.role, email: me.email,
             phone: me.phone, manager: me.manager, jobProfile: me.jobProfile, dept: me.dept },
     company: reg ? reg.company : '',
-    plan: me.role === 'Admin' ? normalizePlan(reg ? reg.plan : 'Free') : '',   // billing is the owner's business
+    plan: me.role === 'Admin' && !isLite_() ? normalizePlan(reg ? reg.plan : 'Free') : '',   // billing is the owner's business
   };
 }
 
@@ -273,6 +284,9 @@ function registryRow_(sheetId) {
         var until = d[i][4] ? new Date(d[i][4]) : null;
         if (until && !isNaN(until)) until.setHours(23, 59, 59, 999);
         var trialOver = trial && until && !isNaN(until) && until < new Date();
+        /* Lite: the Growth plan for good, whatever the sheet says. */
+        if (isLite_()) return { company: d[i][0], email: d[i][1], plan: LITE_PLAN, validUntil: LITE_UNTIL,
+          sheetId: d[i][5], row: i + 1, trial: false, trialEnded: false, trialPlan: '' };
         return { company: d[i][0], email: d[i][1], plan: trialOver ? 'Free' : d[i][3],
                  validUntil: trialOver ? '' : d[i][4], sheetId: d[i][5], row: i + 1,
                  trial: trial && !trialOver, trialEnded: !!trialOver, trialPlan: trial ? d[i][3] : '' };

@@ -106,8 +106,13 @@ function installBackupSchedule() {
 
 function backupFolder_() {
   if (BACKUP.FOLDER_ID) return DriveApp.getFolderById(BACKUP.FOLDER_ID);
-  var it = DriveApp.getFoldersByName(BACKUP.FOLDER_NAME);
+  /* Domebox Lite usually lives in the same Drive as Domebox: its backups get
+     their own folder, and it never adopts the full edition's old one. */
+  var lite = typeof isLite_ === 'function' && isLite_();
+  var name = lite ? 'Domebox Lite Backups' : BACKUP.FOLDER_NAME;
+  var it = DriveApp.getFoldersByName(name);
   if (it.hasNext()) return it.next();
+  if (lite) { var lf = DriveApp.createFolder(name); Logger.log('Created backup folder "' + name + '"'); return lf; }
   /* The product was renamed from "Dome Box". A folder made under the old name
      holds the existing backups: carry on using it, under the new name, rather
      than starting an empty one and orphaning every copy already taken. */

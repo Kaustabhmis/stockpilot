@@ -409,6 +409,10 @@
   .brand-word{letter-spacing:-.01em}
 
   /* ---------- the live-demo bar ------------------------------------------- */
+  /* Domebox Lite: the build marks <html class="lite">. */
+  html.lite .lite-hide{display:none !important}
+  .lite-only{display:none} html.lite .lite-only{display:block}
+  html.lite .brand-word::after{content:' Lite';font-weight:700;opacity:.75}
   .demo-bar{background:#fff7e6;border-bottom:1px solid #f3d9a4;color:var(--ink)}
   .demo-exit{display:inline-flex;align-items:center;gap:4px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:900;
     color:#7a4b00;background:#fff;border:1.5px solid #e9c77d;white-space:nowrap}
@@ -905,7 +909,8 @@
       <!-- sign up -->
       <form id="formSignup" class="space-y-3 hidden">
         <h1 class="text-xl font-black">Create your workspace</h1>
-        <p class="text-xs text-gray-500 font-semibold">Free for 5 people and 50 tasks a month. No card needed.</p>
+        <p class="text-xs text-gray-500 font-semibold lite-hide">The full Growth plan free for 14 days. No card needed.</p>
+        <p class="text-xs text-gray-500 font-semibold lite-only">Your company’s own workspace — up to 50 people, everything included.</p>
         <div><label class="lb" for="suCompany">Company name</label>
           <input id="suCompany" class="in" autocomplete="organization" required></div>
         <div><label class="lb" for="suName">Your name</label>
@@ -944,12 +949,12 @@
       </form>
     </div>
 
-    <p class="text-center mt-5">
+    <p class="text-center mt-5 lite-hide">
       <button type="button" class="text-slate-400 text-xs font-bold hover:text-slate-200"
               onclick="showHome()">&larr; Back to the Domebox home page</button>
     </p>
 
-    <p class="text-center text-slate-500 text-xs mt-3">
+    <p class="text-center text-slate-500 text-xs mt-3 lite-hide">
       <a href="/privacy" class="hover:text-slate-300">Privacy</a> ·
       <a href="/terms" class="hover:text-slate-300">Terms</a> ·
       <a href="/refund" class="hover:text-slate-300">Refunds</a> ·
@@ -1503,6 +1508,7 @@ function saveSession(res) {
    anything that would change it says so and points at the free trial. */
 var DEMO_AS = { owner: 'the owner', manager: 'a manager (Sruti)', staff: 'a team member (Payel)' };
 function openDemo(as, btn) {
+  if (LITE) return goAuth('login');
   if (btn) busy(btn, true, 'Opening the demo…');
   return api('openDemo', { as: as || 'owner' }).then(function (res) {
     STATE.demoAs = as || 'owner';
@@ -1632,21 +1638,25 @@ function refresh() {
 function renderStopped(d) {
   $('banner').className = '';
   $('banner').innerHTML = '<div class="bg-red-50 border-b border-red-200 px-4 py-4 text-center">' +
-    '<div class="font-black text-red-900">' + (isAdmin() ? 'Your subscription lapsed' : 'Read-only for now') + '</div>' +
+    '<div class="font-black text-red-900">' + (canBill() ? 'Your subscription lapsed' : 'Read-only for now') + '</div>' +
     '<div class="text-sm text-red-800 mt-1">' + esc(d.message) + '</div>' +
-    (isAdmin() ? '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button>' : '') + '</div>';
+    (canBill() ? '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button>' : '') + '</div>';
   ['tab-tasks','tab-team','tab-reports'].forEach(function (id) { $(id).classList.add('hidden'); });
 }
 
 /** Plans, prices and billing are for the company's Admin only. */
 function isAdmin() { return !!(STATE.user && STATE.user.role === 'Admin'); }
+/* Domebox Lite (the Lite build sets DOMEBOX_EDITION) has no plans or billing
+   at all — not even for its Admin. */
+var LITE = window.DOMEBOX_EDITION === 'lite';
+function canBill() { return isAdmin() && !LITE; }
 
 function renderBanner() {
   if (STATE.demo) { renderDemoBanner(); return; }
   var u = STATE.usage, b = $('banner');
   /* Staff are not shown the plan, the trial or renewal dates — nothing in it
      is theirs to act on. */
-  if (!isAdmin()) { b.className = 'hidden'; b.innerHTML = ''; return; }
+  if (!canBill()) { b.className = 'hidden'; b.innerHTML = ''; return; }
   var msgs = [];
   /* A trial is said as a trial: how long is left, and what happens after. */
   if (u.trial) {
@@ -2527,7 +2537,7 @@ function openAssign() {
         '<textarea id="asChk" rows="2" class="in" placeholder="Collect quotes&#10;Compare rates"></textarea></div>' +
     '</div>' +
     (left !== null ? '<div class="text-[11px] font-bold mt-3 ' + (left <= 5 ? 'text-amber-700' : 'text-gray-400') + '">' +
-      left + ' of ' + u.maxTasks + ' tasks left this month' + (isAdmin() && u.planName ? ' on ' + esc(u.planName) : '') + '.</div>' : '') +
+      left + ' of ' + u.maxTasks + ' tasks left this month' + (canBill() && u.planName ? ' on ' + esc(u.planName) : '') + '.</div>' : '') +
     '<div class="flex gap-3 mt-6">' +
     '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
     '<button type="submit" class="btn btn-p flex-1">Assign</button></div></form>');
@@ -3080,8 +3090,8 @@ function loadReports() {
       '<h3 class="text-2xl font-black mb-2">Reports are not switched on</h3>' +
       '<p class="text-sm text-gray-500 font-semibold mb-6 max-w-md mx-auto">Trends, per-person scoring, ' +
         'KRA breakdowns and the delivery heatmap are part of every paid plan.' +
-        (isAdmin() ? '' : ' Your company’s Admin can switch them on.') + '</p>' +
-      (isAdmin() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
+        (canBill() ? '' : ' Your company’s Admin can switch them on.') + '</p>' +
+      (canBill() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
     return;
   }
   $('reportsLocked').classList.add('hidden');
@@ -3448,6 +3458,7 @@ function cycleToggle(id) {
 }
 
 function openBilling() {
+  if (LITE) { toast('Plans and billing are not part of Domebox Lite.', 'warn'); return; }
   if (!isAdmin()) { toast('Plans and billing are managed by your company’s Admin.', 'warn'); return; }
   var u = STATE.usage;
   openModal('<div class="p-6 lg:p-7">' +
@@ -3620,7 +3631,7 @@ function openAccount() {
       '<input id="pwNew" type="password" class="in" autocomplete="new-password" minlength="8" required></div>' +
       '<button type="submit" class="btn btn-p w-full">Change password</button></form>' +
     '<div class="flex gap-3 border-t border-gray-100 pt-5">' +
-      (isAdmin() ? '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' : '') +
+      (canBill() ? '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' : '') +
       /* The ? button in the top bar is hidden on a phone to save room, so this
          is the way into help there — and a reasonable second way everywhere. */
       '<button class="btn btn-g flex-1" onclick="closeModal();openHelp()">Help</button>' +
@@ -4208,6 +4219,8 @@ function orgBranch(n) {
    it is for, and why the scoring can be trusted — then get out of the way.
    -------------------------------------------------------------------------- */
 function showHome() {
+  /* Lite has no sales page: its front door is the sign-in form. */
+  if (typeof LITE !== 'undefined' && LITE) return goAuth('login');
   toggleHomeMenu(false);
   $('view-home').classList.remove('hidden');
   $('view-auth').classList.add('hidden');
@@ -4771,6 +4784,7 @@ var HC = { section: null, query: '', tab: null };
 
 function helpSections() {
   var all = (typeof HELP !== 'undefined' && HELP.sections) || [];
+  if (LITE) all = all.filter(function (s) { return s.id !== 'billing'; });
   /* Everyone sees every section — knowing how your manager is measured is part
      of trusting your own score — but a Doer's list puts their own work first
      and the managing-people sections after it, labelled. */
@@ -5329,7 +5343,7 @@ function loadMeetings() {
     $('meetBody').innerHTML = '<div class="max-w-[700px] mx-auto px-4 py-12 text-center">' +
       '<div class="text-xl font-black mb-2">Weekly reviews</div>' +
       '<p class="text-sm font-semibold text-gray-500 mb-5">' + esc(e.message) + '</p>' +
-      (/paid plan/.test(e.message) && isAdmin() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
+      (/paid plan/.test(e.message) && canBill() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
   });
 }
 

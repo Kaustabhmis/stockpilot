@@ -22,6 +22,7 @@ var HC = { section: null, query: '', tab: null };
 
 function helpSections() {
   var all = (typeof HELP !== 'undefined' && HELP.sections) || [];
+  if (LITE) all = all.filter(function (s) { return s.id !== 'billing'; });
   /* Everyone sees every section — knowing how your manager is measured is part
      of trusting your own score — but a Doer's list puts their own work first
      and the managing-people sections after it, labelled. */

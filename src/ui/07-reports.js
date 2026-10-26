@@ -157,8 +157,8 @@ function loadReports() {
       '<h3 class="text-2xl font-black mb-2">Reports are not switched on</h3>' +
       '<p class="text-sm text-gray-500 font-semibold mb-6 max-w-md mx-auto">Trends, per-person scoring, ' +
         'KRA breakdowns and the delivery heatmap are part of every paid plan.' +
-        (isAdmin() ? '' : ' Your company’s Admin can switch them on.') + '</p>' +
-      (isAdmin() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
+        (canBill() ? '' : ' Your company’s Admin can switch them on.') + '</p>' +
+      (canBill() ? '<button class="btn btn-p" onclick="openBilling()">See plans</button>' : '') + '</div>';
     return;
   }
   $('reportsLocked').classList.add('hidden');

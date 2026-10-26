@@ -38,7 +38,8 @@
       <!-- sign up -->
       <form id="formSignup" class="space-y-3 hidden">
         <h1 class="text-xl font-black">Create your workspace</h1>
-        <p class="text-xs text-gray-500 font-semibold">Free for 5 people and 50 tasks a month. No card needed.</p>
+        <p class="text-xs text-gray-500 font-semibold lite-hide">The full Growth plan free for 14 days. No card needed.</p>
+        <p class="text-xs text-gray-500 font-semibold lite-only">Your company’s own workspace — up to 50 people, everything included.</p>
         <div><label class="lb" for="suCompany">Company name</label>
           <input id="suCompany" class="in" autocomplete="organization" required></div>
         <div><label class="lb" for="suName">Your name</label>
@@ -77,12 +78,12 @@
       </form>
     </div>
 
-    <p class="text-center mt-5">
+    <p class="text-center mt-5 lite-hide">
       <button type="button" class="text-slate-400 text-xs font-bold hover:text-slate-200"
               onclick="showHome()">&larr; Back to the Domebox home page</button>
     </p>
 
-    <p class="text-center text-slate-500 text-xs mt-3">
+    <p class="text-center text-slate-500 text-xs mt-3 lite-hide">
       <a href="/privacy" class="hover:text-slate-300">Privacy</a> ·
       <a href="/terms" class="hover:text-slate-300">Terms</a> ·
       <a href="/refund" class="hover:text-slate-300">Refunds</a> ·

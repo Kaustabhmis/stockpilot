@@ -62,7 +62,15 @@ function CFG() {
 /* The only address customer mail ever leaves from, and the name beside it.
    MAIL_FROM itself is a Script Property so it can be pointed somewhere else in
    a sandbox, but it defaults here and setupDomeBox() checks the alias exists. */
-var MAIL_FROM_NAME = 'Domebox';
+/* EDITION — 'full' is Domebox as sold. The Domebox Lite build (build-lite.js)
+   rewrites this one line to 'lite': one company, the whole Growth plan for
+   good, and no plans, prices, trial, billing, payment or demo anywhere. Same
+   code otherwise, so every fix reaches both. */
+var EDITION = 'full';
+function isLite_() { return EDITION === 'lite'; }
+var LITE_PLAN = 'Growth', LITE_UNTIL = '2099-12-31';
+
+var MAIL_FROM_NAME = isLite_() ? 'Domebox Lite' : 'Domebox';
 
 /* Every new workspace starts on the full Growth plan for this many days, then
    moves to Free unless it pays. Nothing is deleted when a trial ends. */
@@ -157,11 +165,16 @@ function setupDomeBox() {
   if (made.length) out.push('Created secrets: ' + made.join(', '));
 
   var c = CFG(), missing = [];
-  [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
-   ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
-   ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
-   ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']
-  ].forEach(function (r) {
+  (isLite_()
+    ? [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
+       ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
+       ['SITE_URL', PropertiesService.getScriptProperties().getProperty('SITE_URL'),
+        'the Lite website address, e.g. https://domebox-lite.netlify.app — emails link to it']]
+    : [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
+       ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
+       ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
+       ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']]
+  ).forEach(function (r) {
     out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
     if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
   });
@@ -172,7 +185,7 @@ function setupDomeBox() {
   var reconcileOn = false;
   try { reconcileOn = ScriptApp.getProjectTriggers().some(function (t) {
     return t.getHandlerFunction() === 'reconcilePayments'; }); } catch (e) {}
-  if (c.razorKey && c.razorSecret && !reconcileOn) {
+  if (!isLite_() && c.razorKey && c.razorSecret && !reconcileOn) {
     out.push('');
     out.push('  WARNING online payment is set up but the payment check is not switched on.');
     out.push('          A customer who closes the tab while paying is charged and stays');

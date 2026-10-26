@@ -164,6 +164,8 @@ function orgBranch(n) {
    it is for, and why the scoring can be trusted — then get out of the way.
    -------------------------------------------------------------------------- */
 function showHome() {
+  /* Lite has no sales page: its front door is the sign-in form. */
+  if (typeof LITE !== 'undefined' && LITE) return goAuth('login');
   toggleHomeMenu(false);
   $('view-home').classList.remove('hidden');
   $('view-auth').classList.add('hidden');

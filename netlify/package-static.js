@@ -126,3 +126,45 @@ fs.writeFileSync(path.join(OUT, 'sitemap.xml'),
 
 console.log('Website folder written: ' + path.relative(root, OUT));
 console.log('  ' + fs.readdirSync(OUT).length + ' items, legal pages: ' + legal.join(', '));
+
+/* =========================================================================
+   DOMEBOX LITE — one company's own copy, built from the same code.
+   dist/lite/Code.gs        the server with EDITION = 'lite'
+   dist/lite-upload/        the website: sign-in and the app, nothing else —
+                            no sales page, no pricing, no legal pages, not
+                            indexed by search engines
+   ========================================================================= */
+const LITE_OUT = path.join(root, 'dist', 'lite-upload'), LITE_GS = path.join(root, 'dist', 'lite');
+rm(LITE_OUT); rm(LITE_GS); fs.mkdirSync(LITE_OUT, { recursive: true }); fs.mkdirSync(LITE_GS, { recursive: true });
+
+const code = fs.readFileSync(path.join(root, 'dist', 'code.gs'), 'utf8');
+if (code.split("var EDITION = 'full';").length !== 2) throw new Error('code.gs must contain exactly one EDITION line');
+fs.writeFileSync(path.join(LITE_GS, 'Code.gs'), code.replace("var EDITION = 'full';", "var EDITION = 'lite';"));
+['reminders.gs', 'backup.gs'].forEach((f) => cp(path.join(root, 'domebox', f), path.join(LITE_GS, f)));
+
+let lite = fs.readFileSync(path.join(root, 'dist', 'index.html'), 'utf8');
+/* The sales page is cut out, not just hidden: nothing about plans or prices
+   is in what the browser receives. */
+const h0 = lite.indexOf('<div id="view-home"'), h1 = lite.indexOf('<!-- ============================ AUTH');
+if (h0 < 0 || h1 < h0) throw new Error('could not find the home page in dist/index.html');
+lite = lite.slice(0, h0) + '<div id="view-home" class="hidden"></div>\n\n' + lite.slice(h1);
+lite = lite.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '')
+  .replace(/<meta (name|property)="(description|og:[^"]*|twitter:[^"]*)"[^>]*>\s*/g, '')
+  .replace(/<link rel="canonical"[^>]*>\s*/g, '')
+  .replace(/<title>[^<]*<\/title>/, '<title>Domebox Lite</title>\n<meta name="robots" content="noindex, nofollow">');
+lite = lite.replace('<head>', '<head>\n' +
+  "<script>window.DOMEBOX_EDITION='lite';document.documentElement.classList.add('lite');</script>\n" +
+  CONFIG_CATCH + '<script src="/domebox-config.js"></script>');
+fs.writeFileSync(path.join(LITE_OUT, 'index.html'), shrink(lite));
+
+['favicon.ico', 'favicon.svg', 'favicon-48.png', 'favicon-96.png', 'favicon-192.png', 'apple-touch-icon.png', 'user-manual.pdf']
+  .forEach((f) => cp(path.join(here, f), path.join(LITE_OUT, f)));
+cp(path.join(here, '_headers'), path.join(LITE_OUT, '_headers')); noHashComments(path.join(LITE_OUT, '_headers'));
+fs.writeFileSync(path.join(LITE_OUT, '_redirects'), '/login  /?login=1  301\n/signup /?signup=1 301\n');
+fs.writeFileSync(path.join(LITE_OUT, 'robots.txt'), 'User-agent: *\nDisallow: /\n');
+fs.writeFileSync(path.join(LITE_OUT, 'domebox-config.js'), `/* Domebox Lite site settings. Fill in between the quotes and save. */
+window.DOMEBOX_CONFIG = {
+  apiUrl: 'PASTE_YOUR_EXEC_URL_HERE'   // the Lite project's address ending in /exec
+};
+`);
+console.log('Domebox Lite written: ' + path.relative(root, LITE_OUT) + ' and ' + path.relative(root, LITE_GS) + '/Code.gs');
