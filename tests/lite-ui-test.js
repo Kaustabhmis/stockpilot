@@ -39,6 +39,13 @@ const SHOTS = process.argv[2], URL = 'http://localhost:8096/';
   ok('the workspace opens', await p.locator('#view-app').isVisible());
   ok('no plan bar, no trial countdown, no Choose a plan', await p.locator('#banner').isHidden() &&
      !/trial|plan/i.test(await p.locator('#banner').textContent()));
+  ok('Lite is white with blue outlines: white app bar with a blue edge, outlined primary buttons',
+     await p.evaluate(() => {
+       const bar = getComputedStyle(document.querySelector('.appbar'));
+       const btn = getComputedStyle(document.querySelector('button.btn-p:not([disabled])') || document.querySelector('.btn-p'));
+       return bar.backgroundColor === 'rgb(255, 255, 255)' && bar.borderBottomColor === 'rgb(30, 79, 191)' &&
+              btn.backgroundColor === 'rgb(255, 255, 255)' && btn.borderTopColor === 'rgb(30, 79, 191)';
+     }));
   ok('the app bar says Domebox Lite', await p.evaluate(() => getComputedStyle(document.querySelector('#view-app .brand-word'), '::after').content) === '" Lite"');
   if (SHOTS) await p.screenshot({ path: SHOTS + '/lite-02-app.png' });
   await p.evaluate(() => openAccount()); await W(400);
@@ -76,6 +83,10 @@ const SHOTS = process.argv[2], URL = 'http://localhost:8096/';
   await m.goto(URL, { waitUntil: 'networkidle' });
   ok('on a phone, also straight to sign-in', await m.locator('#formLogin').isVisible());
   if (SHOTS) await m.screenshot({ path: SHOTS + '/lite-03-phone.png' });
+  const full = await b.newPage({ viewport: { width: 1360, height: 860 } });
+  await full.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' }).catch(() => {});
+  ok('the full edition keeps its own colours (navy sign-in page)', await full.evaluate(() =>
+     !document.documentElement.classList.contains('lite') && getComputedStyle(document.getElementById('view-auth')).backgroundColor !== 'rgb(255, 255, 255)').catch(() => false));
   ok('nothing threw', errs.length === 0, errs.join(' | '));
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
