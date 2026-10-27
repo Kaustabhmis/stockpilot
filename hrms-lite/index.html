@@ -547,8 +547,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 
         <div class="login-setup" id="login-setup">
           <h4>Workspace connection</h4>
-          <label class="field" style="margin-bottom:12px">Google Apps Script Web App URL
-            <input id="in-api" type="url" placeholder="https://script.google.com/macros/s/..../exec">
+          <label class="field" style="margin-bottom:12px">Server address
+            <input id="in-api" type="url" placeholder="https://xxxx.supabase.co/functions/v1/api">
           </label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="ghost sm" onclick="saveLoginUrl()">Save on this device</button>
@@ -1511,7 +1511,7 @@ function testLoginUrl() {
     out.textContent = 'address : ' + url + '\n' +
       'result  : could not reach it at all - ' + e.message + '\n\n' +
       'Either the address is wrong, this device has no internet, or the ' +
-      'browser blocked it. A Google address must start https://script.google.com/.';
+      'browser blocked it. The address must start with https://.';
   });
 }
 
@@ -7878,7 +7878,7 @@ function integrationsPane() {
   '<div class="card" style="margin-bottom:14px;background:#f8fafc">' +
     '<h3>This workspace</h3>' +
     '<div class="card-sub">The API every client and agent talks to.</div>' +
-    '<label class="field">Apps Script Web App URL' +
+    '<label class="field">Server address' +
       '<input id="set-api-url" value="' + esc(S.demo ? '' : S.api) + '" ' +
       (S.demo ? 'placeholder="demo mode - not connected to a sheet" disabled' : '') + '></label>' +
     '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +

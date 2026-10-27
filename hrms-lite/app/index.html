@@ -471,14 +471,14 @@ function api(action, payload) {
         var head = String(text || '').trim().slice(0, 200);
         if (/accounts\.google\.com|sign in/i.test(head)) {
           throw new Error('The workspace is asking for a Google sign-in instead of ' +
-            'answering. Ask HR to set the Apps Script deployment to "Anyone".');
+            'answering. Please tell HR.');
         }
         if (r.status === 404) {
           throw new Error('The workspace address is not a live deployment any more ' +
-            '(404). Ask HR - the Apps Script deployment has probably been replaced.');
+            '(404). Please tell HR - the server address may have changed.');
         }
         throw new Error('The workspace answered with a web page instead of data ' +
-          '(HTTP ' + r.status + '). Ask HR to check the Apps Script deployment.');
+          '(HTTP ' + r.status + '). Please tell HR.');
       }
     });
   }).then(function (j) {
@@ -502,7 +502,7 @@ function api(action, payload) {
       }
       throw new Error('Cannot reach the workspace. Your phone is online, so ' +
         'the address this app was built with may no longer be the live one - ' +
-        'ask HR to check the Apps Script deployment.');
+        'please tell HR.');
     }
     throw e;
   });
