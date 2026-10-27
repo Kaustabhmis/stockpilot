@@ -92,6 +92,12 @@ var REMIND = {
 var RM_MAIL_FROM = 'info@biscsindia.com';
 var RM_MAIL_NAME = 'Domebox';
 
+/** The sender name: "Domebox Lite" in a Lite project, else "Domebox". */
+function rmBrand_() { return typeof MAIL_FROM_NAME === 'string' && MAIL_FROM_NAME ? MAIL_FROM_NAME : RM_MAIL_NAME; }
+function rmOwnAddress_() {
+  try { return String(Session.getEffectiveUser().getEmail() || '').toLowerCase(); } catch (e) { return ''; }
+}
+
 /** The configured address if code.gs is in this project, else the constant. */
 function rmMailFrom_() {
   try { if (typeof CFG === 'function' && CFG().mailFrom) return CFG().mailFrom; }
@@ -932,7 +938,9 @@ var RM_ALIAS_OK = null;
 
 function rmAliasVerified_() {
   if (RM_ALIAS_OK !== null) return RM_ALIAS_OK;
-  try { RM_ALIAS_OK = GmailApp.getAliases().indexOf(rmMailFrom_()) > -1; }
+  var from = String(rmMailFrom_()).toLowerCase();
+  if (from && from === rmOwnAddress_()) { RM_ALIAS_OK = true; return true; }   // the account's own address
+  try { RM_ALIAS_OK = GmailApp.getAliases().map(function (a) { return String(a).toLowerCase(); }).indexOf(from) > -1; }
   catch (e) { RM_ALIAS_OK = false; }
   if (!RM_ALIAS_OK) {
     Logger.log('STOPPED: "' + rmMailFrom_() + '" is not a verified send-as alias on this ' +
@@ -954,10 +962,9 @@ function rmSendMail_(to, subject, bodyHtml) {
   if (!to) return false;
   if (!rmAliasVerified_()) return false;
   try {
-    GmailApp.sendEmail(to, subject, rmPlain_(bodyHtml), {
-      htmlBody: rmShell_(subject, bodyHtml),
-      name: RM_MAIL_NAME, from: rmMailFrom_(), replyTo: rmMailFrom_(),
-    });
+    var opts = { htmlBody: rmShell_(subject, bodyHtml), name: rmBrand_(), replyTo: rmMailFrom_() };
+    if (String(rmMailFrom_()).toLowerCase() !== rmOwnAddress_()) opts.from = rmMailFrom_();   // `from` must be an alias
+    GmailApp.sendEmail(to, subject, rmPlain_(bodyHtml), opts);
     return true;
   } catch (e) {
     Logger.log('Mail failed to ' + to + ': ' + e.message);
@@ -969,12 +976,12 @@ function rmShell_(title, inner) {
   return '<div style="margin:0;padding:24px;background:#f3f4f6;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif">' +
     '<div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">' +
       '<div style="background:#1e3a8a;padding:18px 26px;color:#fff">' +
-        '<div style="font-size:19px;font-weight:800">Domebox</div>' +
+        '<div style="font-size:19px;font-weight:800">' + rmEsc_(rmBrand_()) + '</div>' +
         '<div style="font-size:12px;opacity:.8">' + rmEsc_(title) + '</div>' +
       '</div>' +
       '<div style="padding:26px;color:#1f2937;font-size:14px;line-height:1.6">' + inner + '</div>' +
       '<div style="padding:16px 26px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:11px">' +
-        'Domebox · <a href="mailto:' + RM_MAIL_FROM + '" style="color:#2563eb">' + RM_MAIL_FROM + '</a>' +
+        rmEsc_(rmBrand_()) + ' · <a href="mailto:' + rmMailFrom_() + '" style="color:#2563eb">' + rmEsc_(rmMailFrom_()) + '</a>' +
       '</div>' +
     '</div></div>';
 }

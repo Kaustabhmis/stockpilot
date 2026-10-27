@@ -344,6 +344,7 @@ function backupLog_(started, copied, total, failed, mins) {
 
 function backupAlert_(subject, body) {
   try {
-    sendOpsMail_(BACKUP.ALERT_TO, subject, body);
+    /* To the address this installation sends from — Lite's own, not ours. */
+    sendOpsMail_((typeof CFG === 'function' && CFG().mailFrom) || BACKUP.ALERT_TO, subject, body);
   } catch (e) { Logger.log('Could not send backup alert: ' + e.message); }
 }

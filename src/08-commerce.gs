@@ -254,8 +254,7 @@ function sendOpsMail_(to, subject, body) {
   var from = CFG().mailFrom;
   try {
     if (mailAliasVerified_()) {
-      GmailApp.sendEmail(String(to).trim(), subject, body,
-        { name: MAIL_FROM_NAME, from: from, replyTo: from });
+      GmailApp.sendEmail(String(to).trim(), subject, body, mailOpts_());
     } else {
       MailApp.sendEmail({ to: String(to).trim(), name: MAIL_FROM_NAME,
         subject: '[alias not set] ' + subject,
@@ -273,10 +272,25 @@ var MAIL_ALIAS_OK = null;
 
 function mailAliasVerified_() {
   if (MAIL_ALIAS_OK !== null) return MAIL_ALIAS_OK;
-  var from = CFG().mailFrom;
-  try { MAIL_ALIAS_OK = GmailApp.getAliases().indexOf(from) > -1; }
+  var from = String(CFG().mailFrom).toLowerCase();
+  /* The account's own address needs no alias — e.g. Domebox Lite run from
+     mis@dynamicengineers.in itself. Gmail lists only the extra addresses. */
+  if (from && from === mailOwnAddress_()) return (MAIL_ALIAS_OK = true);
+  try { MAIL_ALIAS_OK = GmailApp.getAliases().map(function (a) { return String(a).toLowerCase(); }).indexOf(from) > -1; }
   catch (e) { MAIL_ALIAS_OK = false; }      // no Gmail scope, or a consumer account
   return MAIL_ALIAS_OK;
+}
+
+function mailOwnAddress_() {
+  try { return String(Session.getEffectiveUser().getEmail() || '').toLowerCase(); } catch (e) { return ''; }
+}
+
+/** Gmail's options for sending as MAIL_FROM: `from` only when it is an alias. */
+function mailOpts_(extra) {
+  var from = CFG().mailFrom, o = { name: MAIL_FROM_NAME, replyTo: from };
+  if (String(from).toLowerCase() !== mailOwnAddress_()) o.from = from;
+  Object.keys(extra || {}).forEach(function (k) { o[k] = extra[k]; });
+  return o;
 }
 
 /**
@@ -306,8 +320,7 @@ function sendEmail_(to, subject, html) {
 
   try {
     GmailApp.sendEmail(String(to).trim(), subject,
-      'This email needs an HTML-capable client.',
-      { htmlBody: html, name: MAIL_FROM_NAME, from: from, replyTo: from });
+      'This email needs an HTML-capable client.', mailOpts_({ htmlBody: html }));
     return true;
   } catch (e) {
     logError_('sendEmail', e.message + ' (to ' + to + ')');
@@ -330,11 +343,11 @@ function mailShell_(title, inner) {
     '<div style="background:#5b4bdb;color:#fff;padding:18px 24px">' +
     mailMark_() +
     '<span style="display:inline-block;vertical-align:middle;margin-left:10px;' +
-    'font-weight:900;font-size:15px;letter-spacing:-.2px">Domebox</span>' +
+    'font-weight:900;font-size:15px;letter-spacing:-.2px">' + esc_(MAIL_FROM_NAME) + '</span>' +
     '<h2 style="margin:12px 0 0;font-size:18px;font-weight:800">' + esc_(title) + '</h2></div>' +
     '<div style="padding:24px;color:#453f4c;font-size:14px;line-height:1.6">' + inner + '</div>' +
     '<div style="padding:16px 24px;background:#faf8f5;color:#7d7570;font-size:12px;border-top:1px solid #e7e1d8">' +
-    'Domebox · BISCS India · <a href="' + CFG().siteUrl + '" style="color:#5b4bdb">' +
+    (isLite_() ? esc_(MAIL_FROM_NAME) + ' · ' : 'Domebox · BISCS India · ') + '<a href="' + CFG().siteUrl + '" style="color:#5b4bdb">' +
     esc_(CFG().siteUrl.replace(/^https?:\/\//, '')) + '</a></div></div>';
 }
 

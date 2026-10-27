@@ -169,7 +169,9 @@ function setupDomeBox() {
     ? [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
        ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
        ['SITE_URL', PropertiesService.getScriptProperties().getProperty('SITE_URL'),
-        'the Lite website address, e.g. https://domebox-lite.netlify.app — emails link to it']]
+        'the Lite website address, e.g. https://domebox-lite.netlify.app — emails link to it'],
+       ['MAIL_FROM', PropertiesService.getScriptProperties().getProperty('MAIL_FROM'),
+        'the address Lite emails come from, e.g. mis@dynamicengineers.in']]
     : [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
        ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
        ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
@@ -200,8 +202,13 @@ function setupDomeBox() {
   out.push('');
   out.push('--- SENDING ADDRESS ---');
   var aliasOk = false, aliasList = [];
-  try { aliasList = GmailApp.getAliases(); aliasOk = aliasList.indexOf(c.mailFrom) > -1; }
-  catch (e) { out.push('  Could not read the send-as aliases: ' + e.message); }
+  /* The account's own address counts too: Gmail lists only the extra ones. */
+  if (String(c.mailFrom).toLowerCase() === mailOwnAddress_()) aliasOk = true;
+  else {
+    try { aliasList = GmailApp.getAliases(); aliasOk = aliasList.map(function (a) { return String(a).toLowerCase(); })
+                                                       .indexOf(String(c.mailFrom).toLowerCase()) > -1; }
+    catch (e) { out.push('  Could not read the send-as aliases: ' + e.message); }
+  }
 
   if (aliasOk) {
     out.push('  ok      every email will leave from ' + c.mailFrom);

@@ -42,11 +42,33 @@ of the Lite zip, and the **lite-upload** website folder.
 3. Netlify gives it an address such as `https://something.netlify.app`. You can rename it
    under **Site configuration → Change site name**, or add a domain of your own.
 
-## 5. Point emails at it
+## 5. Emails: where they come from, and where they link
 
-1. Back in the Lite Apps Script project: **Project Settings → Script Properties** → add
-   `SITE_URL` = the Lite website address from step 4. Save.
-2. Run **setupDomeBox**. It should list nothing under **WHAT IS LEFT**.
+Lite emails (welcome, reminders, the morning digest, backup alerts) come from
+**mis@dynamicengineers.in**, branded **Domebox Lite**. None of them come from
+info@biscsindia.com.
+
+1. Back in the Lite Apps Script project: **Project Settings → Script Properties** → add:
+
+   | Property | Value |
+   |---|---|
+   | `MAIL_FROM` | `mis@dynamicengineers.in` |
+   | `SITE_URL` | the Lite website address from step 4 |
+
+   Save.
+2. The Google account that runs the Lite project must be able to send as that address.
+   Either:
+   - **Easiest:** create the Lite project while signed in to Google **as
+     mis@dynamicengineers.in**. Then nothing else is needed.
+   - **Or:** if it runs under another Google account, add mis@dynamicengineers.in in
+     that account's **Gmail → Settings → Accounts → Send mail as**, and confirm the code
+     Gmail sends to it.
+3. Run **setupDomeBox**. Under **SENDING ADDRESS** it should say
+   *every email will leave from mis@dynamicengineers.in*, and nothing should be listed
+   under **WHAT IS LEFT**.
+
+If Lite cannot send as that address, it sends nothing at all rather than sending from
+the wrong address, and setupDomeBox says what to fix.
 
 ## 6. Create your company
 

@@ -465,6 +465,21 @@ still starts a trial, takes many companies and reaches billing. Setup is in
 While here, the sign-up form's "Free for 5 people and 50 tasks a month" was out of date;
 it now says the full Growth plan is free for 14 days.
 
+### 4aa. Domebox Lite sends from the company's own address
+
+Lite emails now leave from `MAIL_FROM`, which for Lite is mis@dynamicengineers.in, and
+are branded "Domebox Lite": welcome, staff invitations, reminders, the digest and backup
+alerts. Three things stood in the way:
+- the reminder footer and the backup alert had info@biscsindia.com written in
+- the email footer said "BISCS India"
+- sending insisted on a Gmail alias
+
+The last one matters most. When the project runs under mis@dynamicengineers.in itself,
+that address is the account, not an alias, so nothing would have been sent. The
+account's own address now counts and is sent without a `from`. The test stand-in for
+Gmail now rejects a `from` that is not an alias, as Apps Script does. Lite's setup
+asks for `MAIL_FROM`. `lite-test.js` covers it.
+
 ## Open — and three of them are not the code
 
 ### 5. The scheduler is not installed (yours, 15 minutes)

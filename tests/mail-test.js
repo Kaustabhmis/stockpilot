@@ -78,8 +78,9 @@ ok('the daily digest refuses to send without the alias',
    /if \(!rmAliasVerified_\(\)\) return false;/.test(rem));
 ok('and never falls back to another address',
    !/MailApp\.sendEmail/.test(rem), 'reminders.gs still calls MailApp');
-ok('it sets from and replyTo on every message',
-   /from: rmMailFrom_\(\), replyTo: rmMailFrom_\(\)/.test(rem));
+ok('it sets replyTo on every message, and from whenever the address is an alias rather than the account itself',
+   /replyTo: rmMailFrom_\(\)/.test(rem) &&
+   /if \(String\(rmMailFrom_\(\)\)\.toLowerCase\(\) !== rmOwnAddress_\(\)\) opts\.from = rmMailFrom_\(\);/.test(rem));
 
 console.log('\n=== payment reminders ===');
 ok('renewal reminders exist at all', /function sendRenewalReminders\(\)/.test(rem));

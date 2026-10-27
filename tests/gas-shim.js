@@ -191,7 +191,11 @@ function build() {
     formatDate: (d, tz, fmt) => new Date(d).toISOString(),
     DigestAlgorithm: { SHA_256: 'SHA_256' },
   };
-  G.Session = { getScriptTimeZone: () => 'Asia/Kolkata' };
+  /* The account the script runs as. Its own address can send without being an
+     alias; a test changes it to run a project under another account. */
+  const me = { email: 'owner@biscsindia.com' };
+  G.Session = { getScriptTimeZone: () => 'Asia/Kolkata',
+    getEffectiveUser: () => ({ getEmail: () => me.email }), __setUser(e) { me.email = e; } };
   G.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 503, getContentText: () => '{}' }) };
   /* The send-as alias is the whole point of the mail rules, so the shim records
      what each message was actually sent AS — not just that something was sent.
@@ -203,8 +207,10 @@ function build() {
     __setAliases(list) { aliases.length = 0; list.forEach(a => aliases.push(a)); },
     sendEmail(to, subject, body, opts) {
       opts = opts || {};
+      /* As Apps Script does: `from` must be one of the account's aliases. */
+      if (opts.from && aliases.indexOf(opts.from) < 0) throw new Error('Invalid argument: from');
       mails.push({ to, subject, html: opts.htmlBody, body,
-                   from: opts.from || null, replyTo: opts.replyTo || null,
+                   from: opts.from || me.email, replyTo: opts.replyTo || null,
                    name: opts.name || null, via: 'gmail' });
     },
   };
