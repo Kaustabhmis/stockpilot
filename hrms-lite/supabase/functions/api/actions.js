@@ -70,15 +70,28 @@ export function createActions(api, db, deps) {
   }
 
   async function shiftOf(empCode) {
-    const st = await settingsMap();
     const e = await one('select shift from hrms.employees where emp_code = $1', [empCode]);
-    const want = String((e && e.shift) || st.default_shift || 'General').trim().toLowerCase();
-    const rows = await all('select * from hrms.shifts where active is true');
+    return shiftNamed(e && e.shift);
+  }
+
+  const shiftTable = () => all('select * from hrms.shifts where active is true');
+
+  /* A shift by its name; blank means the default shift, as on the employee.
+     `table` reads an earlier copy of the shifts instead of today's. */
+  async function shiftNamed(name, table) {
+    const st = await settingsMap();
+    const want = String(name || st.default_shift || 'General').trim().toLowerCase();
+    const rows = table || await shiftTable();
     const hit = rows.find(s => String(s.name || '').trim().toLowerCase() === want);
     const use = hit || rows[0] || {};
+    const grace = use.grace_minutes === undefined || use.grace_minutes === null || use.grace_minutes === ''
+      ? Number(st.grace_minutes || 15) : Number(use.grace_minutes);
     return {
       full: Number(use.full_day_hours || 8) || 8,
       half: Number(use.half_day_hours || 4) || 4,
+      start: minutesOfClock(clockOf(use.start_time || st.shift_start)),
+      end: minutesOfClock(clockOf(use.end_time || st.shift_end)),
+      grace: isNaN(grace) ? 15 : grace,
       weekly_off: use.weekly_off,
       saturday_policy: use.saturday_policy
     };
@@ -375,7 +388,7 @@ export function createActions(api, db, deps) {
     const sh = await shiftOf(empCode);
     let status, remark;
     if (inT === outT) { status = 'P'; remark = source + ' - single punch, verify'; }
-    else if (hours >= sh.full) { status = 'P'; remark = source + (n > 2 ? ' - ' + n + ' punches' : ''); }
+    else if (judge(hours, sh, inT, outT) === 'P') { status = 'P'; remark = source + (n > 2 ? ' - ' + n + ' punches' : ''); }
     else if (hours >= sh.half) { status = 'HD'; remark = source + ' - ' + hours.toFixed(1) + ' h'; }
     else { status = 'A'; remark = source + ' - only ' + hours.toFixed(1) + ' h, verify'; }
 
@@ -386,6 +399,59 @@ export function createActions(api, db, deps) {
       remarks: remark, updated_at: today()
     };
     return await upsertRow('Attendance', row, dirty);
+  }
+
+  /* What a day becomes on this shift - the rule rebuildDay applies. A full
+     day is either the shift's full-day hours worked, or a day kept within the
+     grace at both ends: in no later than start + grace, out no earlier than
+     end - grace. Otherwise the half-day hours decide HD, and below that A. */
+  function withinGrace(sh, inT, outT) {
+    const a = minutesOfClock(clockOf(inT)), b = minutesOfClock(clockOf(outT));
+    if (a === null || b === null || sh.start === null || sh.end === null || sh.end <= sh.start) return false;
+    return a <= sh.start + sh.grace && b >= sh.end - sh.grace;
+  }
+  const sameDayRules = (a, b) => ['full', 'half', 'start', 'end', 'grace'].every(k => a[k] === b[k]);
+  const judge = (hours, sh, inT, outT) =>
+    (hours >= sh.full || withinGrace(sh, inT, outT)) ? 'P' : (hours >= sh.half ? 'HD' : 'A');
+
+  /* Somebody's shift rules changed - they moved shift, or their shift's hours
+     were edited. `was` is the shift they were judged under. The days already
+     judged under the old full- and half-day hours are judged again under the new one - but
+     only a day whose mark is exactly what the old shift made of its hours. A
+     day somebody set by hand, leave, OD, a single punch, and any month whose
+     payroll is finalised are left alone. Returns how many days changed. */
+  async function rejudgeForShift(empCode, was, dirty) {
+    const now = await shiftOf(empCode);
+    if (sameDayRules(was, now)) return 0;
+    const locked = new Set((await all(
+      `select distinct month from hrms.payroll where status = 'Finalised'`)).map(r => String(r.month)));
+    const rows = await all(
+      `select * from hrms.attendance
+        where emp_code = $1 and status in ('P', 'HD', 'A')
+          and in_time is not null and out_time is not null`, [empCode]);
+    const e = await one('select shift from hrms.employees where emp_code = $1', [empCode]);
+    let changed = 0;
+    for (const raw of rows) {
+      const r = rowOut(raw);
+      const iso = String(r.date).slice(0, 10);
+      if (locked.has(iso.slice(0, 7))) continue;
+      const a = minutesOfClock(clockOf(r.in_time)), b = minutesOfClock(clockOf(r.out_time));
+      if (a === null || b === null || b <= a) continue;
+      const hours = (b - a) / 60;
+      if (judge(hours, was, r.in_time, r.out_time) !== String(r.status)) continue;
+      const status = judge(hours, now, r.in_time, r.out_time);
+      if (status === String(r.status)) continue;
+      await upsertRow('Attendance', {
+        id: empCode + '_' + iso, date: iso, emp_code: empCode, status,
+        in_time: clockOf(r.in_time), out_time: clockOf(r.out_time),
+        hours: Math.round(hours * 10) / 10,
+        remarks: 're-checked for shift ' + String((e && e.shift) || 'default').trim() +
+                 ' - ' + hours.toFixed(1) + ' h',
+        updated_at: today()
+      }, dirty);
+      changed++;
+    }
+    return changed;
   }
 
   async function punchState(empCode) {
@@ -906,6 +972,7 @@ export function createActions(api, db, deps) {
     nowParts, today, login, changePassword, listUsers, saveUser, removeUser,
     backfillAccounts, makeAccountsFor, bootstrap, monthAtt, myMonth,
     punchState, webPunch, punchLog, ingestPunches, decide, payslipMailLog, tally,
-    attendanceBetween, isRestDay, rebuildDay, setPassword, checkPassword
+    attendanceBetween, isRestDay, rebuildDay, setPassword, checkPassword, rejudgeForShift,
+    shiftNamed, shiftTable, sameDayRules, shiftOf
   };
 }

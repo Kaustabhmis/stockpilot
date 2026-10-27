@@ -53,6 +53,49 @@ export function createRouter(db, opts = {}) {
     }
   }
 
+  /* Attendance is judged when the punches arrive. When the rules it was judged
+     by change afterwards - a person moved to another shift, a shift's hours,
+     start, end or grace edited, or the company defaults a blank shift cell
+     falls back to - the open days are judged again, so a day is never left
+     marked by a rule that no longer applies.
+
+     Before the save: the day rules each affected person is on now. After it:
+     anyone whose rules moved is re-judged. Saves that cannot move a rule cost
+     nothing. */
+  const RULE_SETTINGS = ['shift_start', 'shift_end', 'grace_minutes', 'full_day_hours',
+                         'half_day_hours', 'default_shift'];
+  async function rulesBefore(action, p) {
+    let codes = null;
+    if ((action === 'save' || action === 'saveMany') && p.sheet === 'Employees') {
+      codes = (action === 'save' ? [p.row] : p.rows || [])
+        .filter(r => r && r.emp_code && 'shift' in r).map(r => String(r.emp_code));
+    } else if (['save', 'saveMany', 'remove', 'removeMany'].includes(action) && p.sheet === 'Shifts') {
+      codes = 'all';
+    } else if (action === 'saveSettings') {
+      const cur = await api.settingsMap();
+      if (Object.keys(p.settings || {}).some(k => RULE_SETTINGS.includes(k) &&
+            String(p.settings[k] == null ? '' : p.settings[k]) !== String(cur[k] == null ? '' : cur[k]))) {
+        codes = 'all';
+      }
+    }
+    if (!codes || !codes.length) return null;
+    if (codes === 'all') {
+      codes = (await db.query('select emp_code from hrms.employees')).rows.map(r => String(r.emp_code));
+    }
+    const m = new Map();
+    for (const c of codes) m.set(c, await act.shiftOf(c));
+    return m;
+  }
+  async function rejudgeMoved(before, dirty) {
+    if (!before) return 0;
+    let n = 0;
+    for (const [code, was] of before) {
+      if (act.sameDayRules(was, await act.shiftOf(code))) continue;
+      n += await act.rejudgeForShift(code, was, dirty);
+    }
+    return n;
+  }
+
   /* Actions that only read. Everything else is treated as a write for the
      revision stamp. No lock: Postgres handles concurrent readers itself, and
      the single global queue that made the sheet version take minutes has no
@@ -80,7 +123,10 @@ export function createRouter(db, opts = {}) {
       const caller = await api.authenticate(action, token);
       await api.authorize(action, payload, caller);
       const dirty = {};
+      const before = await rulesBefore(action, payload);
       const data = await route(action, payload, caller, dirty);
+      const rejudged = await rejudgeMoved(before, dirty);
+      if (rejudged && data && typeof data === 'object') data.rejudged = rejudged;
       const out = { ok: true, data };
       if (!READ_ACTIONS.has(action)) {
         const moved = await api.bumpRevision(dirty);

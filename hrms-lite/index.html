@@ -1447,6 +1447,16 @@ function api(action, payload) {
     /* A write sends back the revision it produced. Taking it here is what
        stops this screen refreshing itself over its own save. */
     if (j.rev !== undefined) S._rev = j.rev;
+    /* A change to someone's shift rules had the server judge their open days
+       again. Those rows moved under this screen, so fetch them. */
+    if (j.data && j.data.rejudged) {
+      var moved = j.data.rejudged;
+      setTimeout(function () {
+        reload().then(function () {
+          toast(moved + ' attendance day(s) re-checked under the new shift rules', 'good');
+        });
+      }, 300);
+    }
     return j.data;
   });
 }
@@ -3929,6 +3939,14 @@ function shiftCfg(code) {
     fullHours: num(pick(sh.full_day_hours, st.full_day_hours || 8)) || 8,
     halfHours: num(pick(sh.half_day_hours, st.half_day_hours || 4))
   };
+}
+/* Kept to the shift within the grace at both ends - in no later than
+   start + grace, out no earlier than end - grace - is a full day whatever the
+   hours add up to. The server judges punches by the same rule. */
+function withinGrace(cfg, inT, outT) {
+  var a = minutesOf(inT), b = minutesOf(outT);
+  if (a === null || b === null || cfg.start === null || cfg.end === null || cfg.end <= cfg.start) return false;
+  return a <= cfg.start + cfg.grace && b >= cfg.end - cfg.grace;
 }
 function lateMinutes(rec, code) {
   var cfg = shiftCfg(code), inM = minutesOf(rec && rec.in_time);
@@ -9143,7 +9161,7 @@ function punchesToAttendance(punches, problems) {
     var cfg = shiftCfg(g.code), full = cfg.fullHours, half = cfg.halfHours;
     var status, remark = 'punch import';
     if (!pair) { status = 'P'; remark = 'single punch, verify'; }
-    else if (hours >= full) status = 'P';
+    else if (hours >= full || withinGrace(cfg, inT, outT)) status = 'P';
     else if (hours >= half) { status = 'HD'; remark = hours.toFixed(1) + ' h'; }
     else { status = 'A'; remark = 'only ' + hours.toFixed(1) + ' h, verify'; }
     if (merged) remark += ' (updated)';
