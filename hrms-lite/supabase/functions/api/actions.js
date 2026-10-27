@@ -386,8 +386,12 @@ export function createActions(api, db, deps) {
     if (inT !== outT) hours = (minutesOfClock(outT) - minutesOfClock(inT)) / 60;
 
     const sh = await shiftOf(empCode);
+    /* One punch and no second is not a day worked: it is Absent until the out
+       arrives (the punch that follows rebuilds the day). Only with "punch out
+       is mandatory" switched off is an open day taken as present. */
+    const mustOut = String((await settingsMap()).punch_out_mandatory || 'yes').toLowerCase() !== 'no';
     let status, remark;
-    if (inT === outT) { status = 'P'; remark = source + ' - single punch, verify'; }
+    if (inT === outT) { status = mustOut ? 'A' : 'P'; remark = source + ' - single punch, no out'; }
     else if (judge(hours, sh, inT, outT) === 'P') { status = 'P'; remark = source + (n > 2 ? ' - ' + n + ' punches' : ''); }
     else if (hours >= sh.half) { status = 'HD'; remark = source + ' - ' + hours.toFixed(1) + ' h'; }
     else { status = 'A'; remark = source + ' - only ' + hours.toFixed(1) + ' h, verify'; }

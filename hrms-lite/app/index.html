@@ -192,6 +192,10 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .cal .d.OD,.cal .d.CO{background:#ede9fe;border-color:#ddd6fe;color:#5b21b6;}
 .cal .d.WO,.cal .d.H{background:#f1f5f9;color:var(--soft);}
 .cal .d.today{outline:2px solid var(--primary);outline-offset:1px;}
+.cal .d.IN{background:#ecfdf5;border-color:#a7f3d0;color:#065f46;}
+.cal .d{position:relative;}
+.cal .d.late::after{content:'';position:absolute;top:0;left:0;border-top:10px solid #f59e0b;
+  border-right:10px solid transparent;border-top-left-radius:8px;}
 .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;font-size:.7rem;color:var(--muted);}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;
   vertical-align:-1px;}
@@ -714,6 +718,8 @@ function isWeeklyOff(iso) {
 }
 function statusFor(iso) {
   var rec = attFor(iso);
+  /* in today and not out yet: at work, not absent - the day settles at punch out */
+  if (rec && rec.in_time && !rec.out_time && iso === today()) return 'IN';
   if (rec && rec.status) return String(rec.status);
   if (holidayOn(iso)) return 'H';
   if (isWeeklyOff(iso)) return 'WO';
@@ -796,9 +802,14 @@ function myShift() {
   list.forEach(function (x) { byName[String(x.name || '').trim().toLowerCase()] = x; });
   var mine = String((S.me && S.me.shift) || '').trim().toLowerCase();
   var def = String(S.settings.default_shift || '').trim().toLowerCase();
-  return byName[mine] || byName[def] || list[0] || null;
+  return byName[mine] || byName[def] || byName.general || list[0] || null;
 }
 
+/* minutes past midnight after which an arrival is late: shift start + grace */
+function lateAfterMins() {
+  var sh = myShift();
+  return sh ? (minutesOf(sh.start_time) + (num(sh.grace_minutes) || 0)) : null;
+}
 function monthStats(ym) {
   var dim = daysInMonth(ym), upTo = ym === thisMonth() ? new Date().getDate() : dim;
   var s = { present: 0, leave: 0, absent: 0, minutes: 0, open: [],
@@ -816,7 +827,8 @@ function monthStats(ym) {
     else if (st === 'HD') s.hd++;
     else if (st === 'OD' || st === 'CO') s.od++;
     /* Late: arrived after shift start + grace on a day they were in. */
-    if (lateAfter !== null && (st === 'P' || st === 'HD') && rec && rec.in_time) {
+    if (st === 'IN') s.present++;
+    if (lateAfter !== null && (st === 'P' || st === 'HD' || st === 'IN') && rec && rec.in_time) {
       var inM = minutesOf(rec.in_time);
       if (inM && inM > lateAfter) s.late++;
     }
@@ -948,7 +960,9 @@ function renderCalendar() {
   for (var d = 1; d <= dim; d++) {
     var iso = dateStr(ym, d), st = statusFor(iso), rec = attFor(iso);
     var mins = workedMinutes(rec);
-    cells += '<div class="d ' + esc(st) + (iso === today() ? ' today' : '') + '"' +
+    var late = lateAfterMins() !== null && (st === 'P' || st === 'HD' || st === 'IN') && rec && rec.in_time &&
+               minutesOf(rec.in_time) > lateAfterMins();
+    cells += '<div class="d ' + esc(st) + (iso === today() ? ' today' : '') + (late ? ' late' : '') + '"' +
       ' onclick="dayDetail(\'' + iso + '\')">' + d +
       (st ? '<small>' + esc(st === 'P' && mins ? hoursText(mins) : st) + '</small>' : '') +
       '</div>';

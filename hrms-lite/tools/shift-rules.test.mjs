@@ -3,6 +3,8 @@
  *
  *   node shift-rules.test.mjs [base-url]
  *
+ * Also: a single punch with no out is Absent, and the out completes it.
+ *
  * Writes employees SR-01 and SR-02, shifts SR Day / SR Long / SR Tight and
  * their attendance in March and April 2026. Run it against a TEST workspace.
  */
@@ -132,6 +134,21 @@ const loose = await call('save', { sheet: 'Shifts', row: SHIFT('SR-S1', 'SR Day'
 ok(Number(loose.rejudged) >= 1, 'back to grace 15: days re-judged', 'got ' + loose.rejudged);
 eq(await st('SR-01', '2026-04-06'), 'P', 'Apr 06 under grace 15', '09:13 and 17:56 are inside the grace');
 eq(await st('SR-01', '2026-04-09'), 'A', 'Apr 09 still as set by hand');
+
+console.log('\none punch and no second');
+/* A SINGLE PUNCH is Absent while "punch out is mandatory" is on (the
+   default): one tap is not a day worked. The out punch that follows rebuilds
+   the day from both. */
+await call('saveSettings', { settings: { punch_out_mandatory: 'yes' } }, token);
+await call('ingestPunches', { source: 'file', punches: [{ emp_code: 'SR-02', punch_time: '2026-04-16 09:02' }] }, token);
+eq(await st('SR-02', '2026-04-16'), 'A', 'in 09:02, no out', 'a single punch is not a day worked');
+ok(/single punch/.test((await day('SR-02', '2026-04-16')).remarks || ''), 'remark says single punch',
+   (await day('SR-02', '2026-04-16')).remarks);
+await call('ingestPunches', { source: 'file', punches: [{ emp_code: 'SR-02', punch_time: '2026-04-16 18:01' }] }, token);
+eq(await st('SR-02', '2026-04-16'), 'P', 'then out 18:01', 'the out punch completes the day');
+await call('saveSettings', { settings: { punch_out_mandatory: 'no' } }, token);
+await call('ingestPunches', { source: 'file', punches: [{ emp_code: 'SR-02', punch_time: '2026-04-17 09:02' }] }, token);
+eq(await st('SR-02', '2026-04-17'), 'P', 'single punch, out not mandatory', 'switched off, an open day is present');
 
 console.log('\na save that changes nothing about the rules');
 const same = await call('save', { sheet: 'Employees', row: Object.assign(EMP('SR-01', 'SR Day'), { phone: '9000000000' }) }, token);

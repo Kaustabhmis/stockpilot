@@ -366,8 +366,9 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .att-cell:hover{outline:2px solid var(--primary);outline-offset:-2px;}
 .att-cell.edited::after{content:'';position:absolute;top:1px;right:1px;width:4px;height:4px;border-radius:50%;
   background:var(--primary);}
-.att-cell.late::before{content:'';position:absolute;bottom:1px;left:1px;width:4px;height:4px;border-radius:50%;
-  background:var(--warning);}
+.att-cell.late{box-shadow:inset 0 -3px 0 #f59e0b;}
+.att-cell.late::before{content:'';position:absolute;top:0;left:0;border-top:9px solid #f59e0b;
+  border-right:9px solid transparent;}
 .s-P{background:#d1fae5;color:#065f46;} .s-A{background:#fee2e2;color:#991b1b;}
 .s-HD{background:#fef3c7;color:#92400e;} .s-L{background:#dbeafe;color:#1e40af;}
 .s-WO{background:#f1f5f9;color:#94a3b8;} .s-H{background:#ede9fe;color:#5b21b6;}
@@ -753,6 +754,7 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
         </div>
         <div class="att-grid" id="att-grid"></div>
         <div class="legend">
+          <span><b class="s-P att-cell late" style="display:inline-block;position:relative">P</b>Late (after grace)</span>
           <span><b class="s-P">P</b>Present</span><span><b class="s-A">A</b>Absent (LOP)</span>
           <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Leave</span>
           <span><b class="s-OD">OD</b>Out duty</span><span><b class="s-CO">CO</b>Comp-off</span>
@@ -1188,6 +1190,12 @@ function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
 function money(v) { return num(v).toLocaleString('en-IN', { maximumFractionDigits: 0 }); }
 function cur() { return (!S.settings.currency || S.settings.currency === 'INR') ? '₹' : S.settings.currency + ' '; }
 function today() { return new Date().toISOString().slice(0, 10); }
+/* today in the company's day, not UTC's: before 05:30 in India toISOString
+   still says yesterday */
+function localDay() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 function thisMonth() { return new Date().toISOString().slice(0, 7); }
 function daysInMonth(ym) { var p = ym.split('-'); return new Date(+p[0], +p[1], 0).getDate(); }
 function dateStr(ym, d) { return ym + '-' + ('0' + d).slice(-2); }
@@ -3023,12 +3031,16 @@ function peopleOn(kind, iso) {
     var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
     /* each employee can be on a different shift, so "non-working" is per person */
     var off = st === 'WO' || st === 'H';
+    /* punched in today and not out yet: at work now, though the day reads A
+       until the out punch arrives */
+    var inNow = iso === localDay() && rec && rec.in_time && !rec.out_time;
+    if (inNow && st === 'A') st = 'IN';
     return { e: e, st: st, off: off, rec: rec || {},
-             late: (st === 'P' || st === 'HD') ? lateMinutes(rec, e.emp_code) : 0 };
+             late: (st === 'P' || st === 'HD' || st === 'IN') ? lateMinutes(rec, e.emp_code) : 0 };
   }).filter(function (x) {
     switch (kind) {
       case 'headcount': return true;
-      case 'present':   return !x.off && (x.st === 'P' || x.st === 'HD' || x.st === 'OD');
+      case 'present':   return !x.off && (x.st === 'P' || x.st === 'HD' || x.st === 'OD' || x.st === 'IN');
       case 'absent':    return !x.off && x.st === 'A';
       case 'halfday':   return !x.off && x.st === 'HD';
       case 'late':      return !x.off && x.late > 0;
@@ -3041,7 +3053,7 @@ function peopleOn(kind, iso) {
 
 var PEOPLE_KINDS = {
   headcount: { title: 'Active headcount', note: 'Everyone on the payroll right now.' },
-  present:   { title: 'Present', note: 'Marked P or HD on the attendance register.' },
+  present:   { title: 'Present', note: 'Marked P or HD on the attendance register, or punched in today and not out yet.' },
   absent:    { title: 'Absent', note: 'Marked A. These days are unpaid unless the marking changes.' },
   late:      { title: 'Late coming', note: 'In-time later than the shift start plus the grace period.' },
   leave:     { title: 'On approved leave', note: 'Marked L from an approved leave application.' },
@@ -9160,7 +9172,10 @@ function punchesToAttendance(punches, problems) {
 
     var cfg = shiftCfg(g.code), full = cfg.fullHours, half = cfg.halfHours;
     var status, remark = 'punch import';
-    if (!pair) { status = 'P'; remark = 'single punch, verify'; }
+    if (!pair) {
+      status = String(S.settings.punch_out_mandatory || 'yes').toLowerCase() !== 'no' ? 'A' : 'P';
+      remark = 'single punch, no out';
+    }
     else if (hours >= full || withinGrace(cfg, inT, outT)) status = 'P';
     else if (hours >= half) { status = 'HD'; remark = hours.toFixed(1) + ' h'; }
     else { status = 'A'; remark = 'only ' + hours.toFixed(1) + ' h, verify'; }
