@@ -3919,14 +3919,15 @@ function monthLocked(ym) {
 function canEditAtt(ym) { return isAdmin() && !monthLocked(ym); }
 
 function shiftCfg(code) {
-  var sh = shiftFor(code);
+  var sh = shiftFor(code), st = S.settings;
+  function pick(v, d) { return v === undefined || v === null || v === '' ? d : v; }
   return {
-    start: minutesOf(sh.start_time || '09:30'),
-    end: minutesOf(sh.end_time || '18:30'),
-    grace: num(sh.grace_minutes || 15),
-    otAfter: num(sh.ot_after_minutes || 30),
-    fullHours: num(sh.full_day_hours || 8) || 8,
-    halfHours: num(sh.half_day_hours || 4) || 4
+    start: minutesOf(pick(sh.start_time, st.shift_start || '09:30')),
+    end: minutesOf(pick(sh.end_time, st.shift_end || '18:30')),
+    grace: num(pick(sh.grace_minutes, st.grace_minutes || 15)),
+    otAfter: num(pick(sh.ot_after_minutes, st.ot_after_minutes || 30)),
+    fullHours: num(pick(sh.full_day_hours, st.full_day_hours || 8)) || 8,
+    halfHours: num(pick(sh.half_day_hours, st.half_day_hours || 4))
   };
 }
 function lateMinutes(rec, code) {
@@ -6416,6 +6417,18 @@ var SETTING_GROUPS = [
 ];
 
 /* Rules that are not per shift or per leave type. Every one is applied. */
+/* The company-wide working hours. A shift row can set its own; a blank cell
+   on a shift falls back to these, and so does anyone whose shift is not found. */
+var WORKING_HOURS = [
+  ['shift_start', 'Default shift start', 'time'],
+  ['shift_end', 'Default shift end', 'time'],
+  ['full_day_hours', 'Minimum hours worked for a full day (P)', 'number'],
+  ['half_day_hours', 'Minimum hours worked for a half day (HD) - less is Absent', 'number'],
+  ['grace_minutes', 'Grace minutes before a late mark', 'number'],
+  ['ot_after_minutes', 'Overtime starts after (minutes past shift end)', 'number'],
+  ['weekly_off', 'Weekly off (e.g. Sun, or Sun,Sat)', 'text'],
+  ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt']
+];
 var ATTENDANCE_RULES = [
   ['web_punch_enabled', 'Let staff punch from the app', 'select:yes,no'],
   ['punch_out_mandatory', 'Punch out is mandatory', 'select:yes,no'],
@@ -6638,7 +6651,10 @@ function saveSettingsForm() {
   });
   if (!Object.keys(values).length) return closeModal();
   api('saveSettings', { settings: values }).then(function (settings) {
-    S.settings = settings || Object.assign({}, S.settings, values);
+    /* The server answers { saved: n }, not the settings - so merge what was
+       typed into what is already held. Taking the reply as the settings map
+       wiped the company name and every other value off the screen. */
+    S.settings = Object.assign({}, S.settings, values);
     S.attVersion++;
     el('side-company').textContent = S.settings.company_name || 'Dashboard + 5 Modules';
     closeModal(); toast('Settings saved', 'good'); renderAll();
@@ -6717,7 +6733,15 @@ function collectPolicyRows(kind) {
 
 function addPolicyRow(kind) {
   var spec = POLICY_TABLES[kind];
-  S[spec.state] = collectPolicyRows(kind).concat([Object.assign({}, spec.blank)]);
+  var fresh = Object.assign({}, spec.blank);
+  /* a new shift starts from the company's default working hours */
+  if (kind === 'shifts') ['start_time:shift_start', 'end_time:shift_end', 'grace_minutes:grace_minutes',
+    'full_day_hours:full_day_hours', 'half_day_hours:half_day_hours', 'ot_after_minutes:ot_after_minutes',
+    'weekly_off:weekly_off', 'saturday_policy:saturday_policy'].forEach(function (m) {
+    var kv = m.split(':'), v = S.settings[kv[1]];
+    if (v !== undefined && v !== null && v !== '') fresh[kv[0]] = v;
+  });
+  S[spec.state] = collectPolicyRows(kind).concat([fresh]);
   renderPolicyTable(kind);
 }
 
@@ -6804,6 +6828,13 @@ function shiftsPane() {
     '<button class="ghost sm" onclick="fillSiteFromLocation()">&#128205; Use my location for the last row</button>' +
     '<span class="spacer"></span><span class="sub-line" id="site-geo-out"></span>' +
   '</div>' +
+    '<h3 style="margin-top:22px">Default working hours</h3>' +
+    '<div class="card-sub">Used for any shift cell left blank and for staff with no shift. ' +
+    'Worked hours at or above the full-day minimum are <b>P</b>, at or above the half-day ' +
+    'minimum are <b>HD</b>, below that <b>A</b>. A shift above can set its own values.</div>' +
+    '<div class="grid2">' + WORKING_HOURS.map(function (f) {
+      return fieldInput(f, S.settings[f[0]]);
+    }).join('') + '</div>' +
     '<h3 style="margin-top:22px">Attendance rules</h3>' +
     '<div class="card-sub">Applied to the register and to pay.</div>' +
     '<div class="grid2">' + ATTENDANCE_RULES.map(function (f) {
@@ -9071,7 +9102,6 @@ function attRow(code, iso, status, inT, outT, remark) {
 
 /* First punch in, last punch out, status from hours - the same rule the backend uses. */
 function punchesToAttendance(punches, problems) {
-  var full = num(S.settings.full_day_hours || 8), half = num(S.settings.half_day_hours || 4);
   var unchanged = 0;
   var groups = {};
   punches.forEach(function (p) {
@@ -9110,6 +9140,7 @@ function punchesToAttendance(punches, problems) {
     if (mins < 0) mins += 24 * 60;                       // crossed midnight
     var hours = mins / 60;
 
+    var cfg = shiftCfg(g.code), full = cfg.fullHours, half = cfg.halfHours;
     var status, remark = 'punch import';
     if (!pair) { status = 'P'; remark = 'single punch, verify'; }
     else if (hours >= full) status = 'P';
@@ -9317,7 +9348,7 @@ function runImport() {
   saveInBatches(sheet, built.rows, show).then(function () {
     if (built.companies && built.companies.length) {
       return api('saveSettings', { settings: { import_companies: built.companies.join(',') } })
-        .then(function (st) { S.settings = st || S.settings; });
+        .then(function () { S.settings.import_companies = built.companies.join(','); });
     }
   }).then(function () {
     toast(built.rows.length + ' row(s) imported', 'good');
