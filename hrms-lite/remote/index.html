@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>BISCS Remote Punch</title>
+<style>
+/* BISCS Remote Punch - a separate tool, apart from the HR system and the
+   staff app. HR or the owner signs in and records an in or an out, at a
+   chosen date and time, for one or many people at once. The punches go in
+   through the same door as the biometric machine's, so the day is built the
+   same way: first punch in, last punch out, the shift's hours and grace
+   decide P / HD / A. */
+:root {
+  --bg: #f1f5f9; --card: #ffffff; --text: #0f172a; --muted: #64748b; --border: #e2e8f0;
+  --brand: #0f766e; --brand-2: #115e59; --in: #16a34a; --out: #dc2626; --warn: #b45309;
+  --chip: #f8fafc;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input, select { font: inherit; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 16px 16px 120px; }
+header.top { background: var(--text); color: #fff; padding: 14px 16px; }
+header.top .in { max-width: 980px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+header.top h1 { font-size: 1.05rem; margin: 0; letter-spacing: .2px; }
+header.top h1 b { color: #5eead4; }
+header.top .who { margin-left: auto; font-size: .82rem; color: #cbd5e1; text-align: right; }
+header.top .who button { background: none; border: 1px solid #475569; color: #e2e8f0; border-radius: 8px;
+  padding: 4px 10px; margin-left: 8px; cursor: pointer; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.card + .card { margin-top: 14px; }
+h2 { font-size: 1rem; margin: 0 0 10px; }
+.sub { color: var(--muted); font-size: .85rem; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } .grid .wide { grid-column: 1 / -1; } }
+.grid > * { min-width: 0; }
+label.f input, label.f select { width: 100%; }
+label.f { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; color: var(--muted);
+  font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+label.f input, label.f select, .tools input, .tools select {
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #fff; color: var(--text);
+  text-transform: none; letter-spacing: 0; font-weight: 400; font-size: .95rem; min-width: 0; }
+.seg { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.seg button { flex: 1; border: 0; background: #fff; padding: 10px; cursor: pointer; font-weight: 700; color: var(--muted); }
+.seg button.on.in { background: var(--in); color: #fff; }
+.seg button.on.out { background: var(--out); color: #fff; }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 10px; }
+.tools input { flex: 1 1 180px; }
+.ghost { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
+.list { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center;
+  padding: 10px 12px; border-top: 1px solid var(--border); cursor: pointer; background: #fff; }
+.row:first-child { border-top: 0; }
+.row.on { background: #f0fdfa; }
+.row input { width: 20px; height: 20px; accent-color: var(--brand); }
+.row .nm { font-weight: 600; }
+.row .meta { color: var(--muted); font-size: .8rem; }
+.day { font-size: .8rem; text-align: right; white-space: nowrap; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: .75rem;
+  background: var(--chip); border: 1px solid var(--border); }
+.pill.P { background: #dcfce7; border-color: #bbf7d0; color: #166534; }
+.pill.HD { background: #fef9c3; border-color: #fde68a; color: #854d0e; }
+.pill.A { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+.pill.L, .pill.OD { background: #e0e7ff; border-color: #c7d2fe; color: #3730a3; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--border);
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); box-shadow: 0 -6px 20px rgba(15,23,42,.06); }
+.bar .in { max-width: 980px; margin: 0 auto; display: flex; gap: 12px; align-items: center; }
+.bar .count { color: var(--muted); font-size: .9rem; }
+.go { margin-left: auto; border: 0; border-radius: 12px; padding: 13px 20px; font-weight: 800; color: #fff;
+  background: var(--brand); cursor: pointer; min-width: 200px; }
+.go.out { background: var(--out); } .go.in { background: var(--in); }
+.go:disabled { opacity: .45; cursor: default; }
+.log { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.log th, .log td { text-align: left; padding: 7px 8px; border-top: 1px solid var(--border); }
+.log th { color: var(--muted); font-weight: 600; border-top: 0; }
+.msg { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: .9rem; display: none; }
+.msg.show { display: block; }
+.msg.bad { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.msg.good { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.login { max-width: 380px; margin: 9vh auto 0; }
+.login .go { width: 100%; margin: 14px 0 0; }
+.login label.f { margin-top: 12px; }
+.hide { display: none !important; }
+.empty { padding: 18px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="in">
+    <h1>BISCS <b>Remote Punch</b></h1>
+    <div class="who hide" id="who"><span id="who-name"></span><button onclick="signOut()">Sign out</button></div>
+  </div>
+</header>
+
+<!-- sign in -->
+<div class="wrap" id="v-login">
+  <div class="card login">
+    <h2>Sign in</h2>
+    <div class="sub">For HR and administrators only. Use your BISCS HR login.</div>
+    <label class="f">Email or staff code<input id="em" autocomplete="username"></label>
+    <label class="f">Password<input id="pw" type="password" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')signIn()"></label>
+    <button class="go" id="btn-in" onclick="signIn()">Sign in</button>
+    <div class="msg" id="login-msg"></div>
+  </div>
+</div>
+
+<!-- the tool -->
+<div class="wrap hide" id="v-main">
+  <div class="card">
+    <h2>Punch</h2>
+    <div class="grid">
+      <label class="f">Date<input type="date" id="date" onchange="onDate()"></label>
+      <label class="f">Time<input type="time" id="time"></label>
+      <label class="f">In or out
+        <div class="seg"><button id="k-in" class="on in" onclick="setKind('in')">IN</button>
+          <button id="k-out" onclick="setKind('out')">OUT</button></div></label>
+      <label class="f wide">Reason (kept on the punch)<input id="note" maxlength="80"
+        placeholder="e.g. site visit, reader down"></label>
+    </div>
+    <div class="msg" id="main-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>People <span class="sub" id="day-label"></span></h2>
+    <div class="tools">
+      <input id="q" placeholder="Search name or code" oninput="render()">
+      <select id="dept" onchange="render()"><option value="">All departments</option></select>
+      <button class="ghost" onclick="pickAll(true)">Select shown</button>
+      <button class="ghost" onclick="pickAll(false)">Clear</button>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+
+  <div class="card">
+    <h2>Remote punches on this date</h2>
+    <div id="log" class="sub">-</div>
+  </div>
+</div>
+
+<div class="bar hide" id="bar">
+  <div class="in">
+    <span class="count" id="count">Tick the people to punch for</span>
+    <button class="go in" id="go" onclick="record()" disabled>Record IN</button>
+  </div>
+</div>
+
+<script>
+var API = 'https://cquczxlfhrrrncbunbhy.supabase.co/functions/v1/api';
+var KEY = 'biscs_remote_session';
+var S = { token: '', user: null, emps: [], shifts: [], settings: {}, payroll: [], att: {}, picked: {},
+          kind: 'in', months: {} };
+
+function el(id) { return document.getElementById(id); }
+function esc(v) {
+  return String(v === undefined || v === null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function pad(n) { return String(n).padStart(2, '0'); }
+function todayIso() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function nowHm() { var d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function hm(v) { var m = String(v || '').match(/(\d{1,2}):(\d{2})/); return m ? pad(m[1]) + ':' + m[2] : ''; }
+function say(id, text, kind) {
+  var n = el(id); n.textContent = text || ''; n.className = 'msg' + (text ? ' show ' + (kind || 'bad') : '');
+}
+
+function api(action, payload) {
+  return fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: action, payload: payload || {}, token: S.token }) })
+    .then(function (r) { return r.json(); }, function () {
+      throw new Error(navigator.onLine === false ? 'No connection. Check the internet and try again.'
+                                                 : 'Cannot reach the server. Try again in a moment.');
+    })
+    .then(function (j) {
+      if (!j.ok) {
+        if (j.authFailed) { signOut(); throw new Error(j.error || 'Please sign in again.'); }
+        throw new Error(j.error || 'Something went wrong');
+      }
+      return j.data;
+    });
+}
+
+/* ---------------- sign in ---------------- */
+function signIn() {
+  var em = el('em').value.trim(), pw = el('pw').value;
+  if (!em || !pw) return say('login-msg', 'Enter your login and password.');
+  el('btn-in').disabled = true; el('btn-in').textContent = 'Signing in...';
+  say('login-msg', '');
+  api('login', { email: em, password: pw, months: 2 }).then(function (u) {
+    if (['owner', 'admin', 'hr'].indexOf(String(u.role)) < 0) {
+      throw new Error('This tool is for HR and administrators. Staff punch from the BISCS app.');
+    }
+    S.token = u.token; S.user = { email: u.email, role: u.role };
+    try { localStorage.setItem(KEY, JSON.stringify({ token: u.token, user: S.user })); } catch (e) {}
+    takeWorkspace(u.workspace);
+    start();
+  }).catch(function (e) {
+    say('login-msg', e.message);
+  }).then(function () { el('btn-in').disabled = false; el('btn-in').textContent = 'Sign in'; });
+}
+function signOut() {
+  try { localStorage.removeItem(KEY); } catch (e) {}
+  S.token = ''; S.user = null;
+  el('v-main').classList.add('hide'); el('bar').classList.add('hide'); el('who').classList.add('hide');
+  el('v-login').classList.remove('hide');
+}
+function takeWorkspace(w) {
+  if (!w) return;
+  S.emps = (w.employees || []).filter(function (e) {
+    return String(e.status || 'Active').toLowerCase() === 'active' && !e.exit_date;
+  }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+  S.shifts = w.shifts || []; S.settings = w.settings || {}; S.payroll = w.payroll || [];
+  S.att = {}; S.months = {};
+  (w.attendance || []).forEach(function (a) {
+    S.att[a.emp_code + '_' + String(a.date).slice(0, 10)] = a;
+    S.months[String(a.date).slice(0, 7)] = 1;
+  });
+}
+function start() {
+  el('v-login').classList.add('hide');
+  el('v-main').classList.remove('hide'); el('bar').classList.remove('hide'); el('who').classList.remove('hide');
+  el('who-name').textContent = S.user.email + ' (' + S.user.role + ')';
+  el('date').max = todayIso();
+  if (!el('date').value) el('date').value = todayIso();
+  if (!el('time').value) el('time').value = nowHm();
+  var depts = {};
+  S.emps.forEach(function (e) { if (e.department) depts[e.department] = 1; });
+  el('dept').innerHTML = '<option value="">All departments</option>' + Object.keys(depts).sort().map(function (d) {
+    return '<option>' + esc(d) + '</option>'; }).join('');
+  onDate();
+}
+
+/* ---------------- the day ---------------- */
+function shiftName(e) {
+  var want = String(e.shift || S.settings.default_shift || 'General').trim().toLowerCase();
+  var hit = S.shifts.filter(function (s) { return String(s.name || '').trim().toLowerCase() === want; })[0];
+  return hit ? hit.name : (e.shift || 'General');
+}
+function locked(ym) {
+  return S.payroll.some(function (p) { return String(p.month) === ym && p.status === 'Finalised'; });
+}
+function onDate() {
+  var iso = el('date').value || todayIso(), ym = iso.slice(0, 7);
+  el('day-label').textContent = '- status on ' + iso.split('-').reverse().join('/');
+  var need = S.months[ym] ? Promise.resolve() : api('monthAtt', { month: ym }).then(function (r) {
+    (r.rows || []).forEach(function (a) { S.att[a.emp_code + '_' + String(a.date).slice(0, 10)] = a; });
+    S.months[ym] = 1;
+  });
+  need.catch(function (e) { say('main-msg', e.message); }).then(function () { render(); loadLog(); });
+  if (locked(ym)) say('main-msg', 'Payroll for this month is finalised, so its attendance is locked.', 'bad');
+  else say('main-msg', '');
+}
+function shown() {
+  var q = el('q').value.trim().toLowerCase(), d = el('dept').value;
+  return S.emps.filter(function (e) {
+    if (d && e.department !== d) return false;
+    return !q || String(e.name).toLowerCase().indexOf(q) >= 0 || String(e.emp_code).toLowerCase().indexOf(q) >= 0;
+  });
+}
+function render() {
+  var iso = el('date').value, list = shown();
+  el('list').innerHTML = list.length ? list.map(function (e) {
+    var a = S.att[e.emp_code + '_' + iso], on = !!S.picked[e.emp_code];
+    var day = a ? '<span class="pill ' + esc(a.status) + '">' + esc(a.status) + '</span>' +
+      (a.in_time ? '<div class="meta">' + esc(hm(a.in_time)) + (a.out_time ? ' - ' + esc(hm(a.out_time)) : ' - no out') + '</div>' : '')
+      : '<span class="meta">no punch yet</span>';
+    return '<div class="row' + (on ? ' on' : '') + '" onclick="pick(\'' + esc(e.emp_code) + '\')">' +
+      '<input type="checkbox"' + (on ? ' checked' : '') + ' onclick="event.stopPropagation();pick(\'' + esc(e.emp_code) + '\')">' +
+      '<div><div class="nm">' + esc(e.name) + '</div><div class="meta">' + esc(e.emp_code) +
+      (e.department ? ' · ' + esc(e.department) : '') + ' · ' + esc(shiftName(e)) + '</div></div>' +
+      '<div class="day">' + day + '</div></div>';
+  }).join('') : '<div class="empty">Nobody matches.</div>';
+  var n = Object.keys(S.picked).length;
+  el('count').textContent = n ? n + ' selected' : 'Tick the people to punch for';
+  el('go').disabled = !n;
+  el('go').textContent = 'Record ' + S.kind.toUpperCase() + (n ? ' for ' + n : '');
+}
+function pick(code) { if (S.picked[code]) delete S.picked[code]; else S.picked[code] = 1; render(); }
+function pickAll(on) {
+  if (on) shown().forEach(function (e) { S.picked[e.emp_code] = 1; }); else S.picked = {};
+  render();
+}
+function setKind(k) {
+  S.kind = k;
+  el('k-in').className = k === 'in' ? 'on in' : ''; el('k-out').className = k === 'out' ? 'on out' : '';
+  el('go').className = 'go ' + k;
+  render();
+}
+
+/* ---------------- record ---------------- */
+function record() {
+  var iso = el('date').value, time = el('time').value, codes = Object.keys(S.picked);
+  var note = el('note').value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return say('main-msg', 'Pick a date.');
+  if (!/^\d{2}:\d{2}$/.test(time)) return say('main-msg', 'Pick a time.');
+  if (iso > todayIso() || (iso === todayIso() && time > nowHm())) return say('main-msg', 'A punch cannot be in the future.');
+  if (locked(iso.slice(0, 7))) return say('main-msg', 'Payroll for this month is finalised, so its attendance is locked.');
+  if (!codes.length) return say('main-msg', 'Tick at least one person.');
+  var onLeave = codes.filter(function (c) { var a = S.att[c + '_' + iso]; return a && a.status === 'L'; }).length;
+  if (!confirm('Record ' + S.kind.toUpperCase() + ' at ' + time + ' on ' + iso.split('-').reverse().join('/') +
+      ' for ' + codes.length + ' person(s)?' +
+      (onLeave ? '\n\n' + onLeave + ' of them are on approved leave that day - their day will not change.' : ''))) return;
+
+  var device = ('remote ' + S.kind + ' by ' + S.user.email + (note ? ' - ' + note : '')).slice(0, 120);
+  var punches = codes.map(function (c) {
+    return { emp_code: c, punch_time: iso + ' ' + time, device: device, direction: S.kind };
+  });
+  el('go').disabled = true; el('go').textContent = 'Saving...';
+  var added = 0, dup = 0, days = 0, chain = Promise.resolve();
+  for (var i = 0; i < punches.length; i += 200) {
+    (function (part) {
+      chain = chain.then(function () {
+        return api('ingestPunches', { punches: part, source: 'remote' }).then(function (r) {
+          added += Number(r.added || 0); dup += Number(r.duplicates || 0); days += Number(r.days || 0);
+        });
+      });
+    })(punches.slice(i, i + 200));
+  }
+  chain.then(function () {
+    S.picked = {};
+    delete S.months[iso.slice(0, 7)];
+    onDate();
+    say('main-msg', added + ' punch(es) recorded' + (dup ? ', ' + dup + ' were already there' : '') +
+        ' - ' + days + ' day(s) updated.', 'good');
+  }).catch(function (e) { say('main-msg', e.message); render(); });
+}
+
+/* what was recorded remotely on this date, and by whom */
+function loadLog() {
+  var iso = el('date').value;
+  api('punchLog', { from: iso, to: iso }).then(function (r) {
+    var names = {}; S.emps.forEach(function (e) { names[e.emp_code] = e.name; });
+    var rows = (r.rows || []).filter(function (p) { return String(p.source) === 'remote'; });
+    el('log').innerHTML = rows.length ? '<table class="log"><tr><th>Time</th><th>Person</th><th>In/Out</th><th>By / reason</th></tr>' +
+      rows.map(function (p) {
+        return '<tr><td>' + esc(hm(String(p.punch_time).slice(11))) + '</td><td>' + esc(names[p.emp_code] || '') +
+          ' <span class="sub">' + esc(p.emp_code) + '</span></td><td>' + esc(String(p.direction || '').toUpperCase()) +
+          '</td><td class="sub">' + esc(String(p.device_id || p.device || '').replace(/^remote (in|out) by /, '')) + '</td></tr>';
+      }).join('') + '</table>' : 'None yet.';
+  }).catch(function () { el('log').textContent = '-'; });
+}
+
+/* ---------------- open ---------------- */
+(function () {
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+  if (!saved || !saved.token) return;
+  S.token = saved.token; S.user = saved.user;
+  api('bootstrap', { months: 2 }).then(function (w) { takeWorkspace(w); start(); })
+    .catch(function () { signOut(); });
+})();
+</script>
+</body>
+</html>

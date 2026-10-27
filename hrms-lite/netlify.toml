@@ -13,7 +13,15 @@
     cp index.html manifest.webmanifest sw.js site/
     cp app/index.html app/app.webmanifest app/app-sw.js site/app/
     cp -r app/icons site/app/
+    mkdir -p site/remote
+    cp remote/index.html site/remote/
   """
+
+# The remote punch tool changes with the HR system; never serve a stale copy.
+[[headers]]
+  for = "/remote/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # The app is one file and it changes when HR pushes a fix. Never let a browser
 # serve staff a stale copy.
