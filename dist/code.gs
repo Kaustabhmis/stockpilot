@@ -4802,7 +4802,17 @@ function setLeaderboardVisibility_(ctx, value) {
  */
 
 var DEMO_EMAIL    = 'demo@biscsindia.com';
-var DEMO_PASSWORD = 'DomeBoxDemo2026';
+/* The demo's passwords are not in the source (the repository is public, and a
+   password there signs anyone in with write access). They live in Script
+   Properties, DEMO_PASSWORD and DEMO_STAFF_PASSWORD; if unset, a random one is
+   made and stored there. The website's live demo needs neither — it opens
+   view-only without a password. */
+function demoPassword_(which) {
+  var key = which === 'staff' ? 'DEMO_STAFF_PASSWORD' : 'DEMO_PASSWORD';
+  var p = PropertiesService.getScriptProperties(), v = String(p.getProperty(key) || '').trim();
+  if (v.length < 8) { v = Utilities.getUuid().replace(/-/g, '').slice(0, 20); p.setProperty(key, v); }
+  return v;
+}
 var DEMO_COMPANY  = 'Domebox Demo — Sharma Precision Works';
 /* Enterprise: every cap lifted, every feature on. A demo on a plan that hides
    half the product sells half the product. */
@@ -4855,7 +4865,8 @@ function createDemoAccount(email, password) {
   if (isLite_()) { Logger.log('Domebox Lite has no demo — nothing was created.'); return 'Domebox Lite has no demo — nothing was created.'; }
   var out = ['', '=== DOMEBOX DEMO ACCOUNT ===', ''];
   email = String(email || DEMO_EMAIL).trim().toLowerCase();
-  password = String(password || DEMO_PASSWORD);
+  password = String(password || demoPassword_('owner'));
+  var staffPassword = demoPassword_('staff');
 
   /* Every path returns the report as well as logging it, so this is usable
      from a test and from another function, not only from the editor. */
@@ -4915,7 +4926,7 @@ function createDemoAccount(email, password) {
     try {
       addUser_(ctx, { name: t[0], username: t[1], email: t[1] + '@demo.domebox.in',
         role: t[2], manager: t[3], dept: t[4], jobProfile: t[5],
-        password: 'DemoStaff2026', wipLimit: 6 });
+        password: staffPassword, wipLimit: 6 });
     } catch (e) { out.push('  could not add ' + t[0] + ': ' + e.message); }
   });
   dropCache_(ctx);
@@ -4990,9 +5001,9 @@ function createDemoAccount(email, password) {
   out.push('=== SIGN IN ===');
   out.push('  Site      ' + (url || CFG().siteUrl));
   out.push('  Email     ' + email);
-  out.push('  Password  ' + password);
+  out.push('  Password  in Script Properties: DEMO_PASSWORD (not printed here)');
   out.push('');
-  out.push('  Any team member:  <username>@demo.domebox.in  /  DemoStaff2026');
+  out.push('  Any team member:  <username>@demo.domebox.in  /  Script Property DEMO_STAFF_PASSWORD');
   out.push('  e.g. payel@demo.domebox.in — the Doer view, which is the one worth');
   out.push('  showing second: the same data, only their own work, and a score');
   out.push('  they can open and argue with.');

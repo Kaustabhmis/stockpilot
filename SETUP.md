@@ -520,9 +520,12 @@ If the demo account was made before Goals and Meetings existed, run
 filled in.
 
 ```
-Email     demo@biscsindia.com      Password  DomeBoxDemo2026
-Team      <username>@demo.domebox.in / DemoStaff2026
+Email     demo@biscsindia.com      Password  Script Property DEMO_PASSWORD
+Team      <username>@demo.domebox.in / Script Property DEMO_STAFF_PASSWORD
 ```
+
+The passwords are made at random and kept in Script Properties — never in the
+code. The website's **Live demo** button needs neither.
 
 It prints an order to open things in. `removeDemoAccount` removes it; the
 spreadsheet is trashed rather than deleted, so a mistake is recoverable from

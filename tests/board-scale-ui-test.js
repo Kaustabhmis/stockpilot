@@ -26,7 +26,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
-  await p.fill('#liUser', 'demo@biscsindia.com'); await p.fill('#liPass', 'DomeBoxDemo2026');
+  await p.fill('#liUser', 'demo@biscsindia.com'); await p.fill('#liPass', 'demo-pass-for-tests');
   await p.click('#btnLogin'); await p.waitForTimeout(2200);
   const W = (ms) => p.waitForTimeout(ms);
 
@@ -107,7 +107,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   console.log('\n--- a Doer only ever sees their own archive ---');
   const p2 = await b.newPage({ viewport: { width: 1300, height: 900 } });
   await p2.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
-  await p2.fill('#liUser', 'payel@demo.domebox.in'); await p2.fill('#liPass', 'DemoStaff2026');
+  await p2.fill('#liUser', 'payel@demo.domebox.in'); await p2.fill('#liPass', 'staff-pass-for-tests');
   await p2.click('#btnLogin'); await p2.waitForTimeout(2000);
   const mine = await p2.evaluate(async () => (await api('getArchive', { pageSize: 100 })).tasks);
   ok('her archive is her work', mine.length > 0 && mine.every((t) => t.assignee === 'payel' || t.by === 'payel' || t.approver === 'payel'),

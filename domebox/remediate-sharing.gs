@@ -31,7 +31,8 @@
  */
 
 var SHARE = {
-  MASTER_DB_ID: '1qO3Q2WJ7X3xOf9Xi-JyYZbi3c-zbsdwrSKqQv--dakQ',
+  /* Read from Script Properties (MASTER_DB_ID), never written here. */
+  MASTER_DB_ID: PropertiesService.getScriptProperties().getProperty('MASTER_DB_ID') || '',
   DIRECTORY_TAB: 'Directory',
   SHEET_ID_COL: 5,          // zero-based: column F holds the tenant sheet id
   COMPANY_COL: 0,

@@ -20,7 +20,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', 'demo@biscsindia.com');
-  await p.fill('#liPass', 'DomeBoxDemo2026');
+  await p.fill('#liPass', 'demo-pass-for-tests');
   await p.click('#btnLogin');
   await p.waitForTimeout(2000);
 
@@ -82,7 +82,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   await p.evaluate(() => signOut());
   await p.waitForTimeout(800);
   await p.fill('#liUser', 'payel@demo.domebox.in');
-  await p.fill('#liPass', 'DemoStaff2026');
+  await p.fill('#liPass', 'staff-pass-for-tests');
   await p.click('#btnLogin');
   await p.waitForTimeout(2000);
   const doer = await p.locator('body').textContent();

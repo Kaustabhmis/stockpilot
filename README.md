@@ -7,6 +7,26 @@ a performance score your team can see the working for.
 
 ---
 
+## ⚠ Secrets — read before deploying
+
+**This repository is public.** No secret belongs in it, and none is in the current code:
+every key, password and signing secret is read from **Script Properties** (Apps Script's
+environment variables). [`.env.example`](.env.example) lists every one, with placeholders.
+
+**Anything that was ever committed is still in git history, readable by anyone.** Rotate
+these now:
+
+| What was in the code | Where | Rotate by |
+|---|---|---|
+| The demo accounts' fixed passwords (owner and staff) | `src/14-demo.gs`, `SETUP.md`, tests | In Apps Script: run `removeDemoAccount`, then `createDemoAccount`. New random passwords go to Script Properties `DEMO_PASSWORD` / `DEMO_STAFF_PASSWORD`. Until then, anyone can sign in to the demo with write access. |
+| The **old** system's Master spreadsheet id | `domebox/remediate-sharing.gs`, `docs/deploy-book/book.html` | Open that old sheet in Drive → **Share** → make sure it is **Restricted** (not "Anyone with the link"). Delete it if the old system is retired. |
+| Razorpay live key secret and Gemini key (old system) | Never committed in full — only the first characters were quoted in `SECURITY-CRITICAL.md`. They were pasted into a chat, so treat them as exposed. | Razorpay → Settings → API Keys → **Regenerate**; Google AI Studio → delete the old key. Put the new ones in Script Properties. |
+
+Never paste a real key into a file, a commit, an issue or a chat. If one slips in, rotate
+it — deleting the line does not remove it from history.
+
+---
+
 ## Setting it up
 
 **→ [`DEPLOY-EASY.md`](DEPLOY-EASY.md)** — twelve numbered steps, plain words,

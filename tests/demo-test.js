@@ -18,6 +18,8 @@ env.props.MASTER_DB_ID = 'MASTER';
 env.props.TEMPLATE_ID = 'TEMPLATE';
 env.props.AUTH_PEPPER = 'demo-pepper';
 env.props.TOKEN_SECRET = 'demo-token-secret';
+env.props.DEMO_PASSWORD = 'demo-pass-for-tests';
+env.props.DEMO_STAFF_PASSWORD = 'staff-pass-for-tests';
 env.newFile('MASTER', 'Registry');
 const tpl = env.newFile('TEMPLATE', 'Template');
 ['Users', 'Tasks', 'KRA_Master', 'Reviews', 'Leave', 'Settings'].forEach((n) => tpl.insertSheet(n));
@@ -35,7 +37,8 @@ console.log('\n=== it builds ===');
 const report = APP.createDemoAccount();
 ok('createDemoAccount returns its report', typeof report === 'string', typeof report);
 ok('it prints a login', /=== SIGN IN ===/.test(report));
-ok('with the email and the password', /demo@biscsindia\.com/.test(report) && /DomeBoxDemo2026/.test(report));
+ok('with the email, and where the password is — but never the password itself',
+   /demo@biscsindia\.com/.test(report) && /DEMO_PASSWORD/.test(report) && !/demo-pass-for-tests/.test(report), report.slice(report.indexOf('SIGN IN'), report.indexOf('SIGN IN') + 260));
 ok('and the staff login pattern', /@demo\.domebox\.in/.test(report));
 ok('it suggests an order to open things in', /Worth opening in this order/.test(report));
 ok('and says how to remove it, by a name the Run button can actually call', /run removeDemoAccount/.test(report));
@@ -48,10 +51,10 @@ const hiccups = (report.match(/^ {2}(could not|project|cookies|leave|KRAs|goals)
 ok('no step failed quietly', hiccups.length === 0, hiccups.join(' | '));
 
 console.log('\n=== the account signs in ===');
-const A = call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' });
+const A = call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' });
 ok('the admin can log in', A.status === 'success', A.message);
 ok('on the top plan', A.plan === 'Enterprise', A.plan);
-const P = call({ action: 'login', username: 'payel@demo.domebox.in', password: 'DemoStaff2026' });
+const P = call({ action: 'login', username: 'payel@demo.domebox.in', password: 'staff-pass-for-tests' });
 ok('and so can a Doer, for the second half of a demo', P.status === 'success', P.message);
 ok('who is a Doer', P.user && P.user.role === 'Doer', P.user && P.user.role);
 
@@ -201,18 +204,18 @@ const second = APP.createDemoAccount();
 ok('it refuses rather than building a second one', /already exists/.test(second), second.slice(0, 160));
 ok('and says what to do instead', /removeDemoAccount/.test(second));
 ok('the first one still works',
-   call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' }).status === 'success');
+   call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'success');
 
 console.log('\n=== removing it ===');
 APP.deleteDemoAccount();   // no argument: a dry run
 ok('a dry run leaves the account alone',
-   call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' }).status === 'success');
+   call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'success');
 APP.removeDemoAccount();     // the zero-argument one the editor's Run button can call
 ok('and then it is gone',
-   call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' }).status === 'error');
+   call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'error');
 ok('so the address can be used again',
    typeof APP.createDemoAccount() === 'string' &&
-   call({ action: 'login', username: 'demo@biscsindia.com', password: 'DomeBoxDemo2026' }).status === 'success');
+   call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'success');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

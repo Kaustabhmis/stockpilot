@@ -24,6 +24,9 @@ env.props.TEMPLATE_ID  = 'TEMPLATE';
 env.props.SITE_URL     = 'http://localhost:8095';
 env.props.AUTH_PEPPER  = 'test-pepper-for-the-harness';
 env.props.TOKEN_SECRET = 'test-token-secret-for-the-harness';
+/* Fake values for the harness only; production makes random ones. */
+env.props.DEMO_PASSWORD       = 'demo-pass-for-tests';
+env.props.DEMO_STAFF_PASSWORD = 'staff-pass-for-tests';
 APP.ensureRegistry();
 
 const call = body => {

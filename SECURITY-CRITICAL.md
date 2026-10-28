@@ -42,7 +42,7 @@ This does not break anything. Link sharing was never what made the app work.
 
 ```js
 const RAZORPAY_KEY_ID     = "rzp_live_…";
-const RAZORPAY_KEY_SECRET = "MX9…";
+const RAZORPAY_KEY_SECRET = "…";
 const DEFAULT_GEMINI_KEY  = "AIzaSy…";
 ```
 
