@@ -69,9 +69,9 @@ function getDashboard_(ctx) {
     layout: readTabLayout_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
-      return { name: u.name, username: u.username, role: u.role, email: u.email,
+      return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
                phone: u.phone, manager: u.manager, dept: u.dept, jobProfile: u.jobProfile,
-               active: u.active }; }),
+               active: u.active }); }),
     stats: {
       pending:   active.filter(function (t) { return t.status === 'Pending'; }).length,
       progress:  active.filter(function (t) { return t.status === 'In Progress'; }).length,
@@ -174,7 +174,10 @@ function getAnalytics_(ctx, period, offset, span, person) {
       message: 'Reports are included from the Pro plan up.' };
   }
   var tasks = readAllTasks_(ctx);
-  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  /* Scores are per person: an Admin sees the company, a manager their line,
+     anyone else themselves. */
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false && canSeePerson_(ctx, u.username); });
+  if (person && !canSeePerson_(ctx, String(person))) person = null;
   var cal = leaveCalendar_(ctx);
 
   var kind = ['week','month','quarter','year'].indexOf(period) > -1 ? period : 'month';
@@ -238,7 +241,7 @@ function getAccountability_(ctx) {
   tasks.forEach(function (t) {
     queueSpells(t).forEach(function (sp) { if (sp.holder) holders[sp.holder] = true; });
   });
-  var queue = Object.keys(holders).map(function (k) {
+  var queue = Object.keys(holders).filter(function (k) { return canSeePerson_(ctx, k); }).map(function (k) {
     var r = responsivenessStats(tasks, k, now, cal);
     return { username: k, name: names[k] || k, items: r.items, withinSla: r.withinSla,
              pending: r.pending, overdueNow: r.overdueNow, avgHeldDays: r.avgHeldDays,
@@ -246,7 +249,7 @@ function getAccountability_(ctx) {
   }).filter(function (r) { return r.items > 0; })
     .sort(function (a, b) { return (a.score - b.score) || (b.overdueNow - a.overdueNow); });
 
-  return { status: 'success', queue: queue, report: Object.keys(byUser).map(function (k) {
+  return { status: 'success', queue: queue, report: Object.keys(byUser).filter(function (k) { return canSeePerson_(ctx, k); }).map(function (k) {
     var s = byUser[k];
     return { username: k, name: names[k] || k, total: s.total, reworkCount: s.reworks,
              lateCount: s.late,
@@ -263,6 +266,7 @@ function getPerformanceReport_(ctx) {
   var out = [];
   for (var i = 1; i < d.length; i++) {
     if (!d[i][1]) continue;
+    if (!canSeePerson_(ctx, String(d[i][1]))) continue;      // appraisal results are not for colleagues
     out.push({ month: d[i][0], username: d[i][1], name: names[d[i][1]] || d[i][1],
       performance: Number(d[i][2]) || 0, delegation: Number(d[i][3]) || 0,
       score: Number(d[i][4]) || 0, date: toYmd_(d[i][5]),
@@ -274,7 +278,7 @@ function getPerformanceReport_(ctx) {
 /* ---------- appraisals --------------------------------------------------- */
 
 function getAppraisalForm_(ctx, username) {
-  requireManager_(ctx);
+  requireCanManage_(ctx, username);
   var u = findUser_(ctx.ss, username);
   if (!u) throw new Error('That person is not in this workspace.');
 
@@ -313,6 +317,7 @@ function submitAppraisal_(ctx, data) {
   requireManager_(ctx); blockIfStopped_(ctx);
   data = data || {};
   if (!data.employee) throw new Error('Pick who this appraisal is for.');
+  requireCanManage_(ctx, String(data.employee));
 
   /* The delegation half is re-measured here rather than taken from the request:
      the browser sent it, and a score an employee can edit in devtools is not a

@@ -9,6 +9,12 @@ function getUsers_(ctx) {
   var cal = leaveCalendar_(ctx);
 
   return { status: 'success', users: users.map(function (u) {
+    if (!canSeePerson_(ctx, u.username)) {
+      /* A colleague outside your line: enough to recognise and assign to,
+         not their contact details, score or KRAs. */
+      return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, jobProfile: u.jobProfile,
+        dept: u.dept, manager: u.manager, active: u.active });
+    }
     var wip = wipStatus(tasks, u.username, u.wipLimit == null ? DEFAULT_WIP_LIMIT : u.wipLimit);
     var s = scoreForPeriod(tasks, u.username, range, cal, scoreOpts_(ctx, u.username));
     return {
@@ -131,6 +137,16 @@ function updateUser_(ctx, form) {
   if (target.role === 'Admin' && ctx.actor.role !== 'Admin') {
     throw new Error('Only an Admin can edit another Admin.');
   }
+  /* A manager edits their own team, not a peer manager or another team — or
+     anyone could set a colleague's password and sign in as them. Their own
+     record they may tidy, but not their password (that needs the current one),
+     their manager, or whether they are active. */
+  if (target.username !== ctx.actor.username) requireCanManage_(ctx, target.username);
+  else if (ctx.actor.role !== 'Admin' && (form.password ||
+      (form.manager !== undefined && String(form.manager).trim() !== String(target.manager || '').trim()) ||
+      (form.active !== undefined && !!form.active !== (target.active !== false)))) {
+    throw new Error('Change your own password from your account menu. Your manager or an Admin changes the rest.');
+  }
   if (form.role && form.role !== target.role && ctx.actor.role !== 'Admin') {
     throw new Error('Only an Admin can change a role.');
   }
@@ -175,6 +191,7 @@ function updateUser_(ctx, form) {
     var hash = makePasswordHash(String(form.password));
     set('Password', hash);
     syncGlobalPassword_(newEmail || target.email, ctx.sheetId, hash);
+    endSessions_(ctx, target.username);
   }
 
   if (form.active === false) return deactivateUser_(ctx, target, form.reassignTo);

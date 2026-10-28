@@ -72,7 +72,7 @@ const c3 = call({action:'createTask', token:sruti, form:{title:'Cross-team ask',
 ok('HOD assigning to their own report needs no approval', c3.routedForApproval===0);
 
 console.log('\n=== the workflow ===');
-const payel = call({action:'login', username:'payel@acme.in', password:'staffpass123'}).token;
+let payel = call({action:'login', username:'payel@acme.in', password:'staffpass123'}).token;
 const pd = call({action:'getDashboard', token:payel});
 const mine = pd.tasks.find(t=>t.title==='Vendor audit');
 ok('Doer sees their own task', !!mine);
@@ -171,8 +171,14 @@ ok('support message sent', call({action:'contactSupport', token:ADMIN,
 ok('password change needs the current one',
   /not correct/.test(err(()=>call({action:'changePassword', token:payel,
     currentPassword:'wrong', newPassword:'newpass12345'}))||''));
-ok('password change works', call({action:'changePassword', token:payel,
-  currentPassword:'staffpass123', newPassword:'newpass12345'}).status==='success');
+const oldPayel = payel;
+const pwc = call({action:'changePassword', token:payel,
+  currentPassword:'staffpass123', newPassword:'newpass12345'});
+ok('password change works', pwc.status==='success');
+ok('it hands this device a fresh token', !!pwc.token);
+ok('and the old token stops working everywhere',
+  /expired/.test(err(()=>call({action:'getDashboard', token:oldPayel}))||''));
+payel = pwc.token;
 ok('and the new password logs in',
   call({action:'login', username:'payel@acme.in', password:'newpass12345'}).status==='success');
 
@@ -203,9 +209,13 @@ ok('an unknown email gets the identical message',
   call({action:'forgotPassword', email:'nobody@nowhere.in'}).message===fp.message);
 const tokRow = env.FILES.MASTER.getSheetByName('Reset_Tokens')._data.slice(-1)[0];
 ok('a reset token was issued', !!tokRow);
-ok('reset works', call({action:'resetPassword', token:tokRow[0], password:'brandnew12345'}).status==='success');
+const resetMail = env.mails.filter(m=>/reset your password/i.test(m.subject)).slice(-1)[0] || {};
+const linkTok = decodeURIComponent((String(resetMail.html).match(/reset_token=([^"&<\s]+)/) || [])[1] || '');
+ok('the sheet keeps only a hash of the link, not the link', !!linkTok && tokRow[0] !== linkTok && !JSON.stringify(env.FILES.MASTER.getSheetByName('Reset_Tokens')._data).includes(linkTok));
+ok('the hash itself does not work as a link', /not valid/.test(err(()=>call({action:'resetPassword', token:tokRow[0], password:'another12345'}))||''));
+ok('reset works', call({action:'resetPassword', token:linkTok, password:'brandnew12345'}).status==='success');
 ok('the token is single use',
-  /already been used/.test(err(()=>call({action:'resetPassword', token:tokRow[0], password:'another12345'}))||''));
+  /already been used/.test(err(()=>call({action:'resetPassword', token:linkTok, password:'another12345'}))||''));
 ok('and the new password logs in',
   call({action:'login', username:'rohan@acme.in', password:'brandnew12345'}).status==='success');
 

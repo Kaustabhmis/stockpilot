@@ -184,7 +184,7 @@ function requireAdmin(session) {
    LOGIN THROTTLE — a password that is one of the top thousand is found in
    minutes without this, and nothing in the current code slows anyone down.
    ------------------------------------------------------------------------- */
-var LOGIN_LIMIT = { MAX: 8, WINDOW_MIN: 15 };
+var LOGIN_LIMIT = { MAX: 5, WINDOW_MIN: 15 };   // 5 wrong passwords, then 15 minutes' wait
 
 function loginAllowed_(key) {
   var cache = CacheService.getScriptCache();
@@ -211,9 +211,10 @@ function clearLoginFailures_(state) { CacheService.getScriptCache().remove(state
    store Apps Script offers that is fast enough to sit in front of every call.
    ------------------------------------------------------------------------- */
 var PUBLIC_LIMITS = {
-  forgotPassword:       { max: 5,  windowMin: 60 },
+  forgotPassword:       { max: 3,  windowMin: 60 },
   forgotPasswordGlobal: { max: 60, windowMin: 60 },
   register:       { max: 3,  windowMin: 60 },
+  registerGlobal: { max: 30, windowMin: 60 },   // every sign-up copies a spreadsheet: a bot must not fill the Drive
   contactSales:   { max: 5,  windowMin: 60 },
   demo:           { max: 600, windowMin: 60 },
   contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood   // the public demo, all visitors together

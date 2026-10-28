@@ -429,16 +429,51 @@ function doPost(e) {
   }
 
   try {
-    return json_(route_(body));
+    requireConfig_();
+    return json_(route_(neutralizeFormulas_(body, '')));
   } catch (err) {
-    // Never leak a stack trace or an internal id to the browser.
+    /* Our own messages ("Pick a person…") are written for the user and go back
+       as they are. Anything else — a script fault, a Google service error —
+       could name a file, a sheet or a line of code: the user gets a generic
+       message and a reference, and the detail goes to the ErrorLog sheet. */
     var msg = String(err && err.message || err);
-    if (/openById|Spreadsheet|permission|Exception/i.test(msg) && !/signed in|expired|Admin account/i.test(msg)) {
-      logError_('route:' + body.action, msg);
-      msg = 'Something went wrong on our side. Please try again.';
+    var internal = (err && err.name && err.name !== 'Error') ||
+      /openById|Spreadsheet|permission|Exception|Service invoked|is not a function|Cannot read|undefined|null/i.test(msg);
+    if (internal && !/signed in|expired|Admin account/i.test(msg)) {
+      var ref = Utilities.getUuid().replace(/-/g, '').slice(0, 8).toUpperCase();
+      logError_('route:' + String(body.action || '').slice(0, 40), '[' + ref + '] ' + msg +
+        (err && err.stack ? ' | ' + String(err.stack).slice(0, 300) : ''));
+      msg = 'Something went wrong on our side. Please try again. (Reference ' + ref + ')';
     }
     return json_({ status: 'error', message: msg });
   }
+}
+
+/* ---------- spreadsheet formula injection -----------------------------------
+   Everything is stored in Google Sheets, where a value starting with "=" is a
+   formula. Typed into a task title, "=Users!D2" would show a colleague's email
+   on your own board, and "=IMPORTXML(…)" could post data to another website.
+   A leading apostrophe makes Sheets store it as plain text (the apostrophe is
+   not part of the value read back). Only "=" starts a formula in Sheets — "+",
+   "-" and "@" do not — so phone numbers and everything else are untouched.
+   Secrets and search terms are never rewritten. */
+var NO_NEUTRALIZE = { action: 1, token: 1, password: 1, newPassword: 1, currentPassword: 1, q: 1, query: 1,
+                      razorpay_order_id: 1, razorpay_payment_id: 1, razorpay_signature: 1 };
+function neutralizeFormulas_(v, key) {
+  if (typeof v === 'string') return (!NO_NEUTRALIZE[key] && v.charAt(0) === '=') ? "'" + v : v;
+  if (Array.isArray(v)) return v.map(function (x) { return neutralizeFormulas_(x, key); });
+  if (v && typeof v === 'object') {
+    var o = {};
+    Object.keys(v).forEach(function (k) { o[k] = neutralizeFormulas_(v[k], k); });
+    return o;
+  }
+  return v;
+}
+
+/** For logs: enough to tell addresses apart, not enough to read one. */
+function maskEmail_(e) {
+  var s = String(e || ''), at = s.indexOf('@');
+  return at > 0 ? s.charAt(0) + '•••' + s.slice(at) : (s ? '•••' : '');
 }
 
 function json_(o) {
@@ -475,6 +510,7 @@ function route_(p) {
                              return { status: 'success', gstRegistered: si.registered, gstRate: si.rate };
       case 'register':
         throttle_('reg', (p.form && p.form.email) || '', PUBLIC_LIMITS.register);
+        throttle_('regall', 'global', PUBLIC_LIMITS.registerGlobal);
         return registerCompany_(p.form);
       case 'login':          return login_(p.username, p.password);
       case 'forgotPassword':
@@ -555,7 +591,11 @@ function route_(p) {
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
-    case 'getLeave':            return { status:'success', leave: readLeave_(ctx) };
+    /* Dates are shared — the team plans around them — but why someone is away
+       is for them, their manager up the line, and an Admin. */
+    case 'getLeave':            return { status:'success', leave: readLeave_(ctx).map(function (l) {
+                                  return canSeePerson_(ctx, l.username) ? l
+                                    : { username: l.username, from: l.from, to: l.to, reason: '', approved: l.approved }; }) };
 
     /* --- appraisal ------------------------------------------------------- */
     case 'submitAppraisal':     return submitAppraisal_(ctx, p.data);
@@ -593,6 +633,7 @@ function route_(p) {
     case 'contactSupport':      return contactSupport_(ctx, p.form);
     case 'aiInsight':           return aiInsight_(ctx, p.question);
     case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);
+    case 'signOut':             endSessions_(ctx, ctx.actor.username); return { status: 'success' };
 
     default: throw new Error('Unknown action: ' + action);
   }
@@ -637,6 +678,16 @@ function tenantContext_(session) {
      for. */
   CURRENT_CTX = ctx;
 
+  /* Signing out, a password change or a reset ends every session that existed
+     before it, not just the one in this browser. A token's issue time is its
+     expiry minus its fixed lifetime. */
+  if (!session.viewOnly) {
+    var cut = Number(readSetting_(ctx, 'signedOut:' + me.username, 0)) || 0;
+    if (cut && session.expires - AUTH.SESSION_HOURS * 3600000 < cut) {
+      throw new Error('Session has expired. Please sign in again.');
+    }
+  }
+
   /* Point the scoring engine at this workspace's own priority levels before any
      handler runs. Done once here rather than threaded through every call site:
      a weight that applied in one place and not another would be worse than not
@@ -648,6 +699,66 @@ function tenantContext_(session) {
 }
 
 /** Routes that change the team or the company's settings. */
+/* ---------- whose data may this person see? ------------------------------
+   One rule, used by every route that takes a person: an Admin sees everyone;
+   a manager sees themselves and everybody below them in the reporting line
+   (direct or further down); anyone else sees only themselves. Names, roles and
+   departments stay visible to all — they are needed to assign work and to read
+   the org chart — but contact details, scores, KRAs, appraisals and leave
+   reasons follow this rule. */
+function reportingLine_(ctx) {
+  if (ctx._line) return ctx._line;
+  var users = readUsers_(ctx), kids = {}, line = {};
+  users.forEach(function (u) { var m = String(u.manager || '').trim(); (kids[m] = kids[m] || []).push(u.username); });
+  var walk = function (who, depth) {
+    if (depth > 50) return;                       // a broken loop in the chart must not hang the request
+    (kids[who] || []).forEach(function (k) { if (!line[k]) { line[k] = true; walk(k, depth + 1); } });
+  };
+  walk(ctx.actor.username, 0);
+  delete line[ctx.actor.username];
+  return (ctx._line = line);
+}
+function canSeePerson_(ctx, username) {
+  if (!username) return false;
+  if (ctx.actor.role === 'Admin' || username === ctx.actor.username) return true;
+  if (ctx.actor.role === 'Doer') return false;
+  return !!reportingLine_(ctx)[username];
+}
+/** For actions on another person: an Admin, or their manager up the line. */
+function requireCanManage_(ctx, username) {
+  requireManager_(ctx);
+  if (ctx.actor.role === 'Admin') return ctx;
+  if (!reportingLine_(ctx)[username]) {
+    throw new Error('That person is not in your team. Their own manager, or an Admin, can do this.');
+  }
+  return ctx;
+}
+/** A person as a colleague sees them: who they are, not how to reach or rate them. */
+function publicPerson_(ctx, u) {
+  if (canSeePerson_(ctx, u.username)) return u;
+  var out = {};
+  ['name', 'username', 'role', 'jobProfile', 'dept', 'manager', 'active'].forEach(function (k) { if (k in u) out[k] = u[k]; });
+  return out;
+}
+
+/* The settings without which nothing is safe to serve. Checked on every
+   request, because Apps Script has no start-up step to refuse at: a missing
+   secret must close the service, not fall back to a weaker default. */
+var REQUIRED_CONFIG = ['MASTER_DB_ID', 'TEMPLATE_ID', 'AUTH_PEPPER', 'TOKEN_SECRET'];
+function requireConfig_() {
+  var p = PropertiesService.getScriptProperties();
+  var missing = REQUIRED_CONFIG.filter(function (k) { return !p.getProperty(k); });
+  if (!missing.length) return;
+  try { Logger.log('Refusing requests: Script Properties missing ' + missing.join(', ') + '. Run setupDomeBox().'); } catch (e) {}
+  throw new Error('The service is not configured yet. Please try again later.');
+}
+
+/** Ends every session this person has open, everywhere. */
+function endSessions_(ctx, username) {
+  try { writeSetting_(ctx, 'signedOut:' + username, String(Date.now())); }
+  catch (e) { logError_('endSessions', e.message); }
+}
+
 function requireManager_(ctx) {
   if (ctx.actor.role === 'Doer') throw new Error('That action needs a manager account.');
   return ctx;
@@ -852,7 +963,12 @@ function changePassword_(ctx, current, next) {
   var hash = makePasswordHash(next);
   setUserField_(ctx.ss, ctx.me.rowIndex, 'Password', hash);
   syncGlobalPassword_(ctx.me.email, ctx.sheetId, hash);
-  return { status: 'success', message: 'Password changed.' };
+  /* Anyone signed in with the old password is signed out; this browser gets a
+     fresh session so the person changing it is not. */
+  endSessions_(ctx, ctx.actor.username);
+  Utilities.sleep(2);
+  return { status: 'success', message: 'Password changed. Other devices have been signed out.',
+           token: issueToken(ctx.sheetId, ctx.actor.username, ctx.actor.role) };
 }
 
 /**
@@ -878,7 +994,7 @@ function forgotPassword_(email) {
 
     var tokens = mkTab_(master, TAB.TOKENS, ['Token','Email','Created','Used']);
     var token = Utilities.getUuid() + Utilities.getUuid();
-    tokens.appendRow([token, key, new Date(), '']);
+    tokens.appendRow([resetTokenKey_(token), key, new Date(), '']);   // only its hash is kept
 
     var link = CFG().siteUrl + '/?reset_token=' + encodeURIComponent(token);
     sendEmail_(key, 'Domebox — reset your password', resetEmailHtml_(link));
@@ -887,7 +1003,13 @@ function forgotPassword_(email) {
   return generic;
 }
 
-var RESET_TOKEN_HOURS = 1;
+var RESET_TOKEN_HOURS = 0.25;   // 15 minutes
+
+/* The sheet holds a hash of the link's token, never the token: someone who can
+   read the Master sheet still cannot use a pending link. */
+function resetTokenKey_(token) {
+  return 'h:' + toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token)));
+}
 
 function resetPassword_(token, newPassword) {
   if (!token || !newPassword) throw new Error('Reset link and new password are both required.');
@@ -898,9 +1020,9 @@ function resetPassword_(token, newPassword) {
   if (!tokens) throw new Error('That reset link is not valid.');
 
   var td = tokens.getDataRange().getValues();
-  var email = null, rowIndex = -1;
+  var email = null, rowIndex = -1, want = resetTokenKey_(token);
   for (var i = 1; i < td.length; i++) {
-    if (String(td[i][0]) === String(token)) {
+    if (String(td[i][0]) === want) {
       /* The old build wrote a timestamp and never looked at it, so a link mailed
          a year ago still worked. Both checks matter. */
       if (td[i][3]) throw new Error('That reset link has already been used.');
@@ -937,11 +1059,19 @@ function resetPassword_(token, newPassword) {
     try {
       var ss = SpreadsheetApp.openById(sheetId);
       var u = findUserByEmailOrName_(ss, email);
-      if (u) setUserField_(ss, u.rowIndex, 'Password', hash);
+      if (u) {
+        setUserField_(ss, u.rowIndex, 'Password', hash);
+        endSessions_({ ss: ss, sheetId: sheetId }, u.username);   // whoever had the old password is signed out
+      }
     } catch (e) { logError_('resetPassword:tenant', e.message); }
   }
 
-  tokens.getRange(rowIndex, 4).setValue(new Date());   // single use
+  /* Single use — and any other link still open for this email dies with it. */
+  var now = new Date();
+  for (var r = 1; r < td.length; r++) {
+    if (!td[r][3] && String(td[r][1]).trim().toLowerCase() === email) tokens.getRange(r + 1, 4).setValue(now);
+  }
+  tokens.getRange(rowIndex, 4).setValue(now);
   return { status: 'success', message: 'Password updated. You can sign in now.' };
 }
 
@@ -1567,6 +1697,7 @@ function readLeave_(ctx) {
 function setLeave_(ctx, username, from, to, reason) {
   requireManager_(ctx); blockIfStopped_(ctx);
   if (!username || !from) throw new Error('Pick a person and a start date.');
+  if (String(username).trim() !== ctx.actor.username) requireCanManage_(ctx, String(username).trim());
   var sh = mkTab_(ctx.ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
   sh.appendRow([String(username).trim(), from, to || from, reason || '', true]);
   dropCache_(ctx);
@@ -2144,6 +2275,12 @@ function getUsers_(ctx) {
   var cal = leaveCalendar_(ctx);
 
   return { status: 'success', users: users.map(function (u) {
+    if (!canSeePerson_(ctx, u.username)) {
+      /* A colleague outside your line: enough to recognise and assign to,
+         not their contact details, score or KRAs. */
+      return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, jobProfile: u.jobProfile,
+        dept: u.dept, manager: u.manager, active: u.active });
+    }
     var wip = wipStatus(tasks, u.username, u.wipLimit == null ? DEFAULT_WIP_LIMIT : u.wipLimit);
     var s = scoreForPeriod(tasks, u.username, range, cal, scoreOpts_(ctx, u.username));
     return {
@@ -2266,6 +2403,16 @@ function updateUser_(ctx, form) {
   if (target.role === 'Admin' && ctx.actor.role !== 'Admin') {
     throw new Error('Only an Admin can edit another Admin.');
   }
+  /* A manager edits their own team, not a peer manager or another team — or
+     anyone could set a colleague's password and sign in as them. Their own
+     record they may tidy, but not their password (that needs the current one),
+     their manager, or whether they are active. */
+  if (target.username !== ctx.actor.username) requireCanManage_(ctx, target.username);
+  else if (ctx.actor.role !== 'Admin' && (form.password ||
+      (form.manager !== undefined && String(form.manager).trim() !== String(target.manager || '').trim()) ||
+      (form.active !== undefined && !!form.active !== (target.active !== false)))) {
+    throw new Error('Change your own password from your account menu. Your manager or an Admin changes the rest.');
+  }
   if (form.role && form.role !== target.role && ctx.actor.role !== 'Admin') {
     throw new Error('Only an Admin can change a role.');
   }
@@ -2310,6 +2457,7 @@ function updateUser_(ctx, form) {
     var hash = makePasswordHash(String(form.password));
     set('Password', hash);
     syncGlobalPassword_(newEmail || target.email, ctx.sheetId, hash);
+    endSessions_(ctx, target.username);
   }
 
   if (form.active === false) return deactivateUser_(ctx, target, form.reassignTo);
@@ -2455,9 +2603,9 @@ function getDashboard_(ctx) {
     layout: readTabLayout_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
-      return { name: u.name, username: u.username, role: u.role, email: u.email,
+      return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
                phone: u.phone, manager: u.manager, dept: u.dept, jobProfile: u.jobProfile,
-               active: u.active }; }),
+               active: u.active }); }),
     stats: {
       pending:   active.filter(function (t) { return t.status === 'Pending'; }).length,
       progress:  active.filter(function (t) { return t.status === 'In Progress'; }).length,
@@ -2560,7 +2708,10 @@ function getAnalytics_(ctx, period, offset, span, person) {
       message: 'Reports are included from the Pro plan up.' };
   }
   var tasks = readAllTasks_(ctx);
-  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  /* Scores are per person: an Admin sees the company, a manager their line,
+     anyone else themselves. */
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false && canSeePerson_(ctx, u.username); });
+  if (person && !canSeePerson_(ctx, String(person))) person = null;
   var cal = leaveCalendar_(ctx);
 
   var kind = ['week','month','quarter','year'].indexOf(period) > -1 ? period : 'month';
@@ -2624,7 +2775,7 @@ function getAccountability_(ctx) {
   tasks.forEach(function (t) {
     queueSpells(t).forEach(function (sp) { if (sp.holder) holders[sp.holder] = true; });
   });
-  var queue = Object.keys(holders).map(function (k) {
+  var queue = Object.keys(holders).filter(function (k) { return canSeePerson_(ctx, k); }).map(function (k) {
     var r = responsivenessStats(tasks, k, now, cal);
     return { username: k, name: names[k] || k, items: r.items, withinSla: r.withinSla,
              pending: r.pending, overdueNow: r.overdueNow, avgHeldDays: r.avgHeldDays,
@@ -2632,7 +2783,7 @@ function getAccountability_(ctx) {
   }).filter(function (r) { return r.items > 0; })
     .sort(function (a, b) { return (a.score - b.score) || (b.overdueNow - a.overdueNow); });
 
-  return { status: 'success', queue: queue, report: Object.keys(byUser).map(function (k) {
+  return { status: 'success', queue: queue, report: Object.keys(byUser).filter(function (k) { return canSeePerson_(ctx, k); }).map(function (k) {
     var s = byUser[k];
     return { username: k, name: names[k] || k, total: s.total, reworkCount: s.reworks,
              lateCount: s.late,
@@ -2649,6 +2800,7 @@ function getPerformanceReport_(ctx) {
   var out = [];
   for (var i = 1; i < d.length; i++) {
     if (!d[i][1]) continue;
+    if (!canSeePerson_(ctx, String(d[i][1]))) continue;      // appraisal results are not for colleagues
     out.push({ month: d[i][0], username: d[i][1], name: names[d[i][1]] || d[i][1],
       performance: Number(d[i][2]) || 0, delegation: Number(d[i][3]) || 0,
       score: Number(d[i][4]) || 0, date: toYmd_(d[i][5]),
@@ -2660,7 +2812,7 @@ function getPerformanceReport_(ctx) {
 /* ---------- appraisals --------------------------------------------------- */
 
 function getAppraisalForm_(ctx, username) {
-  requireManager_(ctx);
+  requireCanManage_(ctx, username);
   var u = findUser_(ctx.ss, username);
   if (!u) throw new Error('That person is not in this workspace.');
 
@@ -2699,6 +2851,7 @@ function submitAppraisal_(ctx, data) {
   requireManager_(ctx); blockIfStopped_(ctx);
   data = data || {};
   if (!data.employee) throw new Error('Pick who this appraisal is for.');
+  requireCanManage_(ctx, String(data.employee));
 
   /* The delegation half is re-measured here rather than taken from the request:
      the browser sent it, and a score an employee can edit in devtools is not a
@@ -2891,6 +3044,13 @@ function handleVerifiedPayment_(ctx, p) {
     logPayment_('NOT_CAPTURED', ctx.sheetId, p.razorpay_payment_id + ' = ' + (paid && paid.status));
     throw new Error('That payment has not completed yet.');
   }
+  /* The order was created for one company; it buys that company's plan, not
+     the plan of whoever submits it. */
+  if (paid.notes && paid.notes.sheetId && String(paid.notes.sheetId) !== String(ctx.sheetId)) {
+    logPayment_('WRONG_COMPANY', ctx.sheetId, paid.id + ' belongs to another workspace — nothing granted');
+    throw new Error('That payment could not be verified. If money has left your account, ' +
+      'email ' + c.mailFrom + ' and we will sort it out.');
+  }
 
   var planName = (paid.notes && paid.notes.plan) || planForPaise_(paid.amount);
   if (!planName) {
@@ -2986,6 +3146,7 @@ function logPayment_(kind, sheetId, message) {
  * did not agree to, and it is not needed to answer the question.
  */
 function aiInsight_(ctx, question) {
+  requireManager_(ctx);
   if (!ctx.plan.analytics) return { status: 'error', upgrade: true,
     message: 'AI insights are included from the Pro plan up.' };
 
@@ -2993,13 +3154,14 @@ function aiInsight_(ctx, question) {
   if (!key) throw new Error('AI insights are not configured yet.');
 
   var tasks = readTasks_(ctx);
-  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false && canSeePerson_(ctx, u.username); });
   var cal = leaveCalendar_(ctx);
   var a = periodAnalytics(tasks, users, periodRange('month', 1), new Date(), cal,
     function (u) { return scoreOpts_(ctx, u.username); });
 
+  /* Only figures leave for the AI service: no company name, no person's name,
+     email or phone — people are P1, P2… */
   var facts = [
-    'Company: ' + (ctx.company || 'this company'),
     'Period: ' + a.range.label,
     'Tasks delivered: ' + a.delivered,
     'On-time rate: ' + (a.onTimeRate === null ? 'no data' : a.onTimeRate + '%'),
@@ -3022,9 +3184,9 @@ function aiInsight_(ctx, question) {
 
   try {
     var res = UrlFetchApp.fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' +
-      encodeURIComponent(key),
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
       { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: { 'x-goog-api-key': key },            // in a header, not the address, so it is never logged as a URL
         payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
     if (res.getResponseCode() >= 300) throw new Error('HTTP ' + res.getResponseCode());
     var j = JSON.parse(res.getContentText());
@@ -3110,7 +3272,7 @@ function sendEmail_(to, subject, html) {
 
   if (!mailAliasVerified_()) {
     logError_('sendEmail:alias',
-      'NOT SENT to ' + to + ' — "' + from + '" is not a verified send-as alias on the ' +
+      'NOT SENT to ' + maskEmail_(to) + ' — "' + from + '" is not a verified send-as alias on the ' +
       'account running this script. Gmail > Settings > Accounts > Send mail as. ' +
       'Nothing is sent from any other address.');
     return false;
@@ -3121,7 +3283,7 @@ function sendEmail_(to, subject, html) {
       'This email needs an HTML-capable client.', mailOpts_({ htmlBody: html }));
     return true;
   } catch (e) {
-    logError_('sendEmail', e.message + ' (to ' + to + ')');
+    logError_('sendEmail', e.message + ' (to ' + maskEmail_(to) + ')');
     return false;
   }
 }
@@ -3267,7 +3429,7 @@ function resetEmailHtml_(link) {
   return mailShell_('Reset your password',
     '<p>We received a request to reset your Domebox password.</p>' +
     btn_('Set a new password', link) +
-    '<p style="font-size:12px;color:#6b7280">This link works once and expires in one hour. ' +
+    '<p style="font-size:12px;color:#6b7280">This link works once and expires in 15 minutes. ' +
     'If you did not ask for it, you can ignore this email — nothing has changed.</p>');
 }
 
@@ -3582,6 +3744,7 @@ function saveKra_(ctx, data) {
   data = data || {};
   var u = findUser_(ctx.ss, data.employee);
   if (!u) throw new Error('That person is not in this workspace.');
+  if (u.username !== ctx.actor.username) requireCanManage_(ctx, u.username);
   if (u.role === 'Admin' && ctx.actor.role !== 'Admin') {
     throw new Error('Only an Admin can set another Admin\'s KRAs.');
   }
@@ -3646,6 +3809,7 @@ function getKraFor_(ctx, username) {
   requireManager_(ctx);
   var u = findUser_(ctx.ss, username);
   if (!u) throw new Error('That person is not in this workspace.');
+  if (!canSeePerson_(ctx, u.username)) requireCanManage_(ctx, u.username);
   var own = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
   var fromProfile = own.length ? [] : readProfileMaster_(ctx, u.jobProfile);
   return { status:'success',
@@ -3660,6 +3824,8 @@ function copyKraFrom_(ctx, fromUsername, toUsername) {
   requireManager_(ctx); blockIfStopped_(ctx);
   var from = findUser_(ctx.ss, fromUsername), to = findUser_(ctx.ss, toUsername);
   if (!from || !to) throw new Error('One of those people is not in this workspace.');
+  if (to.username !== ctx.actor.username) requireCanManage_(ctx, to.username);
+  if (!canSeePerson_(ctx, from.username)) requireCanManage_(ctx, from.username);
   var rows = (from.kras || []).map(normKra_).filter(function (k) { return k.item; });
   if (!rows.length) throw new Error(from.name + ' has no KRAs to copy.');
   setUserField_(ctx.ss, to.rowIndex, 'KRAs JSON', JSON.stringify(rows));
@@ -3680,7 +3846,9 @@ function applyKraToProfile_(ctx, profile, overwrite) {
 
   var users = readUsers_(ctx).filter(function (u) {
     return u.active !== false &&
-           String(u.jobProfile || '').trim().toLowerCase() === String(profile).trim().toLowerCase(); });
+           String(u.jobProfile || '').trim().toLowerCase() === String(profile).trim().toLowerCase() &&
+           /* A manager applies a profile's KRAs to their own team, not to other teams. */
+           (ctx.actor.role === 'Admin' || canSeePerson_(ctx, u.username)); });
   if (!users.length) throw new Error('Nobody holds the profile "' + profile + '".');
 
   var applied = 0, skipped = [];
@@ -3701,6 +3869,7 @@ function clearKra_(ctx, username) {
   requireManager_(ctx); blockIfStopped_(ctx);
   var u = findUser_(ctx.ss, username);
   if (!u) throw new Error('That person is not in this workspace.');
+  if (u.username !== ctx.actor.username) requireCanManage_(ctx, u.username);
   setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify([]));
   return { status:'success', message: 'Cleared the KRAs for ' + u.name + '.' };
 }
@@ -4048,7 +4217,8 @@ function orgNode_(username, level, byName, kids, open, implied) {
     .map(function (c) { return orgNode_(c, level + 1, byName, kids, open, implied); });
   return {
     username: u.username, name: u.name, role: u.role, dept: u.dept || '',
-    jobProfile: u.jobProfile || '', email: u.email,
+    jobProfile: u.jobProfile || '',
+    email: CURRENT_CTX && canSeePerson_(CURRENT_CTX, u.username) ? u.email : '',   // a colleague's email is not shared
     openTasks: open[u.username] || 0,
     /* Placed here because somebody has to approve their work, not because a
        manager was chosen for them. The UI says so. */
@@ -6863,6 +7033,147 @@ function setCustomerPlan(email, planName, untilYmd) {
   return say_(['No company signed up with ' + key + '. Ask them to sign up first, then run this again.']);
 }
 
+// ===========================================================================
+// PRIVACY — erasing a company, or one person, when they ask
+// ===========================================================================
+//
+// Run by the owner of this installation from the Apps Script editor, never
+// from the website: an erasure that a stolen session could trigger would be a
+// worse hole than the one it closes. Both functions need a typed confirmation
+// so a mis-click on ▶ Run does nothing.
+//
+// WHAT IS KEPT, AND WHY
+//   - Invoices (Master > Invoices). Indian GST law requires a seller to keep
+//     tax invoices for at least 8 years; deleting them would be the offence.
+//   - A person's username on tasks, approvals and meetings they took part in,
+//     so the company's own history still adds up. Their name, email, phone,
+//     password and leave reasons are removed; the username is all that stays.
+//   - The ErrorLog, which holds no personal fields (emails there are masked).
+// ===========================================================================
+
+/**
+ * Erases one company: its workspace sheet and every backup of it go to the
+ * Drive bin (emptied by Google after 30 days), and its rows leave the
+ * Directory, Global_Users, Billing and Reset_Tokens tabs.
+ *
+ *   eraseCompanyData('owner@company.com', 'ERASE owner@company.com')
+ */
+function eraseCompanyData(ownerEmail, confirm) {
+  var email = String(ownerEmail || '').trim().toLowerCase();
+  if (!email) return privacyLog_('Give the owner\'s email: eraseCompanyData(\'owner@company.com\', \'ERASE owner@company.com\')');
+  if (String(confirm || '').trim() !== 'ERASE ' + email) {
+    return privacyLog_('Nothing erased. To confirm, the second argument must be exactly: ERASE ' + email);
+  }
+  var master = SpreadsheetApp.openById(CFG().masterId);
+  var hit = privacyCompany_(master, email);
+  if (!hit) return privacyLog_('No company is registered to ' + email + '. Nothing erased.');
+
+  var sheetId = hit.sheetId, done = [];
+  try { DriveApp.getFileById(sheetId).setTrashed(true); done.push('workspace sheet moved to the Drive bin'); }
+  catch (e) { done.push('workspace sheet could not be opened (' + e.message + ')'); }
+
+  /* Backups are named "... [first 12 of the sheet id]" by backup.gs. */
+  var key = '[' + String(sheetId).slice(0, 12) + ']', binned = 0;
+  try {
+    var it = DriveApp.searchFiles('title contains "' + key.replace(/"/g, '') + '" and trashed = false');
+    while (it.hasNext()) { var f = it.next(); if (String(f.getName()).indexOf(key) >= 0) { f.setTrashed(true); binned++; } }
+  } catch (e) { done.push('backups could not be searched (' + e.message + ')'); }
+  done.push(binned + ' backup' + (binned === 1 ? '' : 's') + ' moved to the Drive bin');
+
+  var emails = {};
+  privacyDropRows_(master, TAB.GLOBAL, function (r) {
+    if (String(r[2]).trim() !== sheetId) return false;
+    emails[String(r[0]).trim().toLowerCase()] = true; return true;
+  }, done);
+  emails[email] = true;
+  privacyDropRows_(master, TAB.DIRECTORY, function (r) { return String(r[5]).trim() === sheetId; }, done);
+  privacyDropRows_(master, 'Billing', function (r) { return String(r[0]).trim() === sheetId; }, done);
+  privacyDropRows_(master, TAB.TOKENS, function (r) { return !!emails[String(r[1]).trim().toLowerCase()]; }, done);
+
+  return privacyLog_('Erased ' + hit.company + ':\n  - ' + done.join('\n  - ') +
+    '\nKept: its invoices (GST law, 8 years). Empty the Drive bin to remove the files at once.');
+}
+
+/**
+ * Erases one person inside a company: name, email, phone and password are
+ * cleared, they are deactivated and signed out, their leave reasons are
+ * removed, and they can no longer sign in. Their username stays on the
+ * company's own records so its history still adds up.
+ *
+ *   erasePerson('owner@company.com', 'person@company.com', 'ERASE person@company.com')
+ */
+function erasePerson(companyOwnerEmail, person, confirm) {
+  var owner = String(companyOwnerEmail || '').trim().toLowerCase();
+  var who = String(person || '').trim().toLowerCase();
+  if (!owner || !who) return privacyLog_('Use: erasePerson(\'owner@company.com\', \'person@company.com\', \'ERASE person@company.com\')');
+  if (String(confirm || '').trim() !== 'ERASE ' + who) {
+    return privacyLog_('Nothing erased. To confirm, the third argument must be exactly: ERASE ' + who);
+  }
+  var master = SpreadsheetApp.openById(CFG().masterId);
+  var hit = privacyCompany_(master, owner);
+  if (!hit) return privacyLog_('No company is registered to ' + owner + '. Nothing erased.');
+
+  var ss = SpreadsheetApp.openById(hit.sheetId);
+  var u = findUserByEmailOrName_(ss, who);
+  if (!u) return privacyLog_('Nobody in ' + hit.company + ' has the email or username ' + who + '.');
+  if (u.email.toLowerCase() === owner) {
+    return privacyLog_(who + ' owns ' + hit.company + '. Erase the whole company with eraseCompanyData, ' +
+      'or make someone else the owner first.');
+  }
+
+  var sh = ss.getSheetByName(TAB.USERS), row = u.rowIndex;
+  [['Name', 'Former member'], ['Password', ''], ['Email', ''], ['Phone', ''],
+   ['Active', false], ['WhatsApp OptIn', false]].forEach(function (c) {
+    if (U[c[0]] != null) sh.getRange(row, U[c[0]] + 1).setValue(c[1]);
+  });
+
+  var done = ['name, email, phone and password cleared; deactivated'];
+  var leave = ss.getSheetByName(TAB.LEAVE);
+  if (leave) {
+    var d = leave.getDataRange().getValues(), n = 0;
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][0]).trim() === u.username && d[i][3]) { leave.getRange(i + 1, 4).setValue(''); n++; }
+    }
+    done.push(n + ' leave reason' + (n === 1 ? '' : 's') + ' cleared');
+  }
+  endSessions_({ ss: ss, sheetId: hit.sheetId }, u.username);
+  done.push('signed out everywhere');
+
+  var mail = u.email.toLowerCase();
+  if (mail) {
+    privacyDropRows_(master, TAB.GLOBAL, function (r) {
+      return String(r[0]).trim().toLowerCase() === mail && String(r[2]).trim() === hit.sheetId; }, done);
+    privacyDropRows_(master, TAB.TOKENS, function (r) { return String(r[1]).trim().toLowerCase() === mail; }, done);
+  }
+  return privacyLog_('Erased ' + u.username + ' in ' + hit.company + ':\n  - ' + done.join('\n  - ') +
+    '\nKept: the username on tasks and meetings they took part in, so the company\'s history adds up.' +
+    '\nBackups taken before today still hold the old row; they age out under the backup schedule.');
+}
+
+/** The Directory row a company was registered under, by its owner's email. */
+function privacyCompany_(master, email) {
+  var dir = master.getSheetByName(TAB.DIRECTORY);
+  if (!dir) return null;
+  var d = dir.getDataRange().getValues();
+  for (var i = 1; i < d.length; i++) {
+    if (String(d[i][1]).trim().toLowerCase() === email && d[i][5]) {
+      return { company: String(d[i][0]), sheetId: String(d[i][5]).trim() };
+    }
+  }
+  return null;
+}
+
+/** Deletes matching rows from the bottom up, so the row numbers stay right. */
+function privacyDropRows_(ss, tab, match, done) {
+  var sh = ss.getSheetByName(tab);
+  if (!sh) return;
+  var d = sh.getDataRange().getValues(), n = 0;
+  for (var i = d.length - 1; i >= 1; i--) { if (match(d[i])) { sh.deleteRow(i + 1); n++; } }
+  done.push(n + ' row' + (n === 1 ? '' : 's') + ' removed from ' + tab);
+}
+
+function privacyLog_(msg) { Logger.log(msg); return msg; }
+
 // =========================================================================
 // AUTHENTICATION
 // =========================================================================
@@ -7052,7 +7363,7 @@ function requireAdmin(session) {
    LOGIN THROTTLE — a password that is one of the top thousand is found in
    minutes without this, and nothing in the current code slows anyone down.
    ------------------------------------------------------------------------- */
-var LOGIN_LIMIT = { MAX: 8, WINDOW_MIN: 15 };
+var LOGIN_LIMIT = { MAX: 5, WINDOW_MIN: 15 };   // 5 wrong passwords, then 15 minutes' wait
 
 function loginAllowed_(key) {
   var cache = CacheService.getScriptCache();
@@ -7079,9 +7390,10 @@ function clearLoginFailures_(state) { CacheService.getScriptCache().remove(state
    store Apps Script offers that is fast enough to sit in front of every call.
    ------------------------------------------------------------------------- */
 var PUBLIC_LIMITS = {
-  forgotPassword:       { max: 5,  windowMin: 60 },
+  forgotPassword:       { max: 3,  windowMin: 60 },
   forgotPasswordGlobal: { max: 60, windowMin: 60 },
   register:       { max: 3,  windowMin: 60 },
+  registerGlobal: { max: 30, windowMin: 60 },   // every sign-up copies a spreadsheet: a bot must not fill the Drive
   contactSales:   { max: 5,  windowMin: 60 },
   demo:           { max: 600, windowMin: 60 },
   contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood   // the public demo, all visitors together

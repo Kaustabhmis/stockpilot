@@ -579,6 +579,7 @@ function readLeave_(ctx) {
 function setLeave_(ctx, username, from, to, reason) {
   requireManager_(ctx); blockIfStopped_(ctx);
   if (!username || !from) throw new Error('Pick a person and a start date.');
+  if (String(username).trim() !== ctx.actor.username) requireCanManage_(ctx, String(username).trim());
   var sh = mkTab_(ctx.ss, TAB.LEAVE, ['Username','From','To','Reason','Approved']);
   sh.appendRow([String(username).trim(), from, to || from, reason || '', true]);
   dropCache_(ctx);

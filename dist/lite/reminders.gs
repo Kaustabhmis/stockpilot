@@ -967,7 +967,9 @@ function rmSendMail_(to, subject, bodyHtml) {
     GmailApp.sendEmail(to, subject, rmPlain_(bodyHtml), opts);
     return true;
   } catch (e) {
-    Logger.log('Mail failed to ' + to + ': ' + e.message);
+    /* The address is masked: logs are read by more people than the inbox. */
+    var at = String(to).indexOf('@');
+    Logger.log('Mail failed to ' + (at > 0 ? String(to).charAt(0) + '•••' + String(to).slice(at) : '•••') + ': ' + e.message);
     return false;
   }
 }

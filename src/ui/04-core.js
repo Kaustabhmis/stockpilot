@@ -16,6 +16,9 @@ var $ = function (id) { return document.getElementById(id); };
 var esc = function (s) { return String(s == null ? '' : s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+/** A value for a quoted argument inside onclick="…". esc() alone is not enough
+ *  there: the browser decodes &#39; back to ' before the script runs. */
+var jsArg = function (s) { return esc(JSON.stringify(String(s == null ? '' : s))); };
 
 var STATE = { token:null, user:null, company:'', plan:'Free', data:null,
               tab:'tasks', mode:'board', archive:false, usage:null,
@@ -278,8 +281,12 @@ function saveSession(res) {
   STATE.token = res.token; STATE.user = res.user;
   STATE.company = res.company || ''; STATE.plan = res.plan || 'Free';
   STATE.demo = !!res.demo;
+  /* Only what a reload needs: the token and who is signed in, nothing more. */
+  var u = res.user || {};
   try { sessionStorage.setItem('dbx', JSON.stringify({
-    token: res.token, user: res.user, company: res.company, plan: res.plan, demo: !!res.demo })); } catch (e) {}
+    token: res.token, company: res.company, plan: res.plan, demo: !!res.demo,
+    user: { name: u.name, username: u.username, email: u.email, role: u.role, jobProfile: u.jobProfile,
+            dept: u.dept, manager: u.manager } })); } catch (e) {}
 }
 
 /* ---------- the public demo ----------------------------------------------
@@ -345,6 +352,13 @@ function restoreSession() {
 }
 function signOut(expired) {
   var wasDemo = !!STATE.demo;
+  /* Tell the server, so a copied token stops working too. Sent straight, not
+     through api(): its answer must never sign out a session started since. */
+  if (!expired && STATE.token && !wasDemo) {
+    try { fetch(API_URL, { method: 'POST', redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'signOut', token: STATE.token }) }).catch(function () {}); } catch (e) {}
+  }
   STATE.token = null; STATE.user = null; STATE.data = null; STATE.demo = false;
   try { sessionStorage.removeItem('dbx'); } catch (e) {}
   closeModal(); closeDrawer();

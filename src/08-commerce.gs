@@ -93,6 +93,13 @@ function handleVerifiedPayment_(ctx, p) {
     logPayment_('NOT_CAPTURED', ctx.sheetId, p.razorpay_payment_id + ' = ' + (paid && paid.status));
     throw new Error('That payment has not completed yet.');
   }
+  /* The order was created for one company; it buys that company's plan, not
+     the plan of whoever submits it. */
+  if (paid.notes && paid.notes.sheetId && String(paid.notes.sheetId) !== String(ctx.sheetId)) {
+    logPayment_('WRONG_COMPANY', ctx.sheetId, paid.id + ' belongs to another workspace — nothing granted');
+    throw new Error('That payment could not be verified. If money has left your account, ' +
+      'email ' + c.mailFrom + ' and we will sort it out.');
+  }
 
   var planName = (paid.notes && paid.notes.plan) || planForPaise_(paid.amount);
   if (!planName) {
@@ -188,6 +195,7 @@ function logPayment_(kind, sheetId, message) {
  * did not agree to, and it is not needed to answer the question.
  */
 function aiInsight_(ctx, question) {
+  requireManager_(ctx);
   if (!ctx.plan.analytics) return { status: 'error', upgrade: true,
     message: 'AI insights are included from the Pro plan up.' };
 
@@ -195,13 +203,14 @@ function aiInsight_(ctx, question) {
   if (!key) throw new Error('AI insights are not configured yet.');
 
   var tasks = readTasks_(ctx);
-  var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
+  var users = readUsers_(ctx).filter(function (u) { return u.active !== false && canSeePerson_(ctx, u.username); });
   var cal = leaveCalendar_(ctx);
   var a = periodAnalytics(tasks, users, periodRange('month', 1), new Date(), cal,
     function (u) { return scoreOpts_(ctx, u.username); });
 
+  /* Only figures leave for the AI service: no company name, no person's name,
+     email or phone — people are P1, P2… */
   var facts = [
-    'Company: ' + (ctx.company || 'this company'),
     'Period: ' + a.range.label,
     'Tasks delivered: ' + a.delivered,
     'On-time rate: ' + (a.onTimeRate === null ? 'no data' : a.onTimeRate + '%'),
@@ -224,9 +233,9 @@ function aiInsight_(ctx, question) {
 
   try {
     var res = UrlFetchApp.fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' +
-      encodeURIComponent(key),
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
       { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: { 'x-goog-api-key': key },            // in a header, not the address, so it is never logged as a URL
         payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
     if (res.getResponseCode() >= 300) throw new Error('HTTP ' + res.getResponseCode());
     var j = JSON.parse(res.getContentText());
@@ -312,7 +321,7 @@ function sendEmail_(to, subject, html) {
 
   if (!mailAliasVerified_()) {
     logError_('sendEmail:alias',
-      'NOT SENT to ' + to + ' — "' + from + '" is not a verified send-as alias on the ' +
+      'NOT SENT to ' + maskEmail_(to) + ' — "' + from + '" is not a verified send-as alias on the ' +
       'account running this script. Gmail > Settings > Accounts > Send mail as. ' +
       'Nothing is sent from any other address.');
     return false;
@@ -323,7 +332,7 @@ function sendEmail_(to, subject, html) {
       'This email needs an HTML-capable client.', mailOpts_({ htmlBody: html }));
     return true;
   } catch (e) {
-    logError_('sendEmail', e.message + ' (to ' + to + ')');
+    logError_('sendEmail', e.message + ' (to ' + maskEmail_(to) + ')');
     return false;
   }
 }
@@ -469,7 +478,7 @@ function resetEmailHtml_(link) {
   return mailShell_('Reset your password',
     '<p>We received a request to reset your Domebox password.</p>' +
     btn_('Set a new password', link) +
-    '<p style="font-size:12px;color:#6b7280">This link works once and expires in one hour. ' +
+    '<p style="font-size:12px;color:#6b7280">This link works once and expires in 15 minutes. ' +
     'If you did not ask for it, you can ignore this email — nothing has changed.</p>');
 }
 

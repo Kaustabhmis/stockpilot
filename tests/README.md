@@ -45,6 +45,7 @@ node payment-config-test.js # Razorpay keys missing, mistyped or wrong: what the
 node lite-test.js           # Domebox Lite on the server: one company, Growth for good, nothing to buy — and the full edition untouched
 node customise-test.js      # tab order and hidden tabs (Admin only), category renames and new categories — both editions
 node secrets-test.js        # no key, password or token in any tracked file or in the website; demo passwords random and unprinted
+node privacy-test.js         # the pre-launch security audit: who can see and change what, sessions, logs, erasure
 
 node server.js &            # then, for the browser tests:
 node ui-test.js

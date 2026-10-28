@@ -405,7 +405,12 @@ function openAccount() {
   $('fPw').addEventListener('submit', function (e) {
     e.preventDefault();
     api('changePassword', { currentPassword:$('pwOld').value, newPassword:$('pwNew').value })
-      .then(function (r) { toast(r.message, 'ok'); closeModal(); })
+      .then(function (r) {
+        /* Changing the password signs out every other device, this one included;
+           the server hands this device a fresh token so it carries on. */
+        if (r.token) saveSession({ token: r.token, user: STATE.user, company: STATE.company,
+          plan: STATE.plan, demo: STATE.demo });
+        toast(r.message, 'ok'); closeModal(); })
       .catch(function (err) { toast(err.message, 'err'); });
   });
 }

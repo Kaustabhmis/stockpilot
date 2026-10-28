@@ -177,7 +177,12 @@ function changePassword_(ctx, current, next) {
   var hash = makePasswordHash(next);
   setUserField_(ctx.ss, ctx.me.rowIndex, 'Password', hash);
   syncGlobalPassword_(ctx.me.email, ctx.sheetId, hash);
-  return { status: 'success', message: 'Password changed.' };
+  /* Anyone signed in with the old password is signed out; this browser gets a
+     fresh session so the person changing it is not. */
+  endSessions_(ctx, ctx.actor.username);
+  Utilities.sleep(2);
+  return { status: 'success', message: 'Password changed. Other devices have been signed out.',
+           token: issueToken(ctx.sheetId, ctx.actor.username, ctx.actor.role) };
 }
 
 /**
@@ -203,7 +208,7 @@ function forgotPassword_(email) {
 
     var tokens = mkTab_(master, TAB.TOKENS, ['Token','Email','Created','Used']);
     var token = Utilities.getUuid() + Utilities.getUuid();
-    tokens.appendRow([token, key, new Date(), '']);
+    tokens.appendRow([resetTokenKey_(token), key, new Date(), '']);   // only its hash is kept
 
     var link = CFG().siteUrl + '/?reset_token=' + encodeURIComponent(token);
     sendEmail_(key, 'Domebox — reset your password', resetEmailHtml_(link));
@@ -212,7 +217,13 @@ function forgotPassword_(email) {
   return generic;
 }
 
-var RESET_TOKEN_HOURS = 1;
+var RESET_TOKEN_HOURS = 0.25;   // 15 minutes
+
+/* The sheet holds a hash of the link's token, never the token: someone who can
+   read the Master sheet still cannot use a pending link. */
+function resetTokenKey_(token) {
+  return 'h:' + toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token)));
+}
 
 function resetPassword_(token, newPassword) {
   if (!token || !newPassword) throw new Error('Reset link and new password are both required.');
@@ -223,9 +234,9 @@ function resetPassword_(token, newPassword) {
   if (!tokens) throw new Error('That reset link is not valid.');
 
   var td = tokens.getDataRange().getValues();
-  var email = null, rowIndex = -1;
+  var email = null, rowIndex = -1, want = resetTokenKey_(token);
   for (var i = 1; i < td.length; i++) {
-    if (String(td[i][0]) === String(token)) {
+    if (String(td[i][0]) === want) {
       /* The old build wrote a timestamp and never looked at it, so a link mailed
          a year ago still worked. Both checks matter. */
       if (td[i][3]) throw new Error('That reset link has already been used.');
@@ -262,11 +273,19 @@ function resetPassword_(token, newPassword) {
     try {
       var ss = SpreadsheetApp.openById(sheetId);
       var u = findUserByEmailOrName_(ss, email);
-      if (u) setUserField_(ss, u.rowIndex, 'Password', hash);
+      if (u) {
+        setUserField_(ss, u.rowIndex, 'Password', hash);
+        endSessions_({ ss: ss, sheetId: sheetId }, u.username);   // whoever had the old password is signed out
+      }
     } catch (e) { logError_('resetPassword:tenant', e.message); }
   }
 
-  tokens.getRange(rowIndex, 4).setValue(new Date());   // single use
+  /* Single use — and any other link still open for this email dies with it. */
+  var now = new Date();
+  for (var r = 1; r < td.length; r++) {
+    if (!td[r][3] && String(td[r][1]).trim().toLowerCase() === email) tokens.getRange(r + 1, 4).setValue(now);
+  }
+  tokens.getRange(rowIndex, 4).setValue(now);
   return { status: 'success', message: 'Password updated. You can sign in now.' };
 }
 

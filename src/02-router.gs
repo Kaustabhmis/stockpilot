@@ -33,16 +33,51 @@ function doPost(e) {
   }
 
   try {
-    return json_(route_(body));
+    requireConfig_();
+    return json_(route_(neutralizeFormulas_(body, '')));
   } catch (err) {
-    // Never leak a stack trace or an internal id to the browser.
+    /* Our own messages ("Pick a person…") are written for the user and go back
+       as they are. Anything else — a script fault, a Google service error —
+       could name a file, a sheet or a line of code: the user gets a generic
+       message and a reference, and the detail goes to the ErrorLog sheet. */
     var msg = String(err && err.message || err);
-    if (/openById|Spreadsheet|permission|Exception/i.test(msg) && !/signed in|expired|Admin account/i.test(msg)) {
-      logError_('route:' + body.action, msg);
-      msg = 'Something went wrong on our side. Please try again.';
+    var internal = (err && err.name && err.name !== 'Error') ||
+      /openById|Spreadsheet|permission|Exception|Service invoked|is not a function|Cannot read|undefined|null/i.test(msg);
+    if (internal && !/signed in|expired|Admin account/i.test(msg)) {
+      var ref = Utilities.getUuid().replace(/-/g, '').slice(0, 8).toUpperCase();
+      logError_('route:' + String(body.action || '').slice(0, 40), '[' + ref + '] ' + msg +
+        (err && err.stack ? ' | ' + String(err.stack).slice(0, 300) : ''));
+      msg = 'Something went wrong on our side. Please try again. (Reference ' + ref + ')';
     }
     return json_({ status: 'error', message: msg });
   }
+}
+
+/* ---------- spreadsheet formula injection -----------------------------------
+   Everything is stored in Google Sheets, where a value starting with "=" is a
+   formula. Typed into a task title, "=Users!D2" would show a colleague's email
+   on your own board, and "=IMPORTXML(…)" could post data to another website.
+   A leading apostrophe makes Sheets store it as plain text (the apostrophe is
+   not part of the value read back). Only "=" starts a formula in Sheets — "+",
+   "-" and "@" do not — so phone numbers and everything else are untouched.
+   Secrets and search terms are never rewritten. */
+var NO_NEUTRALIZE = { action: 1, token: 1, password: 1, newPassword: 1, currentPassword: 1, q: 1, query: 1,
+                      razorpay_order_id: 1, razorpay_payment_id: 1, razorpay_signature: 1 };
+function neutralizeFormulas_(v, key) {
+  if (typeof v === 'string') return (!NO_NEUTRALIZE[key] && v.charAt(0) === '=') ? "'" + v : v;
+  if (Array.isArray(v)) return v.map(function (x) { return neutralizeFormulas_(x, key); });
+  if (v && typeof v === 'object') {
+    var o = {};
+    Object.keys(v).forEach(function (k) { o[k] = neutralizeFormulas_(v[k], k); });
+    return o;
+  }
+  return v;
+}
+
+/** For logs: enough to tell addresses apart, not enough to read one. */
+function maskEmail_(e) {
+  var s = String(e || ''), at = s.indexOf('@');
+  return at > 0 ? s.charAt(0) + '•••' + s.slice(at) : (s ? '•••' : '');
 }
 
 function json_(o) {
@@ -79,6 +114,7 @@ function route_(p) {
                              return { status: 'success', gstRegistered: si.registered, gstRate: si.rate };
       case 'register':
         throttle_('reg', (p.form && p.form.email) || '', PUBLIC_LIMITS.register);
+        throttle_('regall', 'global', PUBLIC_LIMITS.registerGlobal);
         return registerCompany_(p.form);
       case 'login':          return login_(p.username, p.password);
       case 'forgotPassword':
@@ -159,7 +195,11 @@ function route_(p) {
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
-    case 'getLeave':            return { status:'success', leave: readLeave_(ctx) };
+    /* Dates are shared — the team plans around them — but why someone is away
+       is for them, their manager up the line, and an Admin. */
+    case 'getLeave':            return { status:'success', leave: readLeave_(ctx).map(function (l) {
+                                  return canSeePerson_(ctx, l.username) ? l
+                                    : { username: l.username, from: l.from, to: l.to, reason: '', approved: l.approved }; }) };
 
     /* --- appraisal ------------------------------------------------------- */
     case 'submitAppraisal':     return submitAppraisal_(ctx, p.data);
@@ -197,6 +237,7 @@ function route_(p) {
     case 'contactSupport':      return contactSupport_(ctx, p.form);
     case 'aiInsight':           return aiInsight_(ctx, p.question);
     case 'changePassword':      return changePassword_(ctx, p.currentPassword, p.newPassword);
+    case 'signOut':             endSessions_(ctx, ctx.actor.username); return { status: 'success' };
 
     default: throw new Error('Unknown action: ' + action);
   }
@@ -241,6 +282,16 @@ function tenantContext_(session) {
      for. */
   CURRENT_CTX = ctx;
 
+  /* Signing out, a password change or a reset ends every session that existed
+     before it, not just the one in this browser. A token's issue time is its
+     expiry minus its fixed lifetime. */
+  if (!session.viewOnly) {
+    var cut = Number(readSetting_(ctx, 'signedOut:' + me.username, 0)) || 0;
+    if (cut && session.expires - AUTH.SESSION_HOURS * 3600000 < cut) {
+      throw new Error('Session has expired. Please sign in again.');
+    }
+  }
+
   /* Point the scoring engine at this workspace's own priority levels before any
      handler runs. Done once here rather than threaded through every call site:
      a weight that applied in one place and not another would be worse than not
@@ -252,6 +303,66 @@ function tenantContext_(session) {
 }
 
 /** Routes that change the team or the company's settings. */
+/* ---------- whose data may this person see? ------------------------------
+   One rule, used by every route that takes a person: an Admin sees everyone;
+   a manager sees themselves and everybody below them in the reporting line
+   (direct or further down); anyone else sees only themselves. Names, roles and
+   departments stay visible to all — they are needed to assign work and to read
+   the org chart — but contact details, scores, KRAs, appraisals and leave
+   reasons follow this rule. */
+function reportingLine_(ctx) {
+  if (ctx._line) return ctx._line;
+  var users = readUsers_(ctx), kids = {}, line = {};
+  users.forEach(function (u) { var m = String(u.manager || '').trim(); (kids[m] = kids[m] || []).push(u.username); });
+  var walk = function (who, depth) {
+    if (depth > 50) return;                       // a broken loop in the chart must not hang the request
+    (kids[who] || []).forEach(function (k) { if (!line[k]) { line[k] = true; walk(k, depth + 1); } });
+  };
+  walk(ctx.actor.username, 0);
+  delete line[ctx.actor.username];
+  return (ctx._line = line);
+}
+function canSeePerson_(ctx, username) {
+  if (!username) return false;
+  if (ctx.actor.role === 'Admin' || username === ctx.actor.username) return true;
+  if (ctx.actor.role === 'Doer') return false;
+  return !!reportingLine_(ctx)[username];
+}
+/** For actions on another person: an Admin, or their manager up the line. */
+function requireCanManage_(ctx, username) {
+  requireManager_(ctx);
+  if (ctx.actor.role === 'Admin') return ctx;
+  if (!reportingLine_(ctx)[username]) {
+    throw new Error('That person is not in your team. Their own manager, or an Admin, can do this.');
+  }
+  return ctx;
+}
+/** A person as a colleague sees them: who they are, not how to reach or rate them. */
+function publicPerson_(ctx, u) {
+  if (canSeePerson_(ctx, u.username)) return u;
+  var out = {};
+  ['name', 'username', 'role', 'jobProfile', 'dept', 'manager', 'active'].forEach(function (k) { if (k in u) out[k] = u[k]; });
+  return out;
+}
+
+/* The settings without which nothing is safe to serve. Checked on every
+   request, because Apps Script has no start-up step to refuse at: a missing
+   secret must close the service, not fall back to a weaker default. */
+var REQUIRED_CONFIG = ['MASTER_DB_ID', 'TEMPLATE_ID', 'AUTH_PEPPER', 'TOKEN_SECRET'];
+function requireConfig_() {
+  var p = PropertiesService.getScriptProperties();
+  var missing = REQUIRED_CONFIG.filter(function (k) { return !p.getProperty(k); });
+  if (!missing.length) return;
+  try { Logger.log('Refusing requests: Script Properties missing ' + missing.join(', ') + '. Run setupDomeBox().'); } catch (e) {}
+  throw new Error('The service is not configured yet. Please try again later.');
+}
+
+/** Ends every session this person has open, everywhere. */
+function endSessions_(ctx, username) {
+  try { writeSetting_(ctx, 'signedOut:' + username, String(Date.now())); }
+  catch (e) { logError_('endSessions', e.message); }
+}
+
 function requireManager_(ctx) {
   if (ctx.actor.role === 'Doer') throw new Error('That action needs a manager account.');
   return ctx;

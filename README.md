@@ -80,6 +80,7 @@ Everything else here is the detail that guide links to.
 | [`FEATURES.md`](FEATURES.md) | Everything the product does, and why the scoring works as it does |
 | [`LAUNCH-AUDIT.md`](LAUNCH-AUDIT.md) | What the launch audit found and fixed |
 | [`SECURITY-CRITICAL.md`](SECURITY-CRITICAL.md) | What must be true before you sell another seat |
+| [`SECURITY-AUDIT.md`](SECURITY-AUDIT.md) | The pre-launch security and privacy audit: data map, every check, every fix, and the platform drawbacks |
 
 ## Building and testing
 

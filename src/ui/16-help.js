@@ -126,8 +126,7 @@ function renderHelpList() {
   var html = '';
   if (q && !rows.length) {
     html = '<div class="text-xs font-bold text-gray-400 px-2 py-4">Nothing matches “' + esc(q) + '”.' +
-      '<button class="hc-link block mt-2" onclick="openSupport(\'' + esc(q).replace(/'/g, '&#39;') +
-      '\')">Ask us instead →</button></div>';
+      '<button class="hc-link block mt-2" onclick="openSupport(' + jsArg(q) + ')">Ask us instead →</button></div>';
   } else {
     var managersHeaded = false;
     html = rows.map(function (r) {
@@ -187,7 +186,7 @@ function renderHelpSection(id, fromUser) {
     '<div class="hc-stuck">' +
       '<div><div class="font-black text-sm">Still stuck?</div>' +
       '<div class="text-xs font-semibold text-gray-500">We reply within one working day.</div></div>' +
-      '<button class="btn btn-p" onclick="openSupport(\'Help: ' + esc(s.title).replace(/'/g, '&#39;') + '\')">' +
+      '<button class="btn btn-p" onclick="openSupport(' + jsArg('Help: ' + s.title) + ')">' +
         'Contact support</button>' +
     '</div>';
 

@@ -3,6 +3,9 @@
    is implemented; anything missing throws loudly rather than silently passing. */
 const crypto = require('crypto');
 
+/* Sheets stores '=x as the text =x: the apostrophe only says "not a formula". */
+const cell = v => (typeof v === 'string' && v.charAt(0) === "'") ? v.slice(1) : v;
+
 function makeSheet(name, rows) {
   const data = rows ? rows.map(r => r.slice()) : [];
   const api = {
@@ -12,7 +15,7 @@ function makeSheet(name, rows) {
     getLastColumn: () => data.reduce((m, r) => Math.max(m, r.length), 0),
     setFrozenRows: () => api,
     clear() { data.length = 0; return api; },
-    appendRow(row) { data.push(row.slice()); return api; },
+    appendRow(row) { data.push(row.map(cell)); return api; },
     deleteRow(i) { data.splice(i - 1, 1); return api; },
     deleteRows(i, n) { data.splice(i - 1, n); return api; },
     getDataRange() {
@@ -27,13 +30,13 @@ function makeSheet(name, rows) {
           while (data.length < row) data.push([]);
           const r = data[row - 1];
           while (r.length < col) r.push('');
-          r[col - 1] = v; return this;
+          r[col - 1] = cell(v); return this;
         },
         setValues(vals) {
           vals.forEach((rv, ri) => {
             while (data.length < row + ri) data.push([]);
             const r = data[row - 1 + ri];
-            rv.forEach((v, ci) => { while (r.length < col + ci) r.push(''); r[col - 1 + ci] = v; });
+            rv.forEach((v, ci) => { while (r.length < col + ci) r.push(''); r[col - 1 + ci] = cell(v); });
           });
           return this;
         },
@@ -119,7 +122,17 @@ function build() {
         setSharing(a) { META[id] = { sharing: String(a) }; },
         getSharingAccess: () => (META[id] || {}).sharing || 'PRIVATE',
         moveTo(folder) { if (folder && folder._ids && folder._ids.indexOf(id) < 0) folder._ids.push(id); return this; },
+        setTrashed(v) { META[id] = Object.assign(META[id] || {}, { trashed: !!v }); return this; },
+        isTrashed: () => !!(META[id] || {}).trashed,
       };
+    },
+    /* Only the one query shape the code uses: title contains "x" and trashed = false. */
+    searchFiles(q) {
+      const m = String(q).match(/title contains "([^"]*)"/);
+      const ids = Object.keys(FILES).filter((x) => !(META[x] || {}).trashed &&
+        (!m || FILES[x].getName().indexOf(m[1]) > -1));
+      let i = 0;
+      return { hasNext: () => i < ids.length, next: () => G.DriveApp.getFileById(ids[i++]) };
     },
     /* Folders, enough for backup.gs: create, find by name or id, list files. */
     _folders: {},
@@ -182,6 +195,7 @@ function build() {
     },
     computeDigest: (alg, s) => [...crypto.createHash('sha256').update(String(s)).digest()].map(b => b > 127 ? b - 256 : b),
     base64Encode: s => Buffer.from(String(s), 'utf8').toString('base64'),
+    sleep: ms => { const t = Date.now() + Number(ms || 0); while (Date.now() < t) {} },
     base64EncodeWebSafe: s => Buffer.from(String(s), 'utf8').toString('base64url'),
     base64DecodeWebSafe: s => [...Buffer.from(String(s), 'base64url')],
     newBlob: b => {

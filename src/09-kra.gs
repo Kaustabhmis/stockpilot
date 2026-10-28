@@ -85,6 +85,7 @@ function saveKra_(ctx, data) {
   data = data || {};
   var u = findUser_(ctx.ss, data.employee);
   if (!u) throw new Error('That person is not in this workspace.');
+  if (u.username !== ctx.actor.username) requireCanManage_(ctx, u.username);
   if (u.role === 'Admin' && ctx.actor.role !== 'Admin') {
     throw new Error('Only an Admin can set another Admin\'s KRAs.');
   }
@@ -149,6 +150,7 @@ function getKraFor_(ctx, username) {
   requireManager_(ctx);
   var u = findUser_(ctx.ss, username);
   if (!u) throw new Error('That person is not in this workspace.');
+  if (!canSeePerson_(ctx, u.username)) requireCanManage_(ctx, u.username);
   var own = (u.kras || []).map(normKra_).filter(function (k) { return k.item; });
   var fromProfile = own.length ? [] : readProfileMaster_(ctx, u.jobProfile);
   return { status:'success',
@@ -163,6 +165,8 @@ function copyKraFrom_(ctx, fromUsername, toUsername) {
   requireManager_(ctx); blockIfStopped_(ctx);
   var from = findUser_(ctx.ss, fromUsername), to = findUser_(ctx.ss, toUsername);
   if (!from || !to) throw new Error('One of those people is not in this workspace.');
+  if (to.username !== ctx.actor.username) requireCanManage_(ctx, to.username);
+  if (!canSeePerson_(ctx, from.username)) requireCanManage_(ctx, from.username);
   var rows = (from.kras || []).map(normKra_).filter(function (k) { return k.item; });
   if (!rows.length) throw new Error(from.name + ' has no KRAs to copy.');
   setUserField_(ctx.ss, to.rowIndex, 'KRAs JSON', JSON.stringify(rows));
@@ -183,7 +187,9 @@ function applyKraToProfile_(ctx, profile, overwrite) {
 
   var users = readUsers_(ctx).filter(function (u) {
     return u.active !== false &&
-           String(u.jobProfile || '').trim().toLowerCase() === String(profile).trim().toLowerCase(); });
+           String(u.jobProfile || '').trim().toLowerCase() === String(profile).trim().toLowerCase() &&
+           /* A manager applies a profile's KRAs to their own team, not to other teams. */
+           (ctx.actor.role === 'Admin' || canSeePerson_(ctx, u.username)); });
   if (!users.length) throw new Error('Nobody holds the profile "' + profile + '".');
 
   var applied = 0, skipped = [];
@@ -204,6 +210,7 @@ function clearKra_(ctx, username) {
   requireManager_(ctx); blockIfStopped_(ctx);
   var u = findUser_(ctx.ss, username);
   if (!u) throw new Error('That person is not in this workspace.');
+  if (u.username !== ctx.actor.username) requireCanManage_(ctx, u.username);
   setUserField_(ctx.ss, u.rowIndex, 'KRAs JSON', JSON.stringify([]));
   return { status:'success', message: 'Cleared the KRAs for ' + u.name + '.' };
 }

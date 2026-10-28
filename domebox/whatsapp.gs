@@ -453,7 +453,7 @@ function waDoPost(e) {
         });
         (v.statuses || []).forEach(function (s) {
           if (s.status === 'failed') {
-            Logger.log('WhatsApp delivery failed to ' + s.recipient_id + ': ' +
+            Logger.log('WhatsApp delivery failed to •••' + String(s.recipient_id).slice(-4) + ': ' +
               JSON.stringify(s.errors || []));
           }
         });
@@ -512,7 +512,7 @@ function waNotifyAssignment(sheetId, task, assigneeUser, tenantPlan, raisedByNam
                    waTrim(task.title), waTrim(task.due || 'no date', 20) ];
 
     if (WA.DRY_RUN) {
-      Logger.log('DRY RUN WhatsApp → ' + elig.to + ' [' + WA_TEMPLATES.ASSIGNED + '] ' + JSON.stringify(params));
+      Logger.log('DRY RUN WhatsApp → •••' + String(elig.to).slice(-4) + ' [' + WA_TEMPLATES.ASSIGNED + '] ' + JSON.stringify(params));
       return { sent: false, reason: 'dry run' };
     }
     var r = waSend_(elig.to, WA_TEMPLATES.ASSIGNED, params);

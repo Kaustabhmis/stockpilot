@@ -145,7 +145,8 @@ function orgNode_(username, level, byName, kids, open, implied) {
     .map(function (c) { return orgNode_(c, level + 1, byName, kids, open, implied); });
   return {
     username: u.username, name: u.name, role: u.role, dept: u.dept || '',
-    jobProfile: u.jobProfile || '', email: u.email,
+    jobProfile: u.jobProfile || '',
+    email: CURRENT_CTX && canSeePerson_(CURRENT_CTX, u.username) ? u.email : '',   // a colleague's email is not shared
     openTasks: open[u.username] || 0,
     /* Placed here because somebody has to approve their work, not because a
        manager was chosen for them. The UI says so. */
