@@ -120,6 +120,24 @@ const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n);
   const opts = (await p.$$eval('#fAssignee option', (o) => o.map((x) => x.textContent))).slice(1);
   ok('the people pickers list names A–Z', sorted(opts, 1), opts);
 
+  console.log('\n=== giving a task: the people list sorts A–Z / Z–A ===');
+  await p.click('#btnNewTask'); await p.waitForTimeout(500);
+  const who = () => p.$$eval('#asWhoList .asWhoRow > span:first-of-type', (s) => s.map((x) => x.textContent.trim()));
+  let ppl = await who();
+  ok('the Assign list starts A–Z', sorted(ppl, 1) && ppl.length >= 4, ppl);
+  await p.check('#asWhoList input[value="payel' + R + '"]');
+  await p.click('#asWhoSort'); await p.waitForTimeout(200);
+  ppl = await who();
+  ok('one click turns it Z–A', sorted(ppl, -1) && (await p.textContent('#asWhoSort')).includes('Z–A'), ppl);
+  ok('a person already ticked stays ticked when the list re-sorts', await p.isChecked('#asWhoList input[value="payel' + R + '"]'));
+  await p.fill('#asWhoQ', 'a'); await p.waitForTimeout(150);
+  ok('search still works on the sorted list', (await p.$$eval('.asWhoRow:not(.hidden)', (r) => r.length)) > 0);
+  await p.click('#asWhoSort'); await p.waitForTimeout(150);
+  ok('and back to A–Z', sorted(await who(), 1));
+  await p.evaluate(() => closeModal()); await p.waitForTimeout(200);
+  const handOpts = await p.evaluate(() => byName(STATE.data.staff).map((u) => u.name).join('|') === STATE.data.staff.map((u) => u.name).join('|'));
+  ok('every other person picker reads from an A–Z list', handOpts);
+
   console.log('\n=== the archive honours the same filters ===');
   const arch = await post({ action: 'getArchive', token: A, by: 'sruti' + R, dateOn: 'due', from: day(0), to: day(7) });
   ok('the archive call accepts them without complaint', arch.status === 'success', JSON.stringify(arch).slice(0, 120));

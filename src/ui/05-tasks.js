@@ -12,8 +12,7 @@ var STATUS_LIST = ['Awaiting Approval','Delegation Proposed','Pending','In Progr
 
 var filtersReady = false;
 function syncFilters() {
-  var staff = (STATE.data.staff || []).slice().sort(function (a, b) {
-    return String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }); });
+  var staff = byName(STATE.data.staff);
   var cats = STATE.data.categories || [];
   if (!filtersReady) {
     $('fStatus').innerHTML = '<option value="">Any status</option>' +
@@ -811,7 +810,9 @@ function openAssign() {
       '<div><label class="lb" for="asTitle">Task</label><input id="asTitle" class="in" required placeholder="What needs doing?"></div>' +
       '<div><label class="lb" for="asDesc">Detail</label><textarea id="asDesc" rows="2" class="in" placeholder="Context, what done looks like…"></textarea></div>' +
       '<div><div class="flex items-end justify-between"><label class="lb" for="asWhoQ">Assign to</label>' +
-          '<span id="asWhoCount" class="text-[11px] font-black text-gray-400 mb-1"></span></div>' +
+          '<span class="flex items-center gap-3 mb-1"><span id="asWhoCount" class="text-[11px] font-black text-gray-400"></span>' +
+          '<button type="button" id="asWhoSort" class="text-[11px] font-black text-blue-700 hover:underline" ' +
+            'title="Sort the names">A–Z ↓</button></span></div>' +
         /* With a team of fifty, scrolling a list of names is how the wrong
            person gets ticked. Search by name, role, department or job. */
         '<div class="relative mb-2"><span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>' +
@@ -895,6 +896,16 @@ function openAssign() {
     $('asWhoNone').classList.toggle('hidden', shown > 0);
   };
   $('asWhoQ').addEventListener('input', filterWho);
+  /* A–Z to start; one click turns it Z–A. Rows move, ticks stay with them. */
+  var whoDir = 1;
+  $('asWhoSort').addEventListener('click', function () {
+    whoDir = -whoDir;
+    var list = $('asWhoList'), none = $('asWhoNone');
+    Array.prototype.slice.call(list.querySelectorAll('.asWhoRow')).sort(function (a, b) {
+      return whoDir * a.querySelector('span').textContent.localeCompare(b.querySelector('span').textContent, 'en', { sensitivity: 'base' });
+    }).forEach(function (r) { list.insertBefore(r, none); });
+    this.textContent = whoDir > 0 ? 'A–Z ↓' : 'Z–A ↑';
+  });
   $('asWhoQ').addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();

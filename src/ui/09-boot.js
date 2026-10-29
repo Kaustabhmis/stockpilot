@@ -140,6 +140,7 @@ setInterval(function () {
   api('getDashboard', {}, { quiet: true }).then(function (d) {
     if (d.serviceStopped) { STATE.data = d; renderStopped(d); return; }
     var changed = JSON.stringify(d.tasks) !== JSON.stringify(STATE.data.tasks);
+    if (d.staff) d.staff = byName(d.staff);
     STATE.data = d; STATE.usage = d.usage;
     renderBanner(); renderTiles(); renderBell();
     if (changed && STATE.tab === 'tasks') renderTasks();

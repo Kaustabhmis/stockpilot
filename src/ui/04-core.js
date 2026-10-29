@@ -413,8 +413,15 @@ function enterApp() {
   loadDirection().then(function () { if (STATE.data) { syncFilters(); if (STATE.tab === 'tasks') renderTasks(); } });
 }
 
+/** People in A–Z order, so every picker that lists them reads the same way. */
+function byName(list) {
+  return (list || []).slice().sort(function (a, b) {
+    return String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }); });
+}
+
 function refresh() {
   return api('getDashboard').then(function (d) {
+    if (d.staff) d.staff = byName(d.staff);
     STATE.data = d;
     STATE.usage = d.usage;
     /* The plan as the server sees it now — a trial can end, or a payment land,
