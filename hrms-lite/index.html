@@ -1172,6 +1172,25 @@ var INSTALLED = (function () {
 })();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  /* the worker found a newer copy of this page on the site */
+  navigator.serviceWorker.addEventListener('message', function (ev) {
+    if (!ev.data || ev.data.type !== 'biscs-new-version' || document.getElementById('new-version')) return;
+    var bar = document.createElement('div');
+    bar.id = 'new-version';
+    bar.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:9999;' +
+      'background:#0f172a;color:#fff;padding:10px 14px;border-radius:12px;font:600 14px system-ui;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center';
+    bar.innerHTML = 'A new version of BISCS OS is ready.' +
+      '<button style="background:#22c55e;color:#fff;border:0;border-radius:8px;padding:6px 12px;' +
+      'font:700 13px system-ui;cursor:pointer" onclick="location.reload()">Reload</button>';
+    document.body.appendChild(bar);
+  });
+  /* and ask, once this page is up, in case the worker told us too early */
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('biscs-check');
+    }, 3000);
+  });
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('sw.js').catch(function () {
       /* No service worker is not an error - the app runs the same without

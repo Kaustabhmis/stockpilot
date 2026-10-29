@@ -6,9 +6,15 @@
  * never be answered out of a cache, and a stale payslip would be worse than
  * no payslip.
  */
-var CACHE = 'biscs-os-v3';
+var CACHE = 'biscs-os-v4';
 var SHELL = ['./index.html', './manifest.webmanifest',
              './app/icons/icon-192.png', './app/icons/icon-512.png'];
+
+/* set when the page just served from the cache is older than the site's */
+var NEWER = false;
+self.addEventListener('message', function (e) {
+  if (e.data === 'biscs-check' && NEWER && e.source) e.source.postMessage({ type: 'biscs-new-version' });
+});
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
@@ -49,9 +55,27 @@ self.addEventListener('fetch', function (e) {
     if (new URL(req.url).pathname.indexOf('/app/') >= 0) return;
     e.respondWith(
       caches.match('./index.html').then(function (hit) {
+        /* a copy to compare with: "hit" itself is handed to the browser below,
+           and a response body can only be read once */
+        var was = hit ? hit.clone() : null;
         var fresh = fetch(req).then(function (res) {
           var copy = res.clone();
           caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
+          /* A new copy was put on the site: tell the open page, which offers
+             a reload, instead of leaving it on yesterday's code until the
+             next time somebody happens to open it. */
+          if (was && res.ok) {
+            Promise.all([was.text(), res.clone().text()]).then(function (t) {
+              NEWER = t[0] !== t[1];
+              if (!NEWER) return;
+              /* the page may still be starting; it also asks (below) once it is up */
+              setTimeout(function () {
+                self.clients.matchAll({ type: 'window' }).then(function (list) {
+                  list.forEach(function (c) { c.postMessage({ type: 'biscs-new-version' }); });
+                });
+              }, 1500);
+            });
+          }
           return res;
         });
         if (hit) {
