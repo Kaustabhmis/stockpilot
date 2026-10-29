@@ -174,14 +174,15 @@ function setupDomeBox() {
        ['SITE_URL', PropertiesService.getScriptProperties().getProperty('SITE_URL'),
         'the Lite website address, e.g. https://domebox-lite.netlify.app — emails link to it'],
        ['MAIL_FROM', PropertiesService.getScriptProperties().getProperty('MAIL_FROM'),
-        'the address Lite emails come from, e.g. mis@dynamicengineers.in']]
+        'optional: Lite sends from mis@dynamicengineers.in unless you set another address']]
     : [['MASTER_DB_ID', c.masterId, 'the registry spreadsheet id'],
        ['TEMPLATE_ID', c.templateId, 'the blank tenant template id'],
        ['RAZORPAY_KEY_ID', c.razorKey, 'only needed to sell online'],
        ['RAZORPAY_KEY_SECRET', c.razorSecret, 'only needed to sell online']]
   ).forEach(function (r) {
-    out.push((r[1] ? '  set     ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
-    if (!r[1] && r[0].indexOf('RAZORPAY') < 0) missing.push(r[0]);
+    var optional = isLite_() && r[0] === 'MAIL_FROM';
+    out.push((r[1] ? '  set     ' : optional ? '  default ' : '  MISSING ') + r[0] + (r[1] ? '' : '   — ' + r[2]));
+    if (!r[1] && r[0].indexOf('RAZORPAY') < 0 && !(isLite_() && r[0] === 'MAIL_FROM')) missing.push(r[0]);
   });
 
   /* The safety net under online payment is reconcilePayments(), every 15
@@ -230,6 +231,8 @@ function setupDomeBox() {
   /* An invoice without the supplier's legal name, address and state is not a
      document anyone can file, and the first customer to ask for one will ask
      after they have already paid. Checked here, not discovered then. */
+  /* Lite sells nothing, so it issues no invoices and needs no seller details. */
+  if (!isLite_()) {
   out.push('');
   out.push('--- INVOICING ---');
   var s = sellerIdentity_();
@@ -245,6 +248,7 @@ function setupDomeBox() {
     out.push('          because the site tells customers prices exclude 18% GST.');
   }
   out.push('  series  next number ' + s.prefix + '/' + financialYear_(new Date()) + '/0001 onward');
+  }
 
   /* --- the registry ------------------------------------------------------
      Prepared here rather than named as a next step. ensureRegistry() only adds

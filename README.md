@@ -81,6 +81,7 @@ Everything else here is the detail that guide links to.
 | [`LAUNCH-AUDIT.md`](LAUNCH-AUDIT.md) | What the launch audit found and fixed |
 | [`SECURITY-CRITICAL.md`](SECURITY-CRITICAL.md) | What must be true before you sell another seat |
 | [`SECURITY-AUDIT.md`](SECURITY-AUDIT.md) | The pre-launch security and privacy audit: data map, every check, every fix, and the platform drawbacks |
+| [`LAUNCH-CHECKLIST.md`](LAUNCH-CHECKLIST.md) | The go-live steps for both editions, in order, with what to check on the live site |
 
 ## Building and testing
 

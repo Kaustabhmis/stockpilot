@@ -52,8 +52,8 @@ info@biscsindia.com.
 
    | Property | Value |
    |---|---|
-   | `MAIL_FROM` | `mis@dynamicengineers.in` |
    | `SITE_URL` | the Lite website address from step 4 |
+   | `MAIL_FROM` | optional — leave it out and Lite sends from `mis@dynamicengineers.in` |
 
    Save.
 2. The Google account that runs the Lite project must be able to send as that address.
