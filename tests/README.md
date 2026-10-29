@@ -56,6 +56,7 @@ node demo-ui-test.js        # the demo workspace on screen, tab by tab
 node board-scale-ui-test.js  # a board that keeps filling: column limit, archive paging (after demo-ui)
 node help-ui-test.js        # the Help Centre: opens where you are, searches, ends at a person
 node task-dialog-ui-test.js # Submit for review / Send back / Verify actually save
+node task-filter-ui-test.js # an Admin sees every task and project; filter by who assigned it and by a date range
 node meeting-ui-test.js     # Goals set up and a weekly review run, chair and attendee
 node manager-ui-test.js     # the held-review screens, end to end
 node kra-ui-test.js         # the KRA/KPI overview and editor

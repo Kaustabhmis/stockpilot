@@ -63,6 +63,19 @@ $('rPerson').addEventListener('change', function () { STATE.person = this.value;
 $('fSearch').addEventListener('input', function () { FILTER.q = this.value; filtersChanged(true); });
 $('fAssignee').addEventListener('change', function () { FILTER.assignee = this.value; filtersChanged(); });
 $('fStatus').addEventListener('change', function () { FILTER.status = this.value; filtersChanged(); });
+$('fBy').addEventListener('change', function () { FILTER.by = this.value; filtersChanged(); });
+/* A range typed backwards (To before From) is read the right way round. */
+function datesChanged() {
+  var a = $('fFrom').value, b = $('fTo').value;
+  if (a && b && a > b) { var x = a; a = b; b = x; $('fFrom').value = a; $('fTo').value = b; }
+  FILTER.from = a; FILTER.to = b; FILTER.dateOn = $('fDateOn').value;
+  $('fDatesClear').classList.toggle('hidden', !a && !b);
+  filtersChanged();
+}
+$('fDateOn').addEventListener('change', datesChanged);
+$('fFrom').addEventListener('change', datesChanged);
+$('fTo').addEventListener('change', datesChanged);
+$('fDatesClear').addEventListener('click', function () { $('fFrom').value = ''; $('fTo').value = ''; datesChanged(); });
 $('fCategory').addEventListener('change', function () { FILTER.category = this.value; filtersChanged(); });
 $('fGoal').addEventListener('change', function () { FILTER.goal = this.value; filtersChanged(); });
 $('fOverdue').addEventListener('change', function () { FILTER.overdue = this.checked; renderTasks(); });

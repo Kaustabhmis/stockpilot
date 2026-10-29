@@ -2254,6 +2254,11 @@ function getArchive_(ctx, p) {
   var rows = visibleTasks_(ctx, readAllTasks_(ctx)).filter(function (t) {
     if (!t.isArchived) return false;
     if (p.assignee && t.assignee !== p.assignee) return false;
+    if (p.by && t.by !== p.by) return false;
+    if (p.from || p.to) {
+      var day = p.dateOn === 'created' ? (t.createdDate ? ymd(new Date(t.createdDate)) : '') : String(t.due || '').slice(0, 10);
+      if (!day || (p.from && day < String(p.from)) || (p.to && day > String(p.to))) return false;
+    }
     if (p.status && t.status !== p.status) return false;
     if (p.category && t.jobCategory !== p.category) return false;
     if (p.goal && t.goal !== p.goal) return false;

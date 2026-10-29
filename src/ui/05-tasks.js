@@ -21,6 +21,9 @@ function syncFilters() {
   }
   $('fAssignee').innerHTML = '<option value="">Everyone</option>' +
     staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
+  $('fBy').innerHTML = '<option value="">Assigned by anyone</option>' +
+    staff.map(function (u) { return '<option value="' + esc(u.username) + '"' +
+      (u.username === FILTER.by ? ' selected' : '') + '>By ' + esc(u.name) + '</option>'; }).join('');
   $('fCategory').innerHTML = '<option value="">Any category</option>' +
     cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
   /* The goal filter appears only once there are goals to filter by, so a
@@ -41,6 +44,11 @@ function visibleTasks() {
   return src.filter(function (t) {
     if (!!t.isArchived !== STATE.archive) return false;
     if (FILTER.assignee && t.assignee !== FILTER.assignee) return false;
+    if (FILTER.by && t.by !== FILTER.by) return false;
+    if (FILTER.from || FILTER.to) {
+      var day = taskDay(t, FILTER.dateOn);
+      if (!day || (FILTER.from && day < FILTER.from) || (FILTER.to && day > FILTER.to)) return false;
+    }
     if (FILTER.status && t.status !== FILTER.status) return false;
     if (FILTER.category && t.jobCategory !== FILTER.category) return false;
     if (FILTER.goal && t.goal !== FILTER.goal) return false;
@@ -52,6 +60,16 @@ function visibleTasks() {
     }
     return true;
   });
+}
+
+/** The day a task falls on for the date filter: its due date, or the day it
+ *  was assigned in the viewer's own time zone. */
+function taskDay(t, on) {
+  if (on !== 'created') return String(t.due || '').slice(0, 10);
+  var d = new Date(t.createdDate);
+  if (isNaN(d)) return '';
+  var m = String(d.getMonth() + 1), day = String(d.getDate());
+  return d.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (day.length < 2 ? '0' + day : day);
 }
 
 /* The workspace's own levels, with whatever a given task already carries kept
@@ -166,6 +184,7 @@ function loadArchive(reset) {
   if (a.loading) return;
   a.loading = true;
   return api('getArchive', { page: a.page + 1, q: FILTER.q, assignee: FILTER.assignee,
+      by: FILTER.by, dateOn: FILTER.dateOn, from: FILTER.from, to: FILTER.to,
       status: FILTER.status, category: FILTER.category, goal: FILTER.goal })
     .then(function (r) {
       if (STATE.arch !== a) return;
