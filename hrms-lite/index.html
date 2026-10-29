@@ -6636,6 +6636,7 @@ function openSettings() {
   renderHolidays();
   renderPolicyTable('shifts');
   renderPolicyTable('sites');
+  renderSiteCheck();
   renderPolicyTable('leaveTypes');
   renderPolicyTable('requestTypes');
   renderPolicyTable('ctcVariables');
@@ -6652,6 +6653,54 @@ function openSettings() {
    showing - including Settings itself. So when one closes, put Settings back
    on the tab it was opened from, instead of dumping the user on the
    dashboard. */
+/* Is each punch site's pin where the site is? A pin typed from memory, or
+   with three decimals (good to about 100 m), fences people out at their own
+   gate - and it looks like "only one site works". Show every pin on a map
+   link, flag the rough ones, and say how far apart the sites are. */
+function renderSiteCheck() {
+  var box = el('site-check');
+  if (!box) return;
+  var sites = (S.sites || []).filter(function (x) {
+    return String(x.active || 'yes').toLowerCase() !== 'no' && x.lat !== '' && x.lng !== '';
+  });
+  if (!sites.length) { box.innerHTML = ''; return; }
+  var dec = function (v) { var m = String(v).match(/\.(\d+)/); return m ? m[1].length : 0; };
+  var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
+  var dist = function (a, b) {
+    var dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    var q = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.pow(Math.sin(dLng / 2), 2);
+    return Math.round(R * 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q)));
+  };
+  var far = function (m) { return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1) + ' km' : m + ' m'; };
+  var users = {};
+  (S.employees || []).forEach(function (e) {
+    siteListOf(e.site).forEach(function (n) { users[n.toLowerCase()] = (users[n.toLowerCase()] || 0) + 1; });
+  });
+  box.innerHTML = '<div class="card-sub" style="margin-bottom:6px"><b>Check each pin</b> - open it on the map and ' +
+    'make sure it sits on the site. A wrong pin turns everyone away at that gate.</div>' +
+    '<table class="tbl" style="width:100%"><thead><tr><th>Site</th><th>Pin</th><th>Precision</th>' +
+    '<th>Staff tied to it</th><th>Nearest other site</th></tr></thead><tbody>' +
+    sites.map(function (x) {
+      var p = { lat: Number(x.lat), lng: Number(x.lng) };
+      var rough = Math.min(dec(x.lat), dec(x.lng)) < 4;
+      var near = null;
+      sites.forEach(function (y) {
+        if (y === x) return;
+        var d = dist(p, { lat: Number(y.lat), lng: Number(y.lng) });
+        if (!near || d < near.d) near = { d: d, name: y.name };
+      });
+      return '<tr><td><b>' + esc(x.name) + '</b></td>' +
+        '<td><a href="https://www.google.com/maps?q=' + encodeURIComponent(x.lat + ',' + x.lng) +
+          '" target="_blank" rel="noopener">' + esc(x.lat) + ', ' + esc(x.lng) + ' &#8599;</a></td>' +
+        '<td>' + (rough ? '<span class="badge b-amber">rough - re-take it at the site</span>' : 'good') + '</td>' +
+        '<td>' + (users[String(x.name).trim().toLowerCase()] || 0) + ' named' + '</td>' +
+        '<td>' + (near ? esc(near.name) + ' ' + far(near.d) : '-') + '</td></tr>';
+    }).join('') + '</tbody></table>' +
+    '<div class="sub-line" style="margin-top:6px">Staff with no site ticked can punch at any site. To fix a pin: ' +
+    'stand at that gate with a phone, open Settings here, click in that site\u2019s row and press ' +
+    '<b>Use my location for the site row I clicked</b>, then Save sites.</div>';
+}
+
 function reopenSettings(tab) {
   openSettings();
   settingsTab(tab);
@@ -6851,13 +6900,14 @@ function shiftsPane() {
     'what a punch pair becomes all come from the employee\u2019s own shift.</div>' +
     '<div id="policy-shifts"></div>' +
   '<h3 style="margin-top:22px">Punch sites (geofence)</h3>' +
-  '<div class="card-sub">Where staff are allowed to punch from. Stand at the gate and press ' +
-  '<b>Use my location</b> to fill a row in.</div>' +
+  '<div class="card-sub">Where staff are allowed to punch from. Stand at the gate, click in that ' +
+  'site\u2019s row, and press <b>Use my location</b> to set its pin.</div>' +
   '<div id="policy-sites"></div>' +
   '<div class="toolbar" style="margin-top:10px">' +
-    '<button class="ghost sm" onclick="fillSiteFromLocation()">&#128205; Use my location for the last row</button>' +
+    '<button class="ghost sm" onclick="fillSiteFromLocation()">&#128205; Use my location for the site row I clicked</button>' +
     '<span class="spacer"></span><span class="sub-line" id="site-geo-out"></span>' +
   '</div>' +
+  '<div id="site-check" style="margin-top:10px"></div>' +
     '<h3 style="margin-top:22px">Default working hours</h3>' +
     '<div class="card-sub">Used for any shift cell left blank and for staff with no shift. ' +
     'Worked hours at or above the full-day minimum are <b>P</b>, at or above the half-day ' +
@@ -12662,27 +12712,48 @@ function doPunch(kind) {
 
 /* Open a swipe request already filled in for the day that was left open. */
 /* Fill the last site row from where the admin is standing. */
+/* Fill a site's pin from where this phone or laptop is standing. Fills the
+   site row last clicked (any cell of it), else the last row. Listens up to
+   20 s and keeps the best reading: a first, rough fix saved as a pin turns
+   everyone away at that gate. */
+document.addEventListener('focusin', function (ev) {
+  var t = ev.target;
+  if (t && t.dataset && t.dataset.pt === 'sites' && t.dataset.row !== undefined) S._siteRow = Number(t.dataset.row);
+});
 function fillSiteFromLocation() {
   var out = el('site-geo-out');
   if (!navigator.geolocation) { out.textContent = 'This browser cannot report a location.'; return; }
-  out.textContent = 'Getting your location...';
-  navigator.geolocation.getCurrentPosition(function (pos) {
-    var rows = document.querySelectorAll('[data-pt="sites"][data-col="lat"]');
-    if (!rows.length) { out.textContent = 'Add a site row first.'; return; }
-    var last = rows.length - 1;
-    document.querySelector('[data-pt="sites"][data-row="' + last + '"][data-col="lat"]').value =
-      pos.coords.latitude.toFixed(6);
-    document.querySelector('[data-pt="sites"][data-row="' + last + '"][data-col="lng"]').value =
-      pos.coords.longitude.toFixed(6);
-    out.innerHTML = 'Filled the last row: ' + pos.coords.latitude.toFixed(5) + ', ' +
-      pos.coords.longitude.toFixed(5) + ' (\u00b1' + Math.round(pos.coords.accuracy) + ' m). ' +
-      '<a href="https://www.google.com/maps?q=' + pos.coords.latitude + ',' + pos.coords.longitude +
+  var rows = document.querySelectorAll('[data-pt="sites"][data-col="lat"]');
+  if (!rows.length) { out.textContent = 'Add a site row first.'; return; }
+  var row = (S._siteRow !== undefined && S._siteRow < rows.length) ? S._siteRow : rows.length - 1;
+  var nameBox = document.querySelector('[data-pt="sites"][data-row="' + row + '"][data-col="name"]');
+  var siteName = nameBox ? nameBox.value : 'row ' + (row + 1);
+  var best = null, done = false, watch;
+  function finish() {
+    if (done) return;
+    done = true;
+    navigator.geolocation.clearWatch(watch);
+    if (!best) { out.textContent = 'Could not get a location - this needs an https address.'; return; }
+    document.querySelector('[data-pt="sites"][data-row="' + row + '"][data-col="lat"]').value = best.lat.toFixed(6);
+    document.querySelector('[data-pt="sites"][data-row="' + row + '"][data-col="lng"]').value = best.lng.toFixed(6);
+    out.innerHTML = 'Pin for <b>' + esc(siteName) + '</b>: ' + best.lat.toFixed(5) + ', ' + best.lng.toFixed(5) +
+      ' (±' + Math.round(best.acc) + ' m' + (best.acc > 30 ? ' - rough, try outside' : '') + '). ' +
+      '<a href="https://www.google.com/maps?q=' + best.lat + ',' + best.lng +
       '" target="_blank" rel="noopener">Check it on a map</a>, then press Save sites.';
+  }
+  out.textContent = 'Getting an accurate location for ' + siteName + '...';
+  watch = navigator.geolocation.watchPosition(function (pos) {
+    var f = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+    if (!best || f.acc < best.acc) best = f;
+    out.textContent = 'Getting an accurate location for ' + siteName + '... ±' + Math.round(best.acc) + ' m';
+    if (best.acc <= 10) finish();
   }, function (err) {
-    out.textContent = err.code === 1
-      ? 'Location permission refused.'
-      : 'Could not get a location - this needs an https address.';
-  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    if (best) return finish();
+    done = true; navigator.geolocation.clearWatch(watch);
+    out.textContent = err.code === 1 ? 'Location permission refused.'
+                                     : 'Could not get a location - this needs an https address.';
+  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  setTimeout(finish, 20000);
 }
 
 function fixOpenDay(date) {

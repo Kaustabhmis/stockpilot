@@ -524,6 +524,7 @@ export function createActions(api, db, deps) {
                reason: 'Location is required to punch, and none was sent.' };
     }
     if (maxAcc > 0 && geo.accuracy && Number(geo.accuracy) > maxAcc) {
+      console.log('geofence refused (accuracy)', emp && emp.emp_code, Math.round(Number(geo.accuracy)), 'm');
       return { ok: soft, enabled: true, soft, accuracy: Math.round(Number(geo.accuracy)),
                reason: 'Location is only accurate to about ' + Math.round(Number(geo.accuracy)) +
                        ' m; ' + maxAcc + ' m or better is needed.' };
@@ -559,10 +560,13 @@ export function createActions(api, db, deps) {
     }
 
     let best = null;
+    const each = [];
     allowed.forEach(x => {
       const d = metresBetween(Number(geo.lat), Number(geo.lng), Number(x.lat), Number(x.lng));
+      each.push({ site: x.name, distance: d, radius: Number(x.radius_m || 150) });
       if (!best || d < best.distance) best = { site: x.name, distance: d, radius: Number(x.radius_m || 150) };
     });
+    const far = m => m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1) + ' km' : m + ' m';
     if (best.distance <= best.radius) {
       const good = { ok: true, enabled: true, site: best.site, distance: best.distance };
       if (staleNames) good.stale = staleNames;
@@ -579,11 +583,16 @@ export function createActions(api, db, deps) {
       if (od) return { ok: true, enabled: true, site: 'out duty', distance: best.distance, od: true };
     }
 
-    return { ok: soft, enabled: true, soft, site: best.site, distance: best.distance,
-      reason: 'You are about ' + best.distance + ' m from ' + best.site +
-              ', which allows ' + best.radius + ' m.' +
-              (allowed.length > 1
-                ? ' You can punch at: ' + allowed.map(x => x.name).join(', ') + '.' : '') };
+    /* Every site this person may use, with how far each one is: "only one
+       site works" is then visible at a glance - a site whose pin is in the
+       wrong place shows up as kilometres away while they stand at its gate. */
+    const reason = allowed.length > 1
+      ? 'You are not inside any of your sites: ' +
+        each.map(x => x.site + ' ' + far(x.distance) + ' away (allows ' + x.radius + ' m)').join('; ') + '.'
+      : 'You are about ' + far(best.distance) + ' from ' + best.site + ', which allows ' + best.radius + ' m.';
+    console.log('geofence refused', emp && emp.emp_code, JSON.stringify({
+      lat: Number(geo.lat), lng: Number(geo.lng), accuracy: geo.accuracy, sites: each }));
+    return { ok: soft, enabled: true, soft, site: best.site, distance: best.distance, reason };
   }
 
   async function webPunch(empCodeAsked, kind, note, geo, caller, dirty) {

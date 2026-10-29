@@ -191,6 +191,7 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .cal .d.L{background:#dbeafe;border-color:#bfdbfe;color:#1e40af;}
 .cal .d.OD,.cal .d.CO{background:#ede9fe;border-color:#ddd6fe;color:#5b21b6;}
 .cal .d.WO,.cal .d.H{background:#f1f5f9;color:var(--soft);}
+.geo-note{font-size:.72rem;margin-top:4px;color:var(--muted);}
 .cal .d.today{outline:2px solid var(--primary);outline-offset:1px;}
 .cal .d.IN{background:#ecfdf5;border-color:#a7f3d0;color:#065f46;}
 .cal .d{position:relative;}
@@ -874,6 +875,11 @@ function nearestSite(fix) {
   return best;
 }
 
+/* The phone's first answer is usually a rough one - a network fix good to
+   50 or 100 m - and GPS sharpens it over the next few seconds. Taking that
+   first answer had punches refused for "accuracy" by people standing inside
+   the gate. So listen for a while and keep the best reading, stopping as
+   soon as one is good enough for the fence (geofence_accuracy_m). */
 function locate(quiet) {
   var box = el('geo');
   if (!box) return Promise.resolve(null);
@@ -882,34 +888,67 @@ function locate(quiet) {
     box.innerHTML = '&#9888; This phone cannot report its location.';
     return Promise.resolve(null);
   }
+  var need = Number(S.settings.geofence_accuracy_m || 0) || 50;
+  var waitMs = quiet ? 10000 : 20000;
   box.className = 'geo';
   box.innerHTML = '<span class="spin" style="border-top-color:var(--primary)"></span> Finding you&hellip;';
   return new Promise(function (resolve) {
-    navigator.geolocation.getCurrentPosition(function (pos) {
-      GEO.fix = { lat: pos.coords.latitude, lng: pos.coords.longitude,
-                  accuracy: pos.coords.accuracy };
-      GEO.at = Date.now();
-      var site = nearestSite(GEO.fix);
+    var best = null, done = false, watch = null, timer = null;
+    function show(fix) {
+      var site = nearestSite(fix);
+      var acc = Math.round(fix.accuracy || 0);
       if (site && site.distance <= site.radius) {
         box.className = 'geo ok';
-        box.innerHTML = '&#128205; At <b>' + esc(site.name) + '</b>';
+        box.innerHTML = '&#128205; At <b>' + esc(site.name) + '</b>' + (acc > need ? ' <small>(&plusmn;' + acc + ' m)</small>' : '');
       } else if (site) {
         box.className = 'geo';
-        box.innerHTML = '&#128205; About ' + site.distance + ' m from <b>' + esc(site.name) + '</b>';
+        box.innerHTML = '&#128205; About ' + fmtDistance(site.distance) + ' from <b>' + esc(site.name) + '</b>' +
+          ' <small>(&plusmn;' + acc + ' m)</small>';
       } else {
         box.className = 'geo ok';
-        box.innerHTML = '&#128205; Located to about ' + Math.round(pos.coords.accuracy) + ' m';
+        box.innerHTML = '&#128205; Located to about ' + acc + ' m';
       }
-      resolve(GEO.fix);
+    }
+    function finish() {
+      if (done) return;
+      done = true;
+      if (watch !== null) navigator.geolocation.clearWatch(watch);
+      clearTimeout(timer);
+      if (best) {
+        GEO.fix = best; GEO.at = Date.now();
+        show(best);
+        if (best.accuracy > need) {
+          box.innerHTML += '<div class="geo-note">Location is only accurate to about ' + Math.round(best.accuracy) +
+            ' m (' + need + ' m needed). Step near a window or outside and try again.</div>';
+        }
+      }
+      resolve(best);
+    }
+    watch = navigator.geolocation.watchPosition(function (pos) {
+      var fix = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+      if (!best || fix.accuracy < best.accuracy) best = fix;
+      if (best.accuracy <= need) return finish();
+      box.className = 'geo';
+      box.innerHTML = '<span class="spin" style="border-top-color:var(--primary)"></span> Getting an accurate fix&hellip; ' +
+        '&plusmn;' + Math.round(best.accuracy) + ' m';
     }, function (err) {
+      if (best) return finish();
+      done = true;
+      if (watch !== null) navigator.geolocation.clearWatch(watch);
+      clearTimeout(timer);
       GEO.fix = null;
       box.className = 'geo bad';
       box.innerHTML = '&#9888; ' + (err.code === 1
         ? 'Location is blocked. Allow it for this app, or you cannot punch.'
         : 'Could not find you. Step outside and try again.');
       resolve(null);
-    }, { enableHighAccuracy: true, timeout: quiet ? 12000 : 20000, maximumAge: 30000 });
+    }, { enableHighAccuracy: true, timeout: waitMs, maximumAge: quiet ? 30000 : 0 });
+    timer = setTimeout(finish, waitMs);
   });
+}
+function fmtDistance(m) {
+  m = Number(m) || 0;
+  return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1) + ' km' : m + ' m';
 }
 
 function doPunch(kind) {

@@ -65,8 +65,8 @@ ok(!b.refused, 'punches at Unit 2 as well', b.refused ? b.message : 'the site th
 /* far from both - a point in the sea off Mumbai */
 const c = await call('webPunch', { kind: 'in', geo: { lat: 18.0, lng: 70.0, accuracy: 10 } }, sup);
 ok(c.refused, 'refused far from both', c.refused ? c.message.slice(0, 54) : 'LET THROUGH - fence open');
-ok(c.refused && /Unit 1, Unit 2|Unit 2, Unit 1/.test(c.message || ''),
-   'and told which sites count', 'the refusal lists both, not one');
+ok(c.refused && /Unit 1\b[^;]*\d[^;]*away/.test(c.message || '') && /Unit 2\b[^;]*\d[^;]*away/.test(c.message || ''),
+   'and told which sites count', 'the refusal lists both, each with how far away it is');
 
 /* the stored punch carries where it happened */
 const log = await call('punchLog', { from: '2020-01-01', to: '2035-01-01' }, token);
