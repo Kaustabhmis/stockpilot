@@ -28,7 +28,17 @@ const pool = new pg.Pool({ connectionString: CONN, max: 10 });
 pool.on('connect', c => c.query('set search_path to hrms, public, extensions'));
 
 const handle = createRouter(
-  { query: (sql, params) => pool.query(sql, params) },
+  /* Refuse an undefined parameter, as postgres.js does on Supabase. node-pg
+     quietly sends it as NULL, so a value the code forgot to fill passed every
+     test here and failed every request live ("UNDEFINED_VALUE"). */
+  { query: (sql, params) => {
+      const at = (params || []).findIndex(v => v === undefined);
+      if (at >= 0) {
+        return Promise.reject(new Error('UNDEFINED_VALUE: Undefined values are not allowed ($' +
+          (at + 1) + ' in: ' + String(sql).replace(/\s+/g, ' ').slice(0, 90) + ')'));
+      }
+      return pool.query(sql, params);
+    } },
   {
     tokenSecret: process.env.TOKEN_SECRET || 'local-dev-secret',
     timezone: 'Asia/Kolkata',

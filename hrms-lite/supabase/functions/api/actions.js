@@ -683,8 +683,11 @@ export function createActions(api, db, deps) {
                          String(dmy[1]).padStart(2, '0');
     time = clockOf(timeRaw) || clockOf(stamp.slice(10)) || '';
     if (!code || !date || !time) return null;
+    /* Every field a string, never undefined: postgres.js on Supabase refuses
+       an undefined parameter outright, which failed whole imports. */
     return { emp_code: code, date, time,
-             device_id: String(pick(['deviceid', 'device', 'machineid']) || ''),
+             device_id: String(pick(['deviceid', 'machineid', 'deviceno', 'device']) || ''),
+             device: String(pick(['devicename', 'device', 'reader', 'location']) || ''),
              direction: String(pick(['direction', 'inout', 'c1', 'punchtype']) || '') };
   }
 
@@ -716,8 +719,8 @@ export function createActions(api, db, deps) {
          values ($1, ($2::date + $3::time) at time zone $4, $5, $6, $7, $8, $9, now())
          on conflict (id) do nothing
          returning id`,
-        [punchId(code, r.date, r.time, r.device), r.date, r.time, tz, code,
-         r.device_id, r.device, r.direction, source || 'agent']);
+        [punchId(code, r.date, r.time, r.device_id || r.device || ''), r.date, r.time, tz, code,
+         r.device_id || '', r.device || r.device_id || '', r.direction || '', source || 'agent']);
       /* "returning id" rather than a row count, because the two drivers this
          runs on report an affected-row count under different names and one of
          them does not survive the wrapper. A returned row is unambiguous on

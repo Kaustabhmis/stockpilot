@@ -8999,7 +8999,7 @@ function buildEsslReport(sheets, out) {
     if (!range.min || stamp.date < range.min) range.min = stamp.date;
     if (!range.max || stamp.date > range.max) range.max = stamp.date;
     if (device) devices[device] = (devices[device] || 0) + 1;
-    punches.push({ code: mapped, date: stamp.date, time: stamp.time });
+    punches.push({ code: mapped, date: stamp.date, time: stamp.time, device: device || '' });
   };
 
   sheets.forEach(function (sheet) {
@@ -9202,7 +9202,10 @@ function punchesToAttendance(punches, problems) {
       return;
     }
     g.times.sort();
-    var inT = g.times[0], outT = g.times.length > 1 ? g.times[g.times.length - 1] : '';
+    /* A reader that takes the same finger four times in four seconds is one
+       punch, not an in and an out: only a later minute is an out. */
+    var inT = g.times[0], lastT = g.times[g.times.length - 1];
+    var outT = hhmm(lastT) !== hhmm(inT) ? lastT : '';
 
     /* The same day can arrive again in a later file - a longer period, a
        re-export, or a device that was read late. Widen the day rather than
@@ -9386,7 +9389,7 @@ function sendPunchesInBatches(punches, onProgress) {
   return chunks.reduce(function (chain, chunk) {
     return chain.then(function () {
       var rows = chunk.map(function (p) {
-        return { emp_code: p.code, punch_time: p.date + ' ' + p.time };
+        return { emp_code: p.code, punch_time: p.date + ' ' + p.time, device_id: String(p.device || '') };
       });
       return api('ingestPunches', { punches: rows, source: 'file import' }).then(function (r) {
         tally.punches += num(r.punches); tally.days += num(r.days);
