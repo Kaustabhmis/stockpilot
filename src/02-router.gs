@@ -42,7 +42,10 @@ function doPost(e) {
        message and a reference, and the detail goes to the ErrorLog sheet. */
     var msg = String(err && err.message || err);
     var internal = (err && err.name && err.name !== 'Error') ||
-      /openById|Spreadsheet|permission|Exception|Service invoked|is not a function|Cannot read|undefined|null/i.test(msg);
+      /* Phrases only Google's services and the script engine produce. Our own
+         messages can quote what a user typed ("Spreadsheet clean-up"), so
+         plain words are not matched. */
+      /^Exception:|Service invoked|Service (Spreadsheets|Drive|Gmail) |No item with the given ID|You do not have permission|is not a function|Cannot read propert|is not defined|Cannot call method/i.test(msg);
     if (internal && !/signed in|expired|Admin account/i.test(msg)) {
       var ref = Utilities.getUuid().replace(/-/g, '').slice(0, 8).toUpperCase();
       logError_('route:' + String(body.action || '').slice(0, 40), '[' + ref + '] ' + msg +

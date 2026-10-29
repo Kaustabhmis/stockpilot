@@ -62,6 +62,11 @@ const us = call({ action: 'getUsers', token: DB }).users || [];
 const other = us.find((u) => u.username === 'da') || {};
 ok('a colleague\'s email and phone are not sent to a Doer', !other.email && !other.phone, S(other));
 ok('the name, role and team still are, for assigning work', other.name === 'Doer A' && other.role === 'Doer');
+const hodView = call({ action: 'getUsers', token: M2 }).users || [];
+const outside = hodView.find((u) => u.username === 'da') || {}, mine = hodView.find((u) => u.username === 'db') || {};
+ok('a person outside your line shows "no data", not "undefined", and no Edit button',
+  outside.lastMonthScore === null && outside.canEdit === false && typeof outside.openTasks === 'number', S(outside));
+ok('your own report keeps the Edit button', mine.canEdit === true, S(mine));
 ok('no password hash in any user list', !/password|hash|salt/i.test(S(call({ action: 'getUsers', token: A }))));
 const org = S(call({ action: 'getOrgChart', token: DB }));
 ok('the org chart does not hand a Doer everyone\'s email', (org.match(/@a\.in/g) || []).length <= 1, org.match(/@a\.in/g));
@@ -107,6 +112,9 @@ tenant.getSheetByName = realTab;
 ok('an internal fault reaches the user as a plain message with a reference', /Reference [0-9A-F]{8}/.test(internal) && !/Cannot read/.test(internal), internal);
 const ref = (internal.match(/Reference ([0-9A-F]{8})/) || [])[1];
 ok('and the detail is in the ErrorLog under that reference', !!ref && S(env.FILES.MASTER.getSheetByName('ErrorLog')._data).includes(ref));
+
+ok('a normal message that quotes typed text is not mistaken for a fault',
+  !/Reference/.test(msg({ action: 'createTask', token: A, form: { title: 'Spreadsheet null check', assignTo: 'nobody-here', dueDate: due, priority: 'Low' } })));
 
 console.log('\n=== guessing passwords ===');
 let lock = '';

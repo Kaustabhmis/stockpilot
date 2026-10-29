@@ -12,8 +12,12 @@ function getUsers_(ctx) {
     if (!canSeePerson_(ctx, u.username)) {
       /* A colleague outside your line: enough to recognise and assign to,
          not their contact details, score or KRAs. */
-      return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, jobProfile: u.jobProfile,
+      var pub = publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, jobProfile: u.jobProfile,
         dept: u.dept, manager: u.manager, active: u.active });
+      /* Present but empty, so the screen shows "no data" rather than "undefined". */
+      pub.openTasks = tasks.filter(function (t) { return t.assignee === u.username && isOpen(t.status); }).length;
+      pub.wip = null; pub.lastMonthScore = null; pub.lastMonthBand = null; pub.canEdit = false;
+      return pub;
     }
     var wip = wipStatus(tasks, u.username, u.wipLimit == null ? DEFAULT_WIP_LIMIT : u.wipLimit);
     var s = scoreForPeriod(tasks, u.username, range, cal, scoreOpts_(ctx, u.username));
@@ -27,6 +31,9 @@ function getUsers_(ctx) {
       wip: { count: wip.count, limit: wip.limit, exceeded: wip.exceeded },
       lastMonthScore: s.hasData ? s.score : null,
       lastMonthBand: s.hasData ? performanceBand(s.score).band : null,
+      /* Whether the Edit button would work: a manager, on their own line, and
+         only an Admin edits an Admin. The server checks again on save. */
+      canEdit: ctx.actor.role !== ROLE.DOER && !(u.role === ROLE.ADMIN && ctx.actor.role !== ROLE.ADMIN),
     };
   }) };
 }

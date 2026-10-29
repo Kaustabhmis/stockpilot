@@ -438,7 +438,10 @@ function doPost(e) {
        message and a reference, and the detail goes to the ErrorLog sheet. */
     var msg = String(err && err.message || err);
     var internal = (err && err.name && err.name !== 'Error') ||
-      /openById|Spreadsheet|permission|Exception|Service invoked|is not a function|Cannot read|undefined|null/i.test(msg);
+      /* Phrases only Google's services and the script engine produce. Our own
+         messages can quote what a user typed ("Spreadsheet clean-up"), so
+         plain words are not matched. */
+      /^Exception:|Service invoked|Service (Spreadsheets|Drive|Gmail) |No item with the given ID|You do not have permission|is not a function|Cannot read propert|is not defined|Cannot call method/i.test(msg);
     if (internal && !/signed in|expired|Admin account/i.test(msg)) {
       var ref = Utilities.getUuid().replace(/-/g, '').slice(0, 8).toUpperCase();
       logError_('route:' + String(body.action || '').slice(0, 40), '[' + ref + '] ' + msg +
@@ -2278,8 +2281,12 @@ function getUsers_(ctx) {
     if (!canSeePerson_(ctx, u.username)) {
       /* A colleague outside your line: enough to recognise and assign to,
          not their contact details, score or KRAs. */
-      return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, jobProfile: u.jobProfile,
+      var pub = publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, jobProfile: u.jobProfile,
         dept: u.dept, manager: u.manager, active: u.active });
+      /* Present but empty, so the screen shows "no data" rather than "undefined". */
+      pub.openTasks = tasks.filter(function (t) { return t.assignee === u.username && isOpen(t.status); }).length;
+      pub.wip = null; pub.lastMonthScore = null; pub.lastMonthBand = null; pub.canEdit = false;
+      return pub;
     }
     var wip = wipStatus(tasks, u.username, u.wipLimit == null ? DEFAULT_WIP_LIMIT : u.wipLimit);
     var s = scoreForPeriod(tasks, u.username, range, cal, scoreOpts_(ctx, u.username));
@@ -2293,6 +2300,9 @@ function getUsers_(ctx) {
       wip: { count: wip.count, limit: wip.limit, exceeded: wip.exceeded },
       lastMonthScore: s.hasData ? s.score : null,
       lastMonthBand: s.hasData ? performanceBand(s.score).band : null,
+      /* Whether the Edit button would work: a manager, on their own line, and
+         only an Admin edits an Admin. The server checks again on save. */
+      canEdit: ctx.actor.role !== ROLE.DOER && !(u.role === ROLE.ADMIN && ctx.actor.role !== ROLE.ADMIN),
     };
   }) };
 }

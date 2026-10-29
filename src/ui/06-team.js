@@ -8,6 +8,11 @@ function loadTeam() {
 
 function renderTeam() {
   $('btnTabs').classList.toggle('hidden', !isAdmin());
+  /* Only a manager can add people or change categories: a Doer is not shown
+     buttons the server would refuse. */
+  var doer = !!(STATE.user && STATE.user.role === 'Doer');
+  $('btnNewUser').classList.toggle('hidden', doer);
+  $('btnCategories').classList.toggle('hidden', doer);
   var active = TEAM.filter(function (u) { return u.active !== false; });
   var u = STATE.usage;
   var tile = function (k, v, icon, colour, tone) {
@@ -50,7 +55,8 @@ function renderTeam() {
             x.lastMonthScore + ' · ' + esc(x.lastMonthBand) + '</span>'
           : '<span class="text-gray-300 font-bold">no data</span>') + '</td>' +
         '<td class="text-right whitespace-nowrap">' +
-          '<button class="text-blue-600 font-black text-xs hover:underline edit" data-u="' + esc(x.username) + '">Edit</button>' +
+          (x.canEdit === false ? '' :
+            '<button class="text-blue-600 font-black text-xs hover:underline edit" data-u="' + esc(x.username) + '">Edit</button>') +
         '</td></tr>';
     }).join('') + '</tbody></table>';
 

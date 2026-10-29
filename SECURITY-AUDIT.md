@@ -10,10 +10,10 @@ that already existed. The only things a user will notice:
 - A head of department can no longer edit people outside their own reporting line.
 - Reset links last 15 minutes instead of an hour.
 
-`tests/privacy-test.js` re-runs every attack below on each build (44 checks). Results
+`tests/privacy-test.js` re-runs every attack below on each build (47 checks). Results
 for this build:
-- All 44 backend suites pass.
-- All 20 browser suites pass.
+- All 44 backend suites pass (1,626 checks).
+- All 20 browser suites pass (496 checks).
 
 ---
 
