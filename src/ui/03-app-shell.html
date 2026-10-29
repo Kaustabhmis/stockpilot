@@ -82,15 +82,8 @@
         <select id="fStatus" class="in max-w-[150px]"></select>
         <select id="fCategory" class="in max-w-[150px]"></select>
         <select id="fGoal" class="in max-w-[190px] hidden" aria-label="Filter by goal"></select>
-        <div class="flex flex-wrap items-center gap-1 w-full sm:w-auto" id="fDates">
-          <select id="fDateOn" class="in w-full sm:w-auto sm:max-w-[130px]" aria-label="Which date">
-            <option value="due">Due date</option><option value="created">Assigned date</option></select>
-          <input id="fFrom" type="date" class="in flex-1 min-w-0 sm:flex-none sm:w-[150px]" aria-label="From">
-          <span class="text-gray-400 font-bold text-xs">to</span>
-          <input id="fTo" type="date" class="in flex-1 min-w-0 sm:flex-none sm:w-[150px]" aria-label="To">
-          <button id="fDatesClear" type="button" class="hidden text-gray-400 hover:text-gray-800 px-1" title="Clear dates">
-            <span class="material-icons text-base">close</span></button>
-        </div>
+        <button id="fDatesBtn" type="button" class="btn btn-g text-xs py-2 px-3 flex items-center gap-1" title="Filter by date">
+          <span class="material-icons text-sm">date_range</span> <span id="fDatesLabel">Any date</span></button>
         <label class="flex items-center gap-2 text-xs font-bold text-gray-600 px-1 whitespace-nowrap">
           <input type="checkbox" id="fOverdue" class="w-4 h-4 accent-red-600"> Overdue
         </label>

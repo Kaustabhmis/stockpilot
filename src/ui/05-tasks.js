@@ -12,7 +12,8 @@ var STATUS_LIST = ['Awaiting Approval','Delegation Proposed','Pending','In Progr
 
 var filtersReady = false;
 function syncFilters() {
-  var staff = STATE.data.staff || [];
+  var staff = (STATE.data.staff || []).slice().sort(function (a, b) {
+    return String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }); });
   var cats = STATE.data.categories || [];
   if (!filtersReady) {
     $('fStatus').innerHTML = '<option value="">Any status</option>' +
@@ -21,7 +22,7 @@ function syncFilters() {
   }
   $('fAssignee').innerHTML = '<option value="">Everyone</option>' +
     staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
-  $('fBy').innerHTML = '<option value="">Assigned by anyone</option>' +
+  $('fBy').innerHTML = '<option value="">Any assignor</option>' +
     staff.map(function (u) { return '<option value="' + esc(u.username) + '"' +
       (u.username === FILTER.by ? ' selected' : '') + '>By ' + esc(u.name) + '</option>'; }).join('');
   $('fCategory').innerHTML = '<option value="">Any category</option>' +
@@ -60,6 +61,80 @@ function visibleTasks() {
     }
     return true;
   });
+}
+
+/* ---------- the date filter: one button, a small dialog ------------------ */
+function datesLabel() {
+  if (!FILTER.from && !FILTER.to) return 'Any date';
+  var on = FILTER.dateOn === 'created' ? 'Assigned' : 'Due';
+  if (FILTER.from && FILTER.to) return on + ' ' + fmtDate(FILTER.from) + ' – ' + fmtDate(FILTER.to);
+  return on + (FILTER.from ? ' from ' + fmtDate(FILTER.from) : ' until ' + fmtDate(FILTER.to));
+}
+function syncDatesButton() {
+  $('fDatesLabel').textContent = datesLabel();
+  $('fDatesBtn').classList.toggle('on', !!(FILTER.from || FILTER.to));
+}
+function openDateFilter() {
+  var on = FILTER.dateOn === 'created' ? 'created' : 'due';
+  var preset = function (k, label) { return '<button type="button" class="chip t-slate dfPre" data-k="' + k + '">' + label + '</button>'; };
+  openModal('<form id="fDateDlg" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-4">Filter by date</h2>' +
+    '<div class="lb">Which date</div>' +
+    '<div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl mb-4" id="dfOn">' +
+      '<button type="button" data-on="created" class="flex-1' + (on === 'created' ? ' on' : '') + '">Assign date</button>' +
+      '<button type="button" data-on="due" class="flex-1' + (on === 'due' ? ' on' : '') + '">Due date</button></div>' +
+    '<div class="grid grid-cols-2 gap-3 mb-3">' +
+      '<div><label class="lb" for="dfFrom">From</label><input id="dfFrom" type="date" class="in" value="' + esc(FILTER.from) + '"></div>' +
+      '<div><label class="lb" for="dfTo">To</label><input id="dfTo" type="date" class="in" value="' + esc(FILTER.to) + '"></div></div>' +
+    '<div class="flex flex-wrap gap-2 mb-6">' + preset('week', 'This week') + preset('month', 'This month') +
+      preset('last', 'Last month') + preset('next7', 'Next 7 days') + '</div>' +
+    '<div class="flex gap-3">' +
+      '<button type="button" id="dfClear" class="btn btn-g">Clear</button><span class="flex-1"></span>' +
+      '<button type="button" class="btn btn-g" onclick="closeModal()">Cancel</button>' +
+      '<button type="submit" class="btn btn-p px-8">OK</button></div></form>', 'max-w-md');
+  $('dfOn').querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      on = b.dataset.on;
+      $('dfOn').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    });
+  });
+  var ymdOf = function (d) { var m = String(d.getMonth() + 1), day = String(d.getDate());
+    return d.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (day.length < 2 ? '0' + day : day); };
+  document.querySelectorAll('.dfPre').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var now = new Date(), a, z;
+      if (b.dataset.k === 'week') { a = new Date(now); a.setDate(now.getDate() - ((now.getDay() + 6) % 7)); z = new Date(a); z.setDate(a.getDate() + 6); }
+      if (b.dataset.k === 'month') { a = new Date(now.getFullYear(), now.getMonth(), 1); z = new Date(now.getFullYear(), now.getMonth() + 1, 0); }
+      if (b.dataset.k === 'last') { a = new Date(now.getFullYear(), now.getMonth() - 1, 1); z = new Date(now.getFullYear(), now.getMonth(), 0); }
+      if (b.dataset.k === 'next7') { a = new Date(now); z = new Date(now); z.setDate(now.getDate() + 6); }
+      $('dfFrom').value = ymdOf(a); $('dfTo').value = ymdOf(z);
+    });
+  });
+  var apply = function (from, to) {
+    /* A range typed backwards (To before From) is read the right way round. */
+    if (from && to && from > to) { var x = from; from = to; to = x; }
+    FILTER.dateOn = on; FILTER.from = from; FILTER.to = to;
+    closeModal(); syncDatesButton(); filtersChanged();
+  };
+  $('dfClear').addEventListener('click', function () { apply('', ''); });
+  $('fDateDlg').addEventListener('submit', function (e) { e.preventDefault(); apply($('dfFrom').value, $('dfTo').value); });
+}
+
+/* ---------- sorting the list by person ------------------------------------
+   Click "Assigned to" or "Assigned by": A–Z, then Z–A, then back to the usual
+   order. */
+function sortRows(rows) {
+  var m = /^(to|by)-(asc|desc)$/.exec(FILTER.sort || '');
+  if (!m) return rows;
+  var key = m[1] === 'to' ? 'toName' : 'byName', dir = m[2] === 'asc' ? 1 : -1;
+  return rows.slice().sort(function (a, b) {
+    return dir * String(a[key] || '').localeCompare(String(b[key] || ''), 'en', { sensitivity: 'base' }) ||
+      String(a.due || '').localeCompare(String(b.due || ''));
+  });
+}
+function cycleSort(col) {
+  FILTER.sort = FILTER.sort === col + '-asc' ? col + '-desc' : FILTER.sort === col + '-desc' ? '' : col + '-asc';
+  renderTasks();
 }
 
 /** The day a task falls on for the date filter: its due date, or the day it
@@ -336,9 +411,19 @@ function renderBoard(rows) {
 }
 
 function renderList(rows) {
+  rows = sortRows(rows);
+  var head = function (h) {
+    var col = h === 'Assigned to' ? 'to' : h === 'Assigned by' ? 'by' : '';
+    if (!col) return '<th>' + h + '</th>';
+    var s = FILTER.sort === col + '-asc' ? ' <span class="text-blue-600">A–Z ↓</span>'
+          : FILTER.sort === col + '-desc' ? ' <span class="text-blue-600">Z–A ↑</span>'
+          : ' <span class="material-icons text-xs align-middle text-gray-300">unfold_more</span>';
+    return '<th><button type="button" class="sortBy font-black uppercase whitespace-nowrap hover:text-gray-800" ' +
+      'data-col="' + col + '" title="Sort A–Z / Z–A">' + h + s + '</button></th>';
+  };
   $('list').innerHTML = '<table class="tbl"><thead><tr>' +
-    ['Task','Category','Owner','Status','Priority','Due'].map(function (h) {
-      return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    ['Task','Category','Assigned to','Assigned by','Status','Priority','Due'].map(head).join('') +
+    '</tr></thead><tbody>' +
     rows.map(function (t) {
       var late = daysLate(t);
       return '<tr class="cursor-pointer" data-id="' + esc(t.id) + '">' +
@@ -348,6 +433,7 @@ function renderList(rows) {
           (t.jobCategory ? tintChip(t.jobCategory, t.jobCategory) : '—') + '</td>' +
         '<td class="whitespace-nowrap"><span class="flex items-center gap-2">' +
           avatar(t.toName, 22) + esc(t.toName) + '</span></td>' +
+        '<td class="whitespace-nowrap text-gray-600">' + esc(t.byName || '—') + '</td>' +
         '<td class="whitespace-nowrap"><span class="chip ' + stateTone(t.status).chip + '">' +
           esc(t.status) + '</span></td>' +
         '<td class="whitespace-nowrap">' + priorityChip(t.priority) + '</td>' +
@@ -356,6 +442,8 @@ function renderList(rows) {
     }).join('') + '</tbody></table>';
   $('list').querySelectorAll('tr[data-id]').forEach(function (r) {
     r.addEventListener('click', function () { openTask(r.dataset.id); }); });
+  $('list').querySelectorAll('.sortBy').forEach(function (b) {
+    b.addEventListener('click', function () { cycleSort(b.dataset.col); }); });
 }
 
 /* Dropping a card is just a status change; the server re-checks every rule, so

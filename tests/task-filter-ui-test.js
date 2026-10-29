@@ -57,31 +57,68 @@ const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n);
 
   console.log('\n=== filter by who assigned it ===');
   const byOpts = await p.$$eval('#fBy option', (o) => o.map((x) => x.textContent));
-  ok('the Assigned-by list names the people', byOpts[0] === 'Assigned by anyone' && byOpts.includes('By Sruti Charulata'), byOpts);
+  ok('the Assigned-by list names the people', byOpts[0] === 'Any assignor' && byOpts.includes('By Sruti Charulata'), byOpts);
   await p.selectOption('#fBy', 'sruti' + R); await p.waitForTimeout(300);
   ok('By Sruti shows only her two', JSON.stringify(await shown()) === JSON.stringify(['Sruti job later', 'Sruti job soon']), await shown());
   ok('and the list on screen says so', await p.locator('text=Sruti job soon').first().isVisible() &&
     (await p.locator('text=Arjun job soon').count()) === 0 || !(await p.locator('text=Arjun job soon').first().isVisible()));
   await p.selectOption('#fBy', ''); await p.waitForTimeout(300);
 
-  console.log('\n=== filter by a date range ===');
-  await p.fill('#fFrom', day(0)); await p.dispatchEvent('#fFrom', 'change');
-  await p.fill('#fTo', day(7)); await p.dispatchEvent('#fTo', 'change'); await p.waitForTimeout(300);
+  console.log('\n=== filter by a date range, through a small dialog ===');
+  const pick = async (on, from, to) => {
+    await p.click('#fDatesBtn'); await p.waitForTimeout(300);
+    await p.click('#dfOn button[data-on="' + on + '"]');
+    await p.fill('#dfFrom', from); await p.fill('#dfTo', to);
+    await p.click('#fDateDlg button[type=submit]'); await p.waitForTimeout(300);
+  };
+  ok('the Tasks bar shows one small "Any date" button, not a row of inputs',
+    (await p.textContent('#fDatesBtn')).includes('Any date') && (await p.$('#fFrom')) === null);
+  await p.click('#fDatesBtn'); await p.waitForTimeout(300);
+  ok('it opens a dialog: Assign date or Due date, From, To, OK',
+    await p.isVisible('#dfOn button[data-on="created"]') && await p.isVisible('#dfOn button[data-on="due"]') &&
+    await p.isVisible('#dfFrom') && await p.isVisible('#dfTo') && await p.isVisible('#fDateDlg button[type=submit]'));
+  await p.click('#fDateDlg button.btn-g:has-text("Cancel")'); await p.waitForTimeout(200);
+  await pick('due', day(0), day(7));
   ok('due in the next week: the two soon jobs only', JSON.stringify(await shown()) === JSON.stringify(['Arjun job soon', 'Sruti job soon']), await shown());
-  ok('a clear button appears once a date is set', await p.isVisible('#fDatesClear'));
-  await p.selectOption('#fDateOn', 'created'); await p.waitForTimeout(300);
-  ok('on the assigned date, everything assigned today is in range', (await shown()).length === titles.length, await shown());
-  await p.fill('#fFrom', day(-9)); await p.dispatchEvent('#fFrom', 'change');
-  await p.fill('#fTo', day(-2)); await p.dispatchEvent('#fTo', 'change'); await p.waitForTimeout(300);
+  ok('the button now says what is applied', /^Due /.test((await p.textContent('#fDatesLabel')).trim()) &&
+    await p.evaluate(() => $('fDatesBtn').classList.contains('on')), await p.textContent('#fDatesLabel'));
+  await pick('created', day(0), day(0));
+  ok('on the assign date, everything assigned today is in range', (await shown()).length === titles.length, await shown());
+  await pick('created', day(-9), day(-2));
   ok('nothing was assigned last week', (await shown()).length === 0, await shown());
-  await p.click('#fDatesClear'); await p.waitForTimeout(200);
-  await p.fill('#fTo', day(1)); await p.dispatchEvent('#fTo', 'change');
-  await p.fill('#fFrom', day(30)); await p.dispatchEvent('#fFrom', 'change'); await p.waitForTimeout(300);
-  ok('a range typed backwards is turned the right way round', (await p.inputValue('#fFrom')) === day(1) && (await p.inputValue('#fTo')) === day(30));
-  await p.selectOption('#fDateOn', 'due'); await p.selectOption('#fBy', 'sruti' + R); await p.waitForTimeout(300);
+  await pick('due', day(30), day(1));
+  ok('a range typed backwards is turned the right way round', await p.evaluate(() => FILTER.from < FILTER.to));
+  await p.selectOption('#fBy', 'sruti' + R); await p.waitForTimeout(300);
   ok('both filters together: Sruti, due 1–30 days out', JSON.stringify(await shown()) === JSON.stringify(['Sruti job soon']), await shown());
-  await p.click('#fDatesClear'); await p.selectOption('#fBy', ''); await p.waitForTimeout(300);
-  ok('clearing brings everything back', (await shown()).length === titles.length && (await p.inputValue('#fFrom')) === '');
+  await p.click('#fDatesBtn'); await p.waitForTimeout(300);
+  await p.click('#dfClear'); await p.selectOption('#fBy', ''); await p.waitForTimeout(300);
+  ok('Clear in the dialog brings everything back', (await shown()).length === titles.length &&
+    (await p.textContent('#fDatesLabel')).trim() === 'Any date');
+  await p.click('#fDatesBtn'); await p.waitForTimeout(300);
+  await p.click('.dfPre[data-k="next7"]');
+  ok('a preset fills the dates for you', (await p.inputValue('#dfFrom')) === day(0) && (await p.inputValue('#dfTo')) === day(6));
+  await p.click('#fDateDlg button.btn-g:has-text("Cancel")'); await p.waitForTimeout(200);
+  ok('Cancel changes nothing', (await p.textContent('#fDatesLabel')).trim() === 'Any date');
+
+  console.log('\n=== sort by who did it or who assigned it ===');
+  const col = (i) => p.$$eval('#list tbody tr', (rs, i) => rs.map((r) => r.children[i].textContent.trim()), i);
+  const sorted = (a, dir) => a.every((x, k) => k === 0 || dir * a[k - 1].localeCompare(x, 'en', { sensitivity: 'base' }) <= 0);
+  await p.click('.sortBy[data-col="to"]'); await p.waitForTimeout(250);
+  let names = (await col(2)).map((s) => s.replace(/^[A-Z]{1,2}/, ''));
+  ok('Assigned to, A–Z', sorted(names, 1) && (await p.textContent('.sortBy[data-col="to"]')).includes('A–Z'), names);
+  await p.click('.sortBy[data-col="to"]'); await p.waitForTimeout(250);
+  names = (await col(2)).map((s) => s.replace(/^[A-Z]{1,2}/, ''));
+  ok('click again: Z–A', sorted(names, -1) && (await p.textContent('.sortBy[data-col="to"]')).includes('Z–A'), names);
+  await p.click('.sortBy[data-col="by"]'); await p.waitForTimeout(250);
+  let by = await col(3);
+  ok('Assigned by, A–Z', sorted(by, 1) && by[0] === 'Arjun Banerjee', by);
+  await p.click('.sortBy[data-col="by"]'); await p.waitForTimeout(250);
+  by = await col(3);
+  ok('Assigned by, Z–A', sorted(by, -1) && by[by.length - 1] === 'Arjun Banerjee', by);
+  await p.click('.sortBy[data-col="by"]'); await p.waitForTimeout(250);
+  ok('a third click puts the usual order back', await p.evaluate(() => FILTER.sort === ''));
+  const opts = (await p.$$eval('#fAssignee option', (o) => o.map((x) => x.textContent))).slice(1);
+  ok('the people pickers list names A–Z', sorted(opts, 1), opts);
 
   console.log('\n=== the archive honours the same filters ===');
   const arch = await post({ action: 'getArchive', token: A, by: 'sruti' + R, dateOn: 'due', from: day(0), to: day(7) });

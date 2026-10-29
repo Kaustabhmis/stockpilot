@@ -8,11 +8,12 @@ function loadTeam() {
 
 function renderTeam() {
   $('btnTabs').classList.toggle('hidden', !isAdmin());
-  /* Only a manager can add people or change categories: a Doer is not shown
-     buttons the server would refuse. */
+  /* Only a manager can add people, change categories or open the KRA sheet:
+     a Doer is not shown buttons the server would refuse. */
   var doer = !!(STATE.user && STATE.user.role === 'Doer');
   $('btnNewUser').classList.toggle('hidden', doer);
   $('btnCategories').classList.toggle('hidden', doer);
+  $('btnKra').classList.toggle('hidden', doer);       // the company-wide KRA sheet is a manager's screen
   var active = TEAM.filter(function (u) { return u.active !== false; });
   var u = STATE.usage;
   var tile = function (k, v, icon, colour, tone) {

@@ -25,6 +25,9 @@ const boot = (file) => {
 };
 
 const L = boot(__dirname + '/../dist/lite/Code.gs');
+/* A correctly set-up Lite account can send as mis@dynamicengineers.in. MAIL_FROM
+   is deliberately left unset here: Lite must fall back to that address. */
+L.env.G.GmailApp.__setAliases(['mis@dynamicengineers.in']);
 console.log('\n=== the Lite build ===');
 ok('is the same code with EDITION = lite', L.EDITION === 'lite' && L.MAIL_FROM_NAME === 'Domebox Lite');
 const reg = L.call({ action: 'register', form: { companyName: 'Dynamic Engineers', name: 'Kaustabh', email: 'mis@dynamic.in', password: 'ownerpass123' } });
@@ -33,6 +36,8 @@ ok('and is told no plan or trial', !reg.plan && !reg.trialEnds);
 const row = L.env.FILES.MASTER.getSheetByName('Directory').getDataRange().getValues()[1];
 ok('the registry says Growth, Active, no end in sight — not a trial', row[3] === 'Growth' && row[4] === '2099-12-31' && row[6] === 'Active', JSON.stringify(row));
 const welcome = L.env.mails.find((m) => /Welcome/.test(m.subject));
+ok('with MAIL_FROM left blank, Lite still sends from mis@dynamicengineers.in', welcome && welcome.from === 'mis@dynamicengineers.in',
+   welcome && welcome.from);
 ok('the welcome email says Domebox Lite, with no trial or plans', welcome && /Domebox Lite/.test(welcome.subject) && !/trial|Free plan|choose one/i.test(welcome.html), welcome && welcome.subject);
 const second = L.call({ action: 'register', form: { companyName: 'Stranger Ltd', name: 'X', email: 'x@stranger.in', password: 'strangerpass1' } });
 ok('a second company is turned away', second.status === 'error' && /already set up for Dynamic Engineers/.test(second.message), JSON.stringify(second));

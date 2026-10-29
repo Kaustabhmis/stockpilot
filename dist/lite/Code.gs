@@ -54,7 +54,8 @@ function CFG() {
     masterId:   p.getProperty('MASTER_DB_ID') || '',
     templateId: p.getProperty('TEMPLATE_ID') || '',
     siteUrl:    p.getProperty('SITE_URL') || 'https://www.domebox.in',
-    mailFrom:   p.getProperty('MAIL_FROM') || 'info@biscsindia.com',
+    /* Lite always sends as Dynamic Engineers unless told otherwise. */
+    mailFrom:   p.getProperty('MAIL_FROM') || (isLite_() ? 'mis@dynamicengineers.in' : 'info@biscsindia.com'),
     razorKey:   propLoose_(p, 'RAZORPAY_KEY_ID'),
     razorSecret:propLoose_(p, 'RAZORPAY_KEY_SECRET'),
     razorHook:  p.getProperty('RAZORPAY_WEBHOOK_SECRET') || '',
