@@ -15,15 +15,20 @@ const BASE = process.argv[2] || 'http://127.0.0.1:8105';
 /* THE RULES                                                           */
 /* ------------------------------------------------------------------ */
 
-/* A DAY. First punch is in, last is out. It is a full day (P) when either
-     - the shift's full-day hours were worked, or
-     - it was kept within the grace at BOTH ends: in no later than
-       start + grace, out no earlier than end - grace.
-   Otherwise the half-day hours make it HD, and below them it is A.
-     SR Tight 09:00-18:00, full 9 h, half 5 h, grace 15:
-       09:14-17:46  8.5 h  in and out inside the grace       -> P
-       09:16-17:50  8.6 h  in a minute past the grace        -> HD
-       09:05-17:44  8.7 h  out a minute before the grace     -> HD          */
+/* A DAY. First punch is in, last is out, judged on the person's own shift:
+     - fewer than the shift's half-day hours worked                   -> A
+     - in more than 60 min after the start, or out more than 60 min
+       before the end (halfday_after_minutes)                         -> HD
+     - otherwise                                                       -> P
+   Inside the hour, in after start + grace (15) or out before end - grace is
+   a LATE MARK on a P day, counted against the slab - not a half day.
+     SR Tight 09:00-18:00, half 5 h, grace 15:
+       09:14-17:46  in and out inside the grace              -> P, no mark
+       09:16-17:50  in a minute past the grace               -> P, late mark
+       09:05-17:44  out a minute before the grace            -> P, early mark
+       10:01-18:00  in 61 min late                           -> HD
+       09:00-16:59  out 61 min early                         -> HD
+       10:00-18:00  in exactly 60 min late                   -> P, late mark */
 
 /* THE RULES CHANGE AFTERWARDS. Moving someone to another shift, or editing a
    shift's hours, start, end or grace, judges their open days again - but only
@@ -37,10 +42,10 @@ const BASE = process.argv[2] || 'http://127.0.0.1:8105';
        Mar 02 09:13-17:56  -> HD, and March's payroll is finalised
      Moved to SR Day 09:00-18:00, full 8 h, grace 15:
        Apr 06 -> P (8.7 h is a full day here); the rest unchanged; 1 re-judged.
-     SR Day edited to full 9 h, grace 5:
-       Apr 06 -> HD (in 09:13 is past 09:05, and 8.7 h is under 9).
-     ...and back to grace 15:
-       Apr 06 -> P again (09:13 and 17:56 are inside the grace).            */
+     SR Day moved to start 08:00:
+       Apr 06 -> HD (in 09:13 is 73 min after the start).
+     ...and back to 09:00:
+       Apr 06 -> P again.                                                    */
 
 const call = async (action, payload, token) => {
   const r = await fetch(BASE + '/exec', { method: 'POST',
@@ -97,8 +102,16 @@ const st = async (code, iso) => (await day(code, iso)).status;
 
 console.log('\na day of punches');
 eq(await st('SR-02', '2026-04-13'), 'P', '09:14-17:46 on 09:00-18:00, grace 15', 'inside the grace at both ends');
-eq(await st('SR-02', '2026-04-14'), 'HD', '09:16-17:50', 'in past the grace, 8.6 h under 9');
-eq(await st('SR-02', '2026-04-15'), 'HD', '09:05-17:44', 'out before the grace, 8.7 h under 9');
+eq(await st('SR-02', '2026-04-14'), 'P', '09:16-17:50', 'in past the grace: a late mark, not a half day');
+eq(await st('SR-02', '2026-04-15'), 'P', '09:05-17:44', 'out before the grace: an early mark, not a half day');
+await call('ingestPunches', { source: 'file', punches: [
+  ...punch('SR-02', '2026-04-20', '10:01', '18:00'),
+  ...punch('SR-02', '2026-04-21', '09:00', '16:59'),
+  ...punch('SR-02', '2026-04-22', '10:00', '18:00')] }, token);
+eq(await st('SR-02', '2026-04-20'), 'HD', '10:01-18:00', 'in more than an hour late');
+ok(/late/.test((await day('SR-02', '2026-04-20')).remarks || ''), 'remark says why', (await day('SR-02', '2026-04-20')).remarks);
+eq(await st('SR-02', '2026-04-21'), 'HD', '09:00-16:59', 'out more than an hour early');
+eq(await st('SR-02', '2026-04-22'), 'P', '10:00-18:00', 'exactly an hour late is still the late mark');
 eq(await st('SR-01', '2026-04-06'), 'HD', '09:13-17:56 on 09:00-19:00, full 9 h', 'out long before 18:45');
 eq(await st('SR-01', '2026-04-07'), 'A', '09:00-11:00', 'under the half-day hours');
 
@@ -127,12 +140,12 @@ ok(/re-checked/.test((await day('SR-01', '2026-04-06')).remarks || ''), 'remark 
    (await day('SR-01', '2026-04-06')).remarks);
 
 console.log('\nthe shift itself edited');
-const tight = await call('save', { sheet: 'Shifts', row: SHIFT('SR-S1', 'SR Day', '09:00', '18:00', 9, 5) }, token);
-ok(Number(tight.rejudged) >= 1, 'full 9 h, grace 5: days re-judged', 'got ' + tight.rejudged);
-eq(await st('SR-01', '2026-04-06'), 'HD', 'Apr 06 under grace 5', 'in 09:13 is past 09:05 and 8.7 h < 9');
-const loose = await call('save', { sheet: 'Shifts', row: SHIFT('SR-S1', 'SR Day', '09:00', '18:00', 9, 15) }, token);
-ok(Number(loose.rejudged) >= 1, 'back to grace 15: days re-judged', 'got ' + loose.rejudged);
-eq(await st('SR-01', '2026-04-06'), 'P', 'Apr 06 under grace 15', '09:13 and 17:56 are inside the grace');
+const tight = await call('save', { sheet: 'Shifts', row: SHIFT('SR-S1', 'SR Day', '08:00', '18:00', 8, 15) }, token);
+ok(Number(tight.rejudged) >= 1, 'start moved to 08:00: days re-judged', 'got ' + tight.rejudged);
+eq(await st('SR-01', '2026-04-06'), 'HD', 'Apr 06 on 08:00-18:00', 'in 09:13 is 73 min after the start');
+const loose = await call('save', { sheet: 'Shifts', row: SHIFT('SR-S1', 'SR Day', '09:00', '18:00', 8, 15) }, token);
+ok(Number(loose.rejudged) >= 1, 'back to 09:00: days re-judged', 'got ' + loose.rejudged);
+eq(await st('SR-01', '2026-04-06'), 'P', 'Apr 06 on 09:00-18:00', '13 min late is inside the grace');
 eq(await st('SR-01', '2026-04-09'), 'A', 'Apr 09 still as set by hand');
 
 console.log('\none punch and no second');

@@ -139,7 +139,7 @@ const same = (label, got, want, why) => {
         const iso = m + '-' + ('0' + d).slice(-2);
         if (new Date(iso + 'T00:00:00Z').getUTCDay() === 0) continue;
         att.push({ id: code + '_' + iso, date: iso, emp_code: code, status: 'P',
-          in_time: '09:00', out_time: '18:00', hours: 9 });
+          in_time: '09:00', out_time: '18:30', hours: 9.5 });
       }
     }
   }

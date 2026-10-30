@@ -63,7 +63,7 @@ export function createRouter(db, opts = {}) {
      anyone whose rules moved is re-judged. Saves that cannot move a rule cost
      nothing. */
   const RULE_SETTINGS = ['shift_start', 'shift_end', 'grace_minutes', 'full_day_hours',
-                         'half_day_hours', 'default_shift'];
+                         'half_day_hours', 'default_shift', 'halfday_after_minutes'];
   async function rulesBefore(action, p) {
     let codes = null;
     if ((action === 'save' || action === 'saveMany') && p.sheet === 'Employees') {

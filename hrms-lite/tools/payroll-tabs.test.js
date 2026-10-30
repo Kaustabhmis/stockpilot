@@ -179,7 +179,7 @@ function monthsBetween(from, to) {
       const absent = absencesLeft > 0 && (absencesLeft--, true);
       att.push({ id: code + '_' + iso, date: iso, emp_code: code,
         status: absent ? 'A' : 'P', in_time: absent ? '' : '09:00',
-        out_time: absent ? '' : '18:00', hours: absent ? 0 : 9 });
+        out_time: absent ? '' : '18:30', hours: absent ? 0 : 9.5 });
     }
   }
   /* AR-01 needs more than thirty days in the year or bonus will correctly
@@ -191,7 +191,7 @@ function monthsBetween(from, to) {
       const iso = m + '-' + ('0' + d).slice(-2);
       if (new Date(iso + 'T00:00:00Z').getUTCDay() === 0) continue;
       att.push({ id: 'AR-01_' + iso, date: iso, emp_code: 'AR-01', status: 'P',
-        in_time: '09:00', out_time: '18:00', hours: 9 });
+        in_time: '09:00', out_time: '18:30', hours: 9.5 });
     }
   }
   for (let i = 0; i < att.length; i += 400) {

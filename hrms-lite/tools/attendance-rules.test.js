@@ -112,7 +112,7 @@ const STATUS = { P: 'P', A: 'A', h: 'HD', W: 'WO', H: 'H', O: 'OD', C: 'CO', L: 
       const iso = YM + '-' + ('0' + d).slice(-2);
       rows.push({ id: c.code + '_' + iso, date: iso, emp_code: c.code, status: st,
         in_time: (st === 'P' || st === 'HD') ? '09:00' : '',
-        out_time: st === 'P' ? '18:00' : st === 'HD' ? '13:00' : '',
+        out_time: st === 'P' ? '18:30' : st === 'HD' ? '13:00' : '',
         hours: st === 'P' ? 9 : st === 'HD' ? 4 : 0 });
     }
   }
@@ -120,9 +120,9 @@ const STATUS = { P: 'P', A: 'A', h: 'HD', W: 'WO', H: 'H', O: 'OD', C: 'CO', L: 
   for (let d = 1; d <= DIM; d++) {
     const iso = YM + '-' + ('0' + d).slice(-2);
     if (d >= 16) rows.push({ id: 'AT-09_' + iso, date: iso, emp_code: 'AT-09', status: 'P',
-      in_time: '09:00', out_time: '18:00', hours: 9 });
+      in_time: '09:00', out_time: '18:30', hours: 9.5 });
     if (d <= 15) rows.push({ id: 'AT-10_' + iso, date: iso, emp_code: 'AT-10', status: 'P',
-      in_time: '09:00', out_time: '18:00', hours: 9 });
+      in_time: '09:00', out_time: '18:30', hours: 9.5 });
   }
   for (let i = 0; i < rows.length; i += 400) {
     await call('saveMany', { sheet: 'Attendance', rows: rows.slice(i, i + 400) }, token);

@@ -2881,7 +2881,10 @@ function renderDashboard() {
     leave:     peopleOn('leave', iso).length,
     unmarked:  peopleOn('unmarked', iso).length
   };
-  var pending = S.leave.filter(function (l) { return l.status === 'Pending'; });
+  /* leave and every other request (missed punch, OD, comp-off) - counting
+     leave alone left the card at 4 with 29 requests waiting on HR */
+  var pending = S.leave.filter(function (l) { return l.status === 'Pending'; })
+    .concat((S.requests || []).filter(function (r) { return String(r.status) === 'Pending'; }));
   var lastRunMonth = Object.keys(S.payroll.reduce(function (m, r) { m[r.month] = 1; return m; }, {})).sort().pop();
   var lastRunNet = S.payroll.filter(function (r) { return r.month === lastRunMonth; })
     .reduce(function (s, r) { return s + num(r.net); }, 0);
@@ -2913,8 +2916,8 @@ function renderDashboard() {
     kpi('Not marked ' + dayLabel, dash(counts.unmarked),
         nonWorking ? offNote : (counts.unmarked ? 'will be paid as LOP' : 'attendance complete'),
         "showPeople('unmarked')", counts.unmarked ? 'k-warn' : 'k-good', '&#9633;') +
-    kpi('Pending approvals', pending.length, pending.length ? 'waiting on you' : 'nothing waiting',
-        "go('leave')", pending.length ? 'k-warn' : 'k-good', '&#128203;') +
+    kpi('Pending approvals', pending.length, pending.length ? 'leave and requests waiting' : 'nothing waiting',
+        "go('leave');leaveTab('requests')", pending.length ? 'k-warn' : 'k-good', '&#128203;') +
     kpi('LOP this month', lopMonth, 'days of unpaid absence',
         "go('attendance')", lopMonth ? 'k-critical' : 'k-good', '&#8722;') +
     kpi('Last net payout', lastRunMonth ? shortMoney(lastRunNet) : '&mdash;',
@@ -3969,16 +3972,43 @@ function shiftCfg(code) {
     grace: num(pick(sh.grace_minutes, st.grace_minutes || 15)),
     otAfter: num(pick(sh.ot_after_minutes, st.ot_after_minutes || 30)),
     fullHours: num(pick(sh.full_day_hours, st.full_day_hours || 8)) || 8,
-    halfHours: num(pick(sh.half_day_hours, st.half_day_hours || 4))
+    halfHours: num(pick(sh.half_day_hours, st.half_day_hours || 4)),
+    /* in later than this past the start, or out earlier than this before
+       the end, and the day is a half day */
+    halfAfter: num(pick(st.halfday_after_minutes, 60))
   };
 }
-/* Kept to the shift within the grace at both ends - in no later than
-   start + grace, out no earlier than end - grace - is a full day whatever the
-   hours add up to. The server judges punches by the same rule. */
-function withinGrace(cfg, inT, outT) {
+/* What a day of punches becomes on the person's own shift - the same rule
+   the server applies to every punch:
+     - fewer than the shift's half-day hours worked                 -> A
+     - in more than an hour (halfday_after_minutes) after the start,
+       or out more than that before the end                         -> HD
+     - otherwise                                                     -> P
+   Inside that hour, in after start + grace or out before end - grace is a
+   late mark (see lateMinutes / earlyMinutes), not a lost half day. A shift
+   with no start/end, or one crossing midnight, uses the full-day hours. */
+function judgeDay(cfg, inT, outT, hours) {
+  if (hours < cfg.halfHours) return 'A';
   var a = minutesOf(inT), b = minutesOf(outT);
-  if (a === null || b === null || cfg.start === null || cfg.end === null || cfg.end <= cfg.start) return false;
-  return a <= cfg.start + cfg.grace && b >= cfg.end - cfg.grace;
+  if (a === null || b === null || cfg.start === null || cfg.end === null || cfg.end <= cfg.start) {
+    return hours >= cfg.fullHours ? 'P' : 'HD';
+  }
+  if (a - cfg.start > cfg.halfAfter || cfg.end - b > cfg.halfAfter) return 'HD';
+  return 'P';
+}
+/* Minutes left before the end of the shift, beyond the grace. Like a late
+   arrival, an early departure inside the hour is a late mark. */
+function earlyMinutes(rec, code) {
+  var cfg = shiftCfg(code), outM = minutesOf(rec && rec.out_time);
+  if (outM === null || cfg.end === null || cfg.start === null || cfg.end <= cfg.start) return 0;
+  return Math.max(0, cfg.end - cfg.grace - outM);
+}
+/* Late marks a day carries: one for coming late, one for leaving early, on a
+   day kept as P. A day already cut to HD by the hour rule carries none - it
+   has paid for that lateness once. */
+function lateMarks(rec, code, st) {
+  if (st !== 'P' || !rec) return 0;
+  return (lateMinutes(rec, code) ? 1 : 0) + (earlyMinutes(rec, code) ? 1 : 0);
 }
 function lateMinutes(rec, code) {
   var cfg = shiftCfg(code), inM = minutesOf(rec && rec.in_time);
@@ -4056,7 +4086,7 @@ function attStats(ym, code) {
     if (st !== 'WO' && st !== 'H') s.working++;
     if (st === 'L' && unpaid[code + '_' + iso]) s.unpaidLeave++;
     if (st === 'P' || st === 'HD') {
-      if (lateMinutes(rec, code)) s.late++;
+      s.late += lateMarks(rec, code, st);
       s.ot += otMinutes(rec, code);
       /* punched in but never out, on a day that has passed */
       if (rec && rec.in_time && !rec.out_time && iso < today()) {
@@ -4195,10 +4225,12 @@ function renderAttendance() {
       var key = e.emp_code + '_' + dateStr(ym, d);
       var rec = recordFor(ym, e.emp_code, d);
       var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
-      var late = (st === 'P' || st === 'HD') && lateMinutes(rec, e.emp_code);
+      var late = lateMarks(rec, e.emp_code, st);
+      var lateIn = late ? lateMinutes(rec, e.emp_code) : 0, earlyOut = late ? earlyMinutes(rec, e.emp_code) : 0;
       var open = rec && rec.in_time && !rec.out_time && dateStr(ym, d) < today();
       var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + hhmm(rec.in_time) + '-' + (hhmm(rec.out_time) || '?') : '') +
-        (late ? ' (late ' + late + 'm)' : '') + (open ? ' - never punched out' : '') +
+        (lateIn ? ' (late ' + lateIn + 'm)' : '') + (earlyOut ? ' (out ' + earlyOut + 'm early)' : '') +
+        (open ? ' - never punched out' : '') +
         (rec && rec.remarks ? ' ' + rec.remarks : '');
       var handlers = editable
         ? (times ? ' onclick="openCell(\'' + esc(e.emp_code) + '\',' + d + ')"'
@@ -4311,7 +4343,7 @@ function refreshCell(ym, code, d) {
   if (!cell) return;
   var rec = recordFor(ym, code, d);
   var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
-  var late = (st === 'P' || st === 'HD') && lateMinutes(rec, code);
+  var late = lateMarks(rec, code, st);
   cell.className = 'att-cell s-' + st + (S.attDirty[key] ? ' edited' : '') + (late ? ' late' : '');
   cell.textContent = st;
 }
@@ -6475,6 +6507,7 @@ var WORKING_HOURS = [
   ['full_day_hours', 'Minimum hours worked for a full day (P)', 'number'],
   ['half_day_hours', 'Minimum hours worked for a half day (HD) - less is Absent', 'number'],
   ['grace_minutes', 'Grace minutes before a late mark', 'number'],
+  ['halfday_after_minutes', 'Half day when in later / out earlier than this many minutes (default 60)', 'number'],
   ['ot_after_minutes', 'Overtime starts after (minutes past shift end)', 'number'],
   ['weekly_off', 'Weekly off (e.g. Sun, or Sun,Sat)', 'text'],
   ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt']
@@ -9243,15 +9276,16 @@ function punchesToAttendance(punches, problems) {
     if (mins < 0) mins += 24 * 60;                       // crossed midnight
     var hours = mins / 60;
 
-    var cfg = shiftCfg(g.code), full = cfg.fullHours, half = cfg.halfHours;
+    var cfg = shiftCfg(g.code);
     var status, remark = 'punch import';
     if (!pair) {
       status = String(S.settings.punch_out_mandatory || 'yes').toLowerCase() !== 'no' ? 'A' : 'P';
       remark = 'single punch, no out';
+    } else {
+      status = judgeDay(cfg, inT, outT, hours);
+      if (status === 'HD') remark = hours.toFixed(1) + ' h - in or out more than ' + cfg.halfAfter + ' min off the shift';
+      if (status === 'A') remark = 'only ' + hours.toFixed(1) + ' h, verify';
     }
-    else if (hours >= full || withinGrace(cfg, inT, outT)) status = 'P';
-    else if (hours >= half) { status = 'HD'; remark = hours.toFixed(1) + ' h'; }
-    else { status = 'A'; remark = 'only ' + hours.toFixed(1) + ' h, verify'; }
     if (merged) remark += ' (updated)';
 
     /* Identical to what is already there: nothing to write. */

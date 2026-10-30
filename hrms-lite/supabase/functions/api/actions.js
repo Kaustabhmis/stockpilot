@@ -92,6 +92,10 @@ export function createActions(api, db, deps) {
       start: minutesOfClock(clockOf(use.start_time || st.shift_start)),
       end: minutesOfClock(clockOf(use.end_time || st.shift_end)),
       grace: isNaN(grace) ? 15 : grace,
+      /* in later than this past the start, or out earlier than this before the
+         end, and the day is a half day */
+      halfAfter: (v => isNaN(v) ? 60 : v)(Number(st.halfday_after_minutes === undefined || st.halfday_after_minutes === ''
+        ? 60 : st.halfday_after_minutes)),
       weekly_off: use.weekly_off,
       saturday_policy: use.saturday_policy
     };
@@ -392,9 +396,12 @@ export function createActions(api, db, deps) {
     const mustOut = String((await settingsMap()).punch_out_mandatory || 'yes').toLowerCase() !== 'no';
     let status, remark;
     if (inT === outT) { status = mustOut ? 'A' : 'P'; remark = source + ' - single punch, no out'; }
-    else if (judge(hours, sh, inT, outT) === 'P') { status = 'P'; remark = source + (n > 2 ? ' - ' + n + ' punches' : ''); }
-    else if (hours >= sh.half) { status = 'HD'; remark = source + ' - ' + hours.toFixed(1) + ' h'; }
-    else { status = 'A'; remark = source + ' - only ' + hours.toFixed(1) + ' h, verify'; }
+    else {
+      status = judge(hours, sh, inT, outT);
+      remark = source + (status === 'P' ? (n > 2 ? ' - ' + n + ' punches' : '')
+        : status === 'HD' ? ' - ' + dayReason(sh, inT, outT, hours)
+        : ' - only ' + hours.toFixed(1) + ' h, verify');
+    }
 
     const row = {
       id: empCode + '_' + iso, date: iso, emp_code: empCode, status,
@@ -405,18 +412,35 @@ export function createActions(api, db, deps) {
     return await upsertRow('Attendance', row, dirty);
   }
 
-  /* What a day becomes on this shift - the rule rebuildDay applies. A full
-     day is either the shift's full-day hours worked, or a day kept within the
-     grace at both ends: in no later than start + grace, out no earlier than
-     end - grace. Otherwise the half-day hours decide HD, and below that A. */
-  function withinGrace(sh, inT, outT) {
+  /* What a day of punches becomes on the person's own shift - the rule
+     rebuildDay applies, and the admin page's file import mirrors it:
+       - fewer than the shift's half-day hours worked          -> A
+       - in more than an hour (halfday_after_minutes) after the
+         shift start, or out more than that before its end     -> HD
+       - otherwise                                              -> P
+     Inside that hour, in after start + grace or out before end - grace is a
+     late mark, counted against the late-mark slab - not a lost half day.
+     A shift with no start/end (or one crossing midnight) falls back to the
+     full-day hours. */
+  function dayEdges(sh, inT, outT) {
     const a = minutesOfClock(clockOf(inT)), b = minutesOfClock(clockOf(outT));
-    if (a === null || b === null || sh.start === null || sh.end === null || sh.end <= sh.start) return false;
-    return a <= sh.start + sh.grace && b >= sh.end - sh.grace;
+    if (a === null || b === null || sh.start === null || sh.end === null || sh.end <= sh.start) return null;
+    return { late: a - sh.start, early: sh.end - b };
   }
-  const sameDayRules = (a, b) => ['full', 'half', 'start', 'end', 'grace'].every(k => a[k] === b[k]);
-  const judge = (hours, sh, inT, outT) =>
-    (hours >= sh.full || withinGrace(sh, inT, outT)) ? 'P' : (hours >= sh.half ? 'HD' : 'A');
+  function judge(hours, sh, inT, outT) {
+    if (hours < sh.half) return 'A';
+    const e = dayEdges(sh, inT, outT);
+    if (!e) return hours >= sh.full ? 'P' : 'HD';
+    if (e.late > sh.halfAfter || e.early > sh.halfAfter) return 'HD';
+    return 'P';
+  }
+  function dayReason(sh, inT, outT, hours) {
+    const e = dayEdges(sh, inT, outT);
+    if (e && e.late > sh.halfAfter) return 'in ' + e.late + ' min late';
+    if (e && e.early > sh.halfAfter) return 'out ' + e.early + ' min early';
+    return hours.toFixed(1) + ' h';
+  }
+  const sameDayRules = (a, b) => ['full', 'half', 'start', 'end', 'grace', 'halfAfter'].every(k => a[k] === b[k]);
 
   /* Somebody's shift rules changed - they moved shift, or their shift's hours
      were edited. `was` is the shift they were judged under. The days already

@@ -811,6 +811,19 @@ function lateAfterMins() {
   var sh = myShift();
   return sh ? (minutesOf(sh.start_time) + (num(sh.grace_minutes) || 0)) : null;
 }
+/* Late marks on a day: coming in after start + grace, and leaving before
+   end - grace, each count - on a P day (or today, still in). A day already cut
+   to HD for being more than an hour out carries none. Same rule as HR's. */
+function dayLateMarks(st, rec) {
+  if (!rec || !(st === 'P' || st === 'IN')) return 0;
+  var sh = myShift();
+  if (!sh) return 0;
+  var g = num(sh.grace_minutes) || 0, start = minutesOf(sh.start_time), end = minutesOf(sh.end_time);
+  var n = 0, inM = minutesOf(rec.in_time), outM = minutesOf(rec.out_time);
+  if (inM !== null && start !== null && inM > start + g) n++;
+  if (st === 'P' && outM !== null && end !== null && start !== null && end > start && outM < end - g) n++;
+  return n;
+}
 function monthStats(ym) {
   var dim = daysInMonth(ym), upTo = ym === thisMonth() ? new Date().getDate() : dim;
   var s = { present: 0, leave: 0, absent: 0, minutes: 0, open: [],
@@ -829,10 +842,7 @@ function monthStats(ym) {
     else if (st === 'OD' || st === 'CO') s.od++;
     /* Late: arrived after shift start + grace on a day they were in. */
     if (st === 'IN') s.present++;
-    if (lateAfter !== null && (st === 'P' || st === 'HD' || st === 'IN') && rec && rec.in_time) {
-      var inM = minutesOf(rec.in_time);
-      if (inM && inM > lateAfter) s.late++;
-    }
+    s.late += dayLateMarks(st, rec);
     var w = workedMinutes(rec);
     if (w) s.minutes += w;
     if (rec && rec.in_time && !rec.out_time && d <= upTo && iso < today()) s.open.push(iso.slice(8));
@@ -999,8 +1009,7 @@ function renderCalendar() {
   for (var d = 1; d <= dim; d++) {
     var iso = dateStr(ym, d), st = statusFor(iso), rec = attFor(iso);
     var mins = workedMinutes(rec);
-    var late = lateAfterMins() !== null && (st === 'P' || st === 'HD' || st === 'IN') && rec && rec.in_time &&
-               minutesOf(rec.in_time) > lateAfterMins();
+    var late = dayLateMarks(st, rec) > 0;
     cells += '<div class="d ' + esc(st) + (iso === today() ? ' today' : '') + (late ? ' late' : '') + '"' +
       ' onclick="dayDetail(\'' + iso + '\')">' + d +
       (st ? '<small>' + esc(st === 'P' && mins ? hoursText(mins) : st) + '</small>' : '') +
