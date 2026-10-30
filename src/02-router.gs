@@ -284,6 +284,7 @@ function tenantContext_(session) {
      cache through this rather than being handed a ctx they have no other use
      for. */
   CURRENT_CTX = ctx;
+  if (me.manager) me.manager = canonFrom_(userAlias_(ctx), me.manager);
 
   /* Signing out, a password change or a reset ends every session that existed
      before it, not just the one in this browser. A token's issue time is its

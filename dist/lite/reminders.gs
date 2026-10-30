@@ -817,6 +817,16 @@ function rmReadTenant_(sheetId) {
     }
   }
 
+  /* A manager written into the sheet by name, email or other capitalisation
+     still means that person: resolve every reference to their username. */
+  var rmAlias = {}, rmNames = {};
+  users.forEach(function (u) { var n = u.name.trim().toLowerCase(); rmNames[n] = (rmNames[n] || 0) + 1; });
+  users.forEach(function (u) { var n = u.name.trim().toLowerCase(); if (n && rmNames[n] === 1) rmAlias[n] = u.username; });
+  users.forEach(function (u) { if (u.email) rmAlias[u.email.trim().toLowerCase()] = u.username; });
+  users.forEach(function (u) { rmAlias[u.username.trim().toLowerCase()] = u.username; });
+  var rmWho = function (v) { var k = String(v == null ? '' : v).trim(); return (k && rmAlias[k.toLowerCase()]) || k; };
+  users.forEach(function (u) { if (u.manager) u.manager = rmWho(u.manager); });
+
   var tasksSheet = rmFindTab_(ss, ['tasks', 'task', 'assignments', 'work']);
   var tasks = [];
   if (tasksSheet) {
@@ -833,14 +843,14 @@ function rmReadTenant_(sheetId) {
       var row = trows[j];
       var title = String(g(row, ['title', 'task', 'taskname'], ''));
       if (!title) continue;
-      var assignee = String(g(row, ['to', 'assignee', 'assignedto'], ''));
+      var assignee = rmWho(g(row, ['to', 'assignee', 'assignedto'], ''));
       tasks.push({
         id: String(g(row, ['id', 'taskid'], '')),
         title: title,
         assignee: assignee,
         assigneeName: byUser[assignee] || assignee,
-        raisedBy: String(g(row, ['by', 'raisedby', 'assignedby', 'createdby'], '')),
-        approver: String(g(row, ['approvermanager', 'approver'], '')),
+        raisedBy: rmWho(g(row, ['by', 'raisedby', 'assignedby', 'createdby'], '')),
+        approver: rmWho(g(row, ['approvermanager', 'approver'], '')),
         status: String(g(row, ['status'], '')),
         due: g(row, ['due', 'duedate'], ''),
         priority: String(g(row, ['priority'], 'Medium')),

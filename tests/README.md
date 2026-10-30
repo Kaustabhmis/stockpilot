@@ -19,6 +19,7 @@ node extra-test.js          # roles, tenant isolation, plan vocabulary
 node auth-test.js           # hashing, migration, token forgery, throttle
 node pay-test.js            # Razorpay signature forgery and replay
 node multilevel-test.js     # who may assign to whom, and the approval chain
+node approval-routing-test.js # an approval reaches its manager even when "Reports to" was typed as a name, email or other capitals
 node kra-test.js            # KRA/KPI sets, profile standards, optional targets
 node responsiveness-test.js # manager accountability (pure rules engine, no server)
 node milestone-test.js      # stage-deadline scoring (pure rules engine, no server)

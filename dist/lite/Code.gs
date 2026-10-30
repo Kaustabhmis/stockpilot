@@ -685,6 +685,7 @@ function tenantContext_(session) {
      cache through this rather than being handed a ctx they have no other use
      for. */
   CURRENT_CTX = ctx;
+  if (me.manager) me.manager = canonFrom_(userAlias_(ctx), me.manager);
 
   /* Signing out, a password change or a reset ends every session that existed
      before it, not just the one in this browser. A token's issue time is its
@@ -1313,8 +1314,34 @@ function readUsers_(ctx) {
       if (!d[i][U['Username']] && !d[i][U['Email']]) continue;
       out.push(rowToUser_(d[i], i + 1));
     }
+    /* "Reports to" typed into the sheet by hand, or carried over from the old
+       system, may hold the manager's name, email or a different capitalisation
+       rather than their exact username. Unresolved, every approval routed to
+       that manager went to nobody: no card, no email. */
+    var alias = userAliasMap_(out);
+    out.forEach(function (u) { if (u.manager) u.manager = canonFrom_(alias, u.manager); });
     return out;
   });
+}
+
+/** Username, email and (where unique) full name, lower-cased, to the username. */
+function userAliasMap_(users) {
+  var alias = {}, nameCount = {};
+  users.forEach(function (u) { var n = String(u.name || '').trim().toLowerCase(); if (n) nameCount[n] = (nameCount[n] || 0) + 1; });
+  users.forEach(function (u) {
+    var n = String(u.name || '').trim().toLowerCase();
+    if (n && nameCount[n] === 1) alias[n] = u.username;
+  });
+  users.forEach(function (u) { if (u.email) alias[String(u.email).trim().toLowerCase()] = u.username; });
+  users.forEach(function (u) { if (u.username) alias[u.username.toLowerCase()] = u.username; });   // wins over the rest
+  return alias;
+}
+function canonFrom_(alias, ref) {
+  var k = String(ref == null ? '' : ref).trim();
+  return (k && alias[k.toLowerCase()]) || k;
+}
+function userAlias_(ctx) {
+  return cached_(ctx, 'alias', function () { return userAliasMap_(readUsers_(ctx)); });
 }
 
 function rowToUser_(r, rowIndex) {
@@ -1374,14 +1401,15 @@ function readTasks_(ctx) {
     var out = [];
     for (var i = 1; i < d.length; i++) {
       if (!d[i][T['ID']]) continue;
-      out.push(rowToTask_(d[i], i + 1, names));
+      out.push(rowToTask_(d[i], i + 1, names, userAlias_(ctx)));
     }
     return out;
 });
 }
 
-function rowToTask_(r, rowIndex, names) {
+function rowToTask_(r, rowIndex, names, alias) {
   names = names || {};
+  var who = function (col) { return alias ? canonFrom_(alias, r[T[col]]) : String(r[T[col]] || '').trim(); };
   var history = safeJson_(r[T['History JSON']], []);
   var status = r[T['Status']] || 'Pending';
   return {
@@ -1389,12 +1417,12 @@ function rowToTask_(r, rowIndex, names) {
     createdDate: toIso_(r[T['Date Created']]),
     due: toYmd_(r[T['Due Date']]),
     title: r[T['Title']] || '', desc: r[T['Description']] || '',
-    by: String(r[T['Assigned By']] || '').trim(),
-    to: String(r[T['Assigned To']] || '').trim(),
-    assignee: String(r[T['Assigned To']] || '').trim(),   // engine field name
-    raisedBy: String(r[T['Assigned By']] || '').trim(),
-    approver: String(r[T['Approver Manager']] || r[T['Assigned By']] || '').trim(),
-    approverManager: String(r[T['Approver Manager']] || '').trim(),
+    by: who('Assigned By'),
+    to: who('Assigned To'),
+    assignee: who('Assigned To'),   // engine field name
+    raisedBy: who('Assigned By'),
+    approver: who('Approver Manager') || who('Assigned By'),
+    approverManager: who('Approver Manager'),
     status: status, kra: r[T['KRA Tag']] || '', priority: r[T['Priority']] || 'Medium',
     frequency: r[T['Frequency']] || 'One Time',
     cadence: r[T['Frequency']] || 'One Time',
@@ -1404,7 +1432,7 @@ function rowToTask_(r, rowIndex, names) {
     spawnedBy: String(r[T['Spawned By']] || ''),
     blockedBy: safeJson_(r[T['Blocked By']], []),
     subtasks: safeJson_(r[T['Subtasks JSON']], []),
-    delegateTo: String(r[T['Delegate To']] || '').trim(),
+    delegateTo: who('Delegate To'),
     projectId: String(r[T['Project ID']] || '').trim(),
     projectName: String(r[T['Project']] || '').trim(),
     stageNo: Number(r[T['Stage No']] || 0),
@@ -1416,8 +1444,8 @@ function rowToTask_(r, rowIndex, names) {
     goal: String(r[T['Goal']] || '').trim(),
     raisedIn: String(r[T['Raised In']] || '').trim(),
     isArchived: isArchived_(status, r[T['Date Created']], history),
-    toName: names[String(r[T['Assigned To']] || '').trim()] || r[T['Assigned To']] || '',
-    byName: names[String(r[T['Assigned By']] || '').trim()] || r[T['Assigned By']] || '',
+    toName: names[who('Assigned To')] || r[T['Assigned To']] || '',
+    byName: names[who('Assigned By')] || r[T['Assigned By']] || '',
     rowIndex: rowIndex,
   };
 }
@@ -1458,7 +1486,7 @@ function findTaskRow_(ctx, taskId) {
     if (String(d[i][T['ID']]) === String(taskId)) {
       var names = {};
       readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
-      return { sheet: sh, rowIndex: i + 1, raw: d[i], task: rowToTask_(d[i], i + 1, names) };
+      return { sheet: sh, rowIndex: i + 1, raw: d[i], task: rowToTask_(d[i], i + 1, names, userAlias_(ctx)) };
     }
   }
   /* Closed more than a year ago and moved to Tasks_Archive: say so, rather
@@ -6869,7 +6897,7 @@ function readColdTasks_(ctx) {
     for (var i = 1; i < d.length; i++) {
       var id = String(d[i][T['ID']] || '');
       if (!id || live[id]) continue;
-      var t = rowToTask_(d[i], i + 1, names);
+      var t = rowToTask_(d[i], i + 1, names, userAlias_(ctx));
       t.isArchived = true;
       t.coldStore = true;
       out.push(t);
