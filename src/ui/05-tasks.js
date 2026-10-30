@@ -182,44 +182,6 @@ function tabLabel(k) {
   return b ? b.textContent.trim() : k;
 }
 
-/* ---------- the task workflow, chosen by the Admin for everybody ---------- */
-function openWorkflow() {
-  var cur = shortFlow() ? 'short' : 'standard';
-  var opt = function (k, title, flow, note) {
-    return '<label class="flex gap-3 items-start border rounded-2xl p-4 cursor-pointer mb-3 ' +
-      (k === cur ? 'border-blue-600 bg-blue-50' : 'border-gray-200') + '">' +
-      '<input type="radio" name="wfMode" value="' + k + '" class="mt-1 w-4 h-4 accent-blue-600"' + (k === cur ? ' checked' : '') + '>' +
-      '<span><span class="block font-black text-gray-900">' + title + '</span>' +
-      '<span class="block text-sm font-bold text-blue-700 mt-1">' + flow + '</span>' +
-      '<span class="block text-xs font-semibold text-gray-500 mt-1">' + note + '</span></span></label>';
-  };
-  openModal('<form id="fWorkflow" class="p-6 lg:p-7">' +
-    '<h2 class="text-xl font-black mb-1">Task workflow</h2>' +
-    '<p class="text-sm text-gray-400 font-semibold mb-5">How every task in the company moves. Only an Admin can change this.</p>' +
-    opt('standard', 'Three steps', 'To do → Start work → Submit for review → Verify &amp; close',
-      'People mark when they start, so the board shows what is under way.') +
-    opt('short', 'Two steps', 'To do → Submit for review → Verify &amp; close',
-      'No "In progress" stage. Send back returns a task to To do. Tasks already in progress can still be submitted.') +
-    '<div class="flex gap-3 mt-5"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
-    '<button type="submit" class="btn btn-p flex-1">Save</button></div></form>');
-  $('fWorkflow').querySelectorAll('input[name=wfMode]').forEach(function (r) {
-    r.addEventListener('change', function () {
-      $('fWorkflow').querySelectorAll('label').forEach(function (l) {
-        var on = l.querySelector('input').checked;
-        l.classList.toggle('border-blue-600', on); l.classList.toggle('bg-blue-50', on); l.classList.toggle('border-gray-200', !on);
-      });
-    });
-  });
-  $('fWorkflow').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var mode = $('fWorkflow').querySelector('input[name=wfMode]:checked').value;
-    busy(e.target.querySelector('button[type=submit]'), true);
-    api('saveWorkflow', { workflow: mode })
-      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
-      .catch(function (err) { busy(e.target.querySelector('button[type=submit]'), false); toast(err.message, 'err'); });
-  });
-}
-
 function openTabLayout() {
   if (!isAdmin()) { toast('Only an Admin can arrange the tabs.', 'warn'); return; }
   var l = tabLayout(), order = l.order.slice(), hidden = l.hidden.slice();
@@ -419,11 +381,7 @@ function columnOrder(key, items) {
 
 function renderBoard(rows) {
   STATE.colOpen = STATE.colOpen || {};
-  var cols = COLUMNS.filter(function (c) {
-    return c.key !== 'doing' || !shortFlow() || rows.some(function (t) { return t.status === 'In Progress'; });
-  });
-  $('board').style.gridTemplateColumns = 'repeat(' + cols.length + ',minmax(230px,1fr))';
-  $('board').innerHTML = cols.map(function (c) {
+  $('board').innerHTML = COLUMNS.map(function (c) {
     var all = columnOrder(c.key, rows.filter(function (t) { return c.statuses.indexOf(t.status) > -1; }));
     var open = STATE.colOpen[c.key] || all.length <= COL_LIMIT + 5;
     var items = open ? all : all.slice(0, COL_LIMIT);
@@ -509,7 +467,7 @@ function wireBoard() {
       var next = target.statuses[0];
       if (next === 'Awaiting Approval' || next === 'Delegation Proposed') {
         toast('Approval is not something you can drag a task into.', 'warn'); return; }
-      if ((next === 'In Progress' || next === 'Pending') && t.status === 'For Review') { openStatus(t.id, next); return; }
+      if (next === 'In Progress' && t.status === 'For Review') { openStatus(t.id, 'In Progress'); return; }
       doTransition(t.id, next);
     });
   });
@@ -520,9 +478,6 @@ function taskById(id) {
   for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i];
   return null;
 }
-
-/** The two-step workflow (To do -> For review -> Verified), set by an Admin. */
-function shortFlow() { return !!(STATE.data && STATE.data.workflow === 'short'); }
 
 function doTransition(id, status, note, newDue) {
   return api('updateTask', { taskId: id, status: status, note: note, newDueDate: newDue })
@@ -564,7 +519,7 @@ function openTask(id) {
       acts.push(['approve','Approve','btn-p']); acts.push(['reject','Reject','btn-g']);
     }
   } else if (t.status === 'Pending' && (isMine || isAdmin)) {
-    acts.push(shortFlow() ? ['submit','Submit for review','btn-p'] : ['start','Start work','btn-p']);
+    acts.push(['start','Start work','btn-p']);
   } else if (t.status === 'In Progress' && (isMine || isAdmin)) {
     acts.push(['submit','Submit for review','btn-p']);
   } else if (t.status === 'For Review' && (isRaiser || isApprover || isAdmin) && !(isMine && !isAdmin && !isRaiser)) {
@@ -578,7 +533,7 @@ function openTask(id) {
     }).filter(Boolean);
     if (names.length) blockReason = 'Blocked by ' + names.join(', ');
   }
-  if (subs.length && doneN < subs.length && (t.status === 'In Progress' || (shortFlow() && t.status === 'Pending'))) {
+  if (subs.length && doneN < subs.length && t.status === 'In Progress') {
     blockReason = 'Checklist is ' + doneN + '/' + subs.length;
   }
 
@@ -672,7 +627,7 @@ function openTask(id) {
       if (a === 'start')   return doTransition(t.id, 'In Progress');
       if (a === 'submit')  return openStatus(t.id, 'For Review');
       if (a === 'verify')  return openStatus(t.id, 'Verified');
-      if (a === 'rework')  return openStatus(t.id, shortFlow() ? 'Pending' : 'In Progress');
+      if (a === 'rework')  return openStatus(t.id, 'In Progress');
       if (a === 'delegate')return openDelegate(t);
       if (a === 'block')   return openBlocker(t);
       if (a === 'stop')    return stopRecurring(t.id);
@@ -752,8 +707,7 @@ function repeatLabel(t) {
 }
 
 function openStatus(id, status) {
-  var cur = taskById(id);
-  var rework = status === 'In Progress' || (status === 'Pending' && cur && cur.status === 'For Review');
+  var rework = status === 'In Progress';
   /* "fStatusChange", not "fStatus": the status FILTER on the Tasks bar is
      #fStatus and sits earlier in the page, so $('fStatus') used to find the
      filter, the submit handler landed on a <select>, and pressing Submit here

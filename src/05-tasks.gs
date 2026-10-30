@@ -152,9 +152,8 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
   var t = hit.task;
-  var flow = { short: isShortFlow_(ctx) };
 
-  if (!canTransition(t, ctx.actor, status, flow)) {
+  if (!canTransition(t, ctx.actor, status)) {
     if (status === 'Verified' && t.assignee === ctx.actor.username) {
       throw new Error('You cannot sign off your own work — it needs the person who raised it.');
     }
@@ -163,9 +162,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 
   var all = readTasks_(ctx);
 
-  /* Starting work is where the blocker and WIP checks sit; in the two-step
-     workflow there is no start, so they sit on the submission instead. */
-  if ((status === 'In Progress' || status === 'For Review') && t.status === 'Pending') {
+  if (status === 'In Progress' && t.status === 'Pending') {
     var blockers = openBlockers(t, all);
     if (blockers.length) {
       throw new Error('Blocked by: ' + blockers.map(function (b) { return b.title; }).join(', '));
@@ -187,7 +184,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   /* Rework is specifically review sending work BACK. The old build incremented
      this on any move to In Progress, so simply starting a task cost five points
      on the score. Only the For Review -> In Progress path counts. */
-  var isRework = (t.status === 'For Review' && (status === 'In Progress' || status === 'Pending'));
+  var isRework = (t.status === 'For Review' && status === 'In Progress');
   if (isRework) writeTaskField_(hit, 'Reworks', Number(t.reworkCount || 0) + 1);
 
   // An approved hand-off is where the new owner actually takes the task.

@@ -395,8 +395,7 @@ function openAccount() {
       '<button type="submit" class="btn btn-p w-full">Change password</button></form>' +
     (isAdmin() ? '<div class="flex gap-3 border-t border-gray-100 pt-5 mb-3">' +
       '<button class="btn btn-g flex-1" onclick="closeModal();openTabLayout()">Arrange tabs</button>' +
-      '<button class="btn btn-g flex-1" onclick="closeModal();openCategories()">Job categories</button>' +
-      '<button class="btn btn-g flex-1" onclick="closeModal();openWorkflow()">Task workflow</button></div>' : '') +
+      '<button class="btn btn-g flex-1" onclick="closeModal();openCategories()">Job categories</button></div>' : '') +
     '<div class="flex gap-3 border-t border-gray-100 pt-5">' +
       (canBill() ? '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' : '') +
       /* The ? button in the top bar is hidden on a phone to save room, so this
