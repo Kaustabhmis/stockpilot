@@ -514,9 +514,13 @@ function renderTiles() {
       : n >= 85 ? 'text-emerald-700' : n >= 60 ? 'text-amber-700' : 'text-red-700';
   };
 
+  /* The two-step workflow has no "In progress": its tile goes, unless work
+     started before the switch is still sitting there. */
+  var showProgress = !(STATE.data && STATE.data.workflow === 'short') || s.progress > 0;
+  $('statTiles').className = 'grid grid-cols-2 ' + (showProgress ? 'lg:grid-cols-6' : 'lg:grid-cols-5') + ' gap-3 mb-5';
   $('statTiles').innerHTML =
     tile({ k:'Pending',     v:s.pending,  icon:'inbox',       icon2:'#64748b' }) +
-    tile({ k:'In progress', v:s.progress, icon:'bolt',        icon2:'#1e4fbf' }) +
+    (showProgress ? tile({ k:'In progress', v:s.progress, icon:'bolt', icon2:'#1e4fbf' }) : '') +
     tile({ k:'For review',  v:s.review,   icon:'rate_review', icon2:'#7a4fd6',
            sub: s.review ? 'with a reviewer' : '' }) +
     tile({ k:'Overdue',     v:s.overdue,  icon:'warning',

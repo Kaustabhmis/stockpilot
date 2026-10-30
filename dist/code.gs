@@ -605,6 +605,7 @@ function route_(p) {
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
+    case 'saveWorkflow':        return saveWorkflow_(ctx, p.workflow);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
     /* Dates are shared — the team plans around them — but why someone is away
@@ -1585,6 +1586,19 @@ function cleanTabLayout_(raw) {
   return { order: order, hidden: hidden };
 }
 
+/* The task workflow, chosen by an Admin for the whole company:
+   'standard' To do -> In Progress -> For Review -> Verified
+   'short'    To do -> For Review -> Verified */
+function isShortFlow_(ctx) { return readSetting_(ctx, 'workflow', 'standard') === 'short'; }
+function saveWorkflow_(ctx, mode) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  mode = mode === 'short' ? 'short' : 'standard';
+  writeSetting_(ctx, 'workflow', mode);
+  return { status: 'success', workflow: mode, message: mode === 'short'
+    ? 'Two-step workflow on: To do → Submit for review → Verify & close.'
+    : 'Three-step workflow on: To do → Start work → Submit for review → Verify & close.' };
+}
+
 function saveTabLayout_(ctx, layout) {
   requireAdmin_(ctx); blockIfStopped_(ctx);
   var clean = cleanTabLayout_(layout || {});
@@ -1915,8 +1929,9 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
   var t = hit.task;
+  var flow = { short: isShortFlow_(ctx) };
 
-  if (!canTransition(t, ctx.actor, status)) {
+  if (!canTransition(t, ctx.actor, status, flow)) {
     if (status === 'Verified' && t.assignee === ctx.actor.username) {
       throw new Error('You cannot sign off your own work — it needs the person who raised it.');
     }
@@ -1925,7 +1940,9 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 
   var all = readTasks_(ctx);
 
-  if (status === 'In Progress' && t.status === 'Pending') {
+  /* Starting work is where the blocker and WIP checks sit; in the two-step
+     workflow there is no start, so they sit on the submission instead. */
+  if ((status === 'In Progress' || status === 'For Review') && t.status === 'Pending') {
     var blockers = openBlockers(t, all);
     if (blockers.length) {
       throw new Error('Blocked by: ' + blockers.map(function (b) { return b.title; }).join(', '));
@@ -1947,7 +1964,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   /* Rework is specifically review sending work BACK. The old build incremented
      this on any move to In Progress, so simply starting a task cost five points
      on the score. Only the For Review -> In Progress path counts. */
-  var isRework = (t.status === 'For Review' && status === 'In Progress');
+  var isRework = (t.status === 'For Review' && (status === 'In Progress' || status === 'Pending'));
   if (isRework) writeTaskField_(hit, 'Reworks', Number(t.reworkCount || 0) + 1);
 
   // An approved hand-off is where the new owner actually takes the task.
@@ -2749,6 +2766,7 @@ function getDashboard_(ctx) {
     archivedCount: visible.length - active.length,
     categories: readCategories_(ctx),
     layout: readTabLayout_(ctx),
+    workflow: isShortFlow_(ctx) ? 'short' : 'standard',
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
@@ -7962,8 +7980,13 @@ function parseYmd(s) {
  *    visible rather than a silent hand-off
  *
  * `actor` = { username, role }, `task` = { status, assignee, raisedBy, approver, delegateTo }
+ *
+ * `opts.short` is the two-step workflow an Admin can switch on: To do goes
+ * straight to For Review, and a send-back returns work to To do. There is no
+ * "In Progress" stage to pass through.
  */
-function allowedTransitions(task, actor) {
+function allowedTransitions(task, actor, opts) {
+  var short = !!(opts && opts.short);
   var isAdmin = actor.role === ROLE.ADMIN;
   var isAssignee = task.assignee === actor.username;
   var isRaiser = task.raisedBy === actor.username;
@@ -7981,7 +8004,7 @@ function allowedTransitions(task, actor) {
 
     case STATUS.PENDING:
       var fromPending = [];
-      if (isAssignee || isAdmin) fromPending.push(STATUS.IN_PROGRESS);
+      if (isAssignee || isAdmin) fromPending.push(short ? STATUS.FOR_REVIEW : STATUS.IN_PROGRESS);
       if (isRaiser || isAdmin) fromPending.push(STATUS.CANCELLED);
       return fromPending;
 
@@ -7993,17 +8016,18 @@ function allowedTransitions(task, actor) {
 
     case STATUS.FOR_REVIEW:
       // Deliberately excludes the assignee: you cannot sign off your own work.
+      var back = short ? STATUS.PENDING : STATUS.IN_PROGRESS;   // "rework"
       return canVerify && !(isAssignee && !isAdmin && !isRaiser)
-        ? [STATUS.VERIFIED, STATUS.IN_PROGRESS]   // In Progress here means "rework"
-        : (canVerify ? [STATUS.VERIFIED, STATUS.IN_PROGRESS] : []);
+        ? [STATUS.VERIFIED, back]
+        : (canVerify ? [STATUS.VERIFIED, back] : []);
 
     default:
       return []; // Verified / Rejected / Cancelled are terminal
   }
 }
 
-function canTransition(task, actor, next) {
-  return allowedTransitions(task, actor).indexOf(next) > -1;
+function canTransition(task, actor, next, opts) {
+  return allowedTransitions(task, actor, opts).indexOf(next) > -1;
 }
 
 /**
@@ -9314,7 +9338,7 @@ function canDropInColumn(task, actor, columnKey, context) {
   if (!target) return { ok: false, reason: 'Unknown column.' };
   if (columnForStatus(task.status) === columnKey) return { ok: true, noop: true };
 
-  if (!canTransition(task, actor, target)) {
+  if (!canTransition(task, actor, target, context.flow)) {
     if (target === STATUS.VERIFIED && task.assignee === actor.username) {
       return { ok: false, reason: 'You cannot sign off your own work — it needs the person who raised it.' };
     }

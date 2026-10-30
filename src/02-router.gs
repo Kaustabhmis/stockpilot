@@ -201,6 +201,7 @@ function route_(p) {
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
+    case 'saveWorkflow':        return saveWorkflow_(ctx, p.workflow);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
     /* Dates are shared — the team plans around them — but why someone is away

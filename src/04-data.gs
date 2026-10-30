@@ -451,6 +451,19 @@ function cleanTabLayout_(raw) {
   return { order: order, hidden: hidden };
 }
 
+/* The task workflow, chosen by an Admin for the whole company:
+   'standard' To do -> In Progress -> For Review -> Verified
+   'short'    To do -> For Review -> Verified */
+function isShortFlow_(ctx) { return readSetting_(ctx, 'workflow', 'standard') === 'short'; }
+function saveWorkflow_(ctx, mode) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  mode = mode === 'short' ? 'short' : 'standard';
+  writeSetting_(ctx, 'workflow', mode);
+  return { status: 'success', workflow: mode, message: mode === 'short'
+    ? 'Two-step workflow on: To do → Submit for review → Verify & close.'
+    : 'Three-step workflow on: To do → Start work → Submit for review → Verify & close.' };
+}
+
 function saveTabLayout_(ctx, layout) {
   requireAdmin_(ctx); blockIfStopped_(ctx);
   var clean = cleanTabLayout_(layout || {});

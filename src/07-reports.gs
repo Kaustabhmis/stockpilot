@@ -67,6 +67,7 @@ function getDashboard_(ctx) {
     archivedCount: visible.length - active.length,
     categories: readCategories_(ctx),
     layout: readTabLayout_(ctx),
+    workflow: isShortFlow_(ctx) ? 'short' : 'standard',
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
