@@ -39,6 +39,8 @@ for (const [label, file] of [['Domebox', '/../dist/code.gs'], ['Domebox Lite', '
   ok('the stages are To do → In progress → For review → Verified', JSON.stringify(stages()) ===
     JSON.stringify({ names: { approval: 'Needs approval', todo: 'To do', review: 'For review', done: 'Verified' }, work: ['In progress'] }), JSON.stringify(stages()));
   const a = mk();
+  ok('on the default stages, Start work adds no extra note to the history, as before',
+    (() => { const t = mk(); move(P, t.id, 'In Progress'); const h = get(t.id).history; return !h[h.length - 1].note; })());
   ok('Start work, Submit, Verify work as before', move(P, a.id, 'In Progress').status === 'success' && get(a.id).stage === 'In progress' &&
     move(P, a.id, 'For Review').status === 'success' && get(a.id).stage === '' && move(S, a.id, 'Verified').status === 'success');
 

@@ -211,8 +211,11 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   /* Starting, or being sent back, lands at the first working stage. */
   var stageNow = status === 'In Progress' ? (work[0] || '') : '';
   if (stageNow !== t.stage) writeTaskField_(hit, 'Stage', stageNow);
+  /* Name the stage in the history only when the company has its own stages:
+     on the default single "In progress" it would just repeat the status. */
+  var ownStages = !(work.length === 1 && work[0].toLowerCase() === 'in progress');
   appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : '') ||
-      (stageNow && status === 'In Progress' ? 'At ' + stageNow : ''),
+      (stageNow && status === 'In Progress' && ownStages ? 'At ' + stageNow : ''),
     isRework && newDueDate ? { setDate: newDueDate } : null);
 
   var spawned = null;
