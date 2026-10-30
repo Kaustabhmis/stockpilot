@@ -149,7 +149,7 @@ ok('it finds the person who would be locked out', /1 person would be locked out/
    (pv.match(/Ghosh[^\n]*/) || [])[0]);
 ok('it flags the customer with their own column, and says which column',
    /NEEDS A LOOK[\s\S]*Bose Steel — Tasks column P is "Site Notes"/.test(pv), (pv.match(/Bose[^\n]*/) || [])[0]);
-ok('and tells you where to move it', /Tasks: AD or later/.test(pv), (pv.match(/Tasks: [A-Z]+ or later/) || [])[0]);
+ok('and tells you where to move it', /Tasks: AE or later/.test(pv), (pv.match(/Tasks: [A-Z]+ or later/) || [])[0]);
 ok('the preview changed no task cell', snap(tasks) === tasksBeforePreview);
 ok('no user cell', snap(users) === usersBeforePreview);
 ok('and gave nobody access', snap(glob) === globBeforePreview);
@@ -267,21 +267,21 @@ ok('their sheet is still byte-for-byte what it was', JSON.stringify(bt.getDataRa
 const width = OLD_TASK_COLS.length + 1;                        // P, with Site Notes in it
 const notes = bt.getRange(1, width, 2, 1).getValues();
 bt.getRange(1, width, 2, 1).setValues([[''], ['']]);
-bt.getRange(1, 30, 2, 1).setValues(notes);                     // AD — the first column past Domebox's
+bt.getRange(1, 31, 2, 1).setValues(notes);                     // AE — the first column past Domebox's
 const pv2 = APP.previewMigration();
-ok('with the column moved to AD, the preview clears it', /Bose Steel — 1 person, 1 task; will add/.test(pv2) && !/NEEDS A LOOK/.test(pv2),
+ok('with the column moved to AE, the preview clears it', /Bose Steel — 1 person, 1 task; will add/.test(pv2) && !/NEEDS A LOOK/.test(pv2),
    (pv2.match(/Bose[^\n]*/) || [])[0]);
 APP.migrateAllTenants();
 const BL2 = call({ action: 'login', username: 'md@bosesteel.in', password: 'bosepass1' });
 ok('and then they sign in', BL2.status === 'success', BL2.message);
 const bvals = bt.getDataRange().getValues();
-ok('Domebox headings filled P to AC', bvals[0][15] === 'Spawned By' && bvals[0][28] === 'Raised In',
-   bvals[0].slice(15, 29).join(','));
-ok('their own column is untouched at AD, heading and notes',
-   bvals[0][29] === 'Site Notes' && bvals[1][29] === 'Client wants matte finish; gate opens inward', bvals[0][29] + ' / ' + bvals[1][29]);
+ok('Domebox headings filled P to AD', bvals[0][15] === 'Spawned By' && bvals[0][28] === 'Raised In' && bvals[0][29] === 'Archived On',
+   bvals[0].slice(15, 30).join(','));
+ok('their own column is untouched at AE, heading and notes',
+   bvals[0][30] === 'Site Notes' && bvals[1][30] === 'Client wants matte finish; gate opens inward', bvals[0][30] + ' / ' + bvals[1][30]);
 call({ action: 'updateTask', token: BL2.token, taskId: 'B-1', status: 'For Review' });
 ok('and working on their task still leaves their notes alone',
-   bt.getDataRange().getValues()[1][29] === 'Client wants matte finish; gate opens inward');
+   bt.getDataRange().getValues()[1][30] === 'Client wants matte finish; gate opens inward');
 
 console.log('\n=== if the migration step is forgotten, customers still get in ===');
 /* A customer the operator never ran migrateAllTenants for — added to the
@@ -296,9 +296,9 @@ late.insertSheet('Tasks').appendRow(OLD_TASK_COLS);
 const LJ = call({ action: 'login', username: 'ceo@late.in', password: 'latepass1' });
 ok('they sign in without anybody running anything', LJ.status === 'success', LJ.message);
 ok('and their sheet was upgraded on the way in',
-   late.getSheetByName('Tasks').getDataRange().getValues()[0].length === 29 && !!late.getSheetByName('Cookie_Points') &&
+   late.getSheetByName('Tasks').getDataRange().getValues()[0].length === 30 && !!late.getSheetByName('Cookie_Points') &&
    !!late.getSheetByName('Goals') && !!late.getSheetByName('Meetings'));
-ok('which is remembered, so it does not run again', env.props.SCHEMA_LATE_SHEET === '2026-10b');
+ok('which is remembered, so it does not run again', env.props.SCHEMA_LATE_SHEET === '2026-11a');
 
 console.log('\n=== the one thing step 12 is for ===');
 ok('the old sheet is still shared publicly until step 12 is run',

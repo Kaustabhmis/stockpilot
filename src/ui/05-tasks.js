@@ -510,6 +510,8 @@ function openTask(id) {
   var isRaiser = t.by === me.username;
   var isApprover = t.approver === me.username;
   var isAdmin = me.role === 'Admin';
+  var isOpenTask = ['Awaiting Approval','Delegation Proposed','Pending','In Progress','For Review'].indexOf(t.status) > -1;
+  var editSteps = isAdmin && isOpenTask && !t.coldStore;
   var acts = [];
 
   if (t.status === 'Awaiting Approval' || t.status === 'Delegation Proposed') {
@@ -557,17 +559,24 @@ function openTask(id) {
       .map(function (p) { return '<div><div class="lb">' + esc(p[0]) + '</div>' +
         '<div class="font-bold text-gray-800">' + esc(p[1]) + '</div></div>'; }).join('') + '</div>' +
 
-    (subs.length ? '<div class="mb-5"><div class="flex justify-between items-center mb-2">' +
+    (subs.length || editSteps ? '<div class="mb-5"><div class="flex justify-between items-center mb-2">' +
       '<span class="lb mb-0">Checklist</span><span class="text-xs font-black text-gray-500">' +
-      doneN + '/' + subs.length + '</span></div>' +
-      '<div class="h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden"><div class="h-full bg-blue-600" ' +
-      'style="width:' + Math.round(doneN / subs.length * 100) + '%"></div></div>' +
+      (subs.length ? doneN + '/' + subs.length : 'no steps yet') + '</span></div>' +
+      (subs.length ? '<div class="h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden"><div class="h-full bg-blue-600" ' +
+      'style="width:' + Math.round(doneN / subs.length * 100) + '%"></div></div>' : '') +
       subs.map(function (s, i) {
-        return '<label class="flex items-center gap-2 py-1.5 text-sm ' +
+        return '<div class="flex items-center gap-2"><label class="flex-1 flex items-center gap-2 py-1.5 text-sm ' +
           (s.done ? 'text-gray-400 line-through' : 'text-gray-700') + '">' +
           '<input type="checkbox" class="w-4 h-4 accent-blue-600 sub" data-i="' + i + '"' +
-          (s.done ? ' checked' : '') + (isMine || isAdmin ? '' : ' disabled') + '> ' + esc(s.text) + '</label>';
-      }).join('') + '</div>' : '') +
+          (s.done ? ' checked' : '') + (isMine || isAdmin ? '' : ' disabled') + '> ' + esc(s.text) + '</label>' +
+          (editSteps ? '<button type="button" class="stepDel text-gray-300 hover:text-red-600" data-i="' + i + '" ' +
+            'title="Delete this step" aria-label="Delete step"><span class="material-icons text-base">delete</span></button>' : '') +
+          '</div>';
+      }).join('') +
+      /* Only an Admin changes the steps, and only while the task is open. */
+      (editSteps ? '<div class="flex gap-2 mt-2"><input id="stepNew" class="in" maxlength="200" placeholder="Add a step">' +
+        '<button type="button" id="stepAdd" class="btn btn-g whitespace-nowrap">Add step</button></div>' : '') +
+      '</div>' : '') +
 
     '<div class="flex flex-wrap gap-2 mb-2">' +
       acts.map(function (a) {
@@ -585,6 +594,15 @@ function openTask(id) {
       (!acts.length ? '<span class="text-xs font-bold text-gray-400 py-2">No actions available to you here.</span>' : '') +
     '</div>' +
     (blockReason ? '<div class="text-[11px] font-bold text-amber-700 mb-4">' + esc(blockReason) + '</div>' : '<div class="mb-4"></div>') +
+    /* Archive and delete are the Admin's alone. */
+    (isAdmin && !t.coldStore ? '<div class="flex flex-wrap items-center gap-2 mb-5 pt-4 border-t border-gray-100">' +
+      '<span class="lb mb-0 mr-1">Admin</span>' +
+      (t.archivedOn ? '<button class="btn btn-g act" data-act="restore">Restore to board</button>'
+        : !t.isArchived && !(t.projectId && isOpenTask) ? '<button class="btn btn-g act" data-act="archive">' +
+          '<span class="material-icons text-base align-middle">inventory_2</span> Archive</button>' : '') +
+      (!t.projectId ? '<button class="btn btn-g act text-red-700" data-act="delete">' +
+        '<span class="material-icons text-base align-middle">delete</span> Delete</button>' : '') +
+    '</div>' : '') +
 
     '<div class="lb">History</div><div class="space-y-3 mt-2">' +
       (t.history || []).slice().reverse().map(function (h) {
@@ -614,6 +632,30 @@ function openTask(id) {
       if (a === 'block')   return openBlocker(t);
       if (a === 'stop')    return stopRecurring(t.id);
       if (a === 'edit')    return openEdit(t);
+      if (a === 'archive') return adminTask('archiveTask', t, 'Archive "' + t.title + '"?' +
+        (isOpenTask ? ' It is still open, so it will be cancelled: no more reminders, and it counts against nobody. You can restore it.' : ''), 'Archive');
+      if (a === 'restore') return adminTask('restoreTask', t, 'Put "' + t.title + '" back on the board?', 'Restore');
+      if (a === 'delete')  return adminTask('deleteTask', t, 'Delete "' + t.title + '" for good? This cannot be undone.', 'Delete', true);
+    });
+  });
+  var reopen = function () { return refresh().then(function () { openTask(t.id); }); };
+  var addStep = function () {
+    var v = $('stepNew').value.trim();
+    if (!v) return $('stepNew').focus();
+    api('addTaskStep', { taskId: t.id, text: v }).then(reopen).catch(function (e) { toast(e.message, 'err'); });
+  };
+  if ($('stepAdd')) {
+    $('stepAdd').addEventListener('click', addStep);
+    $('stepNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addStep(); } });
+  }
+  $('drawer').querySelectorAll('.stepDel').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var s = subs[Number(b.dataset.i)];
+      confirmBox('Delete the step "' + s.text + '"?', { ok: 'Delete', danger: true }).then(function (yes) {
+        if (!yes) return;
+        api('removeTaskStep', { taskId: t.id, index: Number(b.dataset.i), text: s.text }).then(reopen)
+          .catch(function (e) { toast(e.message, 'err'); });
+      });
     });
   });
   $('drawer').querySelectorAll('.sub').forEach(function (cb) {
@@ -623,6 +665,17 @@ function openTask(id) {
         .then(function () { openTask(t.id); })
         .catch(function (e) { toast(e.message, 'err'); cb.checked = !cb.checked; });
     });
+  });
+}
+
+/** Archive, restore or delete — Admin only, always after a confirmation. */
+function adminTask(action, t, question, ok, danger) {
+  confirmBox(question, { ok: ok, danger: !!danger }).then(function (yes) {
+    if (!yes) return;
+    api(action, { taskId: t.id })
+      .then(function (r) { toast(r.message, 'ok'); closeDrawer(); return refresh(); })
+      .then(function () { if (STATE.archive && typeof loadArchive === 'function') loadArchive(true); })
+      .catch(function (e) { toast(e.message, 'err'); });
   });
 }
 

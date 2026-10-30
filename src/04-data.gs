@@ -52,7 +52,7 @@ function ensureTenantTabs_(ss) {
 --------------------------------------------------------------------------- */
 /* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
    upgraded under the previous version is checked and widened again. */
-var SCHEMA_VERSION = '2026-10b';
+var SCHEMA_VERSION = '2026-11a';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -289,7 +289,8 @@ function rowToTask_(r, rowIndex, names) {
     repeatMade: Number(r[T['Repeat Made']] || 0),
     goal: String(r[T['Goal']] || '').trim(),
     raisedIn: String(r[T['Raised In']] || '').trim(),
-    isArchived: isArchived_(status, r[T['Date Created']], history),
+    archivedOn: r[T['Archived On']] ? toIso_(r[T['Archived On']]) : '',
+    isArchived: !!r[T['Archived On']] || isArchived_(status, r[T['Date Created']], history),
     toName: names[String(r[T['Assigned To']] || '').trim()] || r[T['Assigned To']] || '',
     byName: names[String(r[T['Assigned By']] || '').trim()] || r[T['Assigned By']] || '',
     rowIndex: rowIndex,

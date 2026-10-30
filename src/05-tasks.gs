@@ -381,6 +381,125 @@ function toggleSubtask_(ctx, taskId, index, done) {
   return { status: 'success', progress: subtaskProgress({ subtasks: subs }) };
 }
 
+// ===========================================================================
+// ADMIN ONLY — archive, restore, delete, and the steps of a task
+// ===========================================================================
+
+/* A stage of a project is held in place by the stages around it: removing
+   one, or cancelling it while open, would leave the next stage waiting for
+   something that can no longer happen. */
+function refuseOpenStage_(t, what) {
+  if (t.projectId && isOpen(t.status)) {
+    throw new Error('This is stage ' + t.stageNo + ' of the project "' + t.projectName + '". ' +
+      'An open project stage cannot be ' + what + '; finish or reject it first.');
+  }
+}
+
+/** Off the board now. An open task is closed as Cancelled, so it stops being
+ *  chased and counts against nobody; an Admin can put it back. */
+function archiveTask_(ctx, taskId) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (t.archivedOn) throw new Error('That task is already in the archive.');
+  refuseOpenStage_(t, 'archived');
+  var wasOpen = isOpen(t.status);
+  if (wasOpen) writeTaskField_(hit, 'Status', STATUS.CANCELLED);
+  appendHistory_(hit, wasOpen ? STATUS.CANCELLED : t.status, ctx.actor.name,
+    'Archived by ' + ctx.actor.name, wasOpen ? { archived: true, prevStatus: t.status } : { archived: true });
+  if (wasOpen && t.frequency && t.frequency !== 'One Time') writeTaskField_(hit, 'Frequency', 'One Time');
+  writeTaskField_(hit, 'Archived On', new Date());
+  return { status: 'success', message: wasOpen
+    ? 'Archived. It was still open, so it is now Cancelled: no reminders, and it counts against nobody.'
+    : 'Archived.' };
+}
+
+/** Back on the board, as it was before it was archived by hand. */
+function restoreTask_(ctx, taskId) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (!t.archivedOn) throw new Error('That task was not archived by hand, so there is nothing to restore.');
+  var last = null;
+  (t.history || []).forEach(function (h) { if (h.archived) last = h; });
+  var back = last && last.prevStatus && t.status === STATUS.CANCELLED ? last.prevStatus : t.status;
+  writeTaskField_(hit, 'Archived On', '');
+  if (back !== t.status) writeTaskField_(hit, 'Status', back);
+  appendHistory_(hit, back, ctx.actor.name, 'Restored from the archive by ' + ctx.actor.name);
+  return { status: 'success', message: isOpen(back) ? 'Restored to the board as ' + back + '.'
+    : 'Restored. It is closed, so it moves back to the archive a week after it closed.' };
+}
+
+/** Gone for good. A line is kept in Deleted_Tasks so a deletion can be
+ *  accounted for later — who, when, and what it was. */
+function deleteTask_(ctx, taskId) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (t.projectId) {
+    throw new Error('This is stage ' + t.stageNo + ' of the project "' + t.projectName + '". ' +
+      'Project stages cannot be deleted one by one; archive it instead.');
+  }
+  return withLock_(function () {
+    /* Nothing may stay blocked by a task that no longer exists. */
+    var sh = hit.sheet, d = sh.getDataRange().getValues(), id = String(t.id);
+    for (var i = 1; i < d.length; i++) {
+      var b = safeJson_(d[i][T['Blocked By']], []);
+      if (b.indexOf(id) > -1) {
+        sh.getRange(i + 1, T['Blocked By'] + 1).setValue(JSON.stringify(b.filter(function (x) { return String(x) !== id; })));
+      }
+    }
+    mkTab_(ctx.ss, 'Deleted_Tasks', ['Deleted On', 'Deleted By', 'Task ID', 'Title', 'Assigned To', 'Assigned By', 'Status', 'Due'])
+      .appendRow([new Date(), ctx.actor.username, id, t.title, t.assignee, t.by, t.status, t.due]);
+    var rows = sh.getRange(1, T['ID'] + 1, sh.getLastRow(), 1).getValues(), at = -1;
+    for (var j = 1; j < rows.length; j++) if (String(rows[j][0]) === id) { at = j + 1; break; }
+    if (at < 0) throw new Error('That task has just moved to the archive. Refresh and try again.');
+    sh.deleteRow(at);
+    dropCache_(ctx);
+    return { status: 'success', message: 'Deleted "' + t.title + '".' };
+  });
+}
+
+/** Steps (the checklist) are set when a task is made; an Admin can change them. */
+function addTaskStep_(ctx, taskId, text) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  text = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!text) throw new Error('Type the step first.');
+  if (text.length > 200) throw new Error('Keep a step under 200 characters.');
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (!isOpen(t.status)) throw new Error('This task is ' + t.status + '. Steps can be changed only while it is open.');
+  var subs = (t.subtasks || []).slice();
+  if (subs.length >= 50) throw new Error('A task can have up to 50 steps.');
+  subs.push({ text: text, done: false });
+  writeTaskField_(hit, 'Subtasks JSON', JSON.stringify(subs));
+  appendHistory_(hit, t.status, ctx.actor.name, 'Step added: ' + text);
+  return { status: 'success', subtasks: subs, progress: subtaskProgress({ subtasks: subs }) };
+}
+
+function removeTaskStep_(ctx, taskId, index, text) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (!isOpen(t.status)) throw new Error('This task is ' + t.status + '. Steps can be changed only while it is open.');
+  var subs = (t.subtasks || []).slice();
+  index = Math.floor(Number(index));
+  /* The text is checked as well as the position: if someone else changed the
+     list a moment ago, the wrong step must not be the one that goes. */
+  if (!(index >= 0 && index < subs.length) || (text !== undefined && subs[index].text !== String(text))) {
+    throw new Error('The steps changed since you opened this task. Open it again and retry.');
+  }
+  var gone = subs.splice(index, 1)[0];
+  writeTaskField_(hit, 'Subtasks JSON', JSON.stringify(subs));
+  appendHistory_(hit, t.status, ctx.actor.name, 'Step removed: ' + gone.text);
+  return { status: 'success', subtasks: subs, progress: subtaskProgress({ subtasks: subs }) };
+}
+
 function stopRecurring_(ctx, taskId) {
   requireManager_(ctx); blockIfStopped_(ctx);
   var hit = findTaskRow_(ctx, taskId);

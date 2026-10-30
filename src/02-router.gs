@@ -189,6 +189,11 @@ function route_(p) {
     case 'delegateTask':        return delegateTask_(ctx, p.taskId, p.toUsername);
     case 'addBlocker':          return addBlocker_(ctx, p.taskId, p.blockerId);
     case 'toggleSubtask':       return toggleSubtask_(ctx, p.taskId, p.index, p.done);
+    case 'archiveTask':         return archiveTask_(ctx, p.taskId);
+    case 'restoreTask':         return restoreTask_(ctx, p.taskId);
+    case 'deleteTask':          return deleteTask_(ctx, p.taskId);
+    case 'addTaskStep':         return addTaskStep_(ctx, p.taskId, p.text);
+    case 'removeTaskStep':      return removeTaskStep_(ctx, p.taskId, p.index, p.text);
 
     /* --- team ------------------------------------------------------------ */
     case 'addUser':             return addUser_(ctx, p.form);

@@ -111,7 +111,10 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   'Repeat Until','Repeat Count','Repeat Made',
   /* Which goal this work serves, and which meeting raised it. Appended, as
      always — an existing customer's sheet gains them without a cell moving. */
-  'Goal','Raised In'];
+  'Goal','Raised In',
+  /* Set when an Admin files a task away by hand, before the week-after-closing
+     rule would. Appended, like every column before it. */
+  'Archived On'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
