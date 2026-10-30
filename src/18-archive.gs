@@ -202,7 +202,7 @@ function readColdTasks_(ctx) {
     for (var i = 1; i < d.length; i++) {
       var id = String(d[i][T['ID']] || '');
       if (!id || live[id]) continue;
-      var t = rowToTask_(d[i], i + 1, names, userAlias_(ctx));
+      var t = rowToTask_(d[i], i + 1, names);
       t.isArchived = true;
       t.coldStore = true;
       out.push(t);
