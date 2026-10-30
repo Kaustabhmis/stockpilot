@@ -39,7 +39,7 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
     ok(f + ' is in the folder', fs.existsSync(path.join(PKG, f))));
   const png = fs.readFileSync(path.join(PKG, 'logo-512.png'));
   ok('the logo in the structured data is square, 512px', png.readUInt32BE(16) === 512 && png.readUInt32BE(20) === 512 &&
-     /"logo":"https:\/\/www\.domebox\.in\/logo-512\.png"/.test(idx));
+     /"logo":(\{"@type":"ImageObject","url":)?"https:\/\/www\.domebox\.in\/logo-512\.png"(,"width":512,"height":512\})?/.test(idx));
   ok('and no build comments ship: the code is minified', !/<!--/.test(idx) && !/\/\*[^!]/.test(idx.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '')),
      (idx.match(/.{0,40}(<!--|\/\*).{0,40}/) || [''])[0]);
 }

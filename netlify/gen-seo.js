@@ -134,8 +134,10 @@ function jsonld(p) {
     ]},
     { '@type': 'Article', headline: p.h1, description: p.description,
       mainEntityOfPage: BASE + '/' + p.slug, inLanguage: 'en-IN',
-      author: { '@type': 'Organization', name: C.legalEntity },
-      publisher: { '@type': 'Organization', name: C.legalEntity,
+      /* The same @id as the home page's Organization, so every page points at
+         one BISCS India rather than describing a new one each time. */
+      author: { '@type': 'Organization', '@id': BASE + '/#org', name: C.legalEntity },
+      publisher: { '@type': 'Organization', '@id': BASE + '/#org', name: C.legalEntity,
                    logo: { '@type': 'ImageObject', url: BASE + '/logo-512.png', width: 512, height: 512 } } },
   ];
   /* FAQPage only where there are real questions on the page. Marking up

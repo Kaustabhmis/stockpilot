@@ -31,7 +31,12 @@ ok('Open Graph and Twitter cards, so a shared link is not a bare URL',
    /og:image/.test(app) && /twitter:card/.test(app));
 ok('Organization, WebSite and SoftwareApplication structured data',
    /"@type":"Organization"/.test(app) && /"@type":"SoftwareApplication"/.test(app));
-ok('with the real prices in it', /"price":"59990"/.test(app));
+ok('with the real price in it: ₹999 a month, and the 14-day free trial',
+   /"price":"999","priceCurrency":"INR","priceSpecification":\{"@type":"UnitPriceSpecification","price":"999","priceCurrency":"INR","unitCode":"MON"/.test(app) &&
+   /"name":"14-day free trial"/.test(app));
+ok('the founder and the Microsoft for Startups membership are described, not claimed as an award',
+   /"@type":"Person","@id":"https:\/\/www\.domebox\.in\/#founder","name":"Kaustabh Maitra"/.test(app) &&
+   /"programName":"Microsoft for Startups Founders Hub"/.test(app) && !/"award"/.test(app));
 
 console.log('\n=== no invented social proof ===');
 /* Review and AggregateRating markup must describe reviews that genuinely exist.
