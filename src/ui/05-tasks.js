@@ -1,12 +1,38 @@
 /* ---------- tasks: board, list, detail ----------------------------------- */
 
-var COLUMNS = [
-  { key:'inbox',  title:'Needs approval', statuses:['Awaiting Approval','Delegation Proposed'] },
-  { key:'todo',   title:'To do',          statuses:['Pending'] },
-  { key:'doing',  title:'In progress',    statuses:['In Progress'] },
-  { key:'review', title:'For review',     statuses:['For Review'] },
-  { key:'done',   title:'Verified',       statuses:['Verified'] },
-];
+/* ---------- the company's task stages, as its Admin designed them --------
+   To do, For review and Verified always exist (renamable); the working stages
+   between them are the company's own. A task at a working stage is In
+   Progress underneath, with the stage's name beside it. */
+var STAGE_DEFAULT = { names: { approval: 'Needs approval', todo: 'To do', review: 'For review', done: 'Verified' }, work: ['In progress'] };
+function stages() { return (STATE.data && STATE.data.stages) || STAGE_DEFAULT; }
+/** The name to show for where a task is. */
+function statusLabel(t) {
+  var s = stages();
+  if (t.status === 'In Progress') return t.stage || s.work[0] || 'In progress';
+  return ({ 'Pending': s.names.todo, 'For Review': s.names.review, 'Verified': s.names.done })[t.status] || t.status;
+}
+/** The board's columns for this company, plus a column for In Progress work
+ *  whose stage was removed, so nothing ever drops off the board. */
+function boardColumns(rows) {
+  var s = stages(), work = s.work;
+  var cols = [{ key: 'inbox', title: s.names.approval, tone: 'Needs Approval', statuses: ['Awaiting Approval','Delegation Proposed'] },
+              { key: 'todo', title: s.names.todo, tone: 'To Do', statuses: ['Pending'] }];
+  work.forEach(function (w, i) { cols.push({ key: 'w' + i, title: w, tone: 'In Progress', statuses: ['In Progress'], stage: w }); });
+  var stray = (rows || []).some(function (t) { return t.status === 'In Progress' && work.indexOf(t.stage) < 0; });
+  if (!work.length && stray) cols.push({ key: 'w0', title: 'In progress', tone: 'In Progress', statuses: ['In Progress'], stage: '' });
+  cols.push({ key: 'review', title: s.names.review, tone: 'For Review', statuses: ['For Review'] });
+  cols.push({ key: 'done', title: s.names.done, tone: 'Verified', statuses: ['Verified'] });
+  return cols;
+}
+function inColumn(c, t, work) {
+  if (c.statuses.indexOf(t.status) < 0) return false;
+  if (c.stage === undefined) return true;
+  /* At a stage that no longer exists: shown in the first working column. */
+  var at = work.indexOf(t.stage);
+  return at > -1 ? t.stage === c.stage : c.key === 'w0';
+}
+var COLUMNS = boardColumns([]);
 var STATUS_LIST = ['Awaiting Approval','Delegation Proposed','Pending','In Progress',
                    'For Review','Verified','Rejected','Cancelled'];
 
@@ -14,11 +40,14 @@ var filtersReady = false;
 function syncFilters() {
   var staff = byName(STATE.data.staff);
   var cats = STATE.data.categories || [];
-  if (!filtersReady) {
-    $('fStatus').innerHTML = '<option value="">Any status</option>' +
-      STATUS_LIST.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
-    filtersReady = true;
-  }
+  /* Rebuilt each time, so a stage the Admin renames is renamed here too. */
+  var w = stages().work;
+  $('fStatus').innerHTML = '<option value="">Any status</option>' +
+    STATUS_LIST.filter(function (s) { return s !== 'In Progress' || w.length; }).map(function (s) {
+      return '<option value="' + esc(s) + '"' + (s === FILTER.status ? ' selected' : '') + '>' +
+        esc(statusLabel({ status: s, stage: s === 'In Progress' ? (w.length === 1 ? w[0] : 'In progress') : '' })) + '</option>';
+    }).join('');
+  filtersReady = true;
   $('fAssignee').innerHTML = '<option value="">Everyone</option>' +
     staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
   $('fBy').innerHTML = '<option value="">Any assignor</option>' +
@@ -180,6 +209,71 @@ function applyTabLayout() {
 function tabLabel(k) {
   var b = document.querySelector('#navTabs button[data-tab="' + k + '"]');
   return b ? b.textContent.trim() : k;
+}
+
+/* ---------- Task stages: the Admin designs them for the whole company ------ */
+function openStages() {
+  var s = stages();
+  var names = Object.assign({}, s.names), work = s.work.slice();
+  var row = function (label, key, note) {
+    return '<div class="grid grid-cols-3 gap-3 items-center mb-2"><span class="text-xs font-black text-gray-500 uppercase tracking-wide">' + label + '</span>' +
+      '<input class="in col-span-2 stName" data-k="' + key + '" maxlength="30" value="' + esc(names[key]) + '"' + (note ? ' title="' + note + '"' : '') + '></div>';
+  };
+  var draw = function () {
+    $('stWork').innerHTML = work.map(function (w, i) {
+      return '<div class="flex gap-2 items-center mb-2">' +
+        '<span class="text-xs font-black text-gray-400 w-5 text-right">' + (i + 1) + '</span>' +
+        '<input class="in stWorkName" data-i="' + i + '" maxlength="30" value="' + esc(w) + '">' +
+        '<button type="button" class="stUp px-1 text-gray-400 hover:text-gray-800" data-i="' + i + '" title="Move up"' + (i ? '' : ' disabled') + '><span class="material-icons text-base">arrow_upward</span></button>' +
+        '<button type="button" class="stDown px-1 text-gray-400 hover:text-gray-800" data-i="' + i + '" title="Move down"' + (i < work.length - 1 ? '' : ' disabled') + '><span class="material-icons text-base">arrow_downward</span></button>' +
+        '<button type="button" class="stDel px-1 text-gray-400 hover:text-red-600" data-i="' + i + '" title="Remove this stage"><span class="material-icons text-base">delete</span></button></div>';
+    }).join('') || '<div class="text-xs font-bold text-gray-400 py-2">No working stages: a task goes from ' + esc(names.todo) + ' straight to ' + esc(names.review) + '.</div>';
+    $('stAddRow').classList.toggle('hidden', work.length >= 6);
+    $('stFlow').textContent = [names.todo].concat(work, [names.review, names.done]).join('  →  ');
+    $('stWork').querySelectorAll('.stWorkName').forEach(function (el) {
+      el.addEventListener('input', function () { work[+el.dataset.i] = el.value; $('stFlow').textContent = [names.todo].concat(work, [names.review, names.done]).join('  →  '); }); });
+    $('stWork').querySelectorAll('.stUp').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.i; if (i) { var x = work[i - 1]; work[i - 1] = work[i]; work[i] = x; draw(); } }); });
+    $('stWork').querySelectorAll('.stDown').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.i; if (i < work.length - 1) { var x = work[i + 1]; work[i + 1] = work[i]; work[i] = x; draw(); } }); });
+    $('stWork').querySelectorAll('.stDel').forEach(function (b) { b.addEventListener('click', function () { work.splice(+b.dataset.i, 1); draw(); }); });
+  };
+  openModal('<form id="fStages" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Task stages</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-4">The stages every task in the company passes through. Only an Admin can change them.</p>' +
+    '<div id="stFlow" class="text-xs font-black text-blue-700 bg-blue-50 rounded-xl px-3 py-2 mb-5"></div>' +
+    '<div class="lb">Always there — rename if you like</div>' +
+    row('Waiting', 'approval', 'Tasks waiting for a manager to accept them') + row('Start', 'todo') +
+    row('Review', 'review') + row('Done', 'done') +
+    '<div class="lb mt-5">Working stages, in order</div>' +
+    '<p class="text-xs font-semibold text-gray-400 mb-2">Between ' + esc(names.todo) + ' and ' + esc(names.review) + '. The person doing the task moves it through each one, then submits it for review.</p>' +
+    '<div id="stWork"></div>' +
+    '<div id="stAddRow" class="flex gap-2 mt-1"><input id="stNew" class="in" maxlength="30" placeholder="e.g. Quality check">' +
+      '<button type="button" id="stAdd" class="btn btn-g whitespace-nowrap">Add stage</button></div>' +
+    '<div class="flex gap-3 mt-6"><button type="button" class="btn btn-g" id="stReset">Default</button><span class="flex-1"></span>' +
+      '<button type="button" class="btn btn-g" onclick="closeModal()">Cancel</button>' +
+      '<button type="submit" class="btn btn-p px-8">Save</button></div></form>', 'max-w-xl');
+  document.querySelectorAll('#fStages .stName').forEach(function (el) {
+    el.addEventListener('input', function () { names[el.dataset.k] = el.value; $('stFlow').textContent = [names.todo].concat(work, [names.review, names.done]).join('  →  '); }); });
+  var add = function () {
+    var v = $('stNew').value.replace(/\s+/g, ' ').trim();
+    if (!v) return $('stNew').focus();
+    work.push(v); $('stNew').value = ''; draw(); $('stNew').focus();
+  };
+  $('stAdd').addEventListener('click', add);
+  $('stNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  $('stReset').addEventListener('click', function () {
+    names = Object.assign({}, STAGE_DEFAULT.names); work = STAGE_DEFAULT.work.slice();
+    document.querySelectorAll('#fStages .stName').forEach(function (el) { el.value = names[el.dataset.k]; });
+    draw();
+  });
+  $('fStages').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = e.target.querySelector('button[type=submit]');
+    busy(btn, true);
+    api('saveStages', { stages: { names: names, work: work.map(function (w) { return String(w).trim(); }).filter(Boolean) } })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
+      .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
+  });
+  draw();
 }
 
 function openTabLayout() {
@@ -381,11 +475,15 @@ function columnOrder(key, items) {
 
 function renderBoard(rows) {
   STATE.colOpen = STATE.colOpen || {};
+  COLUMNS = boardColumns(rows);
+  var work = stages().work;
+  /* More stages, narrower columns, so the whole flow fits on a laptop screen. */
+  $('board').style.gridTemplateColumns = 'repeat(' + COLUMNS.length + ',minmax(' + (COLUMNS.length > 5 ? 180 : 230) + 'px,1fr))';
   $('board').innerHTML = COLUMNS.map(function (c) {
-    var all = columnOrder(c.key, rows.filter(function (t) { return c.statuses.indexOf(t.status) > -1; }));
+    var all = columnOrder(c.key, rows.filter(function (t) { return inColumn(c, t, work); }));
     var open = STATE.colOpen[c.key] || all.length <= COL_LIMIT + 5;
     var items = open ? all : all.slice(0, COL_LIMIT);
-    var tone = stateTone(c.title).tone;
+    var tone = stateTone(c.tone).tone;
     /* The column carries the colour of the state it holds, so the eye learns
        the flow left to right. The heading still says the word — the colour is
        never the only thing saying which column this is. */
@@ -434,7 +532,7 @@ function renderList(rows) {
           avatar(t.toName, 22) + esc(t.toName) + '</span></td>' +
         '<td class="whitespace-nowrap text-gray-600">' + esc(t.byName || '—') + '</td>' +
         '<td class="whitespace-nowrap"><span class="chip ' + stateTone(t.status).chip + '">' +
-          esc(t.status) + '</span></td>' +
+          esc(statusLabel(t)) + '</span></td>' +
         '<td class="whitespace-nowrap">' + priorityChip(t.priority) + '</td>' +
         '<td class="whitespace-nowrap ' + (late ? 'text-red-700 font-black' : '') + '">' +
           fmtDate(t.due) + (late ? ' · ' + late + 'd' : '') + '</td></tr>';
@@ -463,8 +561,16 @@ function wireBoard() {
       if (!dragged) return;
       var t = taskById(dragged); if (!t) return;
       var target = COLUMNS.filter(function (c) { return c.key === col.dataset.col; })[0];
-      if (!target || target.statuses.indexOf(t.status) > -1) return;
+      if (!target) return;
+      /* Between two working stages: the task moves stage, not status. */
+      if (target.stage && t.status === 'In Progress') {
+        if (target.stage === t.stage) return;
+        return api('moveStage', { taskId: t.id, stage: target.stage })
+          .then(function (r) { toast(r.message, 'ok'); return refresh(); }).catch(function (e) { toast(e.message, 'err'); });
+      }
+      if (target.statuses.indexOf(t.status) > -1) return;
       var next = target.statuses[0];
+      if (next === 'Pending' && t.status === 'For Review' && !stages().work.length) { openStatus(t.id, 'Pending'); return; }
       if (next === 'Awaiting Approval' || next === 'Delegation Proposed') {
         toast('Approval is not something you can drag a task into.', 'warn'); return; }
       if (next === 'In Progress' && t.status === 'For Review') { openStatus(t.id, 'In Progress'); return; }
@@ -510,6 +616,8 @@ function openTask(id) {
   var isRaiser = t.by === me.username;
   var isApprover = t.approver === me.username;
   var isAdmin = me.role === 'Admin';
+  var work = stages().work, stageAt = work.indexOf(t.stage);
+  var nextStage = t.status === 'In Progress' && stageAt > -1 && stageAt < work.length - 1 ? work[stageAt + 1] : '';
   var isOpenTask = ['Awaiting Approval','Delegation Proposed','Pending','In Progress','For Review'].indexOf(t.status) > -1;
   var editSteps = isAdmin && isOpenTask && !t.coldStore;
   var acts = [];
@@ -519,9 +627,10 @@ function openTask(id) {
       acts.push(['approve','Approve','btn-p']); acts.push(['reject','Reject','btn-g']);
     }
   } else if (t.status === 'Pending' && (isMine || isAdmin)) {
-    acts.push(['start','Start work','btn-p']);
+    acts.push(work.length ? ['start','Start work','btn-p'] : ['submit','Submit for review','btn-p']);
   } else if (t.status === 'In Progress' && (isMine || isAdmin)) {
-    acts.push(['submit','Submit for review','btn-p']);
+    /* Through the company's working stages in order, then to review. */
+    acts.push(nextStage ? ['next','Move to ' + esc(nextStage),'btn-p'] : ['submit','Submit for review','btn-p']);
   } else if (t.status === 'For Review' && (isRaiser || isApprover || isAdmin) && !(isMine && !isAdmin && !isRaiser)) {
     acts.push(['verify','Verify &amp; close','btn-p']); acts.push(['rework','Send back','btn-g']);
   }
@@ -533,14 +642,14 @@ function openTask(id) {
     }).filter(Boolean);
     if (names.length) blockReason = 'Blocked by ' + names.join(', ');
   }
-  if (subs.length && doneN < subs.length && t.status === 'In Progress') {
+  if (subs.length && doneN < subs.length && (t.status === 'In Progress' || (!work.length && t.status === 'Pending'))) {
     blockReason = 'Checklist is ' + doneN + '/' + subs.length;
   }
 
   openDrawer('<div class="p-6 lg:p-7">' +
     '<div class="flex justify-between items-start gap-4 mb-5">' +
       '<div><div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">' +
-        esc(t.id) + ' · ' + esc(t.status) + '</div>' +
+        esc(t.id) + ' · ' + esc(statusLabel(t)) + '</div>' +
         '<h2 class="text-2xl font-black leading-tight">' + esc(t.title) + '</h2></div>' +
       '<button onclick="closeDrawer()" class="text-gray-400 hover:text-gray-900">' +
         '<span class="material-icons">close</span></button></div>' +
@@ -580,7 +689,7 @@ function openTask(id) {
 
     '<div class="flex flex-wrap gap-2 mb-2">' +
       acts.map(function (a) {
-        var off = blockReason && (a[0] === 'submit' || a[0] === 'start');
+        var off = blockReason && (a[0] === 'submit' || (a[0] === 'start' && /^Blocked/.test(blockReason)));
         return '<button class="btn ' + (off ? 'btn-g' : a[2]) + ' act" data-act="' + a[0] + '"' +
           (off ? ' disabled' : '') + '>' + a[1] + '</button>';
       }).join('') +
@@ -627,7 +736,10 @@ function openTask(id) {
       if (a === 'start')   return doTransition(t.id, 'In Progress');
       if (a === 'submit')  return openStatus(t.id, 'For Review');
       if (a === 'verify')  return openStatus(t.id, 'Verified');
-      if (a === 'rework')  return openStatus(t.id, 'In Progress');
+      if (a === 'rework')  return openStatus(t.id, work.length ? 'In Progress' : 'Pending');
+      if (a === 'next')    return api('moveStage', { taskId: t.id, stage: nextStage })
+        .then(function (r) { toast(r.message, 'ok'); return refresh(); }).then(function () { openTask(t.id); })
+        .catch(function (e) { toast(e.message, 'err'); });
       if (a === 'delegate')return openDelegate(t);
       if (a === 'block')   return openBlocker(t);
       if (a === 'stop')    return stopRecurring(t.id);
@@ -707,7 +819,8 @@ function repeatLabel(t) {
 }
 
 function openStatus(id, status) {
-  var rework = status === 'In Progress';
+  var cur = taskById(id);
+  var rework = status === 'In Progress' || (status === 'Pending' && cur && cur.status === 'For Review');
   /* "fStatusChange", not "fStatus": the status FILTER on the Tasks bar is
      #fStatus and sits earlier in the page, so $('fStatus') used to find the
      filter, the submit handler landed on a <select>, and pressing Submit here

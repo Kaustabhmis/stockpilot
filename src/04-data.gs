@@ -52,7 +52,7 @@ function ensureTenantTabs_(ss) {
 --------------------------------------------------------------------------- */
 /* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
    upgraded under the previous version is checked and widened again. */
-var SCHEMA_VERSION = '2026-11a';
+var SCHEMA_VERSION = '2026-11b';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -290,6 +290,7 @@ function rowToTask_(r, rowIndex, names) {
     goal: String(r[T['Goal']] || '').trim(),
     raisedIn: String(r[T['Raised In']] || '').trim(),
     archivedOn: r[T['Archived On']] ? toIso_(r[T['Archived On']]) : '',
+    stage: String(r[T['Stage']] || '').trim(),
     isArchived: !!r[T['Archived On']] || isArchived_(status, r[T['Date Created']], history),
     toName: names[String(r[T['Assigned To']] || '').trim()] || r[T['Assigned To']] || '',
     byName: names[String(r[T['Assigned By']] || '').trim()] || r[T['Assigned By']] || '',
@@ -449,6 +450,54 @@ function cleanTabLayout_(raw) {
   var hidden = (raw && raw.hidden || []).filter(function (k, i, a) {
     return TAB_KEYS.indexOf(k) > -1 && TAB_ALWAYS.indexOf(k) < 0 && a.indexOf(k) === i; });
   return { order: order, hidden: hidden };
+}
+
+/* ---------------------------------------------------------------------------
+   TASK STAGES — designed by the Admin for the whole company
+
+   To do, For review and Verified are always there (approval and the score
+   depend on them) but can be renamed. Between To do and For review sit the
+   company's own working stages, in order: "In progress" by default; any can
+   be renamed, added (up to six) or removed. With none, To do goes straight
+   to For review. Underneath, a task at a working stage is still In Progress,
+   so every rule and every score that reads statuses reads it the same way.
+--------------------------------------------------------------------------- */
+var STAGE_DEFAULTS = { names: { approval: 'Needs approval', todo: 'To do', review: 'For review', done: 'Verified' },
+                       work: ['In progress'] };
+var STAGE_MAX_WORK = 6, STAGE_MAX_LEN = 30;
+
+function cleanStages_(raw, strict) {
+  raw = raw || {};
+  var out = { names: {}, work: [] }, seen = {};
+  var take = function (v, fallback, what) {
+    var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    if (!s) { if (strict) throw new Error('Give the ' + what + ' stage a name.'); s = fallback; }
+    if (s.length > STAGE_MAX_LEN) { if (strict) throw new Error('Keep stage names under ' + STAGE_MAX_LEN + ' characters: "' + s + '".'); s = s.slice(0, STAGE_MAX_LEN); }
+    var k = s.toLowerCase();
+    if (seen[k]) { if (strict) throw new Error('Two stages are both called "' + s + '". Give each its own name.'); return null; }
+    seen[k] = true;
+    return s;
+  };
+  ['approval', 'todo', 'review', 'done'].forEach(function (k) {
+    out.names[k] = take((raw.names || {})[k], STAGE_DEFAULTS.names[k], STAGE_DEFAULTS.names[k]) || STAGE_DEFAULTS.names[k];
+  });
+  var work = Array.isArray(raw.work) ? raw.work : STAGE_DEFAULTS.work;
+  if (strict && work.length > STAGE_MAX_WORK) throw new Error('Up to ' + STAGE_MAX_WORK + ' working stages.');
+  work.slice(0, STAGE_MAX_WORK).forEach(function (w) { var s = take(w, '', 'working'); if (s) out.work.push(s); });
+  return out;
+}
+function readStages_(ctx) {
+  return cached_(ctx, 'stages', function () {
+    var raw = readSetting_(ctx, 'taskStages', '');
+    return raw ? cleanStages_(safeJson_(raw, {}), false) : cleanStages_(STAGE_DEFAULTS, false);
+  });
+}
+function saveStages_(ctx, stages) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var clean = cleanStages_(stages || {}, true);
+  writeSetting_(ctx, 'taskStages', JSON.stringify(clean));
+  dropCache_(ctx);
+  return { status: 'success', stages: clean, message: 'Task stages saved for everybody in the company.' };
 }
 
 function saveTabLayout_(ctx, layout) {

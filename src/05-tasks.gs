@@ -152,8 +152,10 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
   var t = hit.task;
+  var stages = readStages_(ctx), work = stages.work;
+  var flow = { short: !work.length };
 
-  if (!canTransition(t, ctx.actor, status)) {
+  if (!canTransition(t, ctx.actor, status, flow)) {
     if (status === 'Verified' && t.assignee === ctx.actor.username) {
       throw new Error('You cannot sign off your own work — it needs the person who raised it.');
     }
@@ -162,7 +164,9 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 
   var all = readTasks_(ctx);
 
-  if (status === 'In Progress' && t.status === 'Pending') {
+  /* Starting is where the blocker and WIP checks sit; with no working stages
+     there is no start, so they sit on the submission instead. */
+  if ((status === 'In Progress' || status === 'For Review') && t.status === 'Pending') {
     var blockers = openBlockers(t, all);
     if (blockers.length) {
       throw new Error('Blocked by: ' + blockers.map(function (b) { return b.title; }).join(', '));
@@ -172,6 +176,14 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
     if (wip.exceeded) {
       throw new Error(nameOf_(ctx, t.assignee) + ' already has ' + wip.count +
         ' tasks in progress (limit ' + wip.limit + ').');
+    }
+  }
+  /* Through every working stage, in order, before review. A task left at a
+     stage the Admin has since removed is not held back by it. */
+  if (status === 'For Review' && t.status === 'In Progress' && work.length) {
+    var at = work.indexOf(t.stage);
+    if (at > -1 && at < work.length - 1) {
+      throw new Error('Move it through ' + work.slice(at + 1).join(', ') + ' first, then submit it for review.');
     }
   }
   if (status === 'For Review') {
@@ -184,7 +196,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   /* Rework is specifically review sending work BACK. The old build incremented
      this on any move to In Progress, so simply starting a task cost five points
      on the score. Only the For Review -> In Progress path counts. */
-  var isRework = (t.status === 'For Review' && status === 'In Progress');
+  var isRework = (t.status === 'For Review' && (status === 'In Progress' || status === 'Pending'));
   if (isRework) writeTaskField_(hit, 'Reworks', Number(t.reworkCount || 0) + 1);
 
   // An approved hand-off is where the new owner actually takes the task.
@@ -196,7 +208,11 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   if (isRework && newDueDate) writeTaskField_(hit, 'Due Date', newDueDate);
 
   writeTaskField_(hit, 'Status', status);
-  appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : ''),
+  /* Starting, or being sent back, lands at the first working stage. */
+  var stageNow = status === 'In Progress' ? (work[0] || '') : '';
+  if (stageNow !== t.stage) writeTaskField_(hit, 'Stage', stageNow);
+  appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : '') ||
+      (stageNow && status === 'In Progress' ? 'At ' + stageNow : ''),
     isRework && newDueDate ? { setDate: newDueDate } : null);
 
   var spawned = null;
@@ -228,7 +244,9 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
              ? 'Verified. Stage ' + released.stageNo + ' is now open for ' +
                nameOf_(ctx, released.assignee) + '.'
            : spawned ? 'Verified. Next occurrence due ' + spawned
-           : isRework ? 'Sent back for rework.' : 'Moved to ' + status + '.',
+           : isRework ? 'Sent back for rework.'
+           : 'Moved to ' + (stageNow || ({ 'Pending': stages.names.todo, 'For Review': stages.names.review,
+               'Verified': stages.names.done })[status] || status) + '.',
     spawnedDue: spawned,
     releasedStage: released ? { id: released.id, stage: Number(released.stageNo),
                                 title: released.title, to: released.assignee } : null };
@@ -498,6 +516,25 @@ function removeTaskStep_(ctx, taskId, index, text) {
   writeTaskField_(hit, 'Subtasks JSON', JSON.stringify(subs));
   appendHistory_(hit, t.status, ctx.actor.name, 'Step removed: ' + gone.text);
   return { status: 'success', subtasks: subs, progress: subtaskProgress({ subtasks: subs }) };
+}
+
+/** From one working stage to another, by whoever may submit the task. */
+function moveStage_(ctx, taskId, stage) {
+  blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (t.assignee !== ctx.actor.username && ctx.actor.role !== 'Admin') {
+    throw new Error('Only the person doing it, or an Admin, can move this task on.');
+  }
+  if (t.status !== 'In Progress') throw new Error('Start the task first.');
+  var work = readStages_(ctx).work;
+  stage = String(stage || '').trim();
+  if (work.indexOf(stage) < 0) throw new Error('"' + stage + '" is not one of the company\'s stages any more. Refresh and try again.');
+  if (stage === t.stage) return { status: 'success', message: 'It is already at ' + stage + '.' };
+  writeTaskField_(hit, 'Stage', stage);
+  appendHistory_(hit, 'In Progress', ctx.actor.name, 'Moved to ' + stage);
+  return { status: 'success', stage: stage, message: 'Moved to ' + stage + '.' };
 }
 
 function stopRecurring_(ctx, taskId) {

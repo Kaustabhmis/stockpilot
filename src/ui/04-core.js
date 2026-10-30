@@ -514,10 +514,15 @@ function renderTiles() {
       : n >= 85 ? 'text-emerald-700' : n >= 60 ? 'text-amber-700' : 'text-red-700';
   };
 
+  /* Named as the company names its stages. With no working stages there is
+     no "in progress" tile, unless work from before is still sitting there. */
+  var st = (STATE.data && STATE.data.stages) || { names: { todo: 'Pending', review: 'For review' }, work: ['In progress'] };
+  var showProgress = st.work.length > 0 || s.progress > 0;
+  $('statTiles').className = 'grid grid-cols-2 ' + (showProgress ? 'lg:grid-cols-6' : 'lg:grid-cols-5') + ' gap-3 mb-5';
   $('statTiles').innerHTML =
-    tile({ k:'Pending',     v:s.pending,  icon:'inbox',       icon2:'#64748b' }) +
-    tile({ k:'In progress', v:s.progress, icon:'bolt',        icon2:'#1e4fbf' }) +
-    tile({ k:'For review',  v:s.review,   icon:'rate_review', icon2:'#7a4fd6',
+    tile({ k:st.names.todo, v:s.pending,  icon:'inbox',       icon2:'#64748b' }) +
+    (showProgress ? tile({ k: st.work.length === 1 ? st.work[0] : 'In progress', v:s.progress, icon:'bolt', icon2:'#1e4fbf' }) : '') +
+    tile({ k:st.names.review, v:s.review, icon:'rate_review', icon2:'#7a4fd6',
            sub: s.review ? 'with a reviewer' : '' }) +
     tile({ k:'Overdue',     v:s.overdue,  icon:'warning',
            icon2: s.overdue ? '#b42318' : '#c3cddc',

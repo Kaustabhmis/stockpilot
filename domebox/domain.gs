@@ -127,8 +127,12 @@ function parseYmd(s) {
  *    visible rather than a silent hand-off
  *
  * `actor` = { username, role }, `task` = { status, assignee, raisedBy, approver, delegateTo }
+ *
+ * `opts.short`: the company has no working stages between To do and For
+ * review, so To do goes straight to review and a send-back returns to To do.
  */
-function allowedTransitions(task, actor) {
+function allowedTransitions(task, actor, opts) {
+  var short = !!(opts && opts.short);
   var isAdmin = actor.role === ROLE.ADMIN;
   var isAssignee = task.assignee === actor.username;
   var isRaiser = task.raisedBy === actor.username;
@@ -146,7 +150,7 @@ function allowedTransitions(task, actor) {
 
     case STATUS.PENDING:
       var fromPending = [];
-      if (isAssignee || isAdmin) fromPending.push(STATUS.IN_PROGRESS);
+      if (isAssignee || isAdmin) fromPending.push(short ? STATUS.FOR_REVIEW : STATUS.IN_PROGRESS);
       if (isRaiser || isAdmin) fromPending.push(STATUS.CANCELLED);
       return fromPending;
 
@@ -158,17 +162,18 @@ function allowedTransitions(task, actor) {
 
     case STATUS.FOR_REVIEW:
       // Deliberately excludes the assignee: you cannot sign off your own work.
+      var back = short ? STATUS.PENDING : STATUS.IN_PROGRESS;   // "rework"
       return canVerify && !(isAssignee && !isAdmin && !isRaiser)
-        ? [STATUS.VERIFIED, STATUS.IN_PROGRESS]   // In Progress here means "rework"
-        : (canVerify ? [STATUS.VERIFIED, STATUS.IN_PROGRESS] : []);
+        ? [STATUS.VERIFIED, back]
+        : (canVerify ? [STATUS.VERIFIED, back] : []);
 
     default:
       return []; // Verified / Rejected / Cancelled are terminal
   }
 }
 
-function canTransition(task, actor, next) {
-  return allowedTransitions(task, actor).indexOf(next) > -1;
+function canTransition(task, actor, next, opts) {
+  return allowedTransitions(task, actor, opts).indexOf(next) > -1;
 }
 
 /**
@@ -1479,7 +1484,7 @@ function canDropInColumn(task, actor, columnKey, context) {
   if (!target) return { ok: false, reason: 'Unknown column.' };
   if (columnForStatus(task.status) === columnKey) return { ok: true, noop: true };
 
-  if (!canTransition(task, actor, target)) {
+  if (!canTransition(task, actor, target, context.flow)) {
     if (target === STATUS.VERIFIED && task.assignee === actor.username) {
       return { ok: false, reason: 'You cannot sign off your own work — it needs the person who raised it.' };
     }

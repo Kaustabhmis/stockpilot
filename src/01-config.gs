@@ -114,7 +114,10 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   'Goal','Raised In',
   /* Set when an Admin files a task away by hand, before the week-after-closing
      rule would. Appended, like every column before it. */
-  'Archived On'];
+  'Archived On',
+  /* Which of the company's own working stages an In Progress task is at.
+     Blank on everything else. */
+  'Stage'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];

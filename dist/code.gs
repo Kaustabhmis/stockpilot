@@ -116,7 +116,10 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   'Goal','Raised In',
   /* Set when an Admin files a task away by hand, before the week-after-closing
      rule would. Appended, like every column before it. */
-  'Archived On'];
+  'Archived On',
+  /* Which of the company's own working stages an In Progress task is at.
+     Blank on everything else. */
+  'Stage'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
   'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
@@ -605,6 +608,8 @@ function route_(p) {
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
+    case 'saveStages':          return saveStages_(ctx, p.stages);
+    case 'moveStage':           return moveStage_(ctx, p.taskId, p.stage);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
     /* Dates are shared — the team plans around them — but why someone is away
@@ -1186,7 +1191,7 @@ function ensureTenantTabs_(ss) {
 --------------------------------------------------------------------------- */
 /* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
    upgraded under the previous version is checked and widened again. */
-var SCHEMA_VERSION = '2026-11a';
+var SCHEMA_VERSION = '2026-11b';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -1424,6 +1429,7 @@ function rowToTask_(r, rowIndex, names) {
     goal: String(r[T['Goal']] || '').trim(),
     raisedIn: String(r[T['Raised In']] || '').trim(),
     archivedOn: r[T['Archived On']] ? toIso_(r[T['Archived On']]) : '',
+    stage: String(r[T['Stage']] || '').trim(),
     isArchived: !!r[T['Archived On']] || isArchived_(status, r[T['Date Created']], history),
     toName: names[String(r[T['Assigned To']] || '').trim()] || r[T['Assigned To']] || '',
     byName: names[String(r[T['Assigned By']] || '').trim()] || r[T['Assigned By']] || '',
@@ -1583,6 +1589,54 @@ function cleanTabLayout_(raw) {
   var hidden = (raw && raw.hidden || []).filter(function (k, i, a) {
     return TAB_KEYS.indexOf(k) > -1 && TAB_ALWAYS.indexOf(k) < 0 && a.indexOf(k) === i; });
   return { order: order, hidden: hidden };
+}
+
+/* ---------------------------------------------------------------------------
+   TASK STAGES — designed by the Admin for the whole company
+
+   To do, For review and Verified are always there (approval and the score
+   depend on them) but can be renamed. Between To do and For review sit the
+   company's own working stages, in order: "In progress" by default; any can
+   be renamed, added (up to six) or removed. With none, To do goes straight
+   to For review. Underneath, a task at a working stage is still In Progress,
+   so every rule and every score that reads statuses reads it the same way.
+--------------------------------------------------------------------------- */
+var STAGE_DEFAULTS = { names: { approval: 'Needs approval', todo: 'To do', review: 'For review', done: 'Verified' },
+                       work: ['In progress'] };
+var STAGE_MAX_WORK = 6, STAGE_MAX_LEN = 30;
+
+function cleanStages_(raw, strict) {
+  raw = raw || {};
+  var out = { names: {}, work: [] }, seen = {};
+  var take = function (v, fallback, what) {
+    var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    if (!s) { if (strict) throw new Error('Give the ' + what + ' stage a name.'); s = fallback; }
+    if (s.length > STAGE_MAX_LEN) { if (strict) throw new Error('Keep stage names under ' + STAGE_MAX_LEN + ' characters: "' + s + '".'); s = s.slice(0, STAGE_MAX_LEN); }
+    var k = s.toLowerCase();
+    if (seen[k]) { if (strict) throw new Error('Two stages are both called "' + s + '". Give each its own name.'); return null; }
+    seen[k] = true;
+    return s;
+  };
+  ['approval', 'todo', 'review', 'done'].forEach(function (k) {
+    out.names[k] = take((raw.names || {})[k], STAGE_DEFAULTS.names[k], STAGE_DEFAULTS.names[k]) || STAGE_DEFAULTS.names[k];
+  });
+  var work = Array.isArray(raw.work) ? raw.work : STAGE_DEFAULTS.work;
+  if (strict && work.length > STAGE_MAX_WORK) throw new Error('Up to ' + STAGE_MAX_WORK + ' working stages.');
+  work.slice(0, STAGE_MAX_WORK).forEach(function (w) { var s = take(w, '', 'working'); if (s) out.work.push(s); });
+  return out;
+}
+function readStages_(ctx) {
+  return cached_(ctx, 'stages', function () {
+    var raw = readSetting_(ctx, 'taskStages', '');
+    return raw ? cleanStages_(safeJson_(raw, {}), false) : cleanStages_(STAGE_DEFAULTS, false);
+  });
+}
+function saveStages_(ctx, stages) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var clean = cleanStages_(stages || {}, true);
+  writeSetting_(ctx, 'taskStages', JSON.stringify(clean));
+  dropCache_(ctx);
+  return { status: 'success', stages: clean, message: 'Task stages saved for everybody in the company.' };
 }
 
 function saveTabLayout_(ctx, layout) {
@@ -1915,8 +1969,10 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
   var t = hit.task;
+  var stages = readStages_(ctx), work = stages.work;
+  var flow = { short: !work.length };
 
-  if (!canTransition(t, ctx.actor, status)) {
+  if (!canTransition(t, ctx.actor, status, flow)) {
     if (status === 'Verified' && t.assignee === ctx.actor.username) {
       throw new Error('You cannot sign off your own work — it needs the person who raised it.');
     }
@@ -1925,7 +1981,9 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 
   var all = readTasks_(ctx);
 
-  if (status === 'In Progress' && t.status === 'Pending') {
+  /* Starting is where the blocker and WIP checks sit; with no working stages
+     there is no start, so they sit on the submission instead. */
+  if ((status === 'In Progress' || status === 'For Review') && t.status === 'Pending') {
     var blockers = openBlockers(t, all);
     if (blockers.length) {
       throw new Error('Blocked by: ' + blockers.map(function (b) { return b.title; }).join(', '));
@@ -1935,6 +1993,14 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
     if (wip.exceeded) {
       throw new Error(nameOf_(ctx, t.assignee) + ' already has ' + wip.count +
         ' tasks in progress (limit ' + wip.limit + ').');
+    }
+  }
+  /* Through every working stage, in order, before review. A task left at a
+     stage the Admin has since removed is not held back by it. */
+  if (status === 'For Review' && t.status === 'In Progress' && work.length) {
+    var at = work.indexOf(t.stage);
+    if (at > -1 && at < work.length - 1) {
+      throw new Error('Move it through ' + work.slice(at + 1).join(', ') + ' first, then submit it for review.');
     }
   }
   if (status === 'For Review') {
@@ -1947,7 +2013,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   /* Rework is specifically review sending work BACK. The old build incremented
      this on any move to In Progress, so simply starting a task cost five points
      on the score. Only the For Review -> In Progress path counts. */
-  var isRework = (t.status === 'For Review' && status === 'In Progress');
+  var isRework = (t.status === 'For Review' && (status === 'In Progress' || status === 'Pending'));
   if (isRework) writeTaskField_(hit, 'Reworks', Number(t.reworkCount || 0) + 1);
 
   // An approved hand-off is where the new owner actually takes the task.
@@ -1959,7 +2025,11 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   if (isRework && newDueDate) writeTaskField_(hit, 'Due Date', newDueDate);
 
   writeTaskField_(hit, 'Status', status);
-  appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : ''),
+  /* Starting, or being sent back, lands at the first working stage. */
+  var stageNow = status === 'In Progress' ? (work[0] || '') : '';
+  if (stageNow !== t.stage) writeTaskField_(hit, 'Stage', stageNow);
+  appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : '') ||
+      (stageNow && status === 'In Progress' ? 'At ' + stageNow : ''),
     isRework && newDueDate ? { setDate: newDueDate } : null);
 
   var spawned = null;
@@ -1991,7 +2061,9 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
              ? 'Verified. Stage ' + released.stageNo + ' is now open for ' +
                nameOf_(ctx, released.assignee) + '.'
            : spawned ? 'Verified. Next occurrence due ' + spawned
-           : isRework ? 'Sent back for rework.' : 'Moved to ' + status + '.',
+           : isRework ? 'Sent back for rework.'
+           : 'Moved to ' + (stageNow || ({ 'Pending': stages.names.todo, 'For Review': stages.names.review,
+               'Verified': stages.names.done })[status] || status) + '.',
     spawnedDue: spawned,
     releasedStage: released ? { id: released.id, stage: Number(released.stageNo),
                                 title: released.title, to: released.assignee } : null };
@@ -2261,6 +2333,25 @@ function removeTaskStep_(ctx, taskId, index, text) {
   writeTaskField_(hit, 'Subtasks JSON', JSON.stringify(subs));
   appendHistory_(hit, t.status, ctx.actor.name, 'Step removed: ' + gone.text);
   return { status: 'success', subtasks: subs, progress: subtaskProgress({ subtasks: subs }) };
+}
+
+/** From one working stage to another, by whoever may submit the task. */
+function moveStage_(ctx, taskId, stage) {
+  blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit) throw new Error('That task no longer exists.');
+  var t = hit.task;
+  if (t.assignee !== ctx.actor.username && ctx.actor.role !== 'Admin') {
+    throw new Error('Only the person doing it, or an Admin, can move this task on.');
+  }
+  if (t.status !== 'In Progress') throw new Error('Start the task first.');
+  var work = readStages_(ctx).work;
+  stage = String(stage || '').trim();
+  if (work.indexOf(stage) < 0) throw new Error('"' + stage + '" is not one of the company\'s stages any more. Refresh and try again.');
+  if (stage === t.stage) return { status: 'success', message: 'It is already at ' + stage + '.' };
+  writeTaskField_(hit, 'Stage', stage);
+  appendHistory_(hit, 'In Progress', ctx.actor.name, 'Moved to ' + stage);
+  return { status: 'success', stage: stage, message: 'Moved to ' + stage + '.' };
 }
 
 function stopRecurring_(ctx, taskId) {
@@ -2749,6 +2840,7 @@ function getDashboard_(ctx) {
     archivedCount: visible.length - active.length,
     categories: readCategories_(ctx),
     layout: readTabLayout_(ctx),
+    stages: readStages_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
@@ -7962,8 +8054,12 @@ function parseYmd(s) {
  *    visible rather than a silent hand-off
  *
  * `actor` = { username, role }, `task` = { status, assignee, raisedBy, approver, delegateTo }
+ *
+ * `opts.short`: the company has no working stages between To do and For
+ * review, so To do goes straight to review and a send-back returns to To do.
  */
-function allowedTransitions(task, actor) {
+function allowedTransitions(task, actor, opts) {
+  var short = !!(opts && opts.short);
   var isAdmin = actor.role === ROLE.ADMIN;
   var isAssignee = task.assignee === actor.username;
   var isRaiser = task.raisedBy === actor.username;
@@ -7981,7 +8077,7 @@ function allowedTransitions(task, actor) {
 
     case STATUS.PENDING:
       var fromPending = [];
-      if (isAssignee || isAdmin) fromPending.push(STATUS.IN_PROGRESS);
+      if (isAssignee || isAdmin) fromPending.push(short ? STATUS.FOR_REVIEW : STATUS.IN_PROGRESS);
       if (isRaiser || isAdmin) fromPending.push(STATUS.CANCELLED);
       return fromPending;
 
@@ -7993,17 +8089,18 @@ function allowedTransitions(task, actor) {
 
     case STATUS.FOR_REVIEW:
       // Deliberately excludes the assignee: you cannot sign off your own work.
+      var back = short ? STATUS.PENDING : STATUS.IN_PROGRESS;   // "rework"
       return canVerify && !(isAssignee && !isAdmin && !isRaiser)
-        ? [STATUS.VERIFIED, STATUS.IN_PROGRESS]   // In Progress here means "rework"
-        : (canVerify ? [STATUS.VERIFIED, STATUS.IN_PROGRESS] : []);
+        ? [STATUS.VERIFIED, back]
+        : (canVerify ? [STATUS.VERIFIED, back] : []);
 
     default:
       return []; // Verified / Rejected / Cancelled are terminal
   }
 }
 
-function canTransition(task, actor, next) {
-  return allowedTransitions(task, actor).indexOf(next) > -1;
+function canTransition(task, actor, next, opts) {
+  return allowedTransitions(task, actor, opts).indexOf(next) > -1;
 }
 
 /**
@@ -9314,7 +9411,7 @@ function canDropInColumn(task, actor, columnKey, context) {
   if (!target) return { ok: false, reason: 'Unknown column.' };
   if (columnForStatus(task.status) === columnKey) return { ok: true, noop: true };
 
-  if (!canTransition(task, actor, target)) {
+  if (!canTransition(task, actor, target, context.flow)) {
     if (target === STATUS.VERIFIED && task.assignee === actor.username) {
       return { ok: false, reason: 'You cannot sign off your own work — it needs the person who raised it.' };
     }
