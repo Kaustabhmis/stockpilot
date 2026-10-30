@@ -8912,19 +8912,36 @@ function buildImport(sheets, kind, ym) {
     var iTime = headerIndex(headers, ['punchtime', 'logdate', 'attdatetime', 'datetime', 'timestamp', 'recordtime']);
     if (iTime < 0) { out.problems.push('No punch time column found.'); return out; }
     if (iCode < 0 && iDev < 0) { out.problems.push('No employee code or device id column found.'); return out; }
-    var punches = [];
+    /* With an employee-code column present, a "device_id" column is the
+       MACHINE the punch was taken on, not the person: falling back to it
+       pinned an unknown code's punches on whoever had that device number.
+       Without a code column it is the person's enrolment number, as eSSL's
+       own exports use it. */
+    var iMachine = -1;
+    if (iCode >= 0) {
+      iMachine = headerIndex(headers, ['deviceid', 'machineid', 'machineno', 'deviceno', 'devicename']);
+      iDev = headerIndex(headers, ['userid', 'enrollno', 'enrollnumber', 'usrid', 'indexid']);
+    }
+    var punches = [], missing = {};
     rows.slice(1).forEach(function (r, i) {
       var raw = cellDateTime(r[iTime]);
       var when = parsePunchStamp(raw);
-      var code = iCode >= 0 ? known[String(r[iCode] || '').trim().toUpperCase()] : null;
-      if (!code && iDev >= 0) code = known['DEV:' + String(r[iDev] || '').trim()];
+      var typed = iCode >= 0 ? String(r[iCode] || '').trim() : '';
+      var code = typed ? known[typed.toUpperCase()] : null;
+      if (!code && !typed && iDev >= 0) code = known['DEV:' + String(r[iDev] || '').trim()];
       if (!when) { out.problems.push('Row ' + (i + 2) + ': unreadable punch time "' + raw + '"'); return; }
       if (!code) {
-        out.problems.push('Row ' + (i + 2) + ': no employee matches "' +
-          (iCode >= 0 ? r[iCode] : '') + (iDev >= 0 ? ' / device ' + r[iDev] : '') + '"');
+        var who = typed || (iDev >= 0 ? 'device user ' + String(r[iDev] || '').trim() : 'a blank code');
+        missing[who] = (missing[who] || 0) + 1;
         return;
       }
-      punches.push({ code: code, date: when.date, time: when.time });
+      punches.push({ code: code, date: when.date, time: when.time,
+                     device: iMachine >= 0 ? String(r[iMachine] === undefined ? '' : r[iMachine]).trim() : '' });
+    });
+    /* one line per unknown person, not one per punch */
+    Object.keys(missing).sort().forEach(function (who) {
+      out.problems.push(who + ': not in the employee list - ' + missing[who] + ' punch(es) skipped. ' +
+                        'Add them under Employees and import again if they are your staff.');
     });
     out.punches = punches;
     out.rows = punchesToAttendance(punches, out.problems);
