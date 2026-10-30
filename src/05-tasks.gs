@@ -90,6 +90,7 @@ function createTask_locked_(ctx, form) {
 
     try { notifyAssignment_(ctx, target, byName[route.approver], title, form.dueDate, id, route.status); }
     catch (e) { logError_('createTask:notify', e.message); }
+    if (route.status === 'Pending') waLiteAssigned_(ctx, target, { id: id, title: title, due: form.dueDate, byName: ctx.actor.name });
   });
 
   if (!created.length) {
@@ -352,6 +353,7 @@ function processApproval_(ctx, taskId, isApproved, remarks) {
 
   try { notifyDecision_(ctx, t, isApproved, remarks); }
   catch (e) { logError_('processApproval:notify', e.message); }
+  if (isApproved) waLiteAssigned_(ctx, findUser_(ctx.ss, t.status === 'Delegation Proposed' && t.delegateTo ? t.delegateTo : t.assignee), t);
 
   return { status: 'success', remarks: remarks,
     message: isApproved ? 'Approved — it is on their list now.'

@@ -76,12 +76,50 @@ Open the Lite website → **Create a company workspace** → your company name, 
 email and password. That workspace is on the Growth plan permanently. Then add your team
 from the **Team** tab.
 
+## 7. WhatsApp messages (Maytapi, optional)
+
+Lite can send each person a WhatsApp message:
+
+- **when a task is assigned to them** (or, if it needed approval, when it is approved)
+- **once more, 2 days before it is due**, if it is still To do or in progress
+
+The messages are sent through your Maytapi account, from the WhatsApp number linked to it.
+
+1. In the Lite Apps Script project, open **Project Settings → Script Properties** and add
+   these three. Copy the values from your Maytapi dashboard.
+
+   | Property | Value |
+   |---|---|
+   | `MAYTAPI_PRODUCT_ID` | your Product ID |
+   | `MAYTAPI_TOKEN` | your API Token |
+   | `MAYTAPI_PHONE_ID` | the Phone ID of the linked WhatsApp number |
+
+   Never paste these into Code.gs. The code is public on GitHub, and the Script Properties
+   are not.
+2. Test it. At the end of Code.gs, add this line with your own mobile number, choose
+   **testWhatsApp** in the toolbar and click **Run**:
+   `function testWhatsApp() { waLiteTest('98XXXXXXXX'); }`
+   You should get a WhatsApp saying *Domebox Lite: WhatsApp messages are working.* The log
+   shows Maytapi's reason if it fails. Delete the line afterwards.
+3. Run **switchOnSchedules** once. This starts the 2-days-before reminder, daily at about
+   9 am.
+4. In **Team**, make sure everyone has a **mobile number**. People with no number get no
+   WhatsApp, and email works as before.
+
+Each message is listed in a **WhatsApp_Log** tab in the company's spreadsheet: sent,
+failed and why, or skipped for no number. Only the last 4 digits of each number are kept.
+Nothing is sent twice for the same task. If the due date changes, one new reminder goes
+for the new date.
+
+**setupDomeBox** shows whether WhatsApp is on, under **WHATSAPP (MAYTAPI)**.
+
 ---
 
 | Problem | Fix |
 |---|---|
 | "This Domebox Lite is already set up for …" | Lite holds one company. Sign in with that company's Admin account and add people from Team. |
 | Someone uses an email that already signs in to www.domebox.in | Each email opens one workspace **per installation**, and Lite is a separate installation, so it is allowed. |
+| No WhatsApp arrives | Open the **WhatsApp_Log** tab. *failed* shows Maytapi's reason, for example a wrong token or a phone that is not connected in Maytapi. *skipped* means that person has no mobile number in Team. |
 | Changed Code.gs later | **Deploy** → **Manage deployments** → ✏ → **New version** → **Deploy**. The address stays the same. |
 
 Do not run `createDemoAccount` in Lite. It does nothing there, on purpose.

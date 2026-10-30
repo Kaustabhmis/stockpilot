@@ -116,6 +116,7 @@ function switchOnSchedules() {
     ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
     out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
   }
+  if (isLite_()) out = out.concat(switchOnWhatsApp().split('\n').slice(2));
   return say_(out);
 }
 

@@ -6,7 +6,9 @@ const src = raw
   .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g,' '))
   .replace(/\/\/[^\n]*/g, '')
   .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
-  .replace(/"(?:[^"\\\n]|\\.)*"/g, '""');
+  .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+  /* a regex literal tested in place, e.g. /Service (Drive|Gmail)/i.test(msg) */
+  .replace(/\/(?:[^\/\n\\]|\\.)+\/[gimsuy]*(?=\.test\()/g, '/x/');
 const rawForSecrets = raw;
 let pass=0,fail=0;
 const ok=(n,v,x)=>{console.log((v?'  PASS ':'  FAIL ')+n+(v||!x?'':'\n        '+x));v?pass++:fail++;};

@@ -253,6 +253,7 @@ function setupDomeBox() {
   }
   out.push('  series  next number ' + s.prefix + '/' + financialYear_(new Date()) + '/0001 onward');
   }
+  if (isLite_()) waLiteSetupLines_(out);
 
   /* --- the registry ------------------------------------------------------
      Prepared here rather than named as a next step. ensureRegistry() only adds
