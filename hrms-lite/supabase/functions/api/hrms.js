@@ -297,9 +297,12 @@ export function createApi(db, opts = {}) {
   async function upsertRow(sheet, row, dirty) {
     const t = tableFor(sheet);
     const known = await cols(t);
+    const nums = await numericInfo(t);
     const data = {};
     for (const k of Object.keys(row || {})) {
-      if (known.includes(k)) data[k] = inValue(k, row[k]);
+      if (!known.includes(k)) continue;
+      data[k] = nums[k] ? numberFor(k, row[k], nums[k]) : inValue(k, row[k]);
+      if (data[k] === undefined) delete data[k];
     }
     const key = sheet === 'Settings' ? 'key' : (sheet === 'Users' ? 'email'
               : (sheet === 'Employees' ? 'emp_code' : 'id'));
@@ -482,6 +485,34 @@ export function createApi(db, opts = {}) {
   }
 
   const numCache = {};
+  /* For every number column: may it be empty, and what is its default. A
+     blank form field ("" from an empty input) is not a number, and Postgres
+     refuses it outright ("invalid input syntax for type numeric") - which
+     stopped every new employee whose TDS or daily rate was left empty. */
+  const numInfoCache = {};
+  async function numericInfo(table) {
+    if (numInfoCache[table]) return numInfoCache[table];
+    const rows = await all(
+      `select column_name, is_nullable, column_default from information_schema.columns
+        where table_schema = 'hrms' and table_name = $1
+          and data_type in ('numeric','integer','bigint','double precision','real','smallint')`, [table]);
+    const out = {};
+    rows.forEach(r => {
+      const d = String(r.column_default == null ? '' : r.column_default).match(/^\(?'?(-?[0-9.]+)'?/);
+      out[r.column_name] = { nullable: r.is_nullable === 'YES', def: d ? Number(d[1]) : 0 };
+    });
+    return (numInfoCache[table] = out);
+  }
+  const FIELD_LABEL = c => String(c).replace(/_/g, ' ');
+  function numberFor(col, v, info) {
+    if (v === undefined) return undefined;
+    if (v === null || (typeof v === 'string' && v.trim() === '')) return info.nullable ? null : info.def;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : (info.nullable ? null : info.def);
+    const n = Number(String(v).replace(/[,\s\u20b9]/g, ''));
+    if (!Number.isFinite(n)) throw new Error(FIELD_LABEL(col) + ' must be a number - "' + String(v).slice(0, 30) + '" is not.');
+    return n;
+  }
+
   async function numericCols(table) {
     if (numCache[table]) return numCache[table];
     const rows = await all(
