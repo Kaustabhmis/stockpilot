@@ -37,13 +37,14 @@ function waLiteCfg_() {
   return { pid: pid, token: token, phoneId: phoneId };
 }
 
-/** An Indian mobile as typed in Team ("098300 12345", "+91 98300-12345") to 919830012345. */
+/** An Indian mobile as typed in Team ("098300 12345", "91 98300-12345") to +919830012345,
+    the form the company's own Maytapi sheet script already sends to. */
 function waLiteNumber_(raw) {
   var d = String(raw || '').replace(/\D/g, '');
   if (d.indexOf('00') === 0) d = d.slice(2);
   if (d.length === 11 && d.charAt(0) === '0') d = d.slice(1);
   if (d.length === 10) d = '91' + d;
-  return d.length >= 11 && d.length <= 15 ? d : '';
+  return d.length >= 11 && d.length <= 15 ? '+' + d : '';
 }
 
 /** One text message. Returns { ok, detail }; never throws. */
@@ -99,6 +100,31 @@ function waLiteDate_(s) {
 }
 
 /**
+ * One message, laid out like the delegation sheet's WhatsApp so it reads
+ * the same to staff: bold fields, a rule, and the company's sign-off.
+ */
+function waLiteMessage_(ctx, heading, t, who, status) {
+  var names = { todo: 'To do', work: ['In progress'] };
+  try { var st = readStages_(ctx); names = { todo: st.names.todo, work: st.work }; } catch (e) {}
+  var shown = status === 'Pending' ? names.todo
+            : status === 'In Progress' ? (t.stage || names.work[0] || 'In progress') : status;
+  var desc = String(t.desc || '').trim();
+  return '*' + heading + '*\n\n' +
+    '*Task ID:* ' + t.id + '\n' +
+    '*Name:* ' + (who.name || '') + '\n' +
+    '*Task Details:* ' + t.title + (desc ? ' — ' + desc.slice(0, 300) : '') + '\n' +
+    '*Delivery date:-* ' + waLiteDate_(t.due) + '\n' +
+    '*Assigned by:* ' + (t.byName || '') + '\n' +
+    '*Revised Count:* ' + (Number(t.reworkCount) || 0) + '\n' +
+    '*Status:* ' + shown + '\n' +
+    '*Link:* ' + CFG().siteUrl + '\n' +
+    '----------------------------\n\n' +
+    'If you complete this task, please update it in Domebox.\n' +
+    'Thanks & Regards\n' +
+    String(ctx.company || 'Domebox Lite').toUpperCase();
+}
+
+/**
  * The first message: the task is now on this person's list. Called after a
  * task is created straight to To do, and after an approval puts it there.
  * Never throws — a WhatsApp hiccup must not undo an assignment.
@@ -107,12 +133,7 @@ function waLiteAssigned_(ctx, assignee, task) {
   try {
     var cfg = waLiteCfg_();
     if (!cfg || !assignee || assignee.active === false) return;
-    var text = '*New task for you*' + (ctx.company ? ' — ' + ctx.company : '') + '\n\n' +
-      task.title + '\n' +
-      'Due: ' + waLiteDate_(task.due) + '\n' +
-      'Assigned by: ' + (task.byName || '') + '\n' +
-      'Ref: ' + task.id + '\n\n' +
-      'Open Domebox Lite: ' + CFG().siteUrl;
+    var text = waLiteMessage_(ctx, 'Domebox: New Task Assigned', task, assignee, 'Pending');
     waLiteDeliver_(cfg, ctx.ss, waLiteSentSet_(ctx.ss), task.id, 'assigned', assignee.phone, text);
   } catch (e) {
     logError_('whatsapp:assigned', e.message);
@@ -155,12 +176,7 @@ function waLiteDueReminders() {
         var who = people[t.assignee];
         if (!who || who.active === false || !waLiteDueSoon_(t, today)) return;
         var kind = 'due-' + t.due;   // a new due date earns a new reminder
-        var text = '*Reminder: due in ' + WA_LITE_DAYS_BEFORE + ' days*\n\n' +
-          t.title + '\n' +
-          'Due: ' + waLiteDate_(t.due) + '\n' +
-          'Assigned by: ' + (t.byName || '') + '\n' +
-          'Ref: ' + t.id + '\n\n' +
-          'Open Domebox Lite: ' + CFG().siteUrl;
+        var text = waLiteMessage_(ctx, 'Domebox: Task Due in ' + WA_LITE_DAYS_BEFORE + ' Days', t, who, t.status);
         counts[waLiteDeliver_(cfg, ctx.ss, seen, t.id, kind, who.phone, text)]++;
       });
     } catch (e) {

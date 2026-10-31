@@ -68,15 +68,17 @@ console.log('\n######## Domebox Lite, with Maytapi ########');
   const f = setup('/../dist/lite/Code.gs', true);
 
   console.log('\n=== the first message, on assignment ===');
-  f.call({ action: 'createTask', token: f.S, form: { title: 'Gate fabrication', assignTo: 'payel', dueDate: '2026-12-01' } });
+  f.call({ action: 'createTask', token: f.S, form: { title: 'Gate fabrication', desc: 'Bolt the hinges', assignTo: 'payel', dueDate: '2026-12-01' } });
   const g = f.task('Gate fabrication');
   const m = f.sent[0] || { o: { headers: {} }, body: {} };
   ok('one message is sent', f.sent.length === 1, f.sent.length);
   ok('to the Maytapi sendMessage address for this product and phone', m.url === 'https://api.maytapi.com/api/prod-123/789/sendMessage', m.url);
   ok('as a JSON POST with the token in x-maytapi-key', m.o.method === 'post' && m.o.contentType === 'application/json' && m.o.headers['x-maytapi-key'] === 'tok-456' && m.o.muteHttpExceptions === true);
-  ok('to the number in Team, written as 91 + the mobile', m.body.to_number === '919830012345' && m.body.type === 'text', JSON.stringify(m.body));
-  ok('naming the task, who gave it, and its reference', /New task for you/.test(m.body.message) && m.body.message.includes('Gate fabrication') &&
-    m.body.message.includes('Assigned by: Sruti') && m.body.message.includes('Ref: ' + g.id), m.body.message);
+  ok('to the number in Team, written as +91 and the mobile, as the sheet script does', m.body.to_number === '+919830012345' && m.body.type === 'text', JSON.stringify(m.body));
+  ok('laid out like the delegation sheet message', m.body.message === '*Domebox: New Task Assigned*\n\n' +
+    '*Task ID:* ' + g.id + '\n*Name:* Payel\n*Task Details:* Gate fabrication — Bolt the hinges\n*Delivery date:-* ' + m.body.message.match(/Delivery date:-\* (.*)/)[1] + '\n' +
+    '*Assigned by:* Sruti\n*Revised Count:* 0\n*Status:* To do\n*Link:* https://www.domebox.in\n----------------------------\n\n' +
+    'If you complete this task, please update it in Domebox.\nThanks & Regards\nACME', m.body.message);
   const row = f.log()[0] || [];
   ok('the log keeps the last four digits only', row[1] === g.id && row[2] === 'assigned' && row[3] === '…2345' && row[4] === 'sent' &&
     !JSON.stringify(f.log()).includes('9830012345'), JSON.stringify(row));
@@ -88,7 +90,7 @@ console.log('\n######## Domebox Lite, with Maytapi ########');
   const peer = f.task('Peer job');
   ok('a task waiting for approval by their manager sends nothing yet', peer.status === 'Awaiting Approval' && f.sent.length === 1, peer.status);
   ok('the approval sends it to the person doing it', f.call({ action: 'processTaskApproval', token: f.H, taskId: peer.id, isApproved: true }).status === 'success' &&
-    f.sent.length === 2 && f.sent[1].body.to_number === '919830067890' && f.sent[1].body.message.includes('Peer job'));
+    f.sent.length === 2 && f.sent[1].body.to_number === '+919830067890' && f.sent[1].body.message.includes('Peer job'));
   f.call({ action: 'createTask', token: f.S, form: { title: 'Turned down', assignTo: 'vikram', dueDate: '2026-12-02' } });
   f.call({ action: 'processTaskApproval', token: f.H, taskId: f.task('Turned down').id, isApproved: false, remarks: 'Not now' });
   ok('a rejection sends nothing', f.sent.length === 2);
@@ -115,10 +117,11 @@ console.log('\n######## Domebox Lite, with Maytapi ########');
   const out = f.X.waLiteDueReminders();
   const due = f.sent.slice(before);
   ok('only the To do and under-way tasks due in two days get one', due.length === 2 &&
-    due.some((x) => x.body.message.includes('Due in two days') && x.body.to_number === '919830012345') &&
-    due.some((x) => x.body.message.includes('Under way, due in two days') && x.body.to_number === '919830067890'),
-    due.map((x) => x.body.message.split('\n')[2]).join(' | '));
-  ok('it reads as a reminder with the due date', due.every((x) => /^\*Reminder: due in 2 days\*/.test(x.body.message) && /Due: /.test(x.body.message)));
+    due.some((x) => x.body.message.includes('Due in two days') && x.body.to_number === '+919830012345') &&
+    due.some((x) => x.body.message.includes('Under way, due in two days') && x.body.to_number === '+919830067890'),
+    due.map((x) => x.body.message.split('\n')[4]).join(' | '));
+  ok('it reads as a reminder, with the status it is at', due.every((x) => /^\*Domebox: Task Due in 2 Days\*/.test(x.body.message) && /Delivery date:-/.test(x.body.message)) &&
+    due.some((x) => /\*Status:\* To do/.test(x.body.message)) && due.some((x) => /\*Status:\* In progress/.test(x.body.message)), due.map((x) => x.body.message).join(' || '));
   ok('the run reports what it did', /sent 2 /.test(out), out);
   f.X.waLiteDueReminders();
   ok('running it again the same day sends nothing twice', f.sent.length === before + 2);
@@ -129,11 +132,11 @@ console.log('\n######## Domebox Lite, with Maytapi ########');
     f.env.G.ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'waLiteDueReminders').length === 1);
   const setup2 = f.X.setupDomeBox();
   ok('setupDomeBox reports it on', /a WhatsApp goes out when a task is assigned/.test(setup2) && /daily around 9 am/.test(setup2), setup2.split('WHATSAPP')[1]);
-  ok('waLiteTest sends a test to the number given', /test message sent to …4321/.test(f.X.waLiteTest('9876504321')) && f.sent[f.sent.length - 1].body.to_number === '919876504321');
+  ok('waLiteTest sends a test to the number given', /test message sent to …4321/.test(f.X.waLiteTest('9876504321')) && f.sent[f.sent.length - 1].body.to_number === '+919876504321');
 
   console.log('\n=== numbers as people type them ===');
   const n = f.X.waLiteNumber_;
-  ok('10 digits, leading 0, +91, 0091 and spaces all become 91…', ['9830012345', '09830012345', '+91 98300 12345', '0091-98300-12345', '919830012345'].every((x) => n(x) === '919830012345'));
+  ok('10 digits, leading 0, +91, 0091 and spaces all become +91…', ['9830012345', '09830012345', '+91 98300 12345', '0091-98300-12345', '+919830012345'].every((x) => n(x) === '+919830012345'));
   ok('a short or empty number is refused', n('12345') === '' && n('') === '' && n(null) === '');
 }
 

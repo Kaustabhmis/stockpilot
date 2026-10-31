@@ -90,7 +90,7 @@ function createTask_locked_(ctx, form) {
 
     try { notifyAssignment_(ctx, target, byName[route.approver], title, form.dueDate, id, route.status); }
     catch (e) { logError_('createTask:notify', e.message); }
-    if (route.status === 'Pending') waLiteAssigned_(ctx, target, { id: id, title: title, due: form.dueDate, byName: ctx.actor.name });
+    if (route.status === 'Pending') waLiteAssigned_(ctx, target, { id: id, title: title, desc: form.desc, due: form.dueDate, byName: ctx.actor.name });
   });
 
   if (!created.length) {
