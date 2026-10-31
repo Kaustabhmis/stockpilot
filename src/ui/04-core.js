@@ -1,0 +1,706 @@
+/* ===========================================================================
+   DOMEBOX — FRONT END
+   Talks to the Apps Script web app. Put your /exec URL in API_URL below.
+   =========================================================================== */
+'use strict';
+
+var API_URL = 'PASTE_YOUR_EXEC_URL_HERE';
+/* A site uploaded to Netlify by hand carries its address in domebox-config.js,
+   a small file edited in Notepad — no build step needed. */
+(function () {
+  var c = window.DOMEBOX_CONFIG, u = c && String(c.apiUrl || '').trim();
+  if (u && /^https:\/\/script\.google\.com\/.+\/exec$/.test(u)) API_URL = u;
+})();
+
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (s) { return String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+/** A value for a quoted argument inside onclick="…". esc() alone is not enough
+ *  there: the browser decodes &#39; back to ' before the script runs. */
+var jsArg = function (s) { return esc(JSON.stringify(String(s == null ? '' : s))); };
+
+var STATE = { token:null, user:null, company:'', plan:'Free', data:null,
+              tab:'tasks', mode:'board', archive:false, usage:null,
+              period:'month', offset:0, person:'', analytics:null };
+
+var FILTER = { q:'', assignee:'', by:'', dateOn:'due', from:'', to:'', sort:'', status:'', category:'', goal:'', overdue:false };
+
+/* ---------- API ----------------------------------------------------------
+   Apps Script does not answer CORS preflight, so the request has to stay
+   "simple": text/plain content type and no custom headers. The body is still
+   JSON; only the declared type differs. */
+/* Every call the person is waiting on shows the loading bar; background
+   polls pass { quiet: true } so the bar never flickers on its own. */
+function api(action, params, opts) {
+  var body = Object.assign({ action: action }, params || {});
+  if (STATE.token) body.token = STATE.token;
+  var quiet = opts && opts.quiet;
+  if (!quiet) loadingStart();
+
+  return fetch(API_URL, {
+    method: 'POST', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  }).then(function (r) {
+    if (!r.ok) throw new Error('The server is not reachable right now.');
+    return r.text();
+  }).then(function (text) {
+    var j;
+    try { j = JSON.parse(text); }
+    catch (e) { throw new Error('The server sent something unexpected. Try again.'); }
+    if (j.status === 'error') {
+      /* An expired or forged token must drop the session, or the user sits on a
+         dead screen pressing buttons that will never work. */
+      if (/signed in|session|expired/i.test(j.message || '')) signOut(true);
+      throw new Error(j.message || 'Something went wrong.');
+    }
+    return j;
+  }).then(function (j) { if (!quiet) loadingEnd(); return j; },
+          function (e) { if (!quiet) loadingEnd(); throw e; });
+}
+
+/* ---------- loading -------------------------------------------------------
+   A bar across the top while anything is in flight, and after a moment a
+   "Loading…" pill so a slow call never looks like a frozen screen. Shown
+   after a short delay, so a quick answer does not flash anything. */
+var LOADING = { n: 0, bar: null, pill: null };
+function loadingStart() {
+  LOADING.n++;
+  if (LOADING.n > 1) return;
+  clearTimeout(LOADING.bar); clearTimeout(LOADING.pill);
+  LOADING.bar = setTimeout(function () { var el = $('loadBar'); if (el) el.classList.add('on'); }, 120);
+  LOADING.pill = setTimeout(function () { var el = $('loadPill'); if (el) el.classList.add('on'); }, 900);
+}
+function loadingEnd() {
+  LOADING.n = Math.max(0, LOADING.n - 1);
+  if (LOADING.n) return;
+  clearTimeout(LOADING.bar); clearTimeout(LOADING.pill);
+  var b = $('loadBar'), p = $('loadPill');
+  if (b) b.classList.remove('on');
+  if (p) p.classList.remove('on');
+}
+/** The placeholder a panel shows until its data arrives. */
+function spin(label) {
+  return '<div class="loading-block" role="status"><span class="spinner"></span><span>' +
+    esc(label || 'Loading…') + '</span></div>';
+}
+
+/* ---------- small UI helpers --------------------------------------------- */
+/* Errors, warnings and successes open a proper dialog; 'info' stays a small
+   note in the corner for things that need no answer ("Starting payment…"). */
+function toast(msg, kind) {
+  /* Returns nothing, as it always has: code that carries on after a message
+     must not wait for somebody to close it. */
+  if (kind === 'err') { showDialog({ kind: 'error', message: msg }); return; }
+  if (kind === 'warn') { showDialog({ kind: 'warning', message: msg }); return; }
+  if (kind === 'ok' || kind === 'win') { showDialog({ kind: 'success', message: msg, autoClose: 2600 }); return; }
+  var el = document.createElement('div');
+  el.className = 'toast ' + (kind || 'info');
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(function () { el.remove(); }, kind === 'err' ? 5500 : 3200);
+}
+/* ---------- dialogs -------------------------------------------------------
+   One box for every outcome: a red error, an amber warning, a green success,
+   or a question with two buttons. It sits above any open form, so an error
+   never throws away what somebody was typing. One at a time; the rest wait
+   their turn, and the same message twice in a row shows once. */
+var DLG = { open: null, queue: [], timer: null };
+var DLG_KINDS = {
+  error:   { icon: 'error',        title: 'Something went wrong' },
+  warning: { icon: 'warning',      title: 'Please check' },
+  success: { icon: 'check_circle', title: 'Done' },
+  confirm: { icon: 'help',         title: 'Are you sure?' }
+};
+function showDialog(o) {
+  return new Promise(function (resolve) {
+    o.resolve = resolve;
+    var last = DLG.open || DLG.queue[DLG.queue.length - 1];
+    if (last && last.kind === o.kind && last.message === o.message) return resolve(false);
+    /* A success note never holds up what comes after it. */
+    if (DLG.open && DLG.open.kind === 'success') closeDialog(true, true);
+    if (DLG.open) { DLG.queue.push(o); return; }
+    paintDialog(o);
+  });
+}
+function paintDialog(o) {
+  DLG.open = o;
+  var k = DLG_KINDS[o.kind] || DLG_KINDS.error;
+  var box = $('dlg');
+  box.className = 'dlg dlg-' + o.kind;
+  box.setAttribute('role', o.kind === 'success' ? 'status' : 'alertdialog');
+  box.innerHTML =
+    '<div class="dlg-icon"><span class="material-icons">' + k.icon + '</span></div>' +
+    '<h2 id="dlgTitle" class="dlg-title">' + esc(o.title || k.title) + '</h2>' +
+    '<p id="dlgMsg" class="dlg-msg">' + esc(o.message || '') + '</p>' +
+    '<div class="dlg-actions">' +
+      (o.kind === 'confirm'
+        ? '<button class="btn btn-g" data-a="no">' + esc(o.cancel || 'Cancel') + '</button>' +
+          '<button class="btn ' + (o.danger ? 'btn-danger' : 'btn-p') + '" data-a="yes">' + esc(o.ok || 'Yes') + '</button>'
+        : '<button class="btn btn-p" data-a="yes">' + esc(o.ok || 'OK') + '</button>') +
+    '</div>' +
+    (o.autoClose ? '<div class="dlg-timer" style="animation-duration:' + o.autoClose + 'ms"></div>' : '');
+  box.querySelectorAll('[data-a]').forEach(function (b) {
+    b.addEventListener('click', function () { closeDialog(b.dataset.a === 'yes'); });
+  });
+  /* Success floats without a backdrop, so work carries on underneath it;
+     anything that needs an answer dims the page and takes the focus. */
+  $('dlgScrim').classList.toggle('lite', o.kind === 'success');
+  $('dlgScrim').classList.add('on');
+  var focus = o.kind !== 'success' && box.querySelector('[data-a="' + (o.kind === 'confirm' && o.danger ? 'no' : 'yes') + '"]');
+  if (focus) { try { focus.focus(); } catch (e) {} }
+  clearTimeout(DLG.timer);
+  if (o.autoClose) DLG.timer = setTimeout(function () { if (DLG.open === o) closeDialog(true); }, o.autoClose);
+}
+function closeDialog(answer, keepQueue) {
+  var o = DLG.open;
+  if (!o) return false;
+  clearTimeout(DLG.timer);
+  DLG.open = null;
+  $('dlgScrim').classList.remove('on');
+  o.resolve(o.kind === 'confirm' ? !!answer : true);
+  var next = !keepQueue && DLG.queue.shift();
+  if (next) setTimeout(function () { paintDialog(next); }, 120);
+  return true;
+}
+/** A yes/no question. Resolves true only for the yes button. */
+function confirmBox(message, opts) {
+  return showDialog(Object.assign({ kind: 'confirm', message: message }, opts || {}));
+}
+
+function openModal(html, width) {
+  $('modal').className = width || 'max-w-lg';
+  $('modal').innerHTML = html;
+  /* Opened from the task panel ("Hand over…", "Add blocker…"): in front of
+     the panel, not half hidden behind it. */
+  $('scrim').classList.toggle('top', $('drawer').classList.contains('on'));
+  $('scrim').classList.add('on');
+}
+function closeModal() { $('scrim').classList.remove('on'); $('modal').innerHTML = ''; }
+function openDrawer(html) { $('drawer').innerHTML = html; $('drawer').classList.add('on'); }
+function closeDrawer() { $('drawer').classList.remove('on'); }
+function busy(btn, on, label) {
+  if (!btn) return;
+  if (on) {
+    btn.dataset.label = btn.textContent; btn.disabled = true;
+    btn.innerHTML = '<span class="spinner spinner-sm"></span>' + esc(label || 'Working…');
+  } else { btn.disabled = false; if (btn.dataset.label) btn.textContent = btn.dataset.label; }
+}
+
+var fmtDate = function (s) {
+  if (!s) return '—';
+  var d = new Date(s + 'T00:00:00');
+  return isNaN(d) ? s : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+};
+var initials = function (n) { return String(n || '?').trim().split(/\s+/).slice(0,2)
+  .map(function (w) { return w[0] || ''; }).join('').toUpperCase(); };
+/* ---------- colour that means something -----------------------------------
+   A tint is picked from a hash of the name, so a category or a person keeps
+   the same colour on every screen and between sessions. A colour that moves
+   between renders is worse than no colour: people learn it, then it lies to
+   them. Reserved status colours are never drawn from this set. */
+var TINTS = ['violet','coral','teal','amber','rose','sky','lime','plum','slate','rust'];
+function tintFor(key) {
+  var str = String(key || ''), h = 0;
+  for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return TINTS[h % TINTS.length];
+}
+function tintChip(key, label, title) {
+  return '<span class="chip t-' + tintFor(key) + '"' +
+    (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(label) + '</span>';
+}
+/** An avatar bubble, coloured by who it is rather than all the same blue. */
+function avatar(name, px) {
+  var size = px || 28;
+  return '<span class="av s-' + tintFor(name) + '" title="' + esc(name || '') + '" ' +
+    'style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.37) + 'px">' +
+    esc(initials(name)) + '</span>';
+}
+
+/* The five board states, in the order work moves through them. The colour is
+   the state, never the person or the priority — those have their own. */
+var STATE_TONE = {
+  /* Board column titles… */
+  'Needs Approval':      { tone: '#d4930f', chip: 't-amber' },
+  'To Do':               { tone: '#64748b', chip: 't-slate' },
+  'In Progress':         { tone: '#1e4fbf', chip: 't-sky' },
+  'For Review':          { tone: '#7a4fd6', chip: 't-plum' },
+  'Verified':            { tone: '#067647', chip: 't-teal' },
+  /* …and the status values themselves, which the list and the drawer show.
+     Keyed separately rather than mapped, because "To Do" is a column holding
+     two statuses and the two are not the same thing. */
+  'Pending':             { tone: '#64748b', chip: 't-slate' },
+  'Awaiting Approval':   { tone: '#d4930f', chip: 't-amber' },
+  'Delegation Proposed': { tone: '#d4930f', chip: 't-amber' },
+  'Rejected':            { tone: '#b42318', chip: 't-coral' },
+  'Cancelled':           { tone: '#64748b', chip: 't-slate' },
+};
+function stateTone(key) { return STATE_TONE[key] || { tone: '#c3cddc', chip: 't-slate' }; }
+
+/* Priority by its rank in the workspace's own list, so a renamed level still
+   gets the right weight of colour: most urgent reads hottest. */
+var PRIORITY_TONE = ['t-rose', 't-coral', 't-amber', 't-sky', 't-slate'];
+function priorityChip(p) {
+  var names = (STATE.data && STATE.data.priorities || []).map(function (x) { return x.name; });
+  var i = names.indexOf(p);
+  var cls = PRIORITY_TONE[i > -1 ? Math.min(i, PRIORITY_TONE.length - 1) : PRIORITY_TONE.length - 1];
+  return '<span class="chip ' + cls + '">' + esc(p || 'Medium') + '</span>';
+}
+
+function nameOf(u) {
+  var s = (STATE.data && STATE.data.staff) || [];
+  for (var i = 0; i < s.length; i++) if (s[i].username === u) return s[i].name;
+  return u || '—';
+}
+function daysLate(t) {
+  if (!t.due || ['Verified','Rejected','Cancelled','For Review'].indexOf(t.status) > -1) return 0;
+  var due = new Date(t.due + 'T00:00:00'); if (isNaN(due)) return 0;
+  var today = new Date(); today.setHours(0,0,0,0);
+  var n = Math.round((today - due) / 86400000);
+  return n > 0 ? n : 0;
+}
+function todayYmd() {
+  var d = new Date(), m = String(d.getMonth()+1), day = String(d.getDate());
+  return d.getFullYear() + '-' + (m.length<2?'0'+m:m) + '-' + (day.length<2?'0'+day:day);
+}
+function addDaysYmd(n) {
+  var d = new Date(); d.setDate(d.getDate() + n);
+  var m = String(d.getMonth()+1), day = String(d.getDate());
+  return d.getFullYear() + '-' + (m.length<2?'0'+m:m) + '-' + (day.length<2?'0'+day:day);
+}
+
+/* ---------- auth ---------------------------------------------------------- */
+function showAuth(which) {
+  ['Login','Signup','Forgot','Reset'].forEach(function (n) {
+    $('form' + n).classList.toggle('hidden', n.toLowerCase() !== which);
+  });
+}
+
+function saveSession(res) {
+  STATE.token = res.token; STATE.user = res.user;
+  STATE.company = res.company || ''; STATE.plan = res.plan || 'Free';
+  STATE.demo = !!res.demo;
+  /* Only what a reload needs: the token and who is signed in, nothing more. */
+  var u = res.user || {};
+  try { sessionStorage.setItem('dbx', JSON.stringify({
+    token: res.token, company: res.company, plan: res.plan, demo: !!res.demo,
+    user: { name: u.name, username: u.username, email: u.email, role: u.role, jobProfile: u.jobProfile,
+            dept: u.dept, manager: u.manager } })); } catch (e) {}
+}
+
+/* ---------- the public demo ----------------------------------------------
+   One click from the home page opens the demo company, view-only, as the
+   owner, a manager or a member of staff. Everything can be opened and read;
+   anything that would change it says so and points at the free trial. */
+var DEMO_AS = { owner: 'the owner', manager: 'a manager (Sruti)', staff: 'a team member (Payel)' };
+function openDemo(as, btn) {
+  if (LITE) return goAuth('login');
+  if (btn) busy(btn, true, 'Opening the demo…');
+  return api('openDemo', { as: as || 'owner' }).then(function (res) {
+    STATE.demoAs = as || 'owner';
+    saveSession(res);
+    try { sessionStorage.setItem('dbxDemoAs', STATE.demoAs); } catch (e) {}
+    if (btn) busy(btn, false);
+    enterApp();
+  }).catch(function (e) { if (btn) busy(btn, false); toast(e.message, 'err'); });
+}
+function leaveDemoForTrial() {
+  STATE.token = null; STATE.user = null; STATE.data = null; STATE.demo = false;
+  try { sessionStorage.removeItem('dbx'); } catch (e) {}
+  closeModal(); closeDrawer();
+  goAuth('signup');
+}
+/** Leaves the demo for the home page, the way a visitor expects a logo or a
+ *  "back" button to work. Nothing to save: the demo is read-only. */
+function exitDemo() {
+  if (!STATE.demo) return;
+  signOut(false);
+}
+/** The logo: home for a demo visitor, the board for everybody signed in. */
+function brandClick() {
+  if (STATE.demo) return exitDemo();
+  if (STATE.token && STATE.tab !== 'tasks') { STATE.tab = 'tasks'; renderTab(); }
+}
+function renderDemoBanner() {
+  var as = STATE.demoAs || 'owner';
+  $('banner').className = '';
+  $('banner').innerHTML = '<div class="demo-bar px-4 lg:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">' +
+    '<span class="demo-tag">Live demo</span>' +
+    '<span class="font-bold">Demo factory, seen as ' + esc(DEMO_AS[as] || 'the owner') +
+      ' · changes are off</span>' +
+    '<span class="flex items-center gap-1">' + Object.keys(DEMO_AS).map(function (k) {
+      return '<button class="demo-as' + (k === as ? ' on' : '') + '" onclick="openDemo(\'' + k + '\')">' +
+        ({ owner: 'Owner', manager: 'Manager', staff: 'Staff' })[k] + '</button>'; }).join('') + '</span>' +
+    '<span class="flex-1"></span>' +
+    '<button class="demo-exit" id="btnExitDemo" onclick="exitDemo()">' +
+      '<span class="material-icons">arrow_back</span>Exit demo</button>' +
+    '<button class="btn btn-a text-xs py-2" onclick="leaveDemoForTrial()">Start your free 14-day trial</button></div>';
+}
+function restoreSession() {
+  try {
+    var raw = sessionStorage.getItem('dbx');
+    if (!raw) return false;
+    var s = JSON.parse(raw);
+    if (!s.token) return false;
+    STATE.token = s.token; STATE.user = s.user;
+    STATE.company = s.company || ''; STATE.plan = s.plan || 'Free';
+    STATE.demo = !!s.demo;
+    try { STATE.demoAs = sessionStorage.getItem('dbxDemoAs') || 'owner'; } catch (e) {}
+    return true;
+  } catch (e) { return false; }
+}
+function signOut(expired) {
+  var wasDemo = !!STATE.demo;
+  /* Tell the server, so a copied token stops working too. Sent straight, not
+     through api(): its answer must never sign out a session started since. */
+  if (!expired && STATE.token && !wasDemo) {
+    try { fetch(API_URL, { method: 'POST', redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'signOut', token: STATE.token }) }).catch(function () {}); } catch (e) {}
+  }
+  STATE.token = null; STATE.user = null; STATE.data = null; STATE.demo = false;
+  try { sessionStorage.removeItem('dbx'); } catch (e) {}
+  closeModal(); closeDrawer();
+  $('view-app').classList.add('hidden');
+  resetAuthForms();
+  /* A demo visitor has no account to sign back in to: send them home, where
+     the demo and the trial are one click away. */
+  if (wasDemo) {
+    showHome();
+    if (expired) showDialog({ kind: 'warning', title: 'The demo session ended', message: 'Open it again any time, or start your free trial.' });
+    return;
+  }
+  /* Straight back to the sign-in form, because somebody who just signed out of
+     their own workspace is far more likely to be switching accounts than
+     reading the sales page. */
+  goAuth('login');
+  if (expired) showDialog({ kind: 'warning', title: 'You have been signed out', message: 'Your session ended. Please sign in again.' });
+}
+
+/**
+ * A successful sign-in leaves its button disabled and reading "Signing in…",
+ * because the page navigates into the app rather than finishing the call. On
+ * the way back out that stale state would lock the user out of their own login
+ * form until they refreshed, so every auth button and password field is reset
+ * whenever the auth view is shown.
+ */
+function resetAuthForms() {
+  ['btnLogin','btnSignup','btnForgot','btnReset'].forEach(function (id) {
+    busy($(id), false);
+  });
+  ['liPass','suPass','rsPass','rsPass2'].forEach(function (id) {
+    if ($(id)) $(id).value = '';
+  });
+}
+
+function enterApp() {
+  $('view-auth').classList.add('hidden');
+  $('view-home').classList.add('hidden');
+  $('view-app').classList.remove('hidden');
+  $('navName').textContent = STATE.user.name;
+  $('navRole').textContent = STATE.user.role;
+  $('navCompany').textContent = STATE.company;
+  if (typeof loadPublicInfo === 'function') loadPublicInfo();
+  if (!STATE.data) {
+    /* First open: show the shape of the page while the work loads. */
+    $('statTiles').innerHTML = new Array(7).join('<div class="skeleton h-[84px]"></div>');
+    $('board').classList.add('hidden'); $('list').classList.add('hidden');
+    $('tasksEmpty').classList.remove('hidden');
+    $('tasksEmpty').innerHTML = spin('Loading your work…');
+  }
+  refresh();
+  loadDirection().then(function () { if (STATE.data) { syncFilters(); if (STATE.tab === 'tasks') renderTasks(); } });
+}
+
+/** People in A–Z order, so every picker that lists them reads the same way. */
+function byName(list) {
+  return (list || []).slice().sort(function (a, b) {
+    return String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }); });
+}
+
+function refresh() {
+  return api('getDashboard').then(function (d) {
+    if (d.staff) d.staff = byName(d.staff);
+    STATE.data = d;
+    STATE.usage = d.usage;
+    /* The plan as the server sees it now — a trial can end, or a payment land,
+       while somebody is signed in. */
+    if (d.usage && d.usage.plan) STATE.plan = d.usage.plan;
+    if (d.serviceStopped) { renderStopped(d); return; }
+    renderBanner();
+    renderTiles();
+    renderBell();
+    syncFilters();
+    applyTabLayout();
+    renderTab();
+  }).catch(function (e) { toast(e.message, 'err'); });
+}
+
+function renderStopped(d) {
+  $('banner').className = '';
+  $('banner').innerHTML = '<div class="bg-red-50 border-b border-red-200 px-4 py-4 text-center">' +
+    '<div class="font-black text-red-900">' + (canBill() ? 'Your subscription lapsed' : 'Read-only for now') + '</div>' +
+    '<div class="text-sm text-red-800 mt-1">' + esc(d.message) + '</div>' +
+    (canBill() ? '<button class="btn btn-p mt-3" onclick="openBilling()">Renew now</button>' : '') + '</div>';
+  ['tab-tasks','tab-team','tab-reports'].forEach(function (id) { $(id).classList.add('hidden'); });
+}
+
+/** Plans, prices and billing are for the company's Admin only. */
+function isAdmin() { return !!(STATE.user && STATE.user.role === 'Admin'); }
+/* Domebox Lite (the Lite build sets DOMEBOX_EDITION) has no plans or billing
+   at all — not even for its Admin. */
+var LITE = window.DOMEBOX_EDITION === 'lite';
+function canBill() { return isAdmin() && !LITE; }
+
+function renderBanner() {
+  if (STATE.demo) { renderDemoBanner(); return; }
+  var u = STATE.usage, b = $('banner');
+  /* Staff are not shown the plan, the trial or renewal dates — nothing in it
+     is theirs to act on. */
+  if (!canBill()) { b.className = 'hidden'; b.innerHTML = ''; return; }
+  var msgs = [];
+  /* A trial is said as a trial: how long is left, and what happens after. */
+  if (u.trial) {
+    msgs.push({ tone: 'info', text: 'Free trial of the full ' + u.planName + ' plan: ' +
+      (u.daysLeft > 1 ? u.daysLeft + ' days left.' : u.daysLeft === 1 ? 'ends tomorrow.' : 'ends today.') +
+      ' After it, the workspace moves to Free — nothing is deleted.' });
+  }
+  if (u.trialEnded && STATE.user && STATE.user.role === 'Admin') {
+    msgs.push({ tone: 'warn', text: 'Your free trial has ended, so you are on the Free plan. ' +
+      'Choose a plan to keep scoring, reports and appraisals.' });
+  }
+  if (!u.trial && u.daysLeft !== null && u.daysLeft <= 7 && u.daysLeft >= 0 && STATE.plan !== 'Free') {
+    msgs.push({ tone: 'warn', text: 'Your plan renews in ' + u.daysLeft + ' day(s).' });
+  }
+  if (!u.trial && u.daysLeft !== null && u.daysLeft < 0 && STATE.plan !== 'Free') {
+    msgs.push({ tone: 'bad', text: 'Payment is overdue. Access stops ' +
+      Math.max(0, 7 + u.daysLeft) + ' day(s) from now.' });
+  }
+  (u.warnings || []).forEach(function (w) {
+    msgs.push({ tone: w.atLimit ? 'bad' : 'warn', text: w.text });
+  });
+  if (!msgs.length) { b.className = 'hidden'; b.innerHTML = ''; return; }
+  var worst = msgs.some(function (m) { return m.tone === 'bad'; }) ? 'bad'
+            : msgs.some(function (m) { return m.tone === 'warn'; }) ? 'warn' : 'info';
+  b.className = '';
+  b.innerHTML = '<div class="' + (worst === 'bad' ? 'bg-red-50 text-red-900 border-red-200'
+      : worst === 'warn' ? 'bg-amber-50 text-amber-900 border-amber-200'
+      : 'bg-blue-50 text-blue-900 border-blue-200') +
+    ' border-b px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 text-sm font-bold">' +
+    '<span class="text-[10px] uppercase tracking-widest font-black">' + esc(u.planName) + '</span>' +
+    msgs.map(function (m) { return '<span>' + esc(m.text) + '</span>'; }).join('') +
+    '<span class="flex-1"></span>' +
+    '<button class="btn btn-p text-xs py-2" onclick="openBilling()">' + (u.trial ? 'Choose a plan' : 'Upgrade') + '</button></div>';
+}
+
+function renderTiles() {
+  var s = STATE.data.stats, sc = s.scores;
+  /* Each tile carries the colour of the thing it counts, and an icon, so the
+     row is read at a glance instead of five identical white boxes that all
+     have to be decoded by their label. */
+  var tile = function (o) {
+    return '<div class="tile' + (o.lead ? ' lead' : '') + '"' +
+      (o.onclick ? ' onclick="' + o.onclick + '"' : '') + '>' +
+      '<span class="ti material-icons" style="color:' + (o.icon2 || '#c3cddc') + '">' +
+        o.icon + '</span>' +
+      '<div class="tk">' + esc(o.k) + '</div>' +
+      '<div class="tv ' + (o.tone || '') + '">' + o.v + '</div>' +
+      (o.sub ? '<div class="ts">' + esc(o.sub) + '</div>' : '') +
+      '</div>';
+  };
+  var band = function (n) {
+    return n == null ? 'text-gray-300'
+      : n >= 85 ? 'text-emerald-700' : n >= 60 ? 'text-amber-700' : 'text-red-700';
+  };
+
+  /* Named as the company names its stages. With no working stages there is
+     no "in progress" tile, unless work from before is still sitting there. */
+  var st = (STATE.data && STATE.data.stages) || { names: { todo: 'Pending', review: 'For review' }, work: ['In progress'] };
+  var showProgress = st.work.length > 0 || s.progress > 0;
+  $('statTiles').className = 'grid grid-cols-2 ' + (showProgress ? 'lg:grid-cols-6' : 'lg:grid-cols-5') + ' gap-3 mb-5';
+  $('statTiles').innerHTML =
+    tile({ k:st.names.todo, v:s.pending,  icon:'inbox',       icon2:'#64748b' }) +
+    (showProgress ? tile({ k: st.work.length === 1 ? st.work[0] : 'In progress', v:s.progress, icon:'bolt', icon2:'#1e4fbf' }) : '') +
+    tile({ k:st.names.review, v:s.review, icon:'rate_review', icon2:'#7a4fd6',
+           sub: s.review ? 'with a reviewer' : '' }) +
+    tile({ k:'Overdue',     v:s.overdue,  icon:'warning',
+           icon2: s.overdue ? '#b42318' : '#c3cddc',
+           tone: s.overdue ? 'text-red-700' : '', sub:'needs attention' }) +
+    tile({ k:'Delegation',  icon:'speed', icon2:'#1e4fbf',
+           v: sc.hasData && sc.delegation != null ? sc.delegation : '—',
+           tone: band(sc.hasData ? sc.delegation : null),
+           sub: sc.hasData ? (sc.load ? sc.load.percent + '% of an expected load' : 'this month')
+                           : 'no data yet' }) +
+    tile({ k:'Final score', icon:'emoji_events',
+           icon2: sc.final == null ? '#c3cddc' : '#0f8f84',
+           v: sc.final == null ? '—' : sc.final, tone: band(sc.final),
+           sub:'See why →', lead:true, onclick:'openScoreBreakdown()' });
+}
+
+function openScoreBreakdown() {
+  var sc = STATE.data.stats.scores;
+  var rows = (sc.breakdown || []);
+  var resp = sc.responsiveness;
+
+  /* Grouped, because a deduction for sitting on somebody else's work is a
+     different conversation from a late delivery, and lumping them into one
+     list is how a score stops being arguable in good faith. */
+  var order = ['Workload Credit', 'Cookie Points', 'Project Milestones', 'On-Time Delivery',
+               'First-Pass Quality', 'Queue Health', 'Review Responsiveness'];
+  var groups = {};
+  rows.forEach(function (r) { (groups[r.group || 'Other'] = groups[r.group || 'Other'] || []).push(r); });
+  var names = order.filter(function (g) { return groups[g]; })
+    .concat(Object.keys(groups).filter(function (g) { return order.indexOf(g) < 0; }));
+
+  var table = names.map(function (g) {
+    return '<h3 class="text-[11px] font-black uppercase tracking-widest text-gray-500 mt-5 mb-2">' +
+      esc(g) + '</h3>' +
+      '<table class="tbl"><thead><tr><th>Item</th><th>Reason</th><th>Impact</th></tr></thead><tbody>' +
+      groups[g].map(function (r) {
+        return '<tr><td class="font-bold text-gray-800">' + esc(r.item) + '</td>' +
+          '<td>' + esc(r.reason) + '</td>' +
+          '<td class="font-black ' + (String(r.impact).charAt(0) === '-' ? 'text-red-700' : 'text-emerald-700') +
+          '">' + esc(r.impact) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }).join('');
+
+  var respPanel = resp ? '<div class="rounded-2xl border ' +
+      (resp.penalty ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50') +
+      ' p-4 mb-5">' +
+    '<div class="flex items-start gap-3">' +
+      '<span class="material-icons ' + (resp.penalty ? 'text-red-700' : 'text-emerald-700') + '">' +
+      (resp.penalty ? 'hourglass_bottom' : 'task_alt') + '</span>' +
+      '<div class="min-w-0">' +
+      '<div class="text-sm font-black text-gray-900">Work waiting on you</div>' +
+      '<div class="text-[13px] font-semibold text-gray-700 mt-0.5">' +
+        esc(resp.withinSla + ' of ' + resp.items + ' approvals and reviews cleared within ' +
+            resp.slaDays + ' working days') +
+        (resp.avgHeldDays != null ? esc(' · ' + resp.avgHeldDays + ' days held on average') : '') +
+      '</div>' +
+      (resp.pending ? '<div class="text-[13px] font-bold text-gray-800 mt-1">' +
+         esc(resp.pending + ' still on your desk') +
+         (resp.overdueNow ? esc(', ' + resp.overdueNow + ' of them past the ' + resp.slaDays +
+                                '-day mark') : '') + '</div>' : '') +
+      (resp.penalty ? '<div class="text-[13px] font-black text-red-800 mt-1">' +
+         esc('\u2212' + resp.penalty + ' points for holding your team up') + '</div>'
+       : '<div class="text-[13px] font-black text-emerald-800 mt-1">No points lost here</div>') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        'Counted in working days from when it reached you. Weekends, company holidays ' +
+        'and your own approved leave are not counted.</div>' +
+      '</div></div></div>' : '';
+
+  /* The headline answer to "why is my score what it is?". Ten jobs with seven
+     delivered on time has to beat one easy job delivered, and the only honest
+     way to show that is to put the load and the rate side by side. */
+  var ld = sc.load;
+  var loadPanel = ld ? '<div class="rounded-2xl border ' +
+      (ld.full ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-blue-50') + ' p-4 mb-5">' +
+    '<div class="flex items-start gap-3">' +
+      '<span class="material-icons ' + (ld.full ? 'text-emerald-700' : 'text-blue-700') + '">scale</span>' +
+      '<div class="min-w-0 w-full">' +
+      '<div class="text-sm font-black text-gray-900">How well, times how much</div>' +
+      '<div class="text-[13px] font-semibold text-gray-700 mt-1">' +
+        (sc.rate != null ? '<span class="font-black">' + sc.rate + '</span> for how well you delivered, ' : '') +
+        'carried on <span class="font-black">' + ld.percent + '%</span> of an expected load.' +
+      '</div>' +
+      '<div class="h-2 rounded-full bg-white/70 overflow-hidden my-2">' +
+        '<div class="h-full ' + (ld.full ? 'bg-emerald-500' : 'bg-blue-600') + '" ' +
+        'style="width:' + Math.min(100, ld.percent) + '%"></div></div>' +
+      (sc.delegationFormula ? '<div class="text-[13px] font-bold text-gray-800">' +
+        esc(sc.delegationFormula) + '</div>' : '') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        'A rate on its own says nothing about how much you took on, so ten jobs with seven ' +
+        'delivered on time outscores one easy job delivered. Work in hand counts, and so do ' +
+        'the approvals and reviews you clear for other people.</div>' +
+      (sc.provisional ? '<div class="text-[12px] font-black text-amber-800 mt-2">' +
+        'A light month so far — this is not yet a full picture of your work.</div>' : '') +
+      '</div></div></div>' : '';
+
+  var ck = sc.cookies;
+  var cookiePanel = ck && ck.awarded ? '<div class="rounded-2xl border border-amber-200 ' +
+      'bg-amber-50 p-4 mb-5"><div class="flex items-start gap-3">' +
+      '<span class="material-icons text-amber-700">emoji_events</span>' +
+      '<div class="min-w-0">' +
+      '<div class="text-sm font-black text-gray-900">' +
+        esc(ck.awarded + ' cookie point' + (ck.awarded === 1 ? '' : 's') + ' this month') + '</div>' +
+      (ck.list || []).map(function (c) {
+        return '<div class="text-[13px] font-semibold text-gray-700 mt-1">' +
+          '<span class="font-black">+' + c.points + '</span> ' + esc(c.reason || 'Recognised') +
+          '<span class="text-gray-500"> — ' + esc(c.byName || c.by || 'a manager') + '</span></div>';
+      }).join('') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        esc(ck.capped
+          ? 'Adding ' + ck.bonus + ' to your score — that is the monthly cap. The rest still stands on the record.'
+          : 'Adding ' + ck.bonus + ' to your score.') + '</div>' +
+      '</div></div></div>' : '';
+
+  /* The gains, stated as plainly as the losses. A score that only ever shows a
+     person what went wrong is read as a punishment ledger, and stops changing
+     anybody's behaviour after the first month. */
+  var ms = sc.milestones;
+  var msPanel = ms ? '<div class="rounded-2xl border ' +
+      (ms.missed ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50') + ' p-4 mb-5">' +
+    '<div class="flex items-start gap-3">' +
+      '<span class="material-icons ' + (ms.missed ? 'text-amber-700' : 'text-emerald-700') + '">flag</span>' +
+      '<div class="min-w-0">' +
+      '<div class="text-sm font-black text-gray-900">Project stage deadlines</div>' +
+      '<div class="text-[13px] font-semibold text-gray-700 mt-0.5">' +
+        esc(ms.met + ' met' + (ms.missed ? ', ' + ms.missed + ' missed' : '')) +
+        (ms.hitRate != null ? esc(' · ' + ms.hitRate + '% hit rate') : '') +
+        (ms.pending ? esc(' · ' + ms.pending + ' stage' + (ms.pending === 1 ? '' : 's') + ' still running') +
+          (ms.atRisk ? esc(', ' + ms.atRisk + ' past the date') : '') : '') +
+      '</div>' +
+      (ms.met ? '<div class="text-[13px] font-black text-emerald-800 mt-1">' +
+         esc('Every stage deadline you meet adds to this score') + '</div>' : '') +
+      '<div class="text-[11px] font-semibold text-gray-500 mt-1">' +
+        'A stage date is a promise to the people downstream, so it is scored in its own right. ' +
+        'If the stage before yours ran over, your date moves out with it.</div>' +
+      '</div></div></div>' : '';
+
+  openModal('<div class="p-6 lg:p-7">' +
+    '<div class="flex justify-between items-start mb-1">' +
+      '<h2 class="text-2xl font-black">How your score is built</h2>' +
+      '<button onclick="closeModal()" class="text-gray-400 hover:text-gray-900">' +
+      '<span class="material-icons">close</span></button></div>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Every number here comes from your own task record. ' +
+      'Nothing is estimated. ' +
+      /* The question this screen raises most is "why is it calculated like
+         that" — and the answer, including what will NOT count against you, is
+         one click away rather than in a document nobody opens. */
+      '<button class="hc-link" onclick="closeModal();openHelp(\'scores\')">How scoring works →</button></p>' +
+    (sc.formula ? '<p class="text-[13px] font-bold text-gray-700 bg-gray-50 rounded-xl px-3 py-2 mb-5">' +
+       esc(sc.formula) + '</p>' : '') +
+    loadPanel + cookiePanel + msPanel + respPanel +
+    '<div class="grid gap-3 mb-1" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">' +
+      (sc.components || []).map(function (c) {
+        return '<div class="bg-gray-50 rounded-2xl p-3 text-center">' +
+          '<div class="text-[10px] font-black uppercase tracking-widest text-gray-400">' + esc(c.label) + '</div>' +
+          '<div class="text-2xl font-black mt-1">' + (c.score == null ? '\u2014' : c.score) + '</div>' +
+          '<div class="text-[10px] font-semibold text-gray-400">' + esc(c.basis) + '</div></div>';
+      }).join('') + '</div>' +
+    (table ||
+      '<p class="text-sm text-gray-400 font-semibold mt-5">Nothing has affected your score yet this month.</p>') +
+    '</div>', 'max-w-2xl');
+}
+
+/* ---------- notifications ------------------------------------------------ */
+function renderBell() {
+  var n = STATE.data.notifications || [];
+  var c = $('bellCount');
+  c.textContent = n.length;
+  c.classList.toggle('hidden', n.length === 0);
+  var icon = { overdue:['warning','bg-red-100 text-red-700'], approval:['how_to_reg','bg-amber-100 text-amber-800'],
+    review:['rate_review','bg-purple-100 text-purple-700'], today:['event','bg-blue-100 text-blue-700'],
+    team:['groups','bg-gray-100 text-gray-600'] };
+  $('bellList').innerHTML = n.length ? n.map(function (x) {
+    var i = icon[x.type] || ['info','bg-gray-100 text-gray-600'];
+    return '<button class="w-full text-left p-3 border-b hover:bg-gray-50 flex gap-3 items-start" ' +
+      'onclick="closeBell();openTask(\'' + esc(x.id) + '\')">' +
+      '<span class="h-8 w-8 rounded-full ' + i[1] + ' flex items-center justify-center shrink-0">' +
+      '<span class="material-icons text-sm">' + i[0] + '</span></span>' +
+      '<span class="min-w-0"><span class="block text-xs font-black text-gray-800 truncate">' + esc(x.title) + '</span>' +
+      '<span class="block text-[11px] text-gray-500">' + esc(x.msg) + '</span></span></button>';
+  }).join('') : '<div class="p-8 text-center text-gray-400 text-xs font-bold">Nothing needs you right now.</div>';
+}
+function closeBell() { $('bellMenu').classList.add('hidden'); }

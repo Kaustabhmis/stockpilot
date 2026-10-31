@@ -1,0 +1,330 @@
+// ===========================================================================
+// ACCOUNTS — signup, login, password reset
+// ===========================================================================
+
+/* Serialised: this reads, decides, then writes. Without the lock two
+   simultaneous calls both pass the check — two companies registering on one email, which login cannot then tell apart. */
+function registerCompany_(form) {
+  return withLock_(function () { return registerCompany_locked_(form); });
+}
+function registerCompany_locked_(form) {
+  form = form || {};
+  var c = CFG();
+  if (!c.masterId || !c.templateId) throw new Error('The service is not configured yet.');
+
+  var email = String(form.email || '').trim().toLowerCase();
+  var company = String(form.companyName || '').trim();
+  if (!email || !company || !form.password) throw new Error('Company, email and password are required.');
+  if (String(form.password).length < 8) throw new Error('Password must be at least 8 characters.');
+
+  var master = SpreadsheetApp.openById(c.masterId);
+  var global = mkTab_(master, TAB.GLOBAL, ['Email','Password','SheetID','Username']);
+
+  var gd = global.getDataRange().getValues();
+  for (var i = 1; i < gd.length; i++) {
+    if (String(gd[i][0]).trim().toLowerCase() === email) {
+      throw new Error('That email is already registered. Try signing in, or use Forgot Password.');
+    }
+  }
+  /* Domebox Lite is one company's own copy: the first sign-up creates it, and
+     anybody else who finds the address is turned away. */
+  if (isLite_()) {
+    var liteDir = master.getSheetByName(TAB.DIRECTORY);
+    if (liteDir && liteDir.getLastRow() > 1) {
+      throw new Error('This Domebox Lite is already set up for ' + liteDir.getRange(2, 1).getValue() +
+        '. Ask its Admin to add you.');
+    }
+  }
+
+  /* The password is hashed before anything is created, so a failure here can
+     never leave an orphaned copy of the template behind in Drive. */
+  var hash = makePasswordHash(String(form.password));
+
+  var newId;
+  try {
+    var file = DriveApp.getFileById(c.templateId).makeCopy(company + ' — Domebox Data');
+    /* Deliberately NOT shared. The old build set every tenant file to
+       ANYONE_WITH_LINK/EDIT, which made each customer's staff records readable
+       and writable by anyone holding the URL. The app reaches the file through
+       Apps Script, which runs as the owner, so sharing is never needed. */
+    newId = file.getId();
+  } catch (e) {
+    logError_('registerCompany:copy', e.message);
+    throw new Error('We could not create your workspace. Please contact support.');
+  }
+
+  var ss = SpreadsheetApp.openById(newId);
+  ensureTenantTabs_(ss);
+
+  var username = String(form.username || email.split('@')[0]).trim();
+  var row = blankUserRow_();
+  row[U['Name']] = String(form.name || company).trim();
+  row[U['Username']] = username;
+  row[U['Password']] = hash;
+  row[U['Email']] = email;
+  row[U['Role']] = 'Admin';
+  row[U['Job Profile']] = 'Director';
+  row[U['Dept']] = 'Management';
+  row[U['Phone']] = String(form.phone || '');
+  row[U['Manager']] = '';
+  row[U['Active']] = true;
+  ss.getSheetByName(TAB.USERS).appendRow(row);
+
+  /* A new workspace starts on a full trial of the Growth plan, so the owner
+     sees the scoring, reports and appraisals with their own people before they
+     are asked to pay. When it ends they drop to Free — never to read-only. */
+  var expiry = new Date(); expiry.setDate(expiry.getDate() + TRIAL_DAYS);
+  var lite = isLite_();
+  mkTab_(master, TAB.DIRECTORY, ['Company','Email','Password','Plan','Valid Until','SheetID','Status','Created'])
+    .appendRow(lite ? [company, email, '', LITE_PLAN, LITE_UNTIL, newId, 'Active', new Date()]
+                    : [company, email, '', TRIAL_PLAN, ymd(expiry), newId, 'Trial', new Date()]);
+  global.appendRow([email, hash, newId, username]);
+
+  try { sendWelcome_(email, form.name || company, company, lite ? '' : ymd(expiry)); } catch (e) {}
+
+  return {
+    status: 'success',
+    token: issueToken(newId, username, 'Admin'),
+    user: { name: row[U['Name']], username: username, role: 'Admin', email: email },
+    company: company, plan: lite ? '' : TRIAL_PLAN, trialEnds: lite ? '' : ymd(expiry),
+  };
+}
+
+function login_(emailOrUsername, password) {
+  var key = String(emailOrUsername || '').trim().toLowerCase();
+  if (!key || !password) throw new Error('Enter your email and password.');
+
+  var gate = loginAllowed_(key);
+  if (!gate.ok) throw new Error('Too many failed attempts. Wait 15 minutes and try again.');
+
+  var c = CFG();
+  var master = SpreadsheetApp.openById(c.masterId);
+  var global = master.getSheetByName(TAB.GLOBAL);
+  var sheetId = null, storedAt = null, storedVal = null;
+
+  if (global) {
+    var gd = global.getDataRange().getValues();
+    for (var i = 1; i < gd.length; i++) {
+      var rowEmail = String(gd[i][0]).trim().toLowerCase();
+      var rowUser  = String(gd[i][3] || '').trim().toLowerCase();
+      /* An email is unique, but a username like "payel" can exist in many
+         companies (the demo has one). Stopping at the first match locked
+         everyone else with that username out, so every match is tried and
+         the one whose password fits wins. */
+      if (rowEmail === key || (rowUser && rowUser === key)) {
+        var v = verifyPassword_(password, gd[i][1]);
+        if (v.ok) { sheetId = String(gd[i][2]).trim(); storedAt = { sheet: global, row: i + 1, col: 2 };
+                    storedVal = gd[i][1]; break; }
+      }
+    }
+  }
+
+  // Older accounts exist only in the Directory.
+  if (!sheetId) {
+    var dir = master.getSheetByName(TAB.DIRECTORY);
+    if (dir) {
+      var dd = dir.getDataRange().getValues();
+      for (var j = 1; j < dd.length; j++) {
+        if (String(dd[j][1]).trim().toLowerCase() === key) {
+          var dv = verifyPassword_(password, dd[j][2]);
+          if (dv.ok) { sheetId = String(dd[j][5]).trim(); storedAt = { sheet: dir, row: j + 1, col: 3 };
+                       storedVal = dd[j][2]; }
+          break;
+        }
+      }
+    }
+  }
+
+  if (!sheetId) { recordFailedLogin_(gate); throw new Error('Invalid email or password.'); }
+  clearLoginFailures_(gate);
+
+  var ss;
+  try { ss = SpreadsheetApp.openById(sheetId); }
+  catch (e) { throw new Error('Your workspace could not be opened. Contact support.'); }
+  // Sign-in is the first thing an existing customer does on the new build.
+  ensureTenantSchema_(ss, sheetId);
+
+  var me = findUserByEmailOrName_(ss, key);
+  if (!me) throw new Error('Your account is not in this workspace. Contact your administrator.');
+  if (me.active === false) throw new Error('This account has been deactivated.');
+
+  /* Transparent upgrade: a plaintext password that just verified is rewritten as
+     a hash immediately, so nobody is locked out and nobody is asked to reset. */
+  if (!isHashed_(storedVal)) {
+    try {
+      var fresh = makePasswordHash(password);
+      storedAt.sheet.getRange(storedAt.row, storedAt.col).setValue(fresh);
+      setUserField_(ss, me.rowIndex, 'Password', fresh);
+    } catch (e) { logError_('login:upgrade', e.message); }
+  }
+
+  var reg = registryRow_(sheetId);
+  return {
+    status: 'success',
+    token: issueToken(sheetId, me.username, me.role),
+    user: { name: me.name, username: me.username, role: me.role, email: me.email,
+            phone: me.phone, manager: me.manager, jobProfile: me.jobProfile, dept: me.dept },
+    company: reg ? reg.company : '',
+    plan: me.role === 'Admin' && !isLite_() ? normalizePlan(reg ? reg.plan : 'Free') : '',   // billing is the owner's business
+  };
+}
+
+function changePassword_(ctx, current, next) {
+  if (!next || String(next).length < 8) throw new Error('New password must be at least 8 characters.');
+  var stored = getUserField_(ctx.ss, ctx.me.rowIndex, 'Password');
+  if (!verifyPassword_(current, stored).ok) throw new Error('Your current password is not correct.');
+
+  var hash = makePasswordHash(next);
+  setUserField_(ctx.ss, ctx.me.rowIndex, 'Password', hash);
+  syncGlobalPassword_(ctx.me.email, ctx.sheetId, hash);
+  /* Anyone signed in with the old password is signed out; this browser gets a
+     fresh session so the person changing it is not. */
+  endSessions_(ctx, ctx.actor.username);
+  Utilities.sleep(2);
+  return { status: 'success', message: 'Password changed. Other devices have been signed out.',
+           token: issueToken(ctx.sheetId, ctx.actor.username, ctx.actor.role) };
+}
+
+/**
+ * Always reports success. Saying "email not found" lets anyone enumerate your
+ * customer list one address at a time, and the old build did exactly that.
+ */
+function forgotPassword_(email) {
+  var key = String(email || '').trim().toLowerCase();
+  var generic = { status: 'success',
+    message: 'If that email has an account, a reset link is on its way.' };
+  if (!key) return generic;
+
+  try {
+    var master = SpreadsheetApp.openById(CFG().masterId);
+    var global = master.getSheetByName(TAB.GLOBAL);
+    if (!global) return generic;
+    var gd = global.getDataRange().getValues();
+    var found = false;
+    for (var i = 1; i < gd.length; i++) {
+      if (String(gd[i][0]).trim().toLowerCase() === key) { found = true; break; }
+    }
+    if (!found) return generic;
+
+    var tokens = mkTab_(master, TAB.TOKENS, ['Token','Email','Created','Used']);
+    var token = Utilities.getUuid() + Utilities.getUuid();
+    tokens.appendRow([resetTokenKey_(token), key, new Date(), '']);   // only its hash is kept
+
+    var link = CFG().siteUrl + '/?reset_token=' + encodeURIComponent(token);
+    sendEmail_(key, 'Domebox — reset your password', resetEmailHtml_(link));
+  } catch (e) { logError_('forgotPassword', e.message); }
+
+  return generic;
+}
+
+var RESET_TOKEN_HOURS = 0.25;   // 15 minutes
+
+/* The sheet holds a hash of the link's token, never the token: someone who can
+   read the Master sheet still cannot use a pending link. */
+function resetTokenKey_(token) {
+  return 'h:' + toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token)));
+}
+
+function resetPassword_(token, newPassword) {
+  if (!token || !newPassword) throw new Error('Reset link and new password are both required.');
+  if (String(newPassword).length < 8) throw new Error('Password must be at least 8 characters.');
+
+  var master = SpreadsheetApp.openById(CFG().masterId);
+  var tokens = master.getSheetByName(TAB.TOKENS);
+  if (!tokens) throw new Error('That reset link is not valid.');
+
+  var td = tokens.getDataRange().getValues();
+  var email = null, rowIndex = -1, want = resetTokenKey_(token);
+  for (var i = 1; i < td.length; i++) {
+    if (String(td[i][0]) === want) {
+      /* The old build wrote a timestamp and never looked at it, so a link mailed
+         a year ago still worked. Both checks matter. */
+      if (td[i][3]) throw new Error('That reset link has already been used.');
+      var age = (new Date() - new Date(td[i][2])) / 3600000;
+      if (!isFinite(age) || age > RESET_TOKEN_HOURS) {
+        throw new Error('That reset link has expired. Please request a new one.');
+      }
+      email = String(td[i][1]).trim().toLowerCase(); rowIndex = i + 1; break;
+    }
+  }
+  if (!email) throw new Error('That reset link is not valid.');
+
+  var hash = makePasswordHash(newPassword);
+  var sheetId = null;
+
+  var global = master.getSheetByName(TAB.GLOBAL);
+  if (global) {
+    var gd = global.getDataRange().getValues();
+    for (var j = 1; j < gd.length; j++) {
+      if (String(gd[j][0]).trim().toLowerCase() === email) {
+        global.getRange(j + 1, 2).setValue(hash);
+        sheetId = String(gd[j][2]).trim();
+      }
+    }
+  }
+  var dir = master.getSheetByName(TAB.DIRECTORY);
+  if (dir) {
+    var dd = dir.getDataRange().getValues();
+    for (var k = 1; k < dd.length; k++) {
+      if (String(dd[k][1]).trim().toLowerCase() === email) dir.getRange(k + 1, 3).setValue('');
+    }
+  }
+  if (sheetId) {
+    try {
+      var ss = SpreadsheetApp.openById(sheetId);
+      var u = findUserByEmailOrName_(ss, email);
+      if (u) {
+        setUserField_(ss, u.rowIndex, 'Password', hash);
+        endSessions_({ ss: ss, sheetId: sheetId }, u.username);   // whoever had the old password is signed out
+      }
+    } catch (e) { logError_('resetPassword:tenant', e.message); }
+  }
+
+  /* Single use — and any other link still open for this email dies with it. */
+  var now = new Date();
+  for (var r = 1; r < td.length; r++) {
+    if (!td[r][3] && String(td[r][1]).trim().toLowerCase() === email) tokens.getRange(r + 1, 4).setValue(now);
+  }
+  tokens.getRange(rowIndex, 4).setValue(now);
+  return { status: 'success', message: 'Password updated. You can sign in now.' };
+}
+
+function registryRow_(sheetId) {
+  try {
+    var dir = SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.DIRECTORY);
+    if (!dir) return null;
+    var d = dir.getDataRange().getValues();
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][5]).trim() === String(sheetId).trim()) {
+        /* A trial is a paid plan with an end date. Once that date has passed
+           the workspace is on Free — not a lapsed paid plan, which would go
+           read-only a week later. */
+        var trial = String(d[i][6] || '').trim().toLowerCase() === 'trial';
+        var until = d[i][4] ? new Date(d[i][4]) : null;
+        if (until && !isNaN(until)) until.setHours(23, 59, 59, 999);
+        var trialOver = trial && until && !isNaN(until) && until < new Date();
+        /* Lite: the Growth plan for good, whatever the sheet says. */
+        if (isLite_()) return { company: d[i][0], email: d[i][1], plan: LITE_PLAN, validUntil: LITE_UNTIL,
+          sheetId: d[i][5], row: i + 1, trial: false, trialEnded: false, trialPlan: '' };
+        return { company: d[i][0], email: d[i][1], plan: trialOver ? 'Free' : d[i][3],
+                 validUntil: trialOver ? '' : d[i][4], sheetId: d[i][5], row: i + 1,
+                 trial: trial && !trialOver, trialEnded: !!trialOver, trialPlan: trial ? d[i][3] : '' };
+      }
+    }
+  } catch (e) { logError_('registryRow', e.message); }
+  return null;
+}
+
+function syncGlobalPassword_(email, sheetId, hash) {
+  try {
+    var g = SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.GLOBAL);
+    if (!g) return;
+    var d = g.getDataRange().getValues();
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][0]).trim().toLowerCase() === String(email).trim().toLowerCase() &&
+          String(d[i][2]).trim() === String(sheetId).trim()) {
+        g.getRange(i + 1, 2).setValue(hash); return;
+      }
+    }
+  } catch (e) { logError_('syncGlobalPassword', e.message); }
+}
