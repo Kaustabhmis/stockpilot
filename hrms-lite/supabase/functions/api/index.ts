@@ -179,9 +179,29 @@ async function esslPush(req: Request, url: URL): Promise<Response> {
   }
 }
 
+/* The scheduled eSSL cloud pull: Postgres (pg_cron + pg_net) calls
+     .../functions/v1/api/pull?key=THE_PUSH_KEY
+   every few minutes; the server fetches the last two days from the eSSL
+   cloud and stores any new punches. */
+async function esslAutoPull(req: Request, url: URL): Promise<Response> {
+  const json = (o: unknown) => new Response(JSON.stringify(o),
+    { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } });
+  if (!ESSL_PUSH_KEY || esslPickKey(req, url) !== ESSL_PUSH_KEY) return json({ ok: false, error: 'bad key' });
+  try {
+    // deno-lint-ignore no-explicit-any
+    const res = await (handle as any).autoPull();
+    console.log('essl-cloud pull:', JSON.stringify(res).slice(0, 400));
+    return json({ ok: true, data: res });
+  } catch (e) {
+    console.log('essl-cloud pull error:', String((e as Error)?.message ?? e));
+    return json({ ok: false, error: String((e as Error)?.message ?? e) });
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
+  if (req.method === 'POST' && url.pathname.endsWith('/pull')) return await esslAutoPull(req, url);
   if (req.method === 'POST' &&
       (url.pathname.endsWith('/push') || url.searchParams.has('essl') || url.searchParams.has('push'))) {
     return await esslPush(req, url);

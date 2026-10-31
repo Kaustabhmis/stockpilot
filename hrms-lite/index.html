@@ -6774,6 +6774,10 @@ function settingsTab(tab) {
      every row of every table to build a pane nobody looked at is exactly the
      kind of cost this app spent a week removing */
   if (tab === 'browse' && !S.browseRows) browseGo();
+  if (tab === 'integrations' && !S.demo && isOwner()) {
+    api('secretStatus').then(function (st) { S.secrets = st || {}; refreshIntegrationsPane(); })
+      .catch(function () { /* the pane still works; the badge just says not set */ });
+  }
 }
 
 function saveSettingsForm() {
@@ -7978,18 +7982,13 @@ function removeHoliday(id) {
 }
 
 /* --------------------------- integrations ------------------------ */
+/* eSSL cloud (biocloud / eTimeTrack WebAPI): the BISCS server reads the
+   device's punches from eSSL's web service every 15 minutes. */
 var INTEGRATION_FIELDS = [
-  ['essl_mode', 'Biometric source', 'select:none,api,sql-agent'],
-  ['essl_api_url', 'eSSL / eTimeTrackLite API URL', 'text'],
-  ['essl_api_user', 'API username', 'text'],
-  ['essl_auth_style', 'API auth style', 'select:basic,bearer'],
-  ['essl_device_serial', 'Device serial (optional)', 'text'],
-  ['essl_push_enabled', 'Push data out', 'select:no,yes'],
-  ['essl_push_url', 'Push endpoint URL', 'text'],
-  ['sql_server', 'SQL Server host\\instance', 'text'],
-  ['sql_database', 'SQL database', 'text'],
-  ['sql_table', 'Punch log table', 'text'],
-  ['sql_user', 'SQL username', 'text']
+  ['essl_mode', 'Automatic pull from the eSSL cloud', 'select:none,cloud'],
+  ['essl_api_url', 'eSSL API URL (ends in webapiservice.asmx)', 'text'],
+  ['essl_api_user', 'eSSL API username', 'text'],
+  ['essl_device_serial', 'Device serial number(s) - separate several with commas', 'text']
 ];
 
 function secretRow(key, label, hint) {
@@ -8029,37 +8028,24 @@ function integrationsPane() {
     INTEGRATION_FIELDS.map(function (f) { return fieldInput(f, st[f[0]]); }).join('') +
   '</div>' +
 
-  '<h3 style="margin:20px 0 8px">Credentials</h3>' +
-  '<div class="card-sub">Stored in the script’s private properties, never in the spreadsheet, ' +
-  'and never sent back to the browser.</div>' +
-  secretRow('essl_api_password', 'eSSL API password / token',
-            'Used as Basic auth with the username above, or as a Bearer token.') +
-  secretRow('sql_password', 'SQL Server password',
-            'Only needed if you let the agent read it from here; normally it stays in the agent’s own config file.') +
-  secretRow('ingest_token', 'Agent ingest token',
-            'The shared secret the LAN agent sends with every batch of punches. ' +
-            '<a href="#" onclick="suggestToken();return false;">Generate one</a>.') +
-  secretRow('push_token', 'Push endpoint bearer token', 'Sent as Authorization: Bearer on every push.') +
+  '<h3 style="margin:20px 0 8px">eSSL password</h3>' +
+  '<div class="card-sub">Kept on the BISCS server and never sent back to any browser.</div>' +
+  secretRow('essl_api_password', 'eSSL API password', 'The password that goes with the username above.') +
 
   '<div class="toolbar" style="margin:18px 0 8px">' +
     '<button class="ghost sm" onclick="runTestIntegration()">Test connection</button>' +
     '<button class="ghost sm" onclick="openPull()">Pull punches now</button>' +
-    '<button class="ghost sm" onclick="openPush()">Push data out</button>' +
-    '<button class="ghost sm" onclick="downloadAgentConfig()">Download agent config</button>' +
     '<button class="ghost sm" onclick="exportSql()">Export attendance as SQL</button>' +
   '</div>' +
   '<div id="integration-out" style="font-size:.8rem"></div>' +
 
   '<div class="locked-note" style="background:#dbeafe;color:#1e40af;margin-top:16px;align-items:flex-start">' +
     '<div>&#9432;</div><div style="font-weight:500;line-height:1.6">' +
-    '<b>Which mode do you need?</b><br>' +
-    '<b>api</b> works only if your eSSL server has a public https address - Google’s servers cannot ' +
-    'reach <code>192.168.x.x</code> or <code>localhost</code>.<br>' +
-    '<b>sql-agent</b> is the normal choice for an office LAN: run <code>tools/essl-sync.js</code> on the ' +
-    'machine that can see SQL Server and schedule it every 15-30 minutes. It reads the punch table and ' +
-    'posts here with the ingest token.<br>' +
-    'Last pull: <b>' + esc(st.sync_last_pull || 'never') + '</b> &middot; ' +
-    'last push: <b>' + esc(st.sync_last_push || 'never') + '</b>' +
+    '<b>How it works:</b> save the settings above and the password, press <b>Test connection</b>, then ' +
+    '<b>Pull punches now</b> for the dates you need. The first pull lists any device user number that ' +
+    'is not matched to an employee - pick the employee for each and press <b>Save matches</b>. ' +
+    'With the automatic pull set to <b>cloud</b>, the server then fetches new punches every 15 minutes.<br>' +
+    'Last pull: <b>' + esc(st.sync_last_pull || 'never') + '</b>' +
     '</div></div>';
 }
 
@@ -8076,7 +8062,7 @@ function copyApiUrl() {
 }
 function pingApi() {
   if (S.demo) return toast('Demo mode is not connected to a sheet');
-  api('ping').then(function (d) { toast('API replied: ' + d.service + ' v' + d.version, 'good'); })
+  api('ping').then(function (d) { toast('Connected: ' + (d.service || 'BISCS OS') + ' (' + (d.store || 'server') + ') is answering', 'good'); })
     .catch(function (e) { toast(e.message, 'bad'); });
 }
 function suggestToken() {
@@ -8092,7 +8078,7 @@ function saveSecret(key) {
   api('setSecret', { key: key, value: v }).then(function (status) {
     S.secrets = status;
     el('sec-' + key).value = ''; el('sec-' + key).type = 'password';
-    toast('Saved to the script’s private properties', 'good');
+    toast('Saved on the server', 'good');
     refreshIntegrationsPane();
   }).catch(function (e) { toast(e.message, 'bad'); });
 }
@@ -8137,13 +8123,46 @@ function openPull() {
         out.innerHTML = '<span class="spin" style="border-top-color:#2563eb"></span> Contacting the device...';
         api('esslPull', { from: el('pull-from').value, to: el('pull-to').value }).then(function (r) {
           out.innerHTML = '<div class="locked-note" style="background:#d1fae5;color:#065f46">' +
-            'Fetched ' + r.fetched + ' punches &rarr; wrote ' + r.days + ' attendance day(s).' +
-            (r.protectedDays ? ' ' + r.protectedDays + ' day(s) left alone (leave or locked payroll).' : '') +
-            '</div>' + (r.skipped.length ? '<div class="err show" style="margin-top:8px">' +
-            r.skipped.map(esc).join('<br>') + '</div>' : '');
+            'Fetched ' + r.fetched + ' punch(es) from eSSL: ' + r.added + ' new, ' + r.duplicates +
+            ' already here, ' + r.days + ' attendance day(s) updated.</div>' + unmatchedHtml(r.unmatched || []);
           reload();
         }).catch(function (e) { out.innerHTML = '<div class="err show">' + esc(e.message) + '</div>'; });
      } }]);
+}
+
+/* Device user numbers the pull could not match: pick the employee for each,
+   which writes their "Biometric device ID", then pull again. */
+function unmatchedHtml(list) {
+  if (!list.length) return '';
+  var opts = '<option value="">- not our employee / skip -</option>' +
+    activeEmployees().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); })
+      .map(function (e) { return '<option value="' + esc(e.emp_code) + '">' + esc(e.name) + ' (' + esc(e.emp_code) +
+        ')' + (e.device_id ? ' - device ID ' + esc(e.device_id) : '') + '</option>'; }).join('');
+  return '<div style="margin-top:12px"><b>' + list.length + ' device user(s) are not matched to an employee</b>' +
+    '<div class="sub-line" style="margin:4px 0 8px">Their punches were not stored. Choose who each one is, ' +
+    'press <b>Save matches</b>, then <b>Pull now</b> again.</div>' +
+    '<table class="tbl" style="width:100%"><thead><tr><th>Device user</th><th>Punches</th><th>First - last</th>' +
+    '<th>Employee</th></tr></thead><tbody>' +
+    list.map(function (u) {
+      return '<tr><td><b>' + esc(u.user) + '</b><div class="sub-line">device ' + esc(u.serial) + '</div></td>' +
+        '<td>' + u.punches + '</td><td class="sub-line">' + esc(u.first) + '<br>' + esc(u.last) + '</td>' +
+        '<td><select class="map-dev" data-user="' + esc(u.user) + '">' + opts + '</select></td></tr>';
+    }).join('') + '</tbody></table>' +
+    '<button style="margin-top:10px" onclick="saveDeviceMatches()">Save matches</button></div>';
+}
+function saveDeviceMatches() {
+  var rows = [], used = {};
+  document.querySelectorAll('.map-dev').forEach(function (sel) {
+    if (!sel.value) return;
+    if (used[sel.value]) return;
+    used[sel.value] = 1;
+    rows.push({ emp_code: sel.value, device_id: sel.dataset.user });
+  });
+  if (!rows.length) return toast('Choose at least one employee', 'bad');
+  api('saveMany', { sheet: 'Employees', rows: rows }).then(function () {
+    rows.forEach(function (r) { var e = empByCode(r.emp_code); if (e) e.device_id = r.device_id; });
+    toast(rows.length + ' match(es) saved - press Pull now again to bring their punches in', 'good');
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 function openPush() {

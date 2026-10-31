@@ -1004,6 +1004,166 @@ export function createActions(api, db, deps) {
     return out;
   }
 
+  /* -------------------------------------------------------------------
+   * eSSL cloud ("biocloud" / eTimeTrack WebAPI). The device's punches are
+   * read from eSSL's own web service:
+   *   POST <essl_api_url>  (…/webapiservice.asmx)   SOAP GetTransactionsLog
+   *     FromDateTime, ToDateTime, SerialNumber, UserName, UserPassword
+   * and come back as text lines "<user id>  <yyyy-mm-dd hh:mm:ss>". The user
+   * id is the person's number ON THE DEVICE, matched to an employee by their
+   * "Biometric device ID" (or by employee code if the two are the same).
+   * The password lives in hrms.app_secrets and is never sent to a browser.
+   * ------------------------------------------------------------------- */
+  const SECRET_KEYS = ['essl_api_password', 'sql_password', 'ingest_token', 'push_token', 'essl_push_key'];
+  async function secretStatus() {
+    const rows = (await all('select key from hrms.app_secrets')).filter(r => SECRET_KEYS.indexOf(r.key) >= 0);
+    const out = {};
+    SECRET_KEYS.forEach(k => out[k] = rows.some(r => r.key === k));
+    return out;
+  }
+  async function setSecret(key, value) {
+    if (SECRET_KEYS.indexOf(String(key)) < 0) throw new Error('That is not a credential this system stores.');
+    if (String(value || '') === '') await db.query('delete from hrms.app_secrets where key = $1', [key]);
+    else await db.query(`insert into hrms.app_secrets (key, value) values ($1, $2)
+                         on conflict (key) do update set value = excluded.value`, [key, String(value)]);
+    return secretStatus();
+  }
+  const xmlEsc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const xmlText = v => String(v || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (m, d) => String.fromCharCode(Number(d))).replace(/&amp;/g, '&');
+
+  async function esslCloudConfig() {
+    const st = await settingsMap();
+    const pw = await one(`select value from hrms.app_secrets where key = 'essl_api_password'`);
+    return {
+      url: String(st.essl_api_url || '').trim(),
+      user: String(st.essl_api_user || '').trim(),
+      serials: String(st.essl_device_serial || '').split(/[,;\s]+/).map(x => x.trim()).filter(Boolean),
+      password: pw ? String(pw.value || '') : ''
+    };
+  }
+
+  /* One serial, one date range. Returns { count, rows: [{ user, date, time }] }. */
+  async function esslCloudFetch(cfg, serial, from, to) {
+    if (!/^https?:\/\//i.test(cfg.url)) throw new Error('Set the eSSL API URL (…/webapiservice.asmx) in Integrations.');
+    const body = '<?xml version="1.0" encoding="utf-8"?>' +
+      '<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
+      'xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">' +
+      '<soap:Body><GetTransactionsLog xmlns="http://tempuri.org/">' +
+      '<FromDateTime>' + xmlEsc(from + ' 00:00:00') + '</FromDateTime>' +
+      '<ToDateTime>' + xmlEsc(to + ' 23:59:59') + '</ToDateTime>' +
+      '<SerialNumber>' + xmlEsc(serial) + '</SerialNumber>' +
+      '<UserName>' + xmlEsc(cfg.user) + '</UserName>' +
+      '<UserPassword>' + xmlEsc(cfg.password) + '</UserPassword>' +
+      '<strDataList></strDataList>' +
+      '</GetTransactionsLog></soap:Body></soap:Envelope>';
+    const url = cfg.url.replace(/\?.*$/, '');
+    let res;
+    try {
+      res = await fetch(url, { method: 'POST', body,
+        headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '"http://tempuri.org/GetTransactionsLog"' } });
+    } catch (e) {
+      throw new Error('Could not reach the eSSL server at ' + url + ' - ' + String((e && e.message) || e));
+    }
+    const text = await res.text();
+    if (!res.ok) {
+      const fault = (text.match(/<faultstring>([\s\S]*?)<\/faultstring>/i) || [])[1];
+      throw new Error('eSSL server answered HTTP ' + res.status + (fault ? ': ' + xmlText(fault).slice(0, 200) : ''));
+    }
+    const result = xmlText((text.match(/<GetTransactionsLogResult>([\s\S]*?)<\/GetTransactionsLogResult>/i) || [])[1] || '');
+    const data = xmlText((text.match(/<strDataList>([\s\S]*?)<\/strDataList>/i) || [])[1] || '');
+    const rows = [];
+    data.split(/\r?\n/).forEach(line => {
+      const m = line.match(/^\s*(\S+)\s+(\d{4}-\d{2}-\d{2})[ T]+(\d{1,2}:\d{2})(?::\d{2})?/);
+      if (m) rows.push({ user: m[1], date: m[2], time: m[3] });
+    });
+    const count = Number((result.match(/(\d+)/) || [])[1] || rows.length);
+    if (!rows.length && !/count/i.test(result) && result) throw new Error('eSSL server: ' + result.slice(0, 200));
+    return { count, rows, message: result };
+  }
+
+  /* Pull a date range from every configured device and store the punches of
+     people we can match. Unmatched device users are reported, not stored. */
+  async function esslPull(from, to, dirty) {
+    const n = nowParts();
+    const a = /^\d{4}-\d{2}-\d{2}$/.test(String(from || '')) ? String(from) : n.date;
+    const b = /^\d{4}-\d{2}-\d{2}$/.test(String(to || '')) ? String(to) : n.date;
+    const cfg = await esslCloudConfig();
+    if (!cfg.serials.length) throw new Error('Enter the device serial number(s) in Integrations.');
+    if (!cfg.user || !cfg.password) throw new Error('Enter the eSSL API username and save its password in Integrations.');
+
+    const emps = await all('select emp_code, device_id from hrms.employees');
+    const byCode = {}, byDev = {};
+    emps.forEach(e => {
+      byCode[String(e.emp_code).trim().toUpperCase()] = e.emp_code;
+      if (e.device_id !== null && String(e.device_id).trim() !== '') byDev[String(e.device_id).trim()] = e.emp_code;
+    });
+    let fetched = 0;
+    const punches = [], unmatched = {};
+    for (const serial of cfg.serials) {
+      const got = await esslCloudFetch(cfg, serial, a, b);
+      fetched += got.rows.length;
+      got.rows.forEach(r => {
+        const code = byDev[r.user] || byCode[String(r.user).toUpperCase()];
+        if (!code) {
+          const u = unmatched[r.user] || (unmatched[r.user] = { user: r.user, serial, punches: 0, first: '', last: '' });
+          u.punches++;
+          const at = r.date + ' ' + r.time;
+          if (!u.first || at < u.first) u.first = at;
+          if (!u.last || at > u.last) u.last = at;
+          return;
+        }
+        punches.push({ emp_code: code, punch_time: r.date + ' ' + r.time, device_id: serial });
+      });
+    }
+    let res = { added: 0, duplicates: 0, days: 0 };
+    for (let i = 0; i < punches.length; i += 500) {
+      const part = await ingestPunches(punches.slice(i, i + 500), 'essl-cloud', dirty);
+      res.added += part.added; res.duplicates += part.duplicates; res.days += part.days;
+    }
+    await saveSettings({ sync_last_pull: n.date + ' ' + n.time + ' (' + a + ' to ' + b + ': ' + fetched + ' fetched, ' +
+      res.added + ' new)' }, dirty);
+    return { from: a, to: b, fetched, matched: punches.length, added: res.added, duplicates: res.duplicates,
+             days: res.days, unmatched: Object.values(unmatched).sort((x, y) => y.punches - x.punches),
+             skipped: Object.keys(unmatched).length
+               ? [Object.keys(unmatched).length + ' device user(s) not matched to an employee - their punches were not stored.']
+               : [] };
+  }
+
+  /* The scheduled pull: from the day before the last pull to today, so a
+     late upload by the device is still picked up. */
+  async function esslAutoPull(dirty) {
+    const st = await settingsMap();
+    if (String(st.essl_mode || '') !== 'cloud') return { skipped: 'eSSL cloud pull is switched off' };
+    const n = nowParts();
+    const d = new Date(n.date + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1);
+    return esslPull(d.toISOString().slice(0, 10), n.date, dirty);
+  }
+
+  async function testIntegration() {
+    const checks = [];
+    const cfg = await esslCloudConfig();
+    checks.push({ name: 'API URL', ok: /^https?:\/\//i.test(cfg.url), note: cfg.url || 'not set' });
+    checks.push({ name: 'Username', ok: !!cfg.user, note: cfg.user ? 'set' : 'not set' });
+    checks.push({ name: 'Password', ok: !!cfg.password, note: cfg.password ? 'stored on the server' : 'not saved yet' });
+    checks.push({ name: 'Device serial(s)', ok: cfg.serials.length > 0, note: cfg.serials.join(', ') || 'not set' });
+    if (cfg.url && cfg.user && cfg.password) {
+      const n = nowParts();
+      const d = new Date(n.date + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1);
+      for (const serial of cfg.serials) {
+        try {
+          const got = await esslCloudFetch(cfg, serial, d.toISOString().slice(0, 10), n.date);
+          checks.push({ name: 'Device ' + serial, ok: true,
+                        note: 'connected - ' + got.rows.length + ' punch(es) yesterday and today' });
+        } catch (e) {
+          checks.push({ name: 'Device ' + serial, ok: false, note: String((e && e.message) || e) });
+        }
+      }
+    }
+    return { checks };
+  }
+
   async function payslipMailLog(month) {
     return (await all('select * from hrms.payslip_mail where month = $1', [month])).map(rowOut);
   }
@@ -1013,6 +1173,7 @@ export function createActions(api, db, deps) {
     backfillAccounts, makeAccountsFor, bootstrap, monthAtt, myMonth,
     punchState, webPunch, punchLog, ingestPunches, decide, payslipMailLog, tally,
     attendanceBetween, isRestDay, rebuildDay, setPassword, checkPassword, rejudgeForShift,
-    shiftNamed, shiftTable, sameDayRules, shiftOf
+    shiftNamed, shiftTable, sameDayRules, shiftOf,
+    secretStatus, setSecret, esslPull, esslAutoPull, testIntegration
   };
 }

@@ -47,6 +47,12 @@ export function createRouter(db, opts = {}) {
       case 'importTab':     dirty[p.sheet] = 1;
                             return api.importTab(p.sheet, p.rows, { replace: !!p.replace });
       case 'tally':         return act.tally();
+
+      /* eSSL cloud and the server-held credentials (owner only - hrms.js) */
+      case 'secretStatus':  return act.secretStatus();
+      case 'setSecret':     return act.setSecret(p.key, p.value);
+      case 'testIntegration': return act.testIntegration();
+      case 'esslPull':      return act.esslPull(p.from, p.to, dirty);
       case 'payslipMailLog':return act.payslipMailLog(p.month);
 
       default: throw new Error('Unknown action: ' + action);
@@ -102,7 +108,7 @@ export function createRouter(db, opts = {}) {
      equivalent here. */
   const READ_ACTIONS = new Set(['ping', 'rev', 'bootstrap', 'login', 'list',
     'myMonth', 'monthAtt', 'punchState', 'punchLog', 'listUsers', 'payslipMailLog',
-    'tally']);
+    'tally', 'secretStatus', 'testIntegration']);
 
   /* A trusted, auth-free path for the eSSL push endpoint in index.ts: the
      HTTP layer has already checked the device's push key, so this just feeds
@@ -142,6 +148,13 @@ export function createRouter(db, opts = {}) {
     }
   };
 
+  /* the scheduled eSSL cloud pull, called by index.ts on the push key */
+  handle.autoPull = async function () {
+    const dirty = {};
+    const res = await act.esslAutoPull(dirty);
+    await api.bumpRevision(dirty);
+    return res;
+  };
   handle.ingest = ingest;
   return handle;
 }
