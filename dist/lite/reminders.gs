@@ -661,7 +661,7 @@ function generateRecurringJobs() {
 
     var col = {};
     headers.forEach(function (h, i) { col[rmNormKey_(h)] = i; });
-    var calendar = scoringCalendar(cleanCalendar(rmJson_(rmNamedSettings_(ss).workCalendar), false));
+    var calendar = scoringCalendar(cleanCalendar(typeof isLite_ === 'function' && isLite_() ? {} : rmJson_(rmNamedSettings_(ss).workCalendar), false));
     var need = ['cadence', 'frequency', 'due', 'duedate', 'status'];
     var cadenceIdx = col.cadence !== undefined ? col.cadence : col.frequency;
     var dueIdx = col.due !== undefined ? col.due : col.duedate;
@@ -911,7 +911,8 @@ function rmReadTenant_(sheetId) {
 
   /* The company's own working days, holidays and reminder times, kept as named
      settings in Settings columns D and E (Account > Working days, Reminders). */
-  var named = rmNamedSettings_(ss);
+  /* Domebox only: a Lite project keeps Monday to Friday and 9, 3 and 5. */
+  var named = typeof isLite_ === 'function' && isLite_() ? {} : rmNamedSettings_(ss);
   var calendar = scoringCalendar(cleanCalendar(rmJson_(named.workCalendar), false));
   var reminders = cleanReminders(rmJson_(named.reminders), false);
 

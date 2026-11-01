@@ -1,7 +1,8 @@
 /**
  * The company's own working week, holidays and reminder times, set by its
  * Admin. Reminders and scores both follow them; a change to the week counts
- * from the day it is saved, so last month is never re-scored. Both editions.
+ * from the day it is saved, so last month is never re-scored. Domebox only:
+ * Lite keeps Monday to Friday and 9, 3 and 5, and refuses to change them.
  */
 const fs = require('fs');
 const { build } = require('./gas-shim');
@@ -11,6 +12,7 @@ const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 
 for (const [label, file] of [['Domebox', '/../dist/code.gs'], ['Domebox Lite', '/../dist/lite/Code.gs']]) {
+  const lite = /lite/.test(file);
   console.log('\n######## ' + label + ' ########');
   const env = build();
   Object.assign(env.props, { MASTER_DB_ID: 'MASTER', TEMPLATE_ID: 'TEMPLATE', AUTH_PEPPER: 'a', TOKEN_SECRET: 'b' });
@@ -37,6 +39,14 @@ for (const [label, file] of [['Domebox', '/../dist/code.gs'], ['Domebox Lite', '
      JSON.stringify(dash().reminders) === '{"hours":[9,15,17],"daysBeforeDue":2,"overdue":true,"digestHour":8}', JSON.stringify(dash().reminders));
   ok('everybody sees them, not only the Admin', JSON.stringify(dash(S).calendar) === JSON.stringify(dash().calendar));
 
+  if (lite) {
+    console.log('\n=== Lite keeps the old week and times ===');
+    ok('Lite refuses to change the working days', /not Domebox Lite/.test(msg({ action: 'saveCalendar', token: A, calendar: { off: [1] } })));
+    ok('and the reminder times', /not Domebox Lite/.test(msg({ action: 'saveReminders', token: A, reminders: { hours: [10] } })));
+    ok('so it stays Saturday and Sunday off, 9 am, 3 pm and 5 pm', JSON.stringify(dash().calendar.off) === '[0,6]' && dash().reminders.hours.join() === '9,15,17');
+    ok('and scoring uses Monday to Friday, as before', cal().weekly.length === 1 && cal().weekly[0].off.join() === '0,6');
+    continue;
+  }
   console.log('\n=== only the Admin changes them ===');
   ok('a head of department cannot change the week', /Admin account/.test(msg({ action: 'saveCalendar', token: S, calendar: { off: [1] } })));
   ok('nor the reminder times', /Admin account/.test(msg({ action: 'saveReminders', token: S, reminders: { hours: [10] } })));

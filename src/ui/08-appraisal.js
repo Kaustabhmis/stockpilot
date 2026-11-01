@@ -397,9 +397,10 @@ function openAccount() {
       '<button class="btn btn-g flex-1" onclick="closeModal();openTabLayout()">Arrange tabs</button>' +
       '<button class="btn btn-g flex-1" onclick="closeModal();openCategories()">Job categories</button>' +
       '<button class="btn btn-g flex-1" onclick="closeModal();openStages()">Task stages</button></div>' +
-      '<div class="flex gap-3 mb-3">' +
+      /* Domebox only: Lite keeps Monday to Friday and the 9, 3 and 5 reminders. */
+      (LITE ? '' : '<div class="flex gap-3 mb-3">' +
       '<button class="btn btn-g flex-1" onclick="closeModal();openCalendar()">Working days</button>' +
-      '<button class="btn btn-g flex-1" onclick="closeModal();openReminders()">Reminders</button></div>' : '') +
+      '<button class="btn btn-g flex-1" onclick="closeModal();openReminders()">Reminders</button></div>') : '') +
     '<div class="flex gap-3 border-t border-gray-100 pt-5">' +
       (canBill() ? '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' : '') +
       /* The ? button in the top bar is hidden on a phone to save room, so this

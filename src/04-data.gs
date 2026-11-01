@@ -501,8 +501,11 @@ function saveStages_(ctx, stages) {
 }
 
 /* ---------- the company's working days, holidays and reminder times ------ */
+/* Domebox only. Lite keeps Monday to Friday and the 9, 3 and 5 reminders, so
+   in Lite these always read as the defaults and cannot be saved. */
 function readCalendar_(ctx) {
   return cached_(ctx, 'calendar', function () {
+    if (isLite_()) return cleanCalendar({}, false);
     return cleanCalendar(safeJson_(readSetting_(ctx, 'workCalendar', ''), {}), false);
   });
 }
@@ -514,6 +517,7 @@ function calendarView_(cal) {
    worked and scored under, so last month's scores never move because the
    company changed its week this month. */
 function saveCalendar_(ctx, form) {
+  if (isLite_()) throw new Error('Working days and holidays are part of Domebox, not Domebox Lite.');
   requireAdmin_(ctx); blockIfStopped_(ctx);
   form = form || {};
   var cur = readCalendar_(ctx), today = ymd(new Date());
@@ -532,10 +536,12 @@ function saveCalendar_(ctx, form) {
 
 function readReminders_(ctx) {
   return cached_(ctx, 'reminders', function () {
+    if (isLite_()) return cleanReminders({}, false);
     return cleanReminders(safeJson_(readSetting_(ctx, 'reminders', ''), {}), false);
   });
 }
 function saveReminders_(ctx, form) {
+  if (isLite_()) throw new Error('Choosing reminder times is part of Domebox, not Domebox Lite.');
   requireAdmin_(ctx); blockIfStopped_(ctx);
   var clean = cleanReminders(form || {}, true);
   writeSetting_(ctx, 'reminders', JSON.stringify(clean));

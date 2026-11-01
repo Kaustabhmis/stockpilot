@@ -75,6 +75,19 @@ const SHOTS = process.env.SHOTS || '';
   ok('no Working days or Reminders buttons', !(await h.isVisible('button:has-text("Working days")')) && !(await h.isVisible('button:has-text("Reminders")')));
   await h.close();
 
+  console.log('\n=== Domebox Lite does not have them ===');
+  const L = await b.newPage({ viewport: { width: 1400, height: 900 } });
+  L.on('pageerror', (e) => errs.push(e.message));
+  await L.goto('http://localhost:8096/?login=1', { waitUntil: 'networkidle' }).catch(() => {});
+  const liteUp = await L.evaluate(() => window.DOMEBOX_EDITION === 'lite').catch(() => false);
+  if (liteUp) {
+    const html = await L.content();
+    ok('the Lite page has the dialogs in its code but no way to open them for the Admin',
+       await L.evaluate(() => { STATE.user = { role: 'Admin', name: 'x', email: 'x' }; STATE.company = 'x'; openAccount();
+         return !document.body.innerText.includes('Working days') && !document.body.innerText.includes('Reminders') && document.body.innerText.includes('Task stages'); }));
+  } else console.log('  (Lite server not running on 8096 — skipped)');
+  await L.close();
+
   ok('no script errors', errs.length === 0, errs.join(' | '));
   await b.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
