@@ -74,7 +74,7 @@ ok('it reads the Master id from Script Properties', P.REG.SHEET_ID === M, P.REG.
 ok('and is live, not a dry run', P.SCHED.DRY_RUN === false);
 const sw = P.switchOnSchedules();
 ok('switchOnSchedules installs reminders, backups and the archive in one run',
-   env.triggers.filter((x) => x === 'sendTaskReminders').length === 3 && env.triggers.indexOf('backupAllTenants') > -1 &&
+   env.triggers.filter((x) => x === 'sendTaskReminders').length === 1 && env.triggers.indexOf('backupAllTenants') > -1 &&
    env.triggers.indexOf('archiveOldTasks') > -1 && !/MISSING/.test(sw), env.triggers.join(',') + ' ' + sw);
 const r0 = env.mails.length;
 P.sendTaskReminders();

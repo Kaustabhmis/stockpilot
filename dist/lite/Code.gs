@@ -7326,7 +7326,8 @@ function switchOnSchedules() {
   var out = ['', '=== SCHEDULES ==='];
   if (typeof installDomeBoxSchedules === 'function') {
     installDomeBoxSchedules();
-    out.push('  ok      reminders at 9, 3 and 5, the morning digest, repeating tasks, renewal notices');
+    out.push('  ok      ' + (isLite_() ? 'reminders at 9, 3 and 5' : 'reminders at each company\'s own times (9, 3 and 5 unless changed)') +
+             ', the morning digest, repeating tasks, renewal notices');
   } else {
     out.push('  MISSING reminders.gs is not in this project — add it, then run this again.');
   }
