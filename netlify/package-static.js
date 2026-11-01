@@ -48,6 +48,9 @@ if (!/<style>[\s\S]{5000,}?<\/style>/.test(app)) throw new Error('dist/index.htm
    and remembers the line, so the page can say what is actually wrong. */
 const CONFIG_CATCH = "<script>window.addEventListener('error',function(e){if(/domebox-config\\.js/.test(e.filename||''))window.DOMEBOX_CONFIG_ERROR={line:e.lineno||0};});</script>\n";
 app = app.replace('<head>', '<head>\n' + CONFIG_CATCH + '<script src="/domebox-config.js"></script>');
+/* The structured data's "last updated" is the day the site was built, so it
+   is never stale. */
+app = app.replace(/"dateModified":"\d{4}-\d{2}-\d{2}"/, '"dateModified":"' + new Date().toISOString().slice(0, 10) + '"');
 fs.writeFileSync(path.join(OUT, 'index.html'), shrink(app));
 
 /* ---- 2. the static pages and files, exactly as Netlify serves them ------ */

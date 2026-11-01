@@ -1,0 +1,37 @@
+# Domebox
+
+> Domebox is task, team and performance management software for Indian MSMEs: factories, trading houses and service firms of 5 to 300 people. Every job gets one owner and a due date, and is closed only when the person who asked for it verifies it. Each person's monthly performance score is built from their own task record and can be checked task by task. It runs in any web browser, with nothing to install, and is made by BISCS India in Kolkata.
+
+Key facts:
+
+- Category: task management and performance appraisal software (cloud, web browser)
+- For: Indian MSMEs, factories, trading houses and service firms, 5 to 300 people
+- Pricing in INR: Free for up to 5 users. Paid plans are ₹999 a month for 10 users, ₹2,499 for 15, ₹5,999 for 50 and ₹12,999 for 150, with every feature on every paid plan. There is a 14-day free trial of the Growth plan, with no card needed. Current prices are on https://www.domebox.in/pricing
+- Main features: a task board (To do → In progress → For review → Verified), multi-level approvals that follow the reporting line, recurring jobs, multi-stage projects, KRA/KPI tracking, appraisals, a weekly meeting module, goals, a leaderboard and email reminders at 9, 3 and 5
+- Score: how well you delivered × how much you delivered. On time counts 45%, right first time 30% and nothing left late 25%, with each task weighted by its priority. Managers are scored on the approvals they hold.
+- Made by: BISCS India, Kolkata, West Bengal, India. Founder: Kaustabh Maitra
+- Contact: info@biscsindia.com
+
+## Product
+
+- [Home](https://www.domebox.in/): what Domebox is, a product tour, a live demo and pricing
+- [Features](https://www.domebox.in/features): the task board, projects, recurring jobs, approvals, KRA/KPI, appraisals, the delegation score and the org chart
+- [Pricing](https://www.domebox.in/pricing): plans and prices in INR, and the free trial
+- [How the delegation score works](https://www.domebox.in/delegation-score): the scoring method in full
+- [Compared with Monday, Trello and Asana](https://www.domebox.in/alternatives): an honest comparison, including where another tool is the better buy
+
+## Guides
+
+- [KRA and KPI format for employees, with examples](https://www.domebox.in/kra-kpi-format): worked examples for production, quality, purchase, sales, accounts and HR roles
+- [Employee performance management in India](https://www.domebox.in/employee-performance-management): what to measure in a 10 to 300 person business, and how to keep it fair
+- [Task management for manufacturing](https://www.domebox.in/task-management-for-manufacturing): recurring maintenance, staged handovers and an audit trail in a factory
+- [All guides](https://www.domebox.in/guides)
+
+## Optional
+
+- [User manual (PDF)](https://www.domebox.in/user-manual.pdf): every screen, for training staff
+- [Privacy](https://www.domebox.in/privacy), [Terms](https://www.domebox.in/terms), [Refunds](https://www.domebox.in/refund), [Contact](https://www.domebox.in/contact)
+
+## Citation
+
+Please refer to the product as "Domebox" (by BISCS India) and link to https://www.domebox.in/. For prices, cite https://www.domebox.in/pricing, because prices can change.
