@@ -7988,7 +7988,7 @@ var INTEGRATION_FIELDS = [
   ['essl_mode', 'Automatic pull from the eSSL cloud', 'select:none,cloud'],
   ['essl_api_url', 'eSSL API URL (ends in webapiservice.asmx)', 'text'],
   ['essl_api_user', 'eSSL API username', 'text'],
-  ['essl_device_serial', 'Device serial number(s) - separate several with commas', 'text']
+  ['essl_device_serial', 'Devices - Name=SERIAL, separated by commas (e.g. Unit 1=TDBD242100363, Unit 3=TDBD241502244)', 'textarea']
 ];
 
 function secretRow(key, label, hint) {
@@ -8124,7 +8124,8 @@ function openPull() {
         api('esslPull', { from: el('pull-from').value, to: el('pull-to').value }).then(function (r) {
           out.innerHTML = '<div class="locked-note" style="background:#d1fae5;color:#065f46">' +
             'Fetched ' + r.fetched + ' punch(es) from eSSL: ' + r.added + ' new, ' + r.duplicates +
-            ' already here, ' + r.days + ' attendance day(s) updated.</div>' + unmatchedHtml(r.unmatched || []);
+            ' already here, ' + r.days + ' attendance day(s) updated.</div>' + devicesHtml(r.devices || []) +
+            unmatchedHtml(r.unmatched || []);
           reload();
         }).catch(function (e) { out.innerHTML = '<div class="err show">' + esc(e.message) + '</div>'; });
      } }]);
@@ -8132,6 +8133,16 @@ function openPull() {
 
 /* Device user numbers the pull could not match: pick the employee for each,
    which writes their "Biometric device ID", then pull again. */
+/* how each device did - one that failed is named, the rest still counted */
+function devicesHtml(list) {
+  if (!list.length) return '';
+  return '<table class="tbl" style="width:100%;margin-top:10px"><thead><tr><th>Device</th><th>Serial</th>' +
+    '<th>Punches</th><th>Status</th></tr></thead><tbody>' + list.map(function (d) {
+      return '<tr><td><b>' + esc(d.name) + '</b></td><td class="sub-line">' + esc(d.serial) + '</td><td>' +
+        d.fetched + '</td><td>' + (d.error ? '<span class="badge b-red">failed</span> <span class="sub-line">' +
+        esc(d.error) + '</span>' : '<span class="badge b-green">ok</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
 function unmatchedHtml(list) {
   if (!list.length) return '';
   var opts = '<option value="">- not our employee / skip -</option>' +

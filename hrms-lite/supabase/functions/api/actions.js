@@ -1036,10 +1036,20 @@ export function createActions(api, db, deps) {
   async function esslCloudConfig() {
     const st = await settingsMap();
     const pw = await one(`select value from hrms.app_secrets where key = 'essl_api_password'`);
+    /* "TDBD241101231, TDBD241801009" - or with names,
+       "AVIJIT OFFICE=TDBD241101231, Conference=TDBD241801009" */
+    const names = {}, serials = [];
+    String(st.essl_device_serial || '').split(/[,;\n]+/).map(x => x.trim()).filter(Boolean).forEach(part => {
+      const m = part.match(/^(.*?)\s*=\s*(\S+)$/);
+      const serial = (m ? m[2] : part).trim();
+      if (!serial || serials.indexOf(serial) >= 0) return;
+      serials.push(serial);
+      if (m && m[1]) names[serial] = m[1].trim();
+    });
     return {
       url: String(st.essl_api_url || '').trim(),
       user: String(st.essl_api_user || '').trim(),
-      serials: String(st.essl_device_serial || '').split(/[,;\s]+/).map(x => x.trim()).filter(Boolean),
+      serials, names,
       password: pw ? String(pw.value || '') : ''
     };
   }
@@ -1090,6 +1100,7 @@ export function createActions(api, db, deps) {
     const a = /^\d{4}-\d{2}-\d{2}$/.test(String(from || '')) ? String(from) : n.date;
     const b = /^\d{4}-\d{2}-\d{2}$/.test(String(to || '')) ? String(to) : n.date;
     const cfg = await esslCloudConfig();
+    const deviceName = serial => cfg.names[serial] || serial;
     if (!cfg.serials.length) throw new Error('Enter the device serial number(s) in Integrations.');
     if (!cfg.user || !cfg.password) throw new Error('Enter the eSSL API username and save its password in Integrations.');
 
@@ -1100,9 +1111,18 @@ export function createActions(api, db, deps) {
       if (e.device_id !== null && String(e.device_id).trim() !== '') byDev[String(e.device_id).trim()] = e.emp_code;
     });
     let fetched = 0;
-    const punches = [], unmatched = {};
+    const punches = [], unmatched = {}, devices = [];
+    /* Each device on its own: one the eSSL account cannot read yet (not
+       activated, wrong serial) is reported and the others still come in. */
     for (const serial of cfg.serials) {
-      const got = await esslCloudFetch(cfg, serial, a, b);
+      let got;
+      try {
+        got = await esslCloudFetch(cfg, serial, a, b);
+      } catch (e) {
+        devices.push({ serial, name: deviceName(serial), fetched: 0, error: String((e && e.message) || e) });
+        continue;
+      }
+      devices.push({ serial, name: deviceName(serial), fetched: got.rows.length, error: '' });
       fetched += got.rows.length;
       got.rows.forEach(r => {
         const code = byDev[r.user] || byCode[String(r.user).toUpperCase()];
@@ -1122,10 +1142,13 @@ export function createActions(api, db, deps) {
       const part = await ingestPunches(punches.slice(i, i + 500), 'essl-cloud', dirty);
       res.added += part.added; res.duplicates += part.duplicates; res.days += part.days;
     }
+    if (devices.length && devices.every(d => d.error)) {
+      throw new Error('No device could be read: ' + devices.map(d => d.name + ' - ' + d.error).join('; '));
+    }
     await saveSettings({ sync_last_pull: n.date + ' ' + n.time + ' (' + a + ' to ' + b + ': ' + fetched + ' fetched, ' +
-      res.added + ' new)' }, dirty);
+      res.added + ' new; ' + devices.map(d => d.name + (d.error ? ' FAILED' : ' ' + d.fetched)).join(', ') + ')' }, dirty);
     return { from: a, to: b, fetched, matched: punches.length, added: res.added, duplicates: res.duplicates,
-             days: res.days, unmatched: Object.values(unmatched).sort((x, y) => y.punches - x.punches),
+             days: res.days, devices, unmatched: Object.values(unmatched).sort((x, y) => y.punches - x.punches),
              skipped: Object.keys(unmatched).length
                ? [Object.keys(unmatched).length + ' device user(s) not matched to an employee - their punches were not stored.']
                : [] };
@@ -1154,10 +1177,11 @@ export function createActions(api, db, deps) {
       for (const serial of cfg.serials) {
         try {
           const got = await esslCloudFetch(cfg, serial, d.toISOString().slice(0, 10), n.date);
-          checks.push({ name: 'Device ' + serial, ok: true,
+          checks.push({ name: 'Device ' + (cfg.names[serial] ? cfg.names[serial] + ' (' + serial + ')' : serial), ok: true,
                         note: 'connected - ' + got.rows.length + ' punch(es) yesterday and today' });
         } catch (e) {
-          checks.push({ name: 'Device ' + serial, ok: false, note: String((e && e.message) || e) });
+          checks.push({ name: 'Device ' + (cfg.names[serial] ? cfg.names[serial] + ' (' + serial + ')' : serial), ok: false,
+                        note: String((e && e.message) || e) });
         }
       }
     }

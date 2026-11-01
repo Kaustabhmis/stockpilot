@@ -41,6 +41,11 @@ const fake = http.createServer((req, res) => {
         '<soap:Body><GetTransactionsLogResponse xmlns="http://tempuri.org/"><GetTransactionsLogResult>Invalid User Name or Password' +
         '</GetTransactionsLogResult><strDataList /></GetTransactionsLogResponse></soap:Body></soap:Envelope>');
     }
+    if (tag('SerialNumber') === 'DEV-OFF') {
+      res.writeHead(500, { 'content-type': 'text/xml' });
+      return res.end('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault>' +
+        '<faultstring>Device not activated for this account</faultstring></soap:Fault></soap:Body></soap:Envelope>');
+    }
     const from = tag('FromDateTime'), to = tag('ToDateTime');
     const rows = (LOG[tag('SerialNumber')] || []).filter(r => r[1] >= from && r[1] <= to);
     res.writeHead(200, { 'content-type': 'text/xml; charset=utf-8' });
@@ -78,7 +83,7 @@ try {
       doj: '2025-01-01', basic: 20000, department: 'QA', designation: 'Tester', device_id: dev, shift: '' } }, token);
   }
   await call('saveSettings', { settings: { essl_mode: 'cloud', essl_api_url: 'http://127.0.0.1:8301/dynamic/webapiservice.asmx',
-    essl_api_user: 'API', essl_device_serial: 'DEV-A, DEV-B', punch_out_mandatory: 'yes' } }, token);
+    essl_api_user: 'API', essl_device_serial: 'Office=DEV-A, Unit 3=DEV-B', punch_out_mandatory: 'yes' } }, token);
 
   console.log('\nthe password');
   await call('setSecret', { key: 'essl_api_password', value: 'wrong-pass' }, token);
@@ -86,7 +91,7 @@ try {
   eq(status.essl_api_password, true, 'stored', 'only a yes/no comes back');
   ok(!JSON.stringify(status).includes('wrong-pass'), 'never returned to the browser');
   const t1 = await call('testIntegration', {}, token);
-  const devA = t1.checks.find(c => c.name === 'Device DEV-A') || {};
+  const devA = t1.checks.find(c => /DEV-A/.test(c.name)) || {};
   ok(!devA.ok && /Invalid User Name or Password/.test(devA.note || ''), 'wrong password: eSSL\'s own message', devA.note);
 
   await call('setSecret', { key: 'essl_api_password', value: 'right-pass' }, token);
@@ -105,6 +110,16 @@ try {
   eq(u9.punches + ' ' + u9.first, '2 2026-11-02 09:05', 'with count and first punch');
   eq((await call('list', { sheet: 'Punches' }, token)).filter(r => ['9', '12', '77'].includes(String(r.emp_code))).length, 0,
      'unmatched punches not stored');
+
+  eq((p1.devices || []).map(d => d.name + ':' + d.fetched).join(','), 'Office:5,Unit 3:2', 'each device named, with its count');
+
+  console.log('\none device not activated - the others still come in');
+  await call('saveSettings', { settings: { essl_device_serial: 'Office=DEV-A, Conference=DEV-OFF, Unit 3=DEV-B' } }, token);
+  const p3 = await call('esslPull', { from: '2026-11-01', to: '2026-11-05' }, token);
+  const off = (p3.devices || []).find(d => d.name === 'Conference') || {};
+  ok(/not activated/.test(off.error || ''), 'the failing device is named with its error', off.error);
+  eq(p3.fetched, 7, 'the other two devices still read');
+  await call('saveSettings', { settings: { essl_device_serial: 'Office=DEV-A, Unit 3=DEV-B' } }, token);
 
   console.log('\nmatch 9 -> EC-01 and pull again');
   await call('saveMany', { sheet: 'Employees', rows: [{ emp_code: 'EC-01', device_id: '9' }] }, token);
