@@ -136,7 +136,10 @@ console.log('\n=== the CSP permits what the site loads, and nothing else ===');
 const built = fs.readdirSync(OUT).filter((f) => f.endsWith('.html'));
 const origins = new Set();
 built.forEach((f) => {
-  (R(f, OUT).match(/https:\/\/[a-z0-9.-]+/g) || []).forEach((u) => {
+  /* A link the visitor clicks, and an address in the structured data, are
+     not loaded by the page, so the CSP has no say over them. */
+  const loads = R(f, OUT).replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '').replace(/<a\b[^>]*>/g, '');
+  (loads.match(/https:\/\/[a-z0-9.-]+/g) || []).forEach((u) => {
     if (!/schema\.org|www\.domebox\.in|tailwindcss\.com|w3\.org/.test(u)) origins.add(u);
   });
 });

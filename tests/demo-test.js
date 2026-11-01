@@ -109,8 +109,9 @@ ok('and the scores are not all identical — that is the whole argument',
 const now = new Date(), first = new Date(now.getFullYear(), now.getMonth(), 1);
 const verified = tasks.filter((t) => t.status === 'Verified');
 const vDate = (t) => new Date(t.history[t.history.length - 1].date);
-ok('every closed job was verified this month', verified.length >= 10 && verified.every((t) => vDate(t) >= first),
-   verified.length + ': ' + verified.filter((t) => vDate(t) < first).map((t) => t.title).join(' | '));
+ok('work was verified this month, whatever the day', verified.filter((t) => vDate(t) >= first).length >= 10,
+   verified.filter((t) => vDate(t) >= first).length);
+ok('and there is older work in the Archive too', dash.archivedCount > 0, dash.archivedCount);
 ok('and nothing in any history is in the future',
    tasks.every((t) => (t.history || []).every((h) => new Date(h.date) <= now)));
 ok('so most of the team is on the board', board.rows.length >= 6, board.rows.length);

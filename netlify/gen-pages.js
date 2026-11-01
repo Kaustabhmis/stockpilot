@@ -8,6 +8,7 @@
  */
 const fs = require('fs'), path = require('path');
 const here = __dirname;
+const { socialCards, SOCIAL_CSS } = require('./socials.js');
 const cfg = JSON.parse(fs.readFileSync(path.join(here, 'site-config.json'), 'utf8'));
 
 const REQUIRED = ['registeredAddress','phone','gstin','entityType','registrationNumber',
@@ -73,6 +74,7 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;fo
 footer{border-top:1px solid #e5e7eb;background:#fff;padding:28px 24px;text-align:center;
   color:#4b5563;font-size:14px}
 footer a{color:#4b5563;margin:0 10px;font-weight:700}
+${SOCIAL_CSS}
 @media(max-width:600px){h1{font-size:27px}main{padding:32px 20px 60px}}
 </style>
 </head>
@@ -91,6 +93,7 @@ footer a{color:#4b5563;margin:0 10px;font-weight:700}
 ${body}
 </main>
 <footer>
+  ${socialCards()}
   <p>&copy; 2026 ${C.legalEntity}. ${C.productName} is a product of ${C.legalEntity}.</p>
   <p>
     <a href="/privacy">Privacy</a><a href="/terms">Terms</a>

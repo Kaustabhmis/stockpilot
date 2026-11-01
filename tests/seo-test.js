@@ -147,5 +147,25 @@ ok('Google Fonts is permitted, because the SEO pages use it',
    /style-src[^\n]*fonts\.googleapis\.com/.test(headers) &&
    /font-src[^\n]*fonts\.gstatic\.com/.test(headers));
 
+console.log('\n=== the social profiles, the same everywhere ===');
+{
+  const { SOCIALS } = require(path.join(NET, 'socials.js'));
+  const want = SOCIALS.map((x) => x.url);
+  const ld = JSON.parse(app.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+  const org = ld['@graph'].find((n) => n['@type'] === 'Organization');
+  ok('the home page structured data lists them as sameAs', JSON.stringify(org.sameAs) === JSON.stringify(want), JSON.stringify(org.sameAs));
+  const home = (app.match(/<section id="follow"[\s\S]*?<\/section>/) || [''])[0];
+  const hrefs = (h) => [...h.matchAll(/href="([^"]+)"[^>]*rel="noopener me"/g)].map((m) => m[1]);
+  ok('the home page shows a card for each, opening in a new tab', JSON.stringify(hrefs(home)) === JSON.stringify(want) &&
+     (home.match(/target="_blank"/g) || []).length === 3, hrefs(home).join(' '));
+  ok('so does the footer of every guide and product page',
+     pages.every((pg) => JSON.stringify(hrefs(html[pg.slug].split('<footer')[1] || '')) === JSON.stringify(want)));
+  const llms = read('llms.txt');
+  ok('and llms.txt names them', want.every((u) => llms.includes(u)));
+  ok('no tracking parameters in any of them', want.every((u) => !/[?&](cplk|utm_|igsh|fbclid)/.test(u)));
+  const lite = path.join(__dirname, '..', 'dist', 'lite-upload', 'index.html');
+  ok('Domebox Lite carries none of them', !fs.existsSync(lite) || !want.some((u) => fs.readFileSync(lite, 'utf8').includes(u)));
+}
+
 console.log('\n' + (fail ? 'FAILED ' : '') + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

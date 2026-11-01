@@ -69,6 +69,7 @@ const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dbx-legal-'));
 const cfg = JSON.parse(fs.readFileSync(path.join(here, 'site-config.json'), 'utf8'));
 OWNER_FIELDS.forEach((k) => { cfg[k] = 'DBXFIELD' + k + 'DBXEND'; });
 fs.copyFileSync(path.join(here, 'gen-pages.js'), path.join(tmp, 'gen-pages.js'));
+fs.copyFileSync(path.join(here, 'socials.js'), path.join(tmp, 'socials.js'));
 fs.writeFileSync(path.join(tmp, 'site-config.json'), JSON.stringify(cfg, null, 2));
 execFileSync('node', [path.join(tmp, 'gen-pages.js')], { cwd: tmp, stdio: 'ignore' });
 const legal = fs.readdirSync(tmp).filter((f) => f.endsWith('.html'));

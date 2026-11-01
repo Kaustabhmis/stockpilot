@@ -481,12 +481,19 @@ function seedDemoWork_(ctx) {
      month it was VERIFIED. So the closed work is laid out by its verification
      day, spread over the days since the 1st, and each deadline is worked back
      from that. The default view is full whatever day the demo is built, the
-     1st included, when everything is verified that day. (It used to keep at
-     least ten days of spread, which on the 1st to the 10th put most of the
-     work in last month and left the leaderboard with two people on it.)
-     Future deadlines are left where they are. */
+     1st included. (It used to keep at least ten days of spread, which on the
+     1st to the 10th put most of the work in last month and left the
+     leaderboard with two people on it.)
+     Early in a month there is not room for all of it: the more recent half
+     (12 days or less) is squeezed into the days since the 1st, and the older
+     half keeps its real dates — so the Archive and last month's view are not
+     empty either. Future deadlines are left where they are. */
   var span = Math.min(24, new Date().getDate() - 1);
-  var verifyDay = function (offset) { return -Math.round(Math.abs(offset) / 24 * span); };
+  var verifyDay = function (offset) {
+    var back = Math.abs(offset);
+    if (span >= 12) return -Math.round(back / 24 * span);
+    return back <= 12 ? -Math.round(back / 12 * span) : -back;
+  };
   /* The deadline that puts the verification on day v: the day itself when
      handed in on time, two days earlier for a rework loop, and for a late job
      early enough that three working days late and a day to check still fit. */

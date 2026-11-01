@@ -11,6 +11,7 @@
  *   node gen-seo.js --check  verifies without writing (use in CI)
  */
 const fs = require('fs'), path = require('path');
+const { socialCards, SOCIAL_CSS } = require('./socials.js');
 const here = __dirname;
 const cfg = JSON.parse(fs.readFileSync(path.join(here, 'site-config.json'), 'utf8'));
 const CHECK = process.argv.includes('--check');
@@ -55,6 +56,7 @@ const nav = `
 
 const foot = `
 <footer>
+  ${socialCards()}
   <p><strong>${esc(C.productName)}</strong> — task and team management for Indian MSMEs,
      by ${esc(C.legalEntity)}.</p>
   <p class="links">
@@ -124,7 +126,8 @@ footer p{max-width:800px;margin:0 auto 8px;font-size:14px;color:#475467}
 footer .links a{color:#475467;text-decoration:none;font-weight:700;margin-right:16px}
 footer .links a:hover{color:#1e4fbf}
 footer .copy{color:#8a94a6;font-size:13px}
-@media(max-width:600px){h1{font-size:28px}main{padding:32px 18px 56px}nav a{margin-left:12px}}`;
+@media(max-width:600px){h1{font-size:28px}main{padding:32px 18px 56px}nav a{margin-left:12px}}
+` + SOCIAL_CSS;
 
 function jsonld(p) {
   const graph = [
