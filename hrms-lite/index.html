@@ -745,6 +745,9 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
             <button class="on" data-attview="status" onclick="setAttView('status')">Status</button>
             <button data-attview="times" onclick="setAttView('times')">In / out &amp; hours</button>
           </div>
+          <input id="att-q" type="search" placeholder="&#128269; Search name, code or department"
+                 oninput="renderAttendance()" style="min-width:230px;padding:7px 10px;border:1px solid var(--border);border-radius:8px">
+          <span class="sub-line" id="att-q-count"></span>
           <span class="spacer"></span>
           <button class="ghost sm adm" onclick="markAllPresent()">Fill blank days</button>
           <button class="ghost sm adm" onclick="openAttImport()">&#8679; Import device CSV</button>
@@ -4183,11 +4186,27 @@ function printAttendance() {
   });
 }
 
+/* The employees the register shows: everyone active, narrowed by the search
+   box (name, code, department, designation or shift). A column fill uses
+   the same list, so a filtered view never changes rows it is not showing. */
+function attShown() {
+  var all = activeEmployees();
+  var q = String((el('att-q') && el('att-q').value) || '').trim().toLowerCase();
+  if (!q) return all;
+  var words = q.split(/\s+/);
+  return all.filter(function (e) {
+    var hay = [e.name, e.emp_code, e.department, e.designation, e.shift, e.company, e.unit]
+      .map(function (v) { return String(v || '').toLowerCase(); }).join(' ');
+    return words.every(function (w) { return hay.indexOf(w) >= 0; });
+  });
+}
 function renderAttendance() {
   var ym = el('att-month').value || thisMonth();
   if (needMonths([ym], renderAttendance)) return;
   var dim = daysInMonth(ym);
-  var emps = activeEmployees();
+  var emps = attShown();
+  var total = activeEmployees().length;
+  if (el('att-q-count')) el('att-q-count').textContent = emps.length < total ? emps.length + ' of ' + total : '';
   var locked = monthLocked(ym);
   var editable = canEditAtt(ym);
   var times = S.attView === 'times';
@@ -4283,7 +4302,8 @@ function renderAttendance() {
   el('att-grid').innerHTML = emps.length
     ? '<table><thead>' + head + '</thead><tbody>' + body + '</tbody>' +
       (foot ? '<tfoot>' + foot + '</tfoot>' : '') + '</table>'
-    : '<div class="empty">Add employees first (module 1).</div>';
+    : '<div class="empty">' + (total ? 'Nobody matches &ldquo;' + esc(el('att-q').value) + '&rdquo;.'
+                                       : 'Add employees first (module 1).') + '</div>';
 
   el('att-legend-note').innerHTML = times
     ? 'Click a cell to set the in and out times &middot; hours are worked out from them'
@@ -4334,7 +4354,7 @@ function cycleCell(code, d) {
   });
   refreshCell(ym, code, d);
   markAttDirty(true);
-  renderAttSummary(ym, activeEmployees());
+  renderAttSummary(ym, emps);
 }
 
 function refreshCell(ym, code, d) {
@@ -4357,9 +4377,10 @@ function fillColumn(d) {
     return '<button class="ghost" style="margin:4px" onclick="applyFill(\'column\',' + d + ',\'' + s + '\')">' +
       s + ' &mdash; ' + statusName(s) + '</button>';
   }).join('');
-  showModal('Set every employee for ' + iso,
-    '<p style="margin-bottom:12px">Applies to all ' + activeEmployees().length +
-    ' active employees on this date. Nothing is written until you press Save on the register.</p>' + opts,
+  var shown = attShown().length, all = activeEmployees().length;
+  showModal('Set ' + (shown < all ? 'the ' + shown + ' shown employee(s)' : 'every employee') + ' for ' + iso,
+    '<p style="margin-bottom:12px">Applies to ' + (shown < all ? 'the ' + shown + ' employee(s) matching your search' :
+    'all ' + all + ' active employees') + ' on this date. Nothing is written until you press Save on the register.</p>' + opts,
     [{ label: 'Cancel', cls: 'ghost', onClick: closeModal }]);
 }
 /* Row button: set a whole employee-month. */
@@ -4386,7 +4407,7 @@ function applyFill(kind, target, status) {
   var outT = status === 'P' ? (S.settings.shift_end || '18:30') : (status === 'HD' ? '13:30' : '');
   var n = 0;
   if (kind === 'column') {
-    activeEmployees().forEach(function (e) {
+    attShown().forEach(function (e) {
       setCell(ym, e.emp_code, target, { status: status, in_time: inT, out_time: outT }); n++;
     });
   } else {
