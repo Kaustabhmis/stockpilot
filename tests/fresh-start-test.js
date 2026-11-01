@@ -77,7 +77,7 @@ ok('switchOnSchedules installs reminders, backups and the archive in one run',
    env.triggers.filter((x) => x === 'sendTaskReminders').length === 1 && env.triggers.indexOf('backupAllTenants') > -1 &&
    env.triggers.indexOf('archiveOldTasks') > -1 && !/MISSING/.test(sw), env.triggers.join(',') + ' ' + sw);
 const r0 = env.mails.length;
-P.sendTaskReminders();
+P.sendTaskReminders(new Date(new Date().setHours(9, 20, 0, 0)));   // the 9 am reminder, whatever the clock says
 ok('and Payel is reminded about her new task', env.mails.slice(r0).some((x) => x.to === 'payel@acme.in' && /Count bin G stock/.test(x.html)),
    env.mails.slice(r0).map((x) => x.to).join(', '));
 

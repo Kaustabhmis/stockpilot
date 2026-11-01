@@ -69,7 +69,7 @@ P.SCHED.DRY_RUN = false;
 
 console.log('\n=== task reminders find real customers ===');
 const before = env.mails.length;
-const log = P.sendTaskReminders();
+const log = P.sendTaskReminders(new Date(new Date().setHours(9, 20, 0, 0)));   // the 9 am reminder, whatever the clock says
 const sent = env.mails.slice(before);
 ok('the scheduler finds the companies in Directory', /Companies: 3/.test(log), log.slice(0, 400));
 ok('a doer at a paying company is reminded about their new task',
