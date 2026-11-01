@@ -65,6 +65,8 @@ Use your **current** Razorpay live key here. Regenerate keys only after the swit
 3. Choose **setupDomeBox** → **▶ Run**. It prints your **/exec URL** and anything still
    missing under **WHAT IS LEFT**. Fix those, run it again until it says *Nothing*.
 4. Choose **createDemoAccount** → **▶ Run** (the website's live demo).
+   switchOnSchedules rebuilds it every night at about 3 am, so its dates stay current.
+   Anything you change in the demo by hand is replaced the next night.
 
 ## Step 6 — Put the website on Netlify (drag and drop, no GitHub)
 

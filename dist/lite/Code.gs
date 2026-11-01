@@ -5654,17 +5654,27 @@ function seedDemoWork_(ctx) {
   var stats = { closed: 0, open: 0, late: 0, reworked: 0 };
 
   /* The offsets above are written as "up to 24 days ago", but the reports and
-     the leaderboard default to the CALENDAR month — so a demo opened on the
-     3rd would show almost nothing, through no fault of the data. The closed
-     work is compressed into the days since the 1st instead, so the default
-     view is full whatever day the demo is given. Ten days minimum, because a
-     demo on the 1st still has to show a month's work.
-     Only the past is squeezed; future deadlines are left where they are. */
-  var dayOfMonth = new Date().getDate();
-  var span = Math.max(10, dayOfMonth - 1);
-  var squeeze = function (offset) {
-    if (offset >= 0) return offset;
-    return -Math.max(1, Math.round(Math.abs(offset) / 24 * span));
+     the leaderboard default to the CALENDAR month, and a task counts in the
+     month it was VERIFIED. So the closed work is laid out by its verification
+     day, spread over the days since the 1st, and each deadline is worked back
+     from that. The default view is full whatever day the demo is built, the
+     1st included, when everything is verified that day. (It used to keep at
+     least ten days of spread, which on the 1st to the 10th put most of the
+     work in last month and left the leaderboard with two people on it.)
+     Future deadlines are left where they are. */
+  var span = Math.min(24, new Date().getDate() - 1);
+  var verifyDay = function (offset) { return -Math.round(Math.abs(offset) / 24 * span); };
+  /* The deadline that puts the verification on day v: the day itself when
+     handed in on time, two days earlier for a rework loop, and for a late job
+     early enough that three working days late and a day to check still fit. */
+  var dueFor = function (v, outcome) {
+    if (outcome === 'rework') return demoWeekdayOnOrBefore_(v - 2);
+    if (outcome === 'late') {
+      var d = v - 1;
+      while (d + demoWorkdaysAfter_(d, 3) + 1 > v) d--;
+      return demoWeekdayOnOrBefore_(d);
+    }
+    return demoWeekdayOnOrBefore_(v);
   };
 
   JOBS.forEach(function (j) {
@@ -5674,13 +5684,14 @@ function seedDemoWork_(ctx) {
     if (String(j[0]).indexOf('__me__|') === 0) {
       j = [String(j[0]).split('|')[1], ctx.me.username, j[1], j[2], j[3], j[4]];
     }
-    var offset = squeeze(j[2]);
+    var closes = ['ontime', 'late', 'rework'].indexOf(j[5]) > -1;
+    var verified = closes ? verifyDay(j[2]) : null;
+    var offset = closes ? dueFor(verified, j[5]) : j[2];
     /* Lateness is counted in working days, never weekends or leave — so a past
        date has to be a weekday, and an "overdue" job needs enough working days
        behind it to still be late when the demo is built on a Saturday or a
        Monday. Built on a Saturday before this, the demo had nothing overdue. */
     if (j[5] === 'overdue') offset = -demoWorkdaysBack_(Math.max(2, Math.round(Math.abs(j[2]) * 1.5)));
-    else if (offset < 0) offset = demoWeekdayOnOrBefore_(offset);
     var title = j[0], who = j[1], due = demoYmd_(offset), priority = j[3],
         cat = j[4], outcome = j[5];
     try {
@@ -5705,7 +5716,7 @@ function seedDemoWork_(ctx) {
         stats.reworked++;
       }
       updateTask_(ctx, t.id, 'Verified');
-      demoBackdate_(ctx, t.id, offset, outcome === 'late');
+      demoBackdate_(ctx, t.id, offset, outcome === 'late', verified);
       if (outcome === 'late') stats.late++;
       stats.closed++;
     } catch (e) {
@@ -5743,8 +5754,10 @@ function seedDemoWork_(ctx) {
  *
  * @param dueOffset  days from today the deadline sits (negative = past)
  * @param late       true to submit after the deadline rather than before it
+ * @param verifyOffset  days from today it was verified, if set; never in the
+ *                      future, and nothing before it is later than it
  */
-function demoBackdate_(ctx, taskId, dueOffset, late) {
+function demoBackdate_(ctx, taskId, dueOffset, late, verifyOffset) {
   try {
     var hit = findTaskRow_(ctx, taskId);
     if (!hit) return;
@@ -5769,6 +5782,17 @@ function demoBackdate_(ctx, taskId, dueOffset, late) {
     hist.forEach(function (h, i) {
       h.date = at(marks[Math.min(i, marks.length - 1)]);
     });
+    if (verifyOffset !== undefined && verifyOffset !== null) {
+      var v = new Date(); v.setDate(v.getDate() + Number(verifyOffset)); v.setHours(17, 15, 0, 0);
+      hist[hist.length - 1].date = v.toISOString();
+    }
+    /* A demo built in the morning cannot have been verified this evening:
+       nothing is later than now, and the order of events is kept. */
+    var cap = Date.now() - 60000;
+    for (var k = hist.length - 1; k >= 0; k--) {
+      if (new Date(hist[k].date).getTime() > cap) hist[k].date = new Date(cap).toISOString();
+      cap = new Date(hist[k].date).getTime() - 60000;
+    }
     writeTaskField_(hit, 'History JSON', JSON.stringify(hist));
     writeTaskField_(hit, 'Date Created', new Date(at(-7)));
     dropCache_(ctx);
@@ -5787,6 +5811,39 @@ function demoBackdate_(ctx, taskId, dueOffset, late) {
  * writing code. This is the button.
  */
 function removeDemoAccount() { return deleteDemoAccount(true); }
+
+/**
+ * Every night, the demo is built again from today. A demo is seeded once
+ * against today's date, so left alone it ages: a new month starts with all
+ * its verified work in the month before and an empty leaderboard, and its
+ * open jobs drift into being weeks overdue. Does nothing if there is no demo
+ * to refresh, so it never makes one nobody asked for.
+ *
+ * Anything changed in the demo by hand is lost each night — it is rebuilt
+ * from this file, which is the only place its content should come from.
+ */
+function refreshDemoAccount() {
+  if (isLite_()) return say_(['Domebox Lite has no demo — nothing to refresh.']);
+  var found = false;
+  try {
+    var d = SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.DIRECTORY).getDataRange().getValues();
+    for (var i = 1; i < d.length; i++) if (String(d[i][1]).trim().toLowerCase() === DEMO_EMAIL) found = true;
+  } catch (e) {}
+  if (!found) return say_(['No demo to refresh. Run createDemoAccount once to make one.']);
+  deleteDemoAccount(true);
+  var made = createDemoAccount();
+  if (!/=== SIGN IN ===/.test(made)) logError_('refreshDemoAccount', String(made).slice(0, 500));
+  return made;
+}
+
+/** The nightly demo refresh, around 3 am. Safe to run again. */
+function installDemoRefresh() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'refreshDemoAccount') ScriptApp.deleteTrigger(t);
+  });
+  if (isLite_()) return;
+  ScriptApp.newTrigger('refreshDemoAccount').timeBased().atHour(3).everyDays(1).create();
+}
 
 function demoFindTask_(ctx, title) {
   var all = readTasks_(ctx);
@@ -7226,6 +7283,10 @@ function switchOnSchedules() {
   if (!isLite_()) {
     ScriptApp.newTrigger('reconcilePayments').timeBased().everyMinutes(15).create();
     out.push('  ok      every 15 minutes, any paid order the page missed is granted (no webhook needed)');
+  }
+  if (!isLite_()) {
+    installDemoRefresh();
+    out.push('  ok      the live demo is rebuilt every night around 3 am, so its dates stay current');
   }
   if (isLite_()) out = out.concat(switchOnWhatsApp().split('\n').slice(2));
   return say_(out);

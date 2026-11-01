@@ -27,7 +27,7 @@ tpl.getSheetByName('Settings').appendRow(['General']);
 
 const names = Object.keys(env.G);
 const APP = new Function(...names, SRC + '\n;return { doPost, ensureRegistry, ' +
-  'createDemoAccount, deleteDemoAccount, removeDemoAccount };')(...names.map((n) => env.G[n]));
+  'createDemoAccount, deleteDemoAccount, removeDemoAccount, refreshDemoAccount, switchOnSchedules };')(...names.map((n) => env.G[n]));
 APP.ensureRegistry();
 
 const call = (body) => JSON.parse(APP.doPost({ postData: { contents: JSON.stringify(body) },
@@ -103,6 +103,20 @@ ok('the leaderboard ranks people', board.status === 'success' && board.rows.leng
 ok('somebody is named for the month', !!board.champion, JSON.stringify(board.champion));
 ok('and the scores are not all identical — that is the whole argument',
    new Set(board.rows.map((r) => r.score)).size > 1, board.rows.map((r) => r.score).join(' '));
+
+/* Whatever day it is built — the 1st included — the month's view is full:
+   a task counts in the month it was verified. */
+const now = new Date(), first = new Date(now.getFullYear(), now.getMonth(), 1);
+const verified = tasks.filter((t) => t.status === 'Verified');
+const vDate = (t) => new Date(t.history[t.history.length - 1].date);
+ok('every closed job was verified this month', verified.length >= 10 && verified.every((t) => vDate(t) >= first),
+   verified.length + ': ' + verified.filter((t) => vDate(t) < first).map((t) => t.title).join(' | '));
+ok('and nothing in any history is in the future',
+   tasks.every((t) => (t.history || []).every((h) => new Date(h.date) <= now)));
+ok('so most of the team is on the board', board.rows.length >= 6, board.rows.length);
+ok('the history still runs in order', tasks.every((t) => (t.history || []).every((h, i, a) => !i || new Date(a[i - 1].date) <= new Date(h.date))));
+ok('some of it was handed in late, some reworked', verified.some((t) => t.reworkCount > 0) &&
+   call({ action: 'getAccountability', token: A.token }).report.some((r) => r.lateCount > 0));
 
 const proj = call({ action: 'getProjects', token: A.token });
 ok('there is a project mid-flight', proj.status === 'success' && proj.projects.length === 1,
@@ -216,6 +230,20 @@ ok('and then it is gone',
 ok('so the address can be used again',
    typeof APP.createDemoAccount() === 'string' &&
    call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'success');
+
+const before = call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' });
+const beforeId = (env.FILES.MASTER.getSheetByName('Directory').getDataRange().getValues().find((r) => r[1] === 'demo@biscsindia.com') || [])[5];
+const refreshed = APP.refreshDemoAccount();
+const afterId = (env.FILES.MASTER.getSheetByName('Directory').getDataRange().getValues().find((r) => r[1] === 'demo@biscsindia.com') || [])[5];
+ok('the nightly refresh builds it again from today, with the same login', before.status === 'success' && /=== SIGN IN ===/.test(refreshed) &&
+   afterId && afterId !== beforeId && call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'success');
+ok('leaving one demo, not two', env.FILES.MASTER.getSheetByName('Directory').getDataRange().getValues().filter((r) => r[1] === 'demo@biscsindia.com').length === 1);
+APP.switchOnSchedules(); APP.switchOnSchedules();
+ok('switchOnSchedules sets the refresh, once, at 3 am',
+   env.G.ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'refreshDemoAccount').length === 1);
+APP.removeDemoAccount();
+ok('with no demo, the refresh makes none', /No demo to refresh/.test(APP.refreshDemoAccount()) &&
+   call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'error');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
