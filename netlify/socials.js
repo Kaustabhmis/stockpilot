@@ -5,27 +5,30 @@
  * (src/ui/01-head.html) carry the same three links; tests/seo-test.js checks
  * that they all agree.
  */
+/* Domebox's own colours, not each network's: the navy of the hero with the
+   gold of its buttons, so the cards read as part of the site. */
+const TILE = 'linear-gradient(135deg,#0a1628 0%,#13294b 60%,#1c3d73 100%)', GOLD = '#f5c542';
+
 const SOCIALS = [
   { key: 'linkedin', name: 'LinkedIn', url: 'https://www.linkedin.com/in/biscs-india-7a0ab03a6',
-    line: 'Product updates and launch news', bg: '#0A66C2' },
+    line: 'Product updates and launch news', bg: TILE },
   { key: 'facebook', name: 'Facebook', url: 'https://www.facebook.com/share/1PyhN1vLey/',
-    line: 'News for MSME owners', bg: '#1877F2' },
+    line: 'News for MSME owners', bg: TILE },
   { key: 'instagram', name: 'Instagram', url: 'https://www.instagram.com/biscsindia/',
-    line: 'Behind the scenes at BISCS India',
-    bg: 'linear-gradient(45deg,#f9a825 0%,#e1306c 50%,#833ab4 100%)' },
+    line: 'Behind the scenes at BISCS India', bg: TILE },
 ];
 
-/* Drawn from plain shapes, white on the brand colour, so nothing is loaded
+/* Drawn from plain shapes, gold on navy, so nothing is loaded
    from another site and the page's Content-Security-Policy is unchanged. */
 const ICONS = {
-  linkedin: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="#fff">' +
+  linkedin: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="' + GOLD + '">' +
     '<circle cx="6.2" cy="6.4" r="1.9"/><rect x="4.5" y="9.4" width="3.4" height="10.1" rx=".4"/>' +
     '<path d="M10.2 9.4h3.2v1.5c.5-.9 1.7-1.8 3.4-1.8 2.9 0 3.7 1.9 3.7 4.6v5.8h-3.4v-5.1c0-1.3-.3-2.3-1.6-2.3s-1.9 1-1.9 2.4v5h-3.4z"/></svg>',
-  facebook: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="#fff">' +
+  facebook: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="' + GOLD + '">' +
     '<path d="M13.6 21.5v-7.6h2.6l.4-3h-3v-1.9c0-.9.3-1.5 1.5-1.5h1.6V4.8c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 3.9v2.3H8v3h2.6v7.6z"/></svg>',
-  instagram: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2">' +
+  instagram: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="' + GOLD + '" stroke-width="2">' +
     '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="3.9"/>' +
-    '<circle cx="17.2" cy="6.8" r=".6" fill="#fff" stroke="none"/></svg>',
+    '<circle cx="17.2" cy="6.8" r=".6" fill="' + GOLD + '" stroke="none"/></svg>',
 };
 
 /** The cards, for a page with its own stylesheet: put SOCIAL_CSS in it. */
@@ -44,7 +47,8 @@ const SOCIAL_CSS =
   '.social-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}' +
   '.social-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #e2e7ef;border-radius:14px;' +
   'background:#fff;text-decoration:none!important;margin:0!important;transition:border-color .15s,box-shadow .15s}' +
-  '.social-card:hover{border-color:#a9c1ec;box-shadow:0 6px 18px rgba(16,24,40,.08)}' +
+  '.social-card:hover{border-color:#f5c542;box-shadow:0 10px 24px -10px rgba(245,179,1,.45)}' +
+  '.social-card:hover .social-go{color:#f5b301}' +
   '.social-ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex-shrink:0}' +
   '.social-tx{min-width:0;flex:1}' +
   '.social-tx strong{display:block;color:#0f1b2d;font-size:14px;font-weight:800}' +
@@ -52,4 +56,4 @@ const SOCIAL_CSS =
   '.social-go{color:#98a2b3;font-weight:900;font-size:16px}' +
   '@media(max-width:700px){.social-row{grid-template-columns:1fr}}';
 
-module.exports = { SOCIALS, ICONS, socialCards, SOCIAL_CSS };
+module.exports = { SOCIALS, ICONS, TILE, GOLD, socialCards, SOCIAL_CSS };
