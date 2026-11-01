@@ -48,7 +48,7 @@ var TOUR = [
   { key: 'phone', icon: 'smartphone', label: 'On a phone', img: '15-phone', phone: true,
     title: 'Works on any phone, nothing to install',
     points: ['The board, priority list, meetings and scores all fit a small screen.',
-             'Email reminders at 9, 3 and 5 for work assigned today, due in two days, or late.',
+             'Email reminders at the times you choose — 9, 3 and 5 unless you change them — for work assigned today, due soon, or late.',
              'Help is one tap away, with a printable manual for training.'] },
 ];
 

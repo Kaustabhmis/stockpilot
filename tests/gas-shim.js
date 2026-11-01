@@ -258,6 +258,7 @@ function build() {
       atHour: (h) => ({ everyDays: () => ({ create() { triggers.push(fn); triggerHours.push([fn, h]); } }) }),
       onMonthDay: (d) => ({ atHour: (h) => ({ create() { triggers.push(fn); triggerHours.push([fn, h, d]); } }) }),
       everyMinutes: (m) => ({ create() { triggers.push(fn); triggerHours.push([fn, 'every', m]); } }),
+      everyHours: (h) => ({ create() { triggers.push(fn); triggerHours.push([fn, 'hourly', h]); } }),
     }) }),
     deleteTrigger(t) {
       const i = triggers.indexOf(t.getHandlerFunction());

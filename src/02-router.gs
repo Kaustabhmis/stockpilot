@@ -202,6 +202,8 @@ function route_(p) {
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
     case 'saveStages':          return saveStages_(ctx, p.stages);
+    case 'saveCalendar':        return saveCalendar_(ctx, p.calendar);
+    case 'saveReminders':       return saveReminders_(ctx, p.reminders);
     case 'moveStage':           return moveStage_(ctx, p.taskId, p.stage);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);

@@ -610,6 +610,8 @@ function route_(p) {
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
     case 'saveStages':          return saveStages_(ctx, p.stages);
+    case 'saveCalendar':        return saveCalendar_(ctx, p.calendar);
+    case 'saveReminders':       return saveReminders_(ctx, p.reminders);
     case 'moveStage':           return moveStage_(ctx, p.taskId, p.stage);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
     case 'setLeave':            return setLeave_(ctx, p.username, p.from, p.to, p.reason);
@@ -1640,6 +1642,51 @@ function saveStages_(ctx, stages) {
   return { status: 'success', stages: clean, message: 'Task stages saved for everybody in the company.' };
 }
 
+/* ---------- the company's working days, holidays and reminder times ------ */
+function readCalendar_(ctx) {
+  return cached_(ctx, 'calendar', function () {
+    return cleanCalendar(safeJson_(readSetting_(ctx, 'workCalendar', ''), {}), false);
+  });
+}
+/** What the browser needs: today's off days and the holiday list. */
+function calendarView_(cal) {
+  return { off: offDaysOn(cal.weekly, new Date()), holidays: cal.holidays };
+}
+/* The off days count from today. Earlier weeks keep the pattern they were
+   worked and scored under, so last month's scores never move because the
+   company changed its week this month. */
+function saveCalendar_(ctx, form) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  form = form || {};
+  var cur = readCalendar_(ctx), today = ymd(new Date());
+  var off = cleanCalendar({ weekly: [{ from: today, off: form.off }] }, true).weekly[0].off;
+  var weekly = cur.weekly.slice();
+  if (offDaysOn(weekly, new Date()).join() !== off.join()) {
+    if (weekly[weekly.length - 1].from === today) weekly.pop();
+    weekly.push({ from: today, off: off });
+  }
+  var clean = cleanCalendar({ weekly: weekly, holidays: form.holidays }, true);
+  writeSetting_(ctx, 'workCalendar', JSON.stringify(clean));
+  dropCache_(ctx);
+  return { status: 'success', calendar: calendarView_(clean),
+           message: 'Working days and holidays saved. Reminders and scores follow them from today.' };
+}
+
+function readReminders_(ctx) {
+  return cached_(ctx, 'reminders', function () {
+    return cleanReminders(safeJson_(readSetting_(ctx, 'reminders', ''), {}), false);
+  });
+}
+function saveReminders_(ctx, form) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var clean = cleanReminders(form || {}, true);
+  writeSetting_(ctx, 'reminders', JSON.stringify(clean));
+  dropCache_(ctx);
+  return { status: 'success', reminders: clean,
+           message: clean.hours.length ? 'Reminders will go at ' + hoursText(clean.hours) + '.'
+                                       : 'Saved. No timed reminders will go out.' };
+}
+
 function saveTabLayout_(ctx, layout) {
   requireAdmin_(ctx); blockIfStopped_(ctx);
   var clean = cleanTabLayout_(layout || {});
@@ -1783,7 +1830,7 @@ function leaveCalendar_(ctx) {
     if (!l.approved) return;
     (map[l.username] = map[l.username] || []).push({ from: l.from, to: l.to });
   });
-  return { weekend: [0, 6], holidays: [], leave: map };
+  return scoringCalendar(readCalendar_(ctx), map);
 }
 
 /* ---------- small helpers ------------------------------------------------ */
@@ -2075,7 +2122,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 }
 
 function spawnNextOccurrence_(ctx, hit, t) {
-  var next = nextOccurrence(t.frequency, t.due, {});
+  var next = nextOccurrence(t.frequency, t.due, { cal: scoringCalendar(readCalendar_(ctx)) });
   if (!next) return null;
   var due = ymd(next);
 
@@ -2847,6 +2894,7 @@ function getDashboard_(ctx) {
     categories: readCategories_(ctx),
     layout: readTabLayout_(ctx),
     stages: readStages_(ctx),
+    calendar: calendarView_(readCalendar_(ctx)), reminders: readReminders_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
@@ -8550,8 +8598,11 @@ function nextOccurrence(cadence, from, opts) {
   switch (cadence) {
     case CADENCE.DAILY:       return addDays(base, 1);
     case CADENCE.WEEKDAYS:
-      var d = addDays(base, 1);
-      while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, 1);
+      /* The company's own working days when its calendar is passed in, so a
+         works that runs Sunday and rests Monday gets its "weekday" job on
+         Sunday. Without one, Monday to Friday, as before. */
+      var d = addDays(base, 1), guard = 0;
+      while ((opts.cal ? isCompanyOffDay(d, opts.cal) : (d.getDay() === 0 || d.getDay() === 6)) && guard++ < 400) d = addDays(d, 1);
       return d;
     case CADENCE.WEEKLY:      return addDays(base, 7);
     case CADENCE.FORTNIGHTLY: return addDays(base, 14);
@@ -9141,7 +9192,7 @@ var DEFAULT_WEEKEND = [0, 6];   // Sunday, Saturday
 function isNonWorkingDay(date, username, cal) {
   if (!cal) return false;
   var d = startOfDay(date);
-  var weekend = cal.weekend || DEFAULT_WEEKEND;
+  var weekend = cal.weekly ? offDaysOn(cal.weekly, d) : (cal.weekend || DEFAULT_WEEKEND);
   if (weekend.indexOf(d.getDay()) > -1) return true;
   if ((cal.holidays || []).indexOf(ymd(d)) > -1) return true;
   var spans = (cal.leave || {})[username] || [];
@@ -9150,6 +9201,132 @@ function isNonWorkingDay(date, username, cal) {
     if (from && to && d >= from && d <= to) return true;
   }
   return false;
+}
+
+/** A day the whole company is off: its weekly off days and its holidays. */
+function isCompanyOffDay(date, cal) { return isNonWorkingDay(date, null, cal || {}); }
+
+// ---------------------------------------------------------------------------
+// THE COMPANY'S OWN CALENDAR — set by its Admin
+// Not every works rests on Sunday: many run seven days with a weekday off, or
+// close on Monday or Tuesday. The off days are kept as a history — each
+// pattern counts from the day it was saved — so changing the week today never
+// re-scores last month's work against days it was not planned around.
+// ---------------------------------------------------------------------------
+var CALENDAR_DEFAULT = { weekly: [{ from: '2000-01-01', off: [0, 6] }], holidays: [] };
+var MAX_HOLIDAYS = 100;
+
+/** The off days in force on a date, from the history of weekly patterns. */
+function offDaysOn(weekly, date) {
+  var day = ymd(startOfDay(date)), off = DEFAULT_WEEKEND;
+  (weekly || []).forEach(function (w) { if (w && w.from <= day) off = w.off; });
+  return off;
+}
+
+function cleanOffDays_(raw, strict) {
+  var out = [];
+  (Array.isArray(raw) ? raw : []).forEach(function (x) {
+    var n = Number(x);
+    if (n >= 0 && n <= 6 && n % 1 === 0 && out.indexOf(n) < 0) out.push(n);
+  });
+  if (out.length > 6) {
+    if (strict) throw new Error('Keep at least one working day in the week.');
+    return DEFAULT_WEEKEND.slice();
+  }
+  return out.sort(function (a, b) { return a - b; });
+}
+
+function cleanCalendar(raw, strict) {
+  raw = raw || {};
+  var weekly = (Array.isArray(raw.weekly) ? raw.weekly : []).filter(function (w) {
+    return w && /^\d{4}-\d{2}-\d{2}$/.test(String(w.from || ''));
+  }).map(function (w) { return { from: String(w.from), off: cleanOffDays_(w.off, strict) }; })
+    .sort(function (a, b) { return a.from < b.from ? -1 : a.from > b.from ? 1 : 0; });
+  if (!weekly.length) weekly = [{ from: CALENDAR_DEFAULT.weekly[0].from, off: CALENDAR_DEFAULT.weekly[0].off.slice() }];
+  var seen = {}, holidays = [];
+  (Array.isArray(raw.holidays) ? raw.holidays : []).forEach(function (h) {
+    var date = String((h && h.date) || '').trim(), name = String((h && h.name) || '').replace(/\s+/g, ' ').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !parseYmd(date)) {
+      if (strict) throw new Error('Give every holiday a date.');
+      return;
+    }
+    if (name.length > 40) {
+      if (strict) throw new Error('Keep a holiday name under 40 characters.');
+      name = name.slice(0, 40);
+    }
+    if (seen[date]) {
+      if (strict) throw new Error(date + ' is in the list twice.');
+      return;
+    }
+    seen[date] = true;
+    holidays.push({ date: date, name: name || 'Holiday' });
+  });
+  if (holidays.length > MAX_HOLIDAYS) {
+    if (strict) throw new Error('Up to ' + MAX_HOLIDAYS + ' holidays.');
+    holidays = holidays.slice(0, MAX_HOLIDAYS);
+  }
+  holidays.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return { weekly: weekly, holidays: holidays };
+}
+
+/** The calendar the scoring engine reads: weekly patterns and holiday dates. */
+function scoringCalendar(cal, leave) {
+  cal = cal || CALENDAR_DEFAULT;
+  return { weekly: cal.weekly, holidays: (cal.holidays || []).map(function (h) { return h.date; }), leave: leave || {} };
+}
+
+// ---------------------------------------------------------------------------
+// REMINDER SCHEDULE — set by the company's Admin
+// Up to four reminder times a day, chosen by the hour: reminders run from an
+// hourly job, and each one costs the person reading it a moment of attention.
+// The defaults are the schedule every company had before it could choose.
+// ---------------------------------------------------------------------------
+var REMINDER_DEFAULTS = { hours: [9, 15, 17], daysBeforeDue: 2, overdue: true, digestHour: 8 };
+var MAX_REMINDER_TIMES = 4, REMINDER_EARLIEST = 6, REMINDER_LATEST = 21;
+
+function cleanReminders(raw, strict) {
+  raw = raw || {};
+  var hours = [];
+  (Array.isArray(raw.hours) ? raw.hours : REMINDER_DEFAULTS.hours).forEach(function (x) {
+    var h = Number(x);
+    if (!(h % 1 === 0 && h >= REMINDER_EARLIEST && h <= REMINDER_LATEST)) {
+      if (strict) throw new Error('Reminder times run from ' + hourText(REMINDER_EARLIEST) + ' to ' + hourText(REMINDER_LATEST) + '.');
+      return;
+    }
+    if (hours.indexOf(h) > -1) {
+      if (strict) throw new Error(hourText(h) + ' is chosen twice.');
+      return;
+    }
+    hours.push(h);
+  });
+  if (hours.length > MAX_REMINDER_TIMES) {
+    if (strict) throw new Error('Up to ' + MAX_REMINDER_TIMES + ' reminder times a day.');
+    hours = hours.slice(0, MAX_REMINDER_TIMES);
+  }
+  hours.sort(function (a, b) { return a - b; });
+  var before = raw.daysBeforeDue === undefined ? REMINDER_DEFAULTS.daysBeforeDue : Number(raw.daysBeforeDue);
+  if (!(before % 1 === 0 && before >= 0 && before <= 7)) {
+    if (strict) throw new Error('The before-due reminder can be up to 7 days before.');
+    before = REMINDER_DEFAULTS.daysBeforeDue;
+  }
+  var digest = raw.digestHour === undefined ? REMINDER_DEFAULTS.digestHour : Number(raw.digestHour);
+  if (!(digest % 1 === 0 && digest >= REMINDER_EARLIEST && digest <= 11)) {
+    if (strict) throw new Error('The morning summary goes between ' + hourText(REMINDER_EARLIEST) + ' and 11 am.');
+    digest = REMINDER_DEFAULTS.digestHour;
+  }
+  return { hours: hours, daysBeforeDue: before, overdue: raw.overdue === undefined ? REMINDER_DEFAULTS.overdue : !!raw.overdue,
+           digestHour: digest };
+}
+
+/** 9 → "9 am", 15 → "3 pm", 12 → "12 noon". */
+function hourText(h) {
+  return h === 12 ? '12 noon' : h === 0 ? '12 midnight' : (h > 12 ? h - 12 + ' pm' : h + ' am');
+}
+
+/** [9, 15, 17] → "9 am, 3 pm and 5 pm". */
+function hoursText(hours) {
+  var t = (hours || []).map(hourText);
+  return t.length < 2 ? t.join('') : t.slice(0, -1).join(', ') + ' and ' + t[t.length - 1];
 }
 
 /**

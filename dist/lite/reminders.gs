@@ -6,12 +6,16 @@
  * This is the piece that turns Domebox from a place where work is recorded
  * into a system that does the chasing for you. Two time-driven jobs:
  *
- *   sendTaskReminders()     at 9 am, 3 pm and 5 pm: each person's OPEN tasks
- *                           (To do or In progress), most urgent first — on the
- *                           day a task is assigned, two days before it is due,
- *                           and every working day while it is overdue.
+ *   sendTaskReminders()     every hour; each company's reminders go at the
+ *                           times its Admin chose (9 am, 3 pm and 5 pm unless
+ *                           changed, up to four a day): each person's OPEN
+ *                           tasks (To do or In progress), most urgent first —
+ *                           on the day a task is assigned, N days before it is
+ *                           due, and every working day while it is overdue.
+ *                           Working days and holidays are the company's own.
  *
- *   sendDailyReminders()    one morning digest for the people who owe others a
+ *   sendDailyReminders()    every hour, sending at each company's chosen hour
+ *                           (8 am unless changed): one morning digest for the people who owe others a
  *                           decision: what is waiting on them to approve or
  *                           review, and (for managers) their team's badly
  *                           overdue work. A person's own tasks are not in it any
@@ -76,9 +80,11 @@ var SCHED = {
   } catch (e) {}
 })();
 
-/* When open tasks are chased. Hours are the script's time zone — set it to
-   (GMT+05:30) India Standard Time in Project Settings. Apps Script runs an
-   hourly trigger some time inside that hour, so "9 am" lands between 9 and 10. */
+/* When open tasks are chased, for a company whose Admin has not chosen. Each
+   company's own choice (Account > Reminders) is read from its Settings tab.
+   Hours are the script's time zone — set it to (GMT+05:30) India Standard Time
+   in Project Settings. The job runs every hour, some time inside the hour, so
+   "9 am" lands between 9 and 10. */
 var REMIND = {
   HOURS: [9, 15, 17],
   DAYS_BEFORE_DUE: 2,
@@ -112,18 +118,19 @@ var SITE_URL = 'https://www.domebox.in';
 
 function installDomeBoxSchedules() {
   removeDomeBoxSchedules();
-  ScriptApp.newTrigger('sendDailyReminders').timeBased().atHour(SCHED.SEND_HOUR).everyDays(1).create();
-  REMIND.HOURS.forEach(function (h) {
-    ScriptApp.newTrigger('sendTaskReminders').timeBased().atHour(h).everyDays(1).create();
-  });
+  /* Both hourly: each company's digest and reminders go at the hours its Admin
+     chose, so the job has to look in every hour. A company with nothing due
+     that hour costs one read of its sheet and sends nothing. */
+  ScriptApp.newTrigger('sendDailyReminders').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('sendTaskReminders').timeBased().everyHours(1).create();
   // Runs earlier so today's generated work appears in today's digest.
   ScriptApp.newTrigger('generateRecurringJobs').timeBased().atHour(Math.max(0, SCHED.SEND_HOUR - 2)).everyDays(1).create();
   /* An hour after the digest, so the two never compete for the mail quota and a
      renewal notice is never the thing that gets cut off by MAX_EMAILS_PER_RUN. */
   ScriptApp.newTrigger('sendRenewalReminders').timeBased().atHour(SCHED.SEND_HOUR + 1).everyDays(1).create();
   Logger.log('Installed:\n  generateRecurringJobs ~' + (SCHED.SEND_HOUR - 2) + ':00' +
-             '\n  sendDailyReminders    ~' + SCHED.SEND_HOUR + ':00' +
-             '\n  sendTaskReminders     ~' + REMIND.HOURS.map(function (h) { return h + ':00'; }).join(', ') +
+             '\n  sendDailyReminders    every hour, at each company\'s summary hour' +
+             '\n  sendTaskReminders     every hour, at each company\'s reminder times' +
              '\n  sendRenewalReminders  ~' + (SCHED.SEND_HOUR + 1) + ':00');
 }
 
@@ -140,7 +147,7 @@ function removeDomeBoxSchedules() {
 function domeBoxScheduleStatus() {
   var lines = ['', '=== Domebox schedules ==='];
   var want = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders'];
-  var need = { sendTaskReminders: REMIND.HOURS.length };
+  var need = {};
   var have = {};
   ScriptApp.getProjectTriggers().forEach(function (t) {
     var fn = t.getHandlerFunction();
@@ -161,21 +168,26 @@ function domeBoxScheduleStatus() {
 // DAILY REMINDERS
 // ============================================================
 
-function previewDailyReminders() {
+/** Every company's digest as it would go now, whatever its hour. Sends nothing. */
+function previewDailyReminders(when) {
   var was = SCHED.DRY_RUN;
   SCHED.DRY_RUN = true;
-  try { sendDailyReminders(); } finally { SCHED.DRY_RUN = was; }
+  try { rmRunDigests_(when instanceof Date ? when : new Date(), true); } finally { SCHED.DRY_RUN = was; }
 }
 
-function sendDailyReminders() {
-  var log = ['', '=== DAILY REMINDERS ' + new Date().toDateString() + ' ===',
+/* The trigger hands in an event object; a test or a manual run can hand in the
+   moment to act as. */
+function sendDailyReminders(when) { return rmRunDigests_(when instanceof Date ? when : new Date(), false); }
+
+function rmRunDigests_(now, anyHour) {
+  var log = ['', '=== DAILY REMINDERS ' + now.toDateString() + ' ===',
     SCHED.DRY_RUN ? '*** DRY RUN — nothing will be sent ***' : '*** LIVE ***', ''];
 
   var tenants = rmLoadTenants_(log);
   if (!tenants) { Logger.log(log.join('\n')); return; }
 
   var sent = 0, skipped = 0, quietDays = 0;
-  var today = new Date();
+  var today = now;
   var isAppraisalWindow = today.getDate() >= SCHED.APPRAISAL_REMINDER_DAY;
 
   for (var i = 0; i < tenants.length; i++) {
@@ -190,6 +202,7 @@ function sendDailyReminders() {
       log.push('  ' + tenant.company + ': skipped (Free Tier — email alerts are a paid feature)');
       continue;
     }
+    if (!anyHour && now.getHours() !== data.reminders.digestHour) continue;
 
     log.push('  ' + (tenant.company || tenant.sheetId) + ' — ' + data.users.length + ' users, ' + data.tasks.length + ' tasks');
 
@@ -255,45 +268,57 @@ function sendDailyReminders() {
 // person per slot, most urgent first. Nothing on a clear day, nothing to
 // someone on approved leave, and only newly assigned work at weekends.
 
-function previewTaskReminders() {
+/** Every company's reminders as they would go now, whatever its hours. Sends nothing. */
+function previewTaskReminders(when) {
   var was = SCHED.DRY_RUN;
   SCHED.DRY_RUN = true;
-  try { sendTaskReminders(); } finally { SCHED.DRY_RUN = was; }
+  try { rmRunTaskReminders_(when instanceof Date ? when : new Date(), true); } finally { SCHED.DRY_RUN = was; }
 }
 
-/** Which of the three slots this run is, from the hour it fired in. */
-function rmSlot_(now) {
-  var h = now.getHours(), slot = REMIND.HOURS[0];
-  REMIND.HOURS.forEach(function (x) { if (h >= x) slot = x; });
+/** Which slot a run is, from the hour it fired in and the company's times. */
+function rmSlot_(now, hours) {
+  hours = hours && hours.length ? hours : REMIND.HOURS;
+  var h = now.getHours(), slot = hours[0];
+  hours.forEach(function (x) { if (h >= x) slot = x; });
   return slot;
 }
 
-function rmIsWeekend_(d) { return d.getDay() === 0 || d.getDay() === 6; }
+/* cfg = { cal, rem }: the company's calendar (as scoringCalendar gives it) and
+   its reminder choices. Without one, Monday to Friday and the REMIND defaults. */
+function rmCfg_(cfg) {
+  cfg = cfg || {};
+  return { cal: cfg.cal || null,
+           rem: cfg.rem || { hours: REMIND.HOURS, daysBeforeDue: REMIND.DAYS_BEFORE_DUE, overdue: REMIND.INCLUDE_OVERDUE } };
+}
 
-/** The day the "due soon" reminder goes: N days before, never on a weekend. */
-function rmDueSoonDay_(due) {
-  var d = new Date(due.getFullYear(), due.getMonth(), due.getDate() - REMIND.DAYS_BEFORE_DUE);
-  while (rmIsWeekend_(d)) d.setDate(d.getDate() - 1);
+function rmIsWeekend_(d, cal) { return cal ? isCompanyOffDay(d, cal) : (d.getDay() === 0 || d.getDay() === 6); }
+
+/** The day the "due soon" reminder goes: N days before, moved back off any day the company is closed. */
+function rmDueSoonDay_(due, cfg) {
+  var c = rmCfg_(cfg), guard = 0;
+  var d = new Date(due.getFullYear(), due.getMonth(), due.getDate() - c.rem.daysBeforeDue);
+  while (rmIsWeekend_(d, c.cal) && guard++ < 60) d.setDate(d.getDate() - 1);
   return ymd(d);
 }
 
 /** Why a task belongs in today's reminder, or null if it does not. */
-function rmReminderReason_(t, today) {
+function rmReminderReason_(t, today, cfg) {
   if (t.status !== STATUS.PENDING && t.status !== STATUS.IN_PROGRESS) return null;
-  var td = ymd(today), weekend = rmIsWeekend_(today);
+  var c = rmCfg_(cfg);
+  var td = ymd(today), weekend = rmIsWeekend_(today, c.cal);
   var due = parseYmd(rmYmd_(t.due));
-  if (due && REMIND.INCLUDE_OVERDUE && !weekend && dayDiff(today, due) > 0) return { kind: 'overdue', since: ymd(due) };
+  if (due && c.rem.overdue && !weekend && dayDiff(today, due) > 0) return { kind: 'overdue', since: ymd(due) };
   if (t.created && rmYmd_(t.created) === td) return { kind: 'assigned' };
-  if (due && !weekend && rmDueSoonDay_(due) === td) return { kind: 'dueSoon' };
+  if (due && c.rem.daysBeforeDue > 0 && !weekend && rmDueSoonDay_(due, c) === td) return { kind: 'dueSoon' };
   return null;
 }
 
 /** One person's reminder list, most urgent first: late, then priority, then date. */
-function rmTaskReminders_(tasks, username, today, weights) {
+function rmTaskReminders_(tasks, username, today, weights, cfg) {
   var rank = { overdue: 0, dueSoon: 1, assigned: 2 };
   var weight = function (p) { return (weights && weights[p]) || priorityWeight(p); };
   return tasks.filter(function (t) { return t.assignee === username; }).map(function (t) {
-    return { task: t, why: rmReminderReason_(t, today) };
+    return { task: t, why: rmReminderReason_(t, today, cfg) };
   }).filter(function (x) { return x.why; }).sort(function (a, b) {
     var ra = rank[a.why.kind], rb = rank[b.why.kind];
     if (a.why.kind === 'overdue' || b.why.kind === 'overdue') {
@@ -313,9 +338,12 @@ function rmOnLeave_(leave, username, today) {
   return (leave || []).some(function (l) { return l.username === username && l.from && l.from <= td && td <= l.to; });
 }
 
-function sendTaskReminders() {
-  var now = new Date(), slot = rmSlot_(now);
-  var log = ['', '=== TASK REMINDERS ' + now.toDateString() + ' · ' + slot + ':00 slot ===',
+/* The trigger hands in an event object; a test or a manual run can hand in the
+   moment to act as. */
+function sendTaskReminders(when) { return rmRunTaskReminders_(when instanceof Date ? when : new Date(), false); }
+
+function rmRunTaskReminders_(now, anyHour) {
+  var log = ['', '=== TASK REMINDERS ' + now.toDateString() + ' · ' + now.getHours() + ':00 ===',
     SCHED.DRY_RUN ? '*** DRY RUN — nothing will be sent ***' : '*** LIVE ***', ''];
   var tenants = rmLoadTenants_(log);
   if (!tenants) { Logger.log(log.join('\n')); return log.join('\n'); }
@@ -328,11 +356,17 @@ function sendTaskReminders() {
     try { data = rmReadTenant_(tenant.sheetId); }
     catch (e) { log.push('  ' + tenant.company + ': CANNOT OPEN (' + e.message + ')'); continue; }
     if (SCHED.PAID_PLANS_ONLY && !rmIsPaid_(tenant, data)) continue;
+    /* This company's own times. A run in an hour it did not choose sends it
+       nothing; a preview shows the slot the hour falls in. */
+    var hours = data.reminders.hours;
+    if (!hours.length || (!anyHour && hours.indexOf(now.getHours()) < 0)) continue;
+    var slot = anyHour ? rmSlot_(now, hours) : now.getHours();
+    var cfg = { cal: data.calendar, rem: data.reminders };
 
     for (var u = 0; u < data.users.length; u++) {
       var user = data.users[u];
       if (!user.email || sent >= SCHED.MAX_EMAILS_PER_RUN) continue;
-      var list = rmTaskReminders_(data.tasks, user.username, now, data.weights);
+      var list = rmTaskReminders_(data.tasks, user.username, now, data.weights, cfg);
       if (!list.length) continue;
       if (rmOnLeave_(data.leave, user.username, now)) { away++; continue; }
       var key = 'remind-' + ymd(now) + '-' + slot;
@@ -342,7 +376,7 @@ function sendTaskReminders() {
       log.push('    → ' + user.email + '  [' + subject + ']  ' +
         list.map(function (x) { return x.why.kind + ':' + x.task.title; }).join(' | '));
       if (!SCHED.DRY_RUN) {
-        if (rmSendMail_(user.email, subject, rmReminderHtml_(list, user, tenant.company, slot))) {
+        if (rmSendMail_(user.email, subject, rmReminderHtml_(list, user, tenant.company, slot, data.reminders))) {
           rmMarkSent_(tenant.sheetId, user.username, key);
           sent++;
         }
@@ -373,7 +407,8 @@ function rmNiceDate_(s) {
     ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
 }
 
-function rmReminderHtml_(list, user, company, slot) {
+function rmReminderHtml_(list, user, company, slot, rem) {
+  rem = rem || { hours: REMIND.HOURS, daysBeforeDue: REMIND.DAYS_BEFORE_DUE, overdue: REMIND.INCLUDE_OVERDUE };
   var hello = slot >= 17 ? 'Good evening' : slot >= 12 ? 'Good afternoon' : 'Good morning';
   var rows = list.map(function (x) {
     var t = x.task, right;
@@ -389,8 +424,9 @@ function rmReminderHtml_(list, user, company, slot) {
     rmSection_('Your open work', rows, '#1d4ed8') +
     '<p style="margin:22px 0"><a href="' + SITE_URL + '" style="background:#2563eb;color:#fff;text-decoration:none;' +
     'padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">Open Domebox</a></p>' +
-    '<p style="font-size:12px;color:#6b7280">Domebox reminds you at 9 am, 3 pm and 5 pm on the day a task is assigned, ' +
-    REMIND.DAYS_BEFORE_DUE + ' days before it is due' + (REMIND.INCLUDE_OVERDUE ? ', and every working day while it is overdue' : '') +
+    '<p style="font-size:12px;color:#6b7280">Domebox reminds you at ' + hoursText(rem.hours) + ' on the day a task is assigned' +
+    (rem.daysBeforeDue ? ', ' + rem.daysBeforeDue + ' day' + (rem.daysBeforeDue === 1 ? '' : 's') + ' before it is due' : '') +
+    (rem.overdue ? ', and every working day while it is overdue' : '') +
     '. Hand it in and the reminders stop.' + (company ? '<br>' + rmEsc_(company) : '') + '</p>';
 }
 
@@ -625,6 +661,7 @@ function generateRecurringJobs() {
 
     var col = {};
     headers.forEach(function (h, i) { col[rmNormKey_(h)] = i; });
+    var calendar = scoringCalendar(cleanCalendar(rmJson_(rmNamedSettings_(ss).workCalendar), false));
     var need = ['cadence', 'frequency', 'due', 'duedate', 'status'];
     var cadenceIdx = col.cadence !== undefined ? col.cadence : col.frequency;
     var dueIdx = col.due !== undefined ? col.due : col.duedate;
@@ -666,7 +703,7 @@ function generateRecurringJobs() {
       var made  = col.repeatmade  !== undefined ? Number(series.row[col.repeatmade] || 0) : 0;
 
       var plan = dueOccurrences({
-        cadence: series.cadence, nextDue: ymd(series.due), active: true,
+        cadence: series.cadence, nextDue: ymd(series.due), active: true, cal: calendar,
         endDate: until, maxOccurrences: limit, occurrencesCreated: made || (limit ? 1 : 0),
         skipIfPreviousOpen: false,
       }, today, { previousOpen: previousOpen });
@@ -872,6 +909,12 @@ function rmReadTenant_(sheetId) {
     });
   }
 
+  /* The company's own working days, holidays and reminder times, kept as named
+     settings in Settings columns D and E (Account > Working days, Reminders). */
+  var named = rmNamedSettings_(ss);
+  var calendar = scoringCalendar(cleanCalendar(rmJson_(named.workCalendar), false));
+  var reminders = cleanReminders(rmJson_(named.reminders), false);
+
   /* The workspace's own priority levels ("Line Down", "Customer Hold"...) and
      their weights, from Settings columns B and C — so "most urgent first"
      ranks by what this company calls urgent, not by four default names. */
@@ -883,7 +926,23 @@ function rmReadTenant_(sheetId) {
       if (n && !isNaN(w) && w > 0) weights[n] = w;
     });
   }
-  return { users: users, tasks: tasks, plan: plan, leave: leave, weights: weights };
+  return { users: users, tasks: tasks, plan: plan, leave: leave, weights: weights,
+           calendar: calendar, reminders: reminders };
+}
+
+/** Settings columns D and E: one named setting per row, its value a JSON string. */
+function rmNamedSettings_(ss) {
+  var out = {}, sh = ss.getSheetByName('Settings');
+  if (!sh || sh.getLastRow() === 0 || sh.getLastColumn() < 4) return out;
+  sh.getRange(1, 4, sh.getLastRow(), 2).getValues().forEach(function (r) {
+    var k = String(r[0] || '').trim();
+    if (k) out[k] = String(r[1] == null ? '' : r[1]);
+  });
+  return out;
+}
+
+function rmJson_(s) {
+  try { return s ? JSON.parse(s) : {}; } catch (e) { return {}; }
 }
 
 // ============================================================

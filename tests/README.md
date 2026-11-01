@@ -49,6 +49,8 @@ node stages-test.js         # task stages the Admin designs: rename, add, remove
 node secrets-test.js        # no key, password or token in any tracked file or in the website; demo passwords random and unprinted
 node privacy-test.js         # the pre-launch security audit: who can see and change what, sessions, logs, erasure
 node whatsapp-lite-test.js   # Lite only: a WhatsApp (Maytapi) on assignment and 2 days before due; never in the full edition, never twice
+node calendar-test.js        # the company's own working days, holidays and reminder times (Admin only); scores follow them, past weeks keep theirs
+node calendar-ui-test.js     # Account > Working days and Account > Reminders, on desktop and phone
 
 node server.js &            # then, for the browser tests:
 node ui-test.js

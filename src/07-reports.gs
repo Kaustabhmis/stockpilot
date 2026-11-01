@@ -68,6 +68,7 @@ function getDashboard_(ctx) {
     categories: readCategories_(ctx),
     layout: readTabLayout_(ctx),
     stages: readStages_(ctx),
+    calendar: calendarView_(readCalendar_(ctx)), reminders: readReminders_(ctx),
     priorities: readPriorities_(ctx),
     staff: users.map(function (u) {
       return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,

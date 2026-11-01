@@ -316,8 +316,11 @@ function nextOccurrence(cadence, from, opts) {
   switch (cadence) {
     case CADENCE.DAILY:       return addDays(base, 1);
     case CADENCE.WEEKDAYS:
-      var d = addDays(base, 1);
-      while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, 1);
+      /* The company's own working days when its calendar is passed in, so a
+         works that runs Sunday and rests Monday gets its "weekday" job on
+         Sunday. Without one, Monday to Friday, as before. */
+      var d = addDays(base, 1), guard = 0;
+      while ((opts.cal ? isCompanyOffDay(d, opts.cal) : (d.getDay() === 0 || d.getDay() === 6)) && guard++ < 400) d = addDays(d, 1);
       return d;
     case CADENCE.WEEKLY:      return addDays(base, 7);
     case CADENCE.FORTNIGHTLY: return addDays(base, 14);
@@ -907,7 +910,7 @@ var DEFAULT_WEEKEND = [0, 6];   // Sunday, Saturday
 function isNonWorkingDay(date, username, cal) {
   if (!cal) return false;
   var d = startOfDay(date);
-  var weekend = cal.weekend || DEFAULT_WEEKEND;
+  var weekend = cal.weekly ? offDaysOn(cal.weekly, d) : (cal.weekend || DEFAULT_WEEKEND);
   if (weekend.indexOf(d.getDay()) > -1) return true;
   if ((cal.holidays || []).indexOf(ymd(d)) > -1) return true;
   var spans = (cal.leave || {})[username] || [];
@@ -916,6 +919,132 @@ function isNonWorkingDay(date, username, cal) {
     if (from && to && d >= from && d <= to) return true;
   }
   return false;
+}
+
+/** A day the whole company is off: its weekly off days and its holidays. */
+function isCompanyOffDay(date, cal) { return isNonWorkingDay(date, null, cal || {}); }
+
+// ---------------------------------------------------------------------------
+// THE COMPANY'S OWN CALENDAR — set by its Admin
+// Not every works rests on Sunday: many run seven days with a weekday off, or
+// close on Monday or Tuesday. The off days are kept as a history — each
+// pattern counts from the day it was saved — so changing the week today never
+// re-scores last month's work against days it was not planned around.
+// ---------------------------------------------------------------------------
+var CALENDAR_DEFAULT = { weekly: [{ from: '2000-01-01', off: [0, 6] }], holidays: [] };
+var MAX_HOLIDAYS = 100;
+
+/** The off days in force on a date, from the history of weekly patterns. */
+function offDaysOn(weekly, date) {
+  var day = ymd(startOfDay(date)), off = DEFAULT_WEEKEND;
+  (weekly || []).forEach(function (w) { if (w && w.from <= day) off = w.off; });
+  return off;
+}
+
+function cleanOffDays_(raw, strict) {
+  var out = [];
+  (Array.isArray(raw) ? raw : []).forEach(function (x) {
+    var n = Number(x);
+    if (n >= 0 && n <= 6 && n % 1 === 0 && out.indexOf(n) < 0) out.push(n);
+  });
+  if (out.length > 6) {
+    if (strict) throw new Error('Keep at least one working day in the week.');
+    return DEFAULT_WEEKEND.slice();
+  }
+  return out.sort(function (a, b) { return a - b; });
+}
+
+function cleanCalendar(raw, strict) {
+  raw = raw || {};
+  var weekly = (Array.isArray(raw.weekly) ? raw.weekly : []).filter(function (w) {
+    return w && /^\d{4}-\d{2}-\d{2}$/.test(String(w.from || ''));
+  }).map(function (w) { return { from: String(w.from), off: cleanOffDays_(w.off, strict) }; })
+    .sort(function (a, b) { return a.from < b.from ? -1 : a.from > b.from ? 1 : 0; });
+  if (!weekly.length) weekly = [{ from: CALENDAR_DEFAULT.weekly[0].from, off: CALENDAR_DEFAULT.weekly[0].off.slice() }];
+  var seen = {}, holidays = [];
+  (Array.isArray(raw.holidays) ? raw.holidays : []).forEach(function (h) {
+    var date = String((h && h.date) || '').trim(), name = String((h && h.name) || '').replace(/\s+/g, ' ').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !parseYmd(date)) {
+      if (strict) throw new Error('Give every holiday a date.');
+      return;
+    }
+    if (name.length > 40) {
+      if (strict) throw new Error('Keep a holiday name under 40 characters.');
+      name = name.slice(0, 40);
+    }
+    if (seen[date]) {
+      if (strict) throw new Error(date + ' is in the list twice.');
+      return;
+    }
+    seen[date] = true;
+    holidays.push({ date: date, name: name || 'Holiday' });
+  });
+  if (holidays.length > MAX_HOLIDAYS) {
+    if (strict) throw new Error('Up to ' + MAX_HOLIDAYS + ' holidays.');
+    holidays = holidays.slice(0, MAX_HOLIDAYS);
+  }
+  holidays.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return { weekly: weekly, holidays: holidays };
+}
+
+/** The calendar the scoring engine reads: weekly patterns and holiday dates. */
+function scoringCalendar(cal, leave) {
+  cal = cal || CALENDAR_DEFAULT;
+  return { weekly: cal.weekly, holidays: (cal.holidays || []).map(function (h) { return h.date; }), leave: leave || {} };
+}
+
+// ---------------------------------------------------------------------------
+// REMINDER SCHEDULE — set by the company's Admin
+// Up to four reminder times a day, chosen by the hour: reminders run from an
+// hourly job, and each one costs the person reading it a moment of attention.
+// The defaults are the schedule every company had before it could choose.
+// ---------------------------------------------------------------------------
+var REMINDER_DEFAULTS = { hours: [9, 15, 17], daysBeforeDue: 2, overdue: true, digestHour: 8 };
+var MAX_REMINDER_TIMES = 4, REMINDER_EARLIEST = 6, REMINDER_LATEST = 21;
+
+function cleanReminders(raw, strict) {
+  raw = raw || {};
+  var hours = [];
+  (Array.isArray(raw.hours) ? raw.hours : REMINDER_DEFAULTS.hours).forEach(function (x) {
+    var h = Number(x);
+    if (!(h % 1 === 0 && h >= REMINDER_EARLIEST && h <= REMINDER_LATEST)) {
+      if (strict) throw new Error('Reminder times run from ' + hourText(REMINDER_EARLIEST) + ' to ' + hourText(REMINDER_LATEST) + '.');
+      return;
+    }
+    if (hours.indexOf(h) > -1) {
+      if (strict) throw new Error(hourText(h) + ' is chosen twice.');
+      return;
+    }
+    hours.push(h);
+  });
+  if (hours.length > MAX_REMINDER_TIMES) {
+    if (strict) throw new Error('Up to ' + MAX_REMINDER_TIMES + ' reminder times a day.');
+    hours = hours.slice(0, MAX_REMINDER_TIMES);
+  }
+  hours.sort(function (a, b) { return a - b; });
+  var before = raw.daysBeforeDue === undefined ? REMINDER_DEFAULTS.daysBeforeDue : Number(raw.daysBeforeDue);
+  if (!(before % 1 === 0 && before >= 0 && before <= 7)) {
+    if (strict) throw new Error('The before-due reminder can be up to 7 days before.');
+    before = REMINDER_DEFAULTS.daysBeforeDue;
+  }
+  var digest = raw.digestHour === undefined ? REMINDER_DEFAULTS.digestHour : Number(raw.digestHour);
+  if (!(digest % 1 === 0 && digest >= REMINDER_EARLIEST && digest <= 11)) {
+    if (strict) throw new Error('The morning summary goes between ' + hourText(REMINDER_EARLIEST) + ' and 11 am.');
+    digest = REMINDER_DEFAULTS.digestHour;
+  }
+  return { hours: hours, daysBeforeDue: before, overdue: raw.overdue === undefined ? REMINDER_DEFAULTS.overdue : !!raw.overdue,
+           digestHour: digest };
+}
+
+/** 9 → "9 am", 15 → "3 pm", 12 → "12 noon". */
+function hourText(h) {
+  return h === 12 ? '12 noon' : h === 0 ? '12 midnight' : (h > 12 ? h - 12 + ' pm' : h + ' am');
+}
+
+/** [9, 15, 17] → "9 am, 3 pm and 5 pm". */
+function hoursText(hours) {
+  var t = (hours || []).map(hourText);
+  return t.length < 2 ? t.join('') : t.slice(0, -1).join(', ') + ' and ' + t[t.length - 1];
 }
 
 /**
@@ -2140,7 +2269,10 @@ if (typeof module !== 'undefined' && module.exports) {
     TRIGGERS: TRIGGERS, ACTIONS: ACTIONS, evaluateAutomations: evaluateAutomations,
     matchCondition: matchCondition, defaultAutomations: defaultAutomations,
     buildDigest: buildDigest,
-    DEFAULT_WEEKEND: DEFAULT_WEEKEND, isNonWorkingDay: isNonWorkingDay,
+    DEFAULT_WEEKEND: DEFAULT_WEEKEND, isNonWorkingDay: isNonWorkingDay, isCompanyOffDay: isCompanyOffDay,
+    CALENDAR_DEFAULT: CALENDAR_DEFAULT, offDaysOn: offDaysOn, cleanCalendar: cleanCalendar, scoringCalendar: scoringCalendar,
+    REMINDER_DEFAULTS: REMINDER_DEFAULTS, MAX_REMINDER_TIMES: MAX_REMINDER_TIMES, cleanReminders: cleanReminders,
+    hourText: hourText, hoursText: hoursText,
     chargeableLateDays: chargeableLateDays,
     PERIOD: PERIOD, startOfWeek: startOfWeek, isoWeekNumber: isoWeekNumber,
     periodRange: periodRange, closedAt: closedAt, inWindow: inWindow,

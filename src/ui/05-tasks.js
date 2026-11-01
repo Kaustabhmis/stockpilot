@@ -276,6 +276,136 @@ function openStages() {
   draw();
 }
 
+/* ---------- The company's week, holidays and reminder times (Admin) ------- */
+var DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+var REMINDER_DEFAULT = { hours: [9, 15, 17], daysBeforeDue: 2, overdue: true, digestHour: 8 };
+function companyCalendar() { return (STATE.data && STATE.data.calendar) || { off: [0, 6], holidays: [] }; }
+function companyReminders() { return (STATE.data && STATE.data.reminders) || REMINDER_DEFAULT; }
+function hourText(h) { return h === 12 ? '12 noon' : (h > 12 ? h - 12 + ' pm' : h + ' am'); }
+function hoursText(hs) { var t = hs.map(hourText); return t.length < 2 ? t.join('') : t.slice(0, -1).join(', ') + ' and ' + t[t.length - 1]; }
+
+function openCalendar() {
+  if (!isAdmin()) { toast('Only an Admin can set the working days.', 'warn'); return; }
+  var c = companyCalendar(), off = c.off.slice(), hols = c.holidays.map(function (h) { return { date: h.date, name: h.name }; });
+  var order = [1, 2, 3, 4, 5, 6, 0];   // the week as an Indian works reads it, Monday first
+  var nice = function (d) { var x = new Date(d + 'T00:00:00'); return isNaN(x) ? d : x.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
+  var draw = function () {
+    $('cdWeek').innerHTML = order.map(function (d) {
+      var isOff = off.indexOf(d) > -1;
+      return '<button type="button" class="cdDay min-w-0 rounded-xl border-2 px-0.5 sm:px-2 py-2 text-center ' +
+        (isOff ? 'border-gray-200 bg-gray-50 text-gray-400' : 'border-blue-200 bg-blue-50 text-blue-800') + '" data-d="' + d + '" aria-pressed="' + !isOff + '">' +
+        '<span class="block text-sm font-black">' + DAY_NAMES[d].slice(0, 3) + '</span>' +
+        '<span class="block text-[11px] font-bold">' + (isOff ? 'Off' : '<span class="sm:hidden">On</span><span class="max-sm:hidden">Working</span>') + '</span></button>';
+    }).join('');
+    var work = order.filter(function (d) { return off.indexOf(d) < 0; });
+    $('cdSum').textContent = work.length + ' working day' + (work.length === 1 ? '' : 's') + ' a week' +
+      (off.length ? ' · off on ' + order.filter(function (d) { return off.indexOf(d) > -1; }).map(function (d) { return DAY_NAMES[d]; }).join(' and ') : ' · no weekly day off');
+    hols.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    $('cdHols').innerHTML = hols.map(function (h, i) {
+      return '<div class="flex items-center gap-2 py-2 border-b border-gray-100">' +
+        '<span class="w-40 shrink-0 text-sm font-black">' + esc(nice(h.date)) + '</span>' +
+        '<span class="flex-1 text-sm font-semibold text-gray-600 truncate">' + esc(h.name) + '</span>' +
+        '<button type="button" class="cdDel px-1 text-gray-400 hover:text-red-600" data-i="' + i + '" title="Remove this holiday"><span class="material-icons text-base">delete</span></button></div>';
+    }).join('') || '<div class="text-xs font-bold text-gray-400 py-2">No company holidays yet.</div>';
+    $('cdWeek').querySelectorAll('.cdDay').forEach(function (b) { b.addEventListener('click', function () {
+      var d = +b.dataset.d, i = off.indexOf(d);
+      if (i > -1) off.splice(i, 1);
+      else if (off.length >= 6) return toast('Keep at least one working day in the week.', 'warn');
+      else off.push(d);
+      draw(); }); });
+    $('cdHols').querySelectorAll('.cdDel').forEach(function (b) { b.addEventListener('click', function () { hols.splice(+b.dataset.i, 1); draw(); }); });
+  };
+  openModal('<form id="fCalendar" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Working days &amp; holidays</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">Reminders are only sent on working days, and a day off or a holiday never counts as a late day in anybody’s score.</p>' +
+    '<div class="lb">The working week — tap a day to switch it</div>' +
+    '<div id="cdWeek" class="grid grid-cols-7 gap-1.5"></div>' +
+    '<div id="cdSum" class="text-xs font-black text-blue-700 bg-blue-50 rounded-xl px-3 py-2 mt-3"></div>' +
+    '<p class="text-xs font-semibold text-gray-400 mt-2">A change counts from today. Earlier weeks keep the days they were worked, so past scores do not move.</p>' +
+    '<div class="lb mt-6">Company holidays</div>' +
+    '<div id="cdHols" class="max-h-56 overflow-y-auto"></div>' +
+    '<div class="flex flex-wrap gap-2 mt-3"><input id="cdDate" type="date" class="in" style="max-width:11rem">' +
+      '<input id="cdName" class="in flex-1" maxlength="40" placeholder="e.g. Diwali" style="min-width:8rem">' +
+      '<button type="button" id="cdAdd" class="btn btn-g whitespace-nowrap">Add holiday</button></div>' +
+    '<div class="flex gap-3 mt-6"><span class="flex-1"></span>' +
+      '<button type="button" class="btn btn-g" onclick="closeModal()">Cancel</button>' +
+      '<button type="submit" class="btn btn-p px-8">Save</button></div></form>', 'max-w-xl');
+  var add = function () {
+    var d = $('cdDate').value, n = $('cdName').value.replace(/\s+/g, ' ').trim();
+    if (!d) return $('cdDate').focus();
+    if (hols.some(function (h) { return h.date === d; })) return toast('That date is already a holiday.', 'warn');
+    hols.push({ date: d, name: n || 'Holiday' }); $('cdDate').value = ''; $('cdName').value = ''; draw();
+  };
+  $('cdAdd').addEventListener('click', add);
+  $('cdName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  $('fCalendar').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = e.target.querySelector('button[type=submit]');
+    busy(btn, true);
+    api('saveCalendar', { calendar: { off: off, holidays: hols } })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
+      .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
+  });
+  draw();
+}
+
+function openReminders() {
+  if (!isAdmin()) { toast('Only an Admin can set the reminders.', 'warn'); return; }
+  var r = companyReminders(), hours = r.hours.slice(), before = r.daysBeforeDue, overdue = r.overdue, digest = r.digestHour;
+  var opts = function (from, to, sel, fmt) { var o = ''; for (var h = from; h <= to; h++) o += '<option value="' + h + '"' + (h === sel ? ' selected' : '') + '>' + fmt(h) + '</option>'; return o; };
+  var draw = function () {
+    $('rmTimes').innerHTML = hours.map(function (h, i) {
+      return '<div class="flex gap-2 items-center mb-2"><span class="text-xs font-black text-gray-400 w-5 text-right">' + (i + 1) + '</span>' +
+        '<select class="in rmHour" data-i="' + i + '">' + opts(6, 21, h, hourText) + '</select>' +
+        '<button type="button" class="rmDel px-1 text-gray-400 hover:text-red-600" data-i="' + i + '" title="Remove this time"><span class="material-icons text-base">delete</span></button></div>';
+    }).join('') || '<div class="text-xs font-bold text-gray-400 py-2">No timed reminders. People still hear about a task the moment it is assigned.</div>';
+    $('rmAdd').classList.toggle('hidden', hours.length >= 4);
+    var sorted = hours.slice().sort(function (a, b) { return a - b; });
+    $('rmSum').textContent = sorted.length
+      ? 'On a working day, someone with open work gets at most ' + sorted.length + ' reminder email' + (sorted.length === 1 ? '' : 's') + ': at ' + hoursText(sorted) + '.'
+      : 'No timed reminder emails.';
+    $('rmTimes').querySelectorAll('.rmHour').forEach(function (el) { el.addEventListener('change', function () { hours[+el.dataset.i] = +el.value; draw(); }); });
+    $('rmTimes').querySelectorAll('.rmDel').forEach(function (b) { b.addEventListener('click', function () { hours.splice(+b.dataset.i, 1); draw(); }); });
+  };
+  openModal('<form id="fReminders" class="p-6 lg:p-7">' +
+    '<h2 class="text-xl font-black mb-1">Reminders</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-5">When Domebox chases open work for everybody in the company. Each person gets one email per time, with all their open tasks in it, most urgent first.</p>' +
+    '<div class="lb">Reminder times — up to 4 a day</div>' +
+    '<div id="rmTimes"></div>' +
+    '<button type="button" id="rmAdd" class="btn btn-g text-sm mt-1">Add a time</button>' +
+    '<div id="rmSum" class="text-xs font-black text-blue-700 bg-blue-50 rounded-xl px-3 py-2 mt-3"></div>' +
+    '<div class="grid sm:grid-cols-2 gap-4 mt-6">' +
+      '<label><span class="lb">Before the due date</span><select id="rmBefore" class="in">' +
+        '<option value="0"' + (before === 0 ? ' selected' : '') + '>No reminder</option>' +
+        opts(1, 7, before, function (n) { return n + ' day' + (n === 1 ? '' : 's') + ' before'; }) + '</select></label>' +
+      '<label><span class="lb">Managers’ morning summary</span><select id="rmDigest" class="in">' + opts(6, 11, digest, hourText) + '</select></label></div>' +
+    '<label class="flex items-center gap-3 mt-5 cursor-pointer"><input id="rmOverdue" type="checkbox" class="w-5 h-5"' + (overdue ? ' checked' : '') + '>' +
+      '<span class="text-sm font-bold">Keep reminding every working day while a task is overdue</span></label>' +
+    '<div class="flex gap-3 mt-6"><button type="button" class="btn btn-g" id="rmReset">Default</button><span class="flex-1"></span>' +
+      '<button type="button" class="btn btn-g" onclick="closeModal()">Cancel</button>' +
+      '<button type="submit" class="btn btn-p px-8">Save</button></div></form>', 'max-w-xl');
+  $('rmAdd').addEventListener('click', function () {
+    var free = [9, 11, 13, 15, 17, 10, 12, 14, 16, 18].filter(function (h) { return hours.indexOf(h) < 0; })[0];
+    hours.push(free); draw();
+  });
+  $('rmReset').addEventListener('click', function () {
+    hours = REMINDER_DEFAULT.hours.slice();
+    $('rmBefore').value = REMINDER_DEFAULT.daysBeforeDue; $('rmDigest').value = REMINDER_DEFAULT.digestHour; $('rmOverdue').checked = REMINDER_DEFAULT.overdue;
+    draw();
+  });
+  $('fReminders').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var dup = hours.filter(function (h, i) { return hours.indexOf(h) !== i; })[0];
+    if (dup !== undefined) return toast(hourText(dup) + ' is chosen twice.', 'warn');
+    var btn = e.target.querySelector('button[type=submit]');
+    busy(btn, true);
+    api('saveReminders', { reminders: { hours: hours, daysBeforeDue: +$('rmBefore').value, overdue: $('rmOverdue').checked, digestHour: +$('rmDigest').value } })
+      .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
+      .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
+  });
+  draw();
+}
+
 function openTabLayout() {
   if (!isAdmin()) { toast('Only an Admin can arrange the tabs.', 'warn'); return; }
   var l = tabLayout(), order = l.order.slice(), hidden = l.hidden.slice();

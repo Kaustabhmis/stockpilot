@@ -500,6 +500,51 @@ function saveStages_(ctx, stages) {
   return { status: 'success', stages: clean, message: 'Task stages saved for everybody in the company.' };
 }
 
+/* ---------- the company's working days, holidays and reminder times ------ */
+function readCalendar_(ctx) {
+  return cached_(ctx, 'calendar', function () {
+    return cleanCalendar(safeJson_(readSetting_(ctx, 'workCalendar', ''), {}), false);
+  });
+}
+/** What the browser needs: today's off days and the holiday list. */
+function calendarView_(cal) {
+  return { off: offDaysOn(cal.weekly, new Date()), holidays: cal.holidays };
+}
+/* The off days count from today. Earlier weeks keep the pattern they were
+   worked and scored under, so last month's scores never move because the
+   company changed its week this month. */
+function saveCalendar_(ctx, form) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  form = form || {};
+  var cur = readCalendar_(ctx), today = ymd(new Date());
+  var off = cleanCalendar({ weekly: [{ from: today, off: form.off }] }, true).weekly[0].off;
+  var weekly = cur.weekly.slice();
+  if (offDaysOn(weekly, new Date()).join() !== off.join()) {
+    if (weekly[weekly.length - 1].from === today) weekly.pop();
+    weekly.push({ from: today, off: off });
+  }
+  var clean = cleanCalendar({ weekly: weekly, holidays: form.holidays }, true);
+  writeSetting_(ctx, 'workCalendar', JSON.stringify(clean));
+  dropCache_(ctx);
+  return { status: 'success', calendar: calendarView_(clean),
+           message: 'Working days and holidays saved. Reminders and scores follow them from today.' };
+}
+
+function readReminders_(ctx) {
+  return cached_(ctx, 'reminders', function () {
+    return cleanReminders(safeJson_(readSetting_(ctx, 'reminders', ''), {}), false);
+  });
+}
+function saveReminders_(ctx, form) {
+  requireAdmin_(ctx); blockIfStopped_(ctx);
+  var clean = cleanReminders(form || {}, true);
+  writeSetting_(ctx, 'reminders', JSON.stringify(clean));
+  dropCache_(ctx);
+  return { status: 'success', reminders: clean,
+           message: clean.hours.length ? 'Reminders will go at ' + hoursText(clean.hours) + '.'
+                                       : 'Saved. No timed reminders will go out.' };
+}
+
 function saveTabLayout_(ctx, layout) {
   requireAdmin_(ctx); blockIfStopped_(ctx);
   var clean = cleanTabLayout_(layout || {});
@@ -643,7 +688,7 @@ function leaveCalendar_(ctx) {
     if (!l.approved) return;
     (map[l.username] = map[l.username] || []).push({ from: l.from, to: l.to });
   });
-  return { weekend: [0, 6], holidays: [], leave: map };
+  return scoringCalendar(readCalendar_(ctx), map);
 }
 
 /* ---------- small helpers ------------------------------------------------ */

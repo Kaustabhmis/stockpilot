@@ -257,7 +257,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 }
 
 function spawnNextOccurrence_(ctx, hit, t) {
-  var next = nextOccurrence(t.frequency, t.due, {});
+  var next = nextOccurrence(t.frequency, t.due, { cal: scoringCalendar(readCalendar_(ctx)) });
   if (!next) return null;
   var due = ymd(next);
 
