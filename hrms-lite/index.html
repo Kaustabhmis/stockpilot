@@ -9848,6 +9848,7 @@ function ctcOverridesFor(code) {
      if(month >= 202610, slab(gross, ...new...), slab(gross, ...old...))
    Payroll passes the month it is running; anywhere else it is this month. */
 function ctcMonth(ym) { return Number(String(ym || thisMonth()).slice(0, 7).replace('-', '')) || 0; }
+var STAT_CTC = { pf_employee: 'pf', pf_employer: 'pfEmployer', esi_employee: 'esi', esi_employer: 'esiEmployer' };
 function computeCtc(inputs, overrides, rows) {
   inputs = Object.assign({ month: ctcMonth() }, inputs || {}); overrides = overrides || {};
   var comps = ctcComponents(rows), vars = ctcVarMap();
@@ -9855,11 +9856,29 @@ function computeCtc(inputs, overrides, rows) {
   comps.forEach(function (c) { byCode[String(c.code).trim()] = c; });
   var cache = {}, stack = [], errors = {}, text = {};
 
+  /* PF, ESI and P.Tax lines follow Settings -> Payroll rules - the same
+     statutory() the payroll runs - so the CTC sheet and the payslip cannot
+     disagree on a percentage, a ceiling or what they are worked out on. */
+  function ruled(name) {
+    if (inputs._raw) return null;
+    if (STAT_CTC[name]) {
+      var b = byCode.basic ? resolve('basic') : resolve('gross'), g = resolve('gross');
+      var st = statutory({ pf_applicable: inputs._pf || 'yes', esi_applicable: inputs._esi || 'yes' },
+                         { basic: b, gross: g }, { basic: b, gross: g }, inputs.month, { noPt: true });
+      return st[STAT_CTC[name]];
+    }
+    if (name === 'ptax' && !inputs._ptOnly && statBase('pt_base') === 'basic' && byCode.basic) {
+      return num(computeCtc({ gross: resolve('basic'), month: inputs.month, _ptOnly: true }, {}).values.ptax);
+    }
+    return null;
+  }
   function resolve(name) {
     name = String(name).trim();
     if (cache.hasOwnProperty(name)) return cache[name];
     if (overrides.hasOwnProperty(name) && String(overrides[name]) !== '') return (cache[name] = num(overrides[name]));
     if (inputs.hasOwnProperty(name)) return (cache[name] = num(inputs[name]));
+    var fixed = ruled(name);
+    if (fixed !== null) return (cache[name] = fixed);
     if (vars.hasOwnProperty(name)) return (cache[name] = vars[name]);
     var c = byCode[name];
     if (!c) throw new Error('"' + name + '" is not a component or variable');
@@ -9892,7 +9911,8 @@ function computeCtc(inputs, overrides, rows) {
 /** The monthly gross a structure should start from for this employee. */
 function ctcInputsFor(e) {
   var ov = ctcOverridesFor(e.emp_code);
-  return { gross: ov.gross !== undefined && ov.gross !== '' ? num(ov.gross) : grossOf(e) };
+  return { gross: ov.gross !== undefined && ov.gross !== '' ? num(ov.gross) : grossOf(e),
+           _pf: e.pf_applicable, _esi: e.esi_applicable };
 }
 function ctcFor(e) {
   return computeCtc(ctcInputsFor(e), ctcOverridesFor(e.emp_code));
@@ -9909,6 +9929,12 @@ function validateStructure(rows) {
 /* ---------------------------- the pane --------------------------- */
 function ctcPane() {
   return '' +
+  '<div class="locked-note" style="background:#dbeafe;color:#1e40af;margin-bottom:14px;align-items:flex-start">' +
+    '<div>&#9432;</div><div style="font-weight:500;line-height:1.6"><b>PF, ESI and P.Tax follow Payroll rules.</b> ' +
+    'The lines coded <code>pf_employee</code>, <code>pf_employer</code>, <code>esi_employee</code> and ' +
+    '<code>esi_employer</code> are worked out exactly as the payroll does - its percentages, ceilings and ' +
+    'Basic / Gross choices - whatever their formula says, and the P.Tax slab is read on what Payroll rules ' +
+    'choose. Change those in Settings &rarr; Payroll rules.</div></div>' +
   '<h3>Variables</h3>' +
   '<div class="card-sub">Numbers you can reuse in any formula below, so a rate changes in one place.</div>' +
   '<div id="policy-ctcVariables"></div>' +
@@ -10458,10 +10484,10 @@ function statutory(e, earned, full, ym, opts) {
     out.esi = out.esiWage * num(S.settings.esi_employee_pct || 0.75) / 100;
     out.esiEmployer = out.esiWage * num(S.settings.esi_employer_pct || 3.25) / 100;
   }
-  if (num(earned.gross) > 0) {
+  if (num(earned.gross) > 0 && !opts.noPt) {
     var ptComp = ctcComponentByCode('ptax');
     out.pt = ptComp
-      ? num(computeCtc({ gross: pick('pt_base', full), month: ctcMonth(ym) }, opts.overrides || {}).values.ptax)
+      ? num(computeCtc({ gross: pick('pt_base', full), month: ctcMonth(ym), _ptOnly: true }, opts.overrides || {}).values.ptax)
       : num(S.settings.pt_amount || 0);
   }
   return out;

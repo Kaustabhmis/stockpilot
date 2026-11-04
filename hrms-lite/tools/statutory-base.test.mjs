@@ -120,6 +120,26 @@ eq(r.r1.esi, 75, '"same" follows ESI on basic');
 r = await run({ esi_base: 'basic', esi_ceiling_base: 'gross' }, { special_allowance: 7000 });
 eq(r.r1.esi, 0, 'ceiling set apart on gross still holds');
 
+console.log('\nthe CTC sheet matches the payroll');
+const ctc = async (settings) => p.evaluate(([ym, settings]) => {
+  const keep = Object.assign({}, S.settings);
+  Object.assign(S.settings, { pf_employee_pct: '12', pf_employer_pct: '12', pf_wage_ceiling: '25000',
+    esi_employee_pct: '0.75', esi_employer_pct: '3.25', esi_wage_ceiling: '21000',
+    pf_base: 'basic', esi_base: 'basic', esi_ceiling_base: 'same', pt_base: 'gross' }, settings);
+  const e = empByCode('SB-01');
+  const v = computeCtc({ gross: 20000, _pf: 'yes', _esi: 'yes', month: 202703 }, {}).values;
+  S.settings = keep;
+  return v;
+}, [YM, settings]);
+let v = await ctc({});
+eq(v.pf_employee, v.basic * 0.12, 'CTC PF employee: 12% of its basic', 'basic ' + v.basic);
+eq(v.pf_employer, v.basic * 0.12, 'CTC PF employer: Payroll rules 12%, not the 13% variable');
+eq(v.esi_employee, v.basic * 0.0075, 'CTC ESI on basic, as Payroll rules say');
+v = await ctc({ esi_base: 'gross', esi_ceiling_base: 'same' });
+eq(v.esi_employee, 150, 'CTC ESI on gross 20,000 within the ceiling');
+v = await ctc({ esi_base: 'gross' }); const v2 = await p.evaluate(() => 0);
+eq((await ctc({ esi_base: 'gross', esi_wage_ceiling: '15000' })).esi_employee, 0, 'CTC ESI: gross over a 15,000 ceiling - none');
+
 console.log('\nsetting ESI = Yes on the employee form and in bulk');
 await call('saveSettings', { settings: { esi_base: 'basic', esi_ceiling_base: 'same', esi_wage_ceiling: '21000' } }, token);
 await call('save', { sheet: 'Employees', row: { emp_code: 'SB-03', name: 'Gross Over Basic Under', status: 'Active',
