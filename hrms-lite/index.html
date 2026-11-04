@@ -3753,6 +3753,16 @@ function openBulk() {
           '<input id="bulk-ot-rate" type="number" min="0" step="any" placeholder="blank = company rate"></label>' +
         '<button class="ghost" onclick="bulkOvertime()">Set overtime (' + rows.length + ')</button>' +
       '</div></div>' +
+    '<div style="margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px">' +
+      '<b>ESI and PF</b> for these ' + rows.length + ' employee(s)' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">' +
+        '<label class="field" style="min-width:150px">ESI applicable<select id="bulk-esi">' +
+          '<option value="">leave as is</option><option value="yes">Yes</option><option value="no">No</option></select></label>' +
+        '<label class="field" style="min-width:150px">PF applicable<select id="bulk-pf">' +
+          '<option value="">leave as is</option><option value="yes">Yes</option><option value="no">No</option></select></label>' +
+        '<button class="ghost" onclick="bulkStatutory()">Set ESI / PF</button>' +
+      '</div><div class="sub-line" style="margin-top:6px">ESI = Yes is set only for those within the ESI ceiling ' +
+      '(checked on ' + statBase('esi_ceiling_base') + '); anyone above it is listed and left as is.</div></div>' +
     '<label class="field" style="margin-top:14px">To delete, type <b>DELETE</b> here' +
       '<input id="bulk-confirm" placeholder="DELETE" autocomplete="off"></label>',
     [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
@@ -3763,6 +3773,38 @@ function openBulk() {
         }
         runBulk('delete', deletable);
      } }], true);
+}
+
+/* ESI / PF applicable for everyone the list is showing. ESI is only switched
+   on for people within the ceiling, on the base the payroll rules use. */
+function bulkStatutory() {
+  var rows = filteredEmployees();
+  var esi = el('bulk-esi').value, pf = el('bulk-pf').value;
+  if (!esi && !pf) return toast('Choose Yes or No for ESI or PF', 'bad');
+  var ceiling = num(S.settings.esi_wage_ceiling || 21000), over = [];
+  var updates = rows.map(function (e) {
+    var u = { emp_code: e.emp_code, updated_at: today() };
+    if (pf) u.pf_applicable = pf;
+    if (esi === 'no') u.esi_applicable = 'no';
+    if (esi === 'yes') {
+      var on = statBase('esi_ceiling_base') === 'basic' ? num(e.basic) : grossOf(e);
+      if (on > ceiling) over.push(e.name + ' (' + e.emp_code + ')'); else u.esi_applicable = 'yes';
+    }
+    return u;
+  }).filter(function (u) { return Object.keys(u).length > 2; });
+  if (!updates.length) return toast('Nobody to change - all ' + over.length + ' are above the ESI ceiling', 'bad');
+  api('saveMany', { sheet: 'Employees', rows: updates }).then(function () {
+    updates.forEach(function (u) {
+      var e = empByCode(u.emp_code);
+      if (!e) return;
+      if (u.esi_applicable) e.esi_applicable = u.esi_applicable;
+      if (u.pf_applicable) e.pf_applicable = u.pf_applicable;
+    });
+    closeModal();
+    toast(updates.length + ' employee(s) updated' + (over.length ? '; ' + over.length + ' above the ESI ceiling left as is: ' +
+      over.slice(0, 5).join(', ') + (over.length > 5 ? '...' : '') : ''), 'good');
+    renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 /* Overtime Yes/No and rate for everyone the list is showing. */
@@ -6582,7 +6624,7 @@ var PAYROLL_RULES = [
   ['esi_employer_pct', 'ESI employer %', 'number'],
   ['esi_base', 'ESI is worked out on', 'select:gross,basic'],
   ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
-  ['esi_ceiling_base', 'ESI ceiling is checked against', 'select:gross,basic'],
+  ['esi_ceiling_base', 'ESI ceiling is checked against (same = what ESI is worked out on)', 'select:same,gross,basic'],
   ['pt_base', 'P.Tax slab is read on', 'select:gross,basic'],
   ['pt_amount', 'Professional tax / month (used only if the CTC structure has no P.Tax slab)', 'number'],
   /* The Payment of Bonus Act numbers. They sit here because these are the
@@ -10390,10 +10432,13 @@ var isSalaried = function (e) { return String(e.wage_type || 'Salary') !== 'Wage
    earned = what this month pays ({ basic, gross }); full = the full-month
    figures the ceiling and the slab are tested on. For wages "basic" is
    basic + DA, as the PF rules have it. */
-var STAT_DEFAULT = { pf_base: 'basic', esi_base: 'gross', esi_ceiling_base: 'gross', pt_base: 'gross' };
+var STAT_DEFAULT = { pf_base: 'basic', esi_base: 'gross', esi_ceiling_base: 'same', pt_base: 'gross' };
 function statBase(key) {
   var v = String(S.settings[key] || '').trim().toLowerCase();
-  return v === 'basic' || v === 'gross' ? v : STAT_DEFAULT[key];
+  if (v !== 'basic' && v !== 'gross') v = STAT_DEFAULT[key];
+  /* the ESI ceiling follows what ESI is worked out on, unless set apart */
+  if (v === 'same') return statBase('esi_base');
+  return v;
 }
 function statutory(e, earned, full, ym, opts) {
   opts = opts || {};

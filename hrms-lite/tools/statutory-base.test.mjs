@@ -25,6 +25,8 @@ const YM = '2027-03';                 /* 31 days, every one present */
    With special 7,000 the gross is 22,000, over the ESI ceiling:
      ceiling checked on gross -> no ESI
      ceiling checked on basic -> 10,000 is within it: ESI 0.75% of 22,000 = 165
+     ESI on basic, ceiling "same" (the default) -> the ceiling is checked on
+       basic too: 0.75% of 10,000 = 75
    SB-02 (wages): basic 500 + DA 100 + HRA 100 a day, 31 days -> basic+DA
    18,600, gross 21,700.
      PF on basic (basic + DA) -> 12% of min(18,600, 15,000) = 1,800
@@ -111,7 +113,38 @@ r = await run({}, { special_allowance: 7000 });
 eq(r.r1.esi, 0, 'gross 22,000 over the ceiling: no ESI');
 r = await run({ esi_ceiling_base: 'basic' }, { special_allowance: 7000 });
 eq(r.r1.esi, 165, 'ceiling on basic: 10,000 within it', '0.75% of 22,000');
+r = await run({ esi_base: 'basic' }, { special_allowance: 7000 });
+eq(r.r1.esi, 75, 'ESI on basic: the ceiling follows it', 'basic 10,000 within 21,000: 0.75% of 10,000');
+r = await run({ esi_base: 'basic', esi_ceiling_base: 'same' }, { special_allowance: 7000 });
+eq(r.r1.esi, 75, '"same" follows ESI on basic');
+r = await run({ esi_base: 'basic', esi_ceiling_base: 'gross' }, { special_allowance: 7000 });
+eq(r.r1.esi, 0, 'ceiling set apart on gross still holds');
 
+console.log('\nsetting ESI = Yes on the employee form and in bulk');
+await call('saveSettings', { settings: { esi_base: 'basic', esi_ceiling_base: 'same', esi_wage_ceiling: '21000' } }, token);
+await call('save', { sheet: 'Employees', row: { emp_code: 'SB-03', name: 'Gross Over Basic Under', status: 'Active',
+  doj: '2025-01-01', wage_type: 'Salary', basic: 15000, hra: 6000, special_allowance: 4000, other_allowance: 0,
+  esi_applicable: 'no', pf_applicable: 'yes', department: 'QB', designation: 'Tester' } }, token);
+await call('save', { sheet: 'Employees', row: { emp_code: 'SB-04', name: 'Basic Over', status: 'Active',
+  doj: '2025-01-01', wage_type: 'Salary', basic: 30000, hra: 0, special_allowance: 0, other_allowance: 0,
+  esi_applicable: 'no', pf_applicable: 'yes', department: 'QB', designation: 'Tester' } }, token);
+await p.evaluate(() => reload()); await p.waitForTimeout(2500);
+const formErrs = await p.evaluate(() => validateEmployee(Object.assign({}, empByCode('SB-03'), { esi_applicable: 'yes' }), 'SB-03'));
+eq(formErrs.filter(x => /ESI/.test(x)).length, 0, 'form accepts ESI = Yes: basic 15,000 under 21,000',
+   'gross 25,000 is over it, but the ceiling is on basic');
+const formErrs2 = await p.evaluate(() => validateEmployee(Object.assign({}, empByCode('SB-04'), { esi_applicable: 'yes' }), 'SB-04'));
+eq(formErrs2.filter(x => /ESI/.test(x)).length, 1, 'form refuses ESI = Yes: basic 30,000 over it');
+await p.evaluate(() => { go('employees'); el('emp-search').value = 'SB-0'; renderEmployees(); });
+await p.waitForTimeout(400);
+await p.evaluate(() => openBulk()); await p.waitForTimeout(300);
+await p.selectOption('#bulk-esi', 'yes');
+await p.evaluate(() => bulkStatutory()); await p.waitForTimeout(1500);
+const toast = await p.$$eval('.toast', t => t.map(x => x.textContent).join(' / '));
+const after = (await call('list', { sheet: 'Employees' }, token)).filter(e => /^SB-0[34]$/.test(e.emp_code));
+eq(after.filter(e => e.emp_code === 'SB-03' && e.esi_applicable === 'yes').length, 1, 'bulk: SB-03 switched on');
+eq(after.filter(e => e.emp_code === 'SB-04' && e.esi_applicable === 'no').length, 1, 'bulk: SB-04 over the ceiling left off',
+   toast.slice(0, 120));
+await call('saveSettings', { settings: { esi_base: 'gross', esi_ceiling_base: 'same' } }, token);
 eq(errs.length, 0, 'no page errors', errs.join(' | '));
 await b.close();
 console.log(bad ? '\n' + bad + ' check(s) FAILED' : '\nall statutory-base checks passed');
