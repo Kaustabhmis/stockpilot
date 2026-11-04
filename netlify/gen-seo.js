@@ -202,19 +202,20 @@ ${foot}
 `;
 
 /* ------------------------------------------------------------------ sitemap */
-const today = new Date().toISOString().slice(0, 10);
+/* Each page's lastmod is when its content last changed, not the build date. */
+const { lastmodFor } = require('./lastmod.js');
 const urls = [
-  { loc: BASE + '/', changefreq: 'weekly', priority: '1.0' },
+  { loc: BASE + '/', changefreq: 'weekly', priority: '1.0', lastmod: lastmodFor('') },
   ...pages.map((p) => ({ loc: BASE + '/' + p.slug,
-    changefreq: p.changefreq || 'monthly', priority: p.priority || '0.6' })),
+    changefreq: p.changefreq || 'monthly', priority: p.priority || '0.6', lastmod: lastmodFor(p.slug) })),
   ...LEGAL.map((p) => ({ loc: BASE + '/' + p.slug,
-    changefreq: p.changefreq, priority: p.priority })),
+    changefreq: p.changefreq, priority: p.priority, lastmod: lastmodFor(p.slug) })),
 ];
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((u) => `  <url>
     <loc>${u.loc}</loc>
-    <lastmod>${today}</lastmod>
+    <lastmod>${u.lastmod}</lastmod>
     <changefreq>${u.changefreq}</changefreq>
     <priority>${u.priority}</priority>
   </url>`).join('\n')}

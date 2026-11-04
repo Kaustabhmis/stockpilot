@@ -122,10 +122,11 @@ window.DOMEBOX_CONFIG = {
 const domain = 'https://www.domebox.in';
 const pages = fs.readdirSync(OUT).filter((f) => f.endsWith('.html') && f !== '404.html')
   .map((f) => f === 'index.html' ? '/' : '/' + f.replace(/\.html$/, ''));
-const today = new Date().toISOString().slice(0, 10);
+/* Each page's lastmod is when its content last changed, not the build date. */
+const { lastmodFor } = require('./lastmod.js');
 fs.writeFileSync(path.join(OUT, 'sitemap.xml'),
   '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-  pages.map((u) => '  <url><loc>' + domain + u + '</loc><lastmod>' + today + '</lastmod></url>').join('\n') +
+  pages.map((u) => '  <url><loc>' + domain + u + '</loc><lastmod>' + lastmodFor(u.replace(/^\//, '')) + '</lastmod></url>').join('\n') +
   '\n</urlset>\n');
 
 console.log('Website folder written: ' + path.relative(root, OUT));
