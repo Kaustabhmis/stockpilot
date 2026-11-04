@@ -184,6 +184,9 @@ function moveToColdStore_(ss, dryRun, now) {
       tasks.deleteRows(start, end - start + 1);
       k++;
     }
+    /* Rows have moved: screens and the 30-second read cache start again. */
+    SpreadsheetApp.flush();
+    bumpVersion_(ss.getId());
     return { moved: picked.length, message: 'moved ' + picked.length + ' of ' + rows.length +
              ' tasks; ' + (rows.length - picked.length) + ' stay on the board side' };
   });

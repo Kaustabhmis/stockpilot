@@ -18,7 +18,7 @@ const SHOTS = process.argv[2];
   ok('no browser alert, confirm or prompt box anywhere in the app', !/\b(window\.)?(alert|confirm|prompt)\(/.test(ui.replace(/confirmBox\(/g, '')));
 
   await hit('/__demo');
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1360, height: 860 } });
   const errs = []; let native = 0;
   p.on('pageerror', (e) => errs.push(e.message));

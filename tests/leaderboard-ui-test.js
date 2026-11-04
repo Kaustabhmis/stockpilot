@@ -50,7 +50,7 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   for (let i = 0; i < 4; i++) await run('imran', 'I job ' + i, ymd(4), 'Medium');
   await run('vikram', 'One easy job', ymd(5), 'Low');
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1400, height: 1100 } });
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', email); await p.fill('#liPass', 'strongpass123');

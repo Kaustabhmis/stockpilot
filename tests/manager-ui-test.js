@@ -40,7 +40,7 @@ const hit = (path) => new Promise((res, rej) =>
   await post({ action: 'updateTask', token: P, taskId: id, status: 'For Review' });
   await hit('/__backdate?email=' + encodeURIComponent(email) + '&title=Vendor%20quote%20sign-off&days=14');
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1500, height: 950 } });
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 

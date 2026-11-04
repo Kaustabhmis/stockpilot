@@ -743,6 +743,9 @@ function generateRecurringJobs() {
     });
 
     if (created) log.push('  ' + (tenant.company || tenant.sheetId) + ': ' + created + ' occurrence(s)');
+    /* New rows written straight to the sheet: screens and the app's short read
+       cache must not keep showing the board without them. */
+    if (created && !SCHED.DRY_RUN && typeof bumpVersion_ === 'function') { try { SpreadsheetApp.flush(); } catch (e) {} bumpVersion_(tenant.sheetId); }
   });
 
   log.push('');

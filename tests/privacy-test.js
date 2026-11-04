@@ -106,6 +106,7 @@ ok('no password appears in any log', !/staffpass123|ownerpass123|takeover123/.te
 
 const tenant = env.FILES[Object.keys(env.FILES).find((k) => /^SHEET_/.test(k) && env.FILES[k].getSheetByName('Tasks'))];
 const realTab = tenant.getSheetByName;
+{ const c = env.G.CacheService.getScriptCache(); c.__keys().filter((k) => /^t:/.test(k)).forEach((k) => c.remove(k)); }   // read the sheet, not the 30-second cache
 tenant.getSheetByName = (n) => { if (n === 'Tasks') throw new TypeError("Cannot read properties of undefined (reading 'getLastRow')"); return realTab(n); };
 const internal = msg({ action: 'getDashboard', token: A });
 tenant.getSheetByName = realTab;

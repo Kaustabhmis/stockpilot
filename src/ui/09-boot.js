@@ -135,9 +135,19 @@ addEventListener('resize', function () {
 /* Re-check quietly while the tab is in front. 30 seconds, paused when hidden:
    Apps Script allows about 90 minutes of execution a day, and a 5-second poll
    per user burns through that before lunch. */
+/* The check sends the version of the board it has; when nothing in the company
+   has changed the answer is two words, not the board. The whole board still
+   comes at least every 2 minutes, and on coming back to the tab, so an edit
+   typed straight into the sheet is never missed for long. Nothing is checked
+   while a change is still saving. */
+var lastFullCheck = Date.now();
+document.addEventListener('visibilitychange', function () { if (!document.hidden) lastFullCheck = 0; });
 setInterval(function () {
-  if (document.hidden || !STATE.token || !STATE.data) return;
-  api('getDashboard', {}, { quiet: true }).then(function (d) {
+  if (document.hidden || !STATE.token || !STATE.data || (typeof SAVING !== 'undefined' && SAVING > 0)) return;
+  var full = !STATE.data.version || Date.now() - lastFullCheck > 120000;
+  api('getDashboard', full ? {} : { since: STATE.data.version }, { quiet: true }).then(function (d) {
+    if (d.unchanged || (typeof SAVING !== 'undefined' && SAVING > 0)) return;
+    lastFullCheck = Date.now();
     if (d.serviceStopped) { STATE.data = d; renderStopped(d); return; }
     var changed = JSON.stringify(d.tasks) !== JSON.stringify(STATE.data.tasks);
     if (d.staff) d.staff = byName(d.staff);

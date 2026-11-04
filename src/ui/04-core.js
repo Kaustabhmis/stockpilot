@@ -419,8 +419,8 @@ function byName(list) {
     return String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }); });
 }
 
-function refresh() {
-  return api('getDashboard').then(function (d) {
+function refresh(quiet) {
+  return api('getDashboard', {}, { quiet: !!quiet }).then(function (d) {
     if (d.staff) d.staff = byName(d.staff);
     STATE.data = d;
     STATE.usage = d.usage;

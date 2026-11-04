@@ -56,7 +56,7 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   ok('and the hard worker is scored well, not merely higher', payel.delegation >= 80, payel.delegation);
   ok('the light record is flagged provisional rather than failed', vikram.provisional === true);
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });

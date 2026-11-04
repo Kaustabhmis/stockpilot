@@ -2,7 +2,14 @@
 // DASHBOARD, SCORING, APPRAISALS, REPORTS
 // ===========================================================================
 
-function getDashboard_(ctx) {
+function getDashboard_(ctx, since) {
+  /* The 30-second check: the screen already has this version of the company,
+     so there is nothing to send. Everything else, including a new day, is a
+     change. */
+  var speed = speedOn_(), version = speed && ctx.sheetId ? companyVersion_(ctx) : '';
+  if (speed && since && version && since === version && !ctx.serviceStopped) {
+    return { status: 'success', unchanged: true, version: version };
+  }
   if (ctx.serviceStopped) {
     var owner = ctx.actor.role === 'Admin';
     return { status: 'success', serviceStopped: true,
@@ -57,7 +64,7 @@ function getDashboard_(ctx) {
   var activeUsers = users.filter(function (u) { return u.active !== false; }).length;
 
   return {
-    status: 'success', serviceStopped: false,
+    status: 'success', serviceStopped: false, version: version, speed: speed,
     user: me, company: ctx.company,
     /* Active work only. Closed work older than a week is fetched a page at a
        time from Archive (getArchive) — sending every task a person has ever

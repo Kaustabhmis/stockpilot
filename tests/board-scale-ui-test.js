@@ -23,7 +23,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || !x ? '' : '  [' + String(x).slice(0, 220) + ']')); v ? pass++ : fail++; };
 
   await hit('/__demo');      // builds it, or says it already exists — either way it is there
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', 'demo@biscsindia.com'); await p.fill('#liPass', 'demo-pass-for-tests');

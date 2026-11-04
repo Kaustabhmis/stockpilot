@@ -175,7 +175,116 @@ function cached_(ctx, key, fn) {
    there is only ever one request in flight, so CURRENT_CTX is unambiguous. */
 function dropCache_(ctx) {
   var c = ctx || CURRENT_CTX;
-  if (c) { c._cache = {}; c._scoreOpts = null; }
+  if (c) { c._cache = {}; c._scoreOpts = null; c._dirty = true; }
+}
+
+/* ---------- speed: a company's change counter and a short read cache --------
+   Every request used to read the whole Tasks tab, and every 30-second check
+   sent the whole board back even when nothing had changed.
+
+   The change counter: a value per company, in Apps Script's own cache, that
+   changes whenever anything in the company is written through the app (a
+   write calls dropCache_, and the router renews the counter when the request
+   ends, after the writes are flushed). A screen that already has the current
+   counter is told "nothing changed" instead of being sent the board again.
+
+   The Tasks cache: the Tasks tab as last read, for 30 seconds, under the
+   counter — so a write anywhere in the app makes the next read fresh. An edit
+   typed straight into the sheet shows within 30 seconds. Reads only: every
+   write still finds its row in the live sheet and checks the task's ID first,
+   and the Users tab is never cached, because a person's row is written by its
+   position. Nothing leaves Google: CacheService is part of Apps Script.
+
+   Script Property SPEED = off switches both off at once. */
+var SPEED_CACHE_SECONDS = 30, SPEED_VERSION_SECONDS = 21600, SPEED_CHUNK = 90000, SPEED_MAX_CHUNKS = 10;
+
+function speedOn_() {
+  try { return String(PropertiesService.getScriptProperties().getProperty('SPEED') || '').toLowerCase() !== 'off'; }
+  catch (e) { return false; }
+}
+
+/** The company's change counter, with the date so a new day is always "changed". */
+function companyVersion_(ctx) {
+  if (ctx._version) return ctx._version;
+  var cache = CacheService.getScriptCache(), key = 'ver:' + ctx.sheetId, v = cache.get(key);
+  if (!v) { v = Utilities.getUuid().slice(0, 8); cache.put(key, v, SPEED_VERSION_SECONDS); }
+  return (ctx._version = v + ':' + ymd(new Date()));
+}
+
+/** Called when anything in a company has been written: every screen and cached read is now stale. */
+function bumpVersion_(sheetId) {
+  if (!sheetId) return;
+  try { CacheService.getScriptCache().put('ver:' + sheetId, Utilities.getUuid().slice(0, 8), SPEED_VERSION_SECONDS); }
+  catch (e) {}
+}
+
+/** The end of a request that wrote: make the writes visible, then renew the counter. */
+function finishWrites_() {
+  var c = CURRENT_CTX;
+  if (!c || !c._dirty) return;
+  c._dirty = false; c._version = null;
+  try { SpreadsheetApp.flush(); } catch (e) {}
+  bumpVersion_(c.sheetId);
+}
+
+/* Dates do not survive JSON, and the code below the cache tests for them. */
+function packRows_(rows) {
+  return JSON.stringify(rows.map(function (r) {
+    return r.map(function (v) { return v instanceof Date ? { d: v.getTime() } : v; });
+  }));
+}
+function unpackRows_(s) {
+  return JSON.parse(s).map(function (r) {
+    return r.map(function (v) { return v && typeof v === 'object' && typeof v.d === 'number' ? new Date(v.d) : v; });
+  });
+}
+
+/**
+ * Run from the editor: how long one company's Tasks tab takes to read from the
+ * sheet, and from the cache, so the gain is measured rather than assumed.
+ */
+function speedCheck() {
+  var out = ['', '=== SPEED CHECK ===', speedOn_() ? 'Speed-ups are ON.' : 'Speed-ups are OFF (Script Property SPEED = off).', ''];
+  allTenants_().slice(0, 10).forEach(function (t) {
+    try {
+      var ctx = { ss: SpreadsheetApp.openById(t.sheetId), sheetId: t.sheetId };
+      var a = Date.now(), rows = ctx.ss.getSheetByName(TAB.TASKS).getDataRange().getValues().length, live = Date.now() - a;
+      tasksValues_(ctx);                       // fills the cache
+      var b = Date.now(); tasksValues_({ ss: ctx.ss, sheetId: t.sheetId }); var cached = Date.now() - b;
+      out.push('  ' + t.company + ': ' + rows + ' rows — from the sheet ' + live + ' ms, from the cache ' + cached + ' ms');
+    } catch (e) { out.push('  ' + t.company + ': ' + e.message); }
+  });
+  return say_(out);
+}
+
+/** The Tasks tab's values: from the 30-second cache when the company has not changed, else live. */
+function tasksValues_(ctx) {
+  var live = function () { return ctx.ss.getSheetByName(TAB.TASKS).getDataRange().getValues(); };
+  /* After a write in this same request the sheet is the only truth. */
+  if (ctx._dirty || !ctx.sheetId || !speedOn_()) return live();
+  var cache = CacheService.getScriptCache(), key = 't:' + ctx.sheetId + ':' + companyVersion_(ctx);
+  try {
+    var n = Number(cache.get(key + ':n') || 0);
+    if (n > 0) {
+      var parts = [];
+      for (var i = 0; i < n; i++) { var p = cache.get(key + ':' + i); if (p === null) { parts = null; break; } parts.push(p); }
+      if (parts) {
+        var bytes = Utilities.base64Decode(parts.join(''));
+        return unpackRows_(Utilities.ungzip(Utilities.newBlob(bytes, 'application/x-gzip')).getDataAsString());
+      }
+    }
+  } catch (e) {}
+  var d = live();
+  try {
+    var packed = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(packRows_(d))).getBytes());
+    var chunks = Math.ceil(packed.length / SPEED_CHUNK);
+    /* Too big for the cache: read it live, as before. */
+    if (chunks <= SPEED_MAX_CHUNKS) {
+      for (var j = 0; j < chunks; j++) cache.put(key + ':' + j, packed.slice(j * SPEED_CHUNK, (j + 1) * SPEED_CHUNK), SPEED_CACHE_SECONDS);
+      cache.put(key + ':n', String(chunks), SPEED_CACHE_SECONDS);
+    }
+  } catch (e) {}
+  return d;
 }
 
 function readUsers_(ctx) {
@@ -242,7 +351,7 @@ function setUserField_(ss, rowIndex, col, value) {
 
 function readTasks_(ctx) {
   return cached_(ctx, 'tasks', function () {
-    var d = ctx.ss.getSheetByName(TAB.TASKS).getDataRange().getValues();
+    var d = tasksValues_(ctx);
     var names = {};
     readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
     var out = [];

@@ -24,7 +24,7 @@ const hit = (p) => new Promise((res) => http.get('http://localhost:8095' + p, (r
   await post({ action: 'createTask', token: S, form: { title: 'Throwaway', assignTo: 'payel' + R, dueDate: '2026-12-21' } });
   const ids = Object.fromEntries((await post({ action: 'getDashboard', token: A })).tasks.map((t) => [t.title, t.id]));
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const errs = [];
   const signIn = async (user, pass) => { const p = await b.newPage({ viewport: { width: 1440, height: 950 } });
     p.on('pageerror', (e) => errs.push(e.message));

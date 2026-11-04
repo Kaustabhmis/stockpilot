@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 const EMAIL = process.argv[2];
 (async () => {
-  const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+  const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
   const p = await b.newPage({viewport:{width:1500,height:950}});
   let pass=0,fail=0;
   const ok=(n,v,x)=>{console.log((v?'  PASS ':'  FAIL ')+n+(v||!x?'':'  ['+String(x).slice(0,110)+']'));v?pass++:fail++;};

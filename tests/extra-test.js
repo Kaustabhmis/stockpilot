@@ -34,6 +34,9 @@ const tasksSheet = sheet.getSheetByName('Tasks');
 const row = tasksSheet._data.find(r=>r[3]==='Weekly line check');
 const old = new Date(); old.setDate(old.getDate()-20);
 row[12] = JSON.stringify([{date: old.toISOString(), status:'Verified', user:'Ravi K', note:''}]);
+/* An edit typed straight into the sheet: the app's 30-second read cache has
+   not seen it, so let that time pass. */
+{ const c = env.G.CacheService.getScriptCache(); c.__keys().forEach((k) => c.remove(k)); }
 const dashAfter = call({action:'getDashboard', token:A});
 ok('work closed 20 days ago leaves the board — the dashboard no longer carries it',
    !dashAfter.tasks.some(t=>t.title==='Weekly line check') && dashAfter.archivedCount>=1);

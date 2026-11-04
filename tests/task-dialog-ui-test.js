@@ -29,7 +29,7 @@ const post = (body) => new Promise((res, rej) => {
   await post({ action: 'createTask', token: A, form: { title: 'Dialog task', assignTo: 'payel' + RUN, dueDate: '2026-12-20' } });
   const status = async () => (await post({ action: 'getDashboard', token: A })).tasks.find((x) => x.title === 'Dialog task');
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const login = async (user, pw) => {
     const p = await b.newPage({ viewport: { width: 1400, height: 950 } });
     await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });

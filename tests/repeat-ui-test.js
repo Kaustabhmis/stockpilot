@@ -26,7 +26,7 @@ const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); ret
   await post({ action: 'addUser', token: A, form: { name: 'Payel S', username: 'payel' + RUN,
     email: 'payel' + RUN + '@acme.in', role: 'Doer', jobProfile: 'Executive', password: 'staffpass123' } });
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1400, height: 1000 } });
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', email); await p.fill('#liPass', 'strongpass123');

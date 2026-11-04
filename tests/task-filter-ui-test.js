@@ -46,7 +46,7 @@ const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n);
   const projects = (await post({ action: 'getProjects', token: A })).projects || [];
   ok('every project, including one an HOD built', projects.some((p) => p.name === 'Arjun project'), projects.map((p) => p.name));
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1500, height: 950 } });
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });

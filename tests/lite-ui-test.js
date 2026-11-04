@@ -10,7 +10,7 @@ const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || x 
 const SHOTS = process.argv[2], URL = 'http://localhost:8096/';
 
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1360, height: 860 } });
   const errs = [];
   p.on('pageerror', (e) => errs.push(e.message));

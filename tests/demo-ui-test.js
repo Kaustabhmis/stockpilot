@@ -16,7 +16,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   const built = await hit('/__demo');
   ok('the demo builds on the harness too', /SIGN IN/.test(built), built.slice(0, 200));
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', 'demo@biscsindia.com');

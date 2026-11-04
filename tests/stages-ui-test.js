@@ -27,7 +27,7 @@ const SHOTS = process.env.SHOTS || '';
   }
   const ids = Object.fromEntries((await post({ action: 'getDashboard', token: A })).tasks.map((t) => [t.title, t.id]));
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const errs = [];
   const signIn = async (user, pw) => { const p = await b.newPage({ viewport: { width: 1600, height: 900 } });
     p.on('pageerror', (e) => errs.push(e.message));

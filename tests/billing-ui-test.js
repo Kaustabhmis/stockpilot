@@ -24,7 +24,7 @@ const post = (body) => new Promise((res, rej) => {
   await post({ action: 'register', form: { companyName: 'Acme Engineering',
     name: 'Rohan Mehta', email, password: 'strongpass123' } });
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1400, height: 950 } });
   await p.goto('http://localhost:8095/?login=1', { waitUntil: 'networkidle' });
   await p.fill('#liUser', email); await p.fill('#liPass', 'strongpass123');

@@ -34,8 +34,12 @@ function doPost(e) {
 
   try {
     requireConfig_();
-    return json_(route_(neutralizeFormulas_(body, '')));
+    var out = route_(neutralizeFormulas_(body, ''));
+    finishWrites_();
+    return json_(out);
   } catch (err) {
+    /* A write that failed half way may still have changed something. */
+    finishWrites_();
     /* Our own messages ("Pick a person…") are written for the user and go back
        as they are. Anything else — a script fault, a Google service error —
        could name a file, a sheet or a line of code: the user gets a generic
@@ -154,7 +158,7 @@ function route_(p) {
 
   switch (action) {
     /* --- read ------------------------------------------------------------ */
-    case 'getDashboard':        return getDashboard_(ctx);
+    case 'getDashboard':        return getDashboard_(ctx, p.since);
     case 'getArchive':          return getArchive_(ctx, p);
     case 'getTasks':            return { status:'success',
                                         tasks: visibleTasks_(ctx, readAllTasks_(ctx)) };

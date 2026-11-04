@@ -92,6 +92,7 @@ function build() {
 
   const G = {};
   G.SpreadsheetApp = {
+    flush() {},
     openById(id) {
       if (!FILES[id]) throw new Error('No item with the given ID could be found: ' + id);
       return FILES[id];
@@ -174,10 +175,17 @@ function build() {
   G.LockService.getDocumentLock = G.LockService.getScriptLock;
   G.LockService.getUserLock = G.LockService.getScriptLock;
 
+  /* With expiry, as Apps Script's: a value put for 30 seconds is gone after
+     30 seconds (Date.now is the clock, so a test can move it). Values are
+     strings, and over 100 KB is refused, as in Apps Script. */
   G.CacheService = { getScriptCache: () => ({
-    get: k => (k in cache ? cache[k] : null),
-    put: (k, v) => { cache[k] = v; },
+    get: k => { const e = cache[k]; if (!e) return null; if (e.until && Date.now() > e.until) { delete cache[k]; return null; } return e.v; },
+    put: (k, v, ttl) => {
+      if (String(v).length > 100 * 1024) throw new Error('Exception: Argument too large: value');
+      cache[k] = { v: String(v), until: Date.now() + 1000 * Math.min(Number(ttl || 600), 21600) };
+    },
     remove: k => { delete cache[k]; },
+    __keys: () => Object.keys(cache),
   })};
   G.Utilities = {
     getUuid: () => crypto.randomUUID(),
@@ -194,14 +202,19 @@ function build() {
       return [...crypto.createHmac('sha256', bytes(key)).update(bytes(data)).digest()].map(b => b > 127 ? b - 256 : b);
     },
     computeDigest: (alg, s) => [...crypto.createHash('sha256').update(String(s)).digest()].map(b => b > 127 ? b - 256 : b),
-    base64Encode: s => Buffer.from(String(s), 'utf8').toString('base64'),
+    base64Encode: s => Array.isArray(s) ? Buffer.from(s.map(x => x < 0 ? x + 256 : x)).toString('base64') : Buffer.from(String(s), 'utf8').toString('base64'),
     sleep: ms => { const t = Date.now() + Number(ms || 0); while (Date.now() < t) {} },
     base64EncodeWebSafe: s => Buffer.from(String(s), 'utf8').toString('base64url'),
     base64DecodeWebSafe: s => [...Buffer.from(String(s), 'base64url')],
     newBlob: b => {
       const buf = Array.isArray(b) ? Buffer.from(b.map(x => x < 0 ? x + 256 : x)) : Buffer.from(String(b), 'utf8');
-      return { getDataAsString: () => buf.toString('utf8'), getBytes: () => [...buf].map(x => x > 127 ? x - 256 : x) };
+      return { getDataAsString: () => buf.toString('utf8'), getBytes: () => [...buf].map(x => x > 127 ? x - 256 : x), __buf: buf };
     },
+    gzip: (blob) => { const z = require('zlib').gzipSync(blob.__buf);
+      return { getBytes: () => [...z].map(x => x > 127 ? x - 256 : x), __buf: z }; },
+    ungzip: (blob) => { const u = require('zlib').gunzipSync(blob.__buf);
+      return { getDataAsString: () => u.toString('utf8'), getBytes: () => [...u].map(x => x > 127 ? x - 256 : x), __buf: u }; },
+    base64Decode: s => [...Buffer.from(String(s), 'base64')].map(x => x > 127 ? x - 256 : x),
     formatDate: (d, tz, fmt) => new Date(d).toISOString(),
     DigestAlgorithm: { SHA_256: 'SHA_256' },
   };

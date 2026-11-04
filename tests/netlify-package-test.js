@@ -75,7 +75,7 @@ const serve = (dir, port) => new Promise((r) => {
   await hit('/__demo');
   const filled = mk(true), blank = mk(false);
   const s1 = await serve(filled, 8101), s2 = await serve(blank, 8102);
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = async (base) => {
     const p = await b.newPage({ viewport: { width: 1360, height: 860 } });
     /* Stand in for Google: the /exec address in the config reaches the test backend. */

@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 const [OWNER, PAYEL, SRUTI] = process.argv.slice(2);
 
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 }, deviceScaleFactor: 2 });
   const shot = async (name) => { await p.screenshot({ path: 'new-' + name + '.png' }); console.log('  ' + name); };
   const login = async (email, pass) => {

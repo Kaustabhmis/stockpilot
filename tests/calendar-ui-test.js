@@ -20,7 +20,7 @@ const SHOTS = process.env.SHOTS || '';
   await hit('/__setplan?email=' + encodeURIComponent(email) + '&plan=Yearly');
   await post({ action: 'addUser', token: A, form: { name: 'Sruti Charulata', username: 'sruti' + R, email: 'sruti' + R + '@acme.in', role: 'HOD', dept: 'Operations', jobProfile: 'Head', password: 'staffpass123' } });
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const errs = [];
   const signIn = async (user, pw, w, h) => { const p = await b.newPage({ viewport: { width: w || 1400, height: h || 900 } });
     p.on('pageerror', (e) => errs.push(e.message));

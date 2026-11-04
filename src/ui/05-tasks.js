@@ -695,8 +695,9 @@ function wireBoard() {
       /* Between two working stages: the task moves stage, not status. */
       if (target.stage && t.status === 'In Progress') {
         if (target.stage === t.stage) return;
-        return api('moveStage', { taskId: t.id, stage: target.stage })
-          .then(function (r) { toast(r.message, 'ok'); return refresh(); }).catch(function (e) { toast(e.message, 'err'); });
+        var req = function () { return api('moveStage', { taskId: t.id, stage: target.stage }, { quiet: true }); };
+        return instant(t.id, function (x) { x.stage = target.stage; }, req) ||
+          req().then(function (r) { toast(r.message, 'ok'); return refresh(); }).catch(function (e) { toast(e.message, 'err'); });
       }
       if (target.statuses.indexOf(t.status) > -1) return;
       var next = target.statuses[0];
@@ -716,9 +717,58 @@ function taskById(id) {
 }
 
 function doTransition(id, status, note, newDue) {
-  return api('updateTask', { taskId: id, status: status, note: note, newDueDate: newDue })
+  var call = function (q) { return api('updateTask', { taskId: id, status: status, note: note, newDueDate: newDue }, { quiet: !!q }); };
+  /* Starting work and handing it in show at once. Rework, verifying and
+     anything with a note wait for the server, as before. */
+  var t = taskById(id);
+  if (t && !note && !newDue && ((status === 'In Progress' && t.status === 'Pending') || (status === 'For Review' && t.status === 'In Progress'))) {
+    var p = instant(id, function (x) {
+      x.status = status; x.stage = status === 'In Progress' ? (x.stage || stages().work[0] || '') : '';
+    }, function () { return call(true); });
+    if (p) { closeDrawer(); return p; }
+  }
+  return call()
     .then(function (r) { toast(r.message, 'ok'); closeDrawer(); return refresh(); })
     .catch(function (e) { toast(e.message, 'err'); });
+}
+
+/* ---------- instant moves ----------------------------------------------------
+   Everyday moves — starting work, handing it in, moving a stage, ticking a
+   step — show at once and save behind the board. If the server refuses, the
+   card goes back and the reason is shown. Decisions — verifying, approving,
+   assigning, deleting — still wait for the server. A small "Saving…" sign shows
+   while anything is on its way, and the browser asks before the page is left. */
+var SAVING = 0;
+function speedOn() { return !(STATE.data && STATE.data.speed === false); }
+function saving(n) {
+  SAVING = Math.max(0, SAVING + n);
+  var el = $('savingPill');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'savingPill'; el.setAttribute('role', 'status');
+    el.className = 'fixed bottom-20 md:bottom-4 left-4 z-50 bg-gray-900 text-white text-xs font-black rounded-full px-3 py-2 shadow-lg hidden';
+    el.textContent = 'Saving\u2026'; document.body.appendChild(el);
+  }
+  el.classList.toggle('hidden', SAVING === 0);
+}
+addEventListener('beforeunload', function (e) { if (SAVING > 0) { e.preventDefault(); e.returnValue = ''; } });
+
+/** Shows a change at once and saves it; puts it back if the server says no. Null when it cannot. */
+function instant(id, change, request, redraw) {
+  var t = taskById(id);
+  if (!speedOn() || !t || !STATE.data) return null;
+  redraw = redraw || function () { if (STATE.tab === 'tasks') renderTasks(); };
+  var before = JSON.stringify(STATE.data.tasks);
+  change(t); redraw(); saving(1);
+  return request().then(function (r) {
+    saving(-1);
+    if (r && r.message) toast(r.message, 'ok');
+    /* With more on its way, the last save brings the board up to date. */
+    if (!SAVING) return refresh(true);
+  }).catch(function (e) {
+    saving(-1);
+    STATE.data.tasks = JSON.parse(before); redraw();
+    toast(e.message, 'err');
+  });
 }
 
 /* ---------- detail drawer ------------------------------------------------ */
@@ -867,9 +917,13 @@ function openTask(id) {
       if (a === 'submit')  return openStatus(t.id, 'For Review');
       if (a === 'verify')  return openStatus(t.id, 'Verified');
       if (a === 'rework')  return openStatus(t.id, work.length ? 'In Progress' : 'Pending');
-      if (a === 'next')    return api('moveStage', { taskId: t.id, stage: nextStage })
-        .then(function (r) { toast(r.message, 'ok'); return refresh(); }).then(function () { openTask(t.id); })
-        .catch(function (e) { toast(e.message, 'err'); });
+      if (a === 'next') {
+        var req = function () { return api('moveStage', { taskId: t.id, stage: nextStage }, { quiet: true }); };
+        return instant(t.id, function (x) { x.stage = nextStage; }, req,
+            function () { if (STATE.tab === 'tasks') renderTasks(); openTask(t.id); }) ||
+          req().then(function (r) { toast(r.message, 'ok'); return refresh(); }).then(function () { openTask(t.id); })
+            .catch(function (e) { toast(e.message, 'err'); });
+      }
       if (a === 'delegate')return openDelegate(t);
       if (a === 'block')   return openBlocker(t);
       if (a === 'stop')    return stopRecurring(t.id);
@@ -902,8 +956,11 @@ function openTask(id) {
   });
   $('drawer').querySelectorAll('.sub').forEach(function (cb) {
     cb.addEventListener('change', function () {
-      api('toggleSubtask', { taskId: t.id, index: Number(cb.dataset.i), done: cb.checked })
-        .then(function () { return refresh(); })
+      var i = Number(cb.dataset.i), done = cb.checked;
+      var req = function () { return api('toggleSubtask', { taskId: t.id, index: i, done: done }, { quiet: true }); };
+      if (instant(t.id, function (x) { if (x.subtasks && x.subtasks[i]) x.subtasks[i].done = done; }, req,
+          function () { if (STATE.tab === 'tasks') renderTasks(); openTask(t.id); })) return;
+      req().then(function () { return refresh(); })
         .then(function () { openTask(t.id); })
         .catch(function (e) { toast(e.message, 'err'); cb.checked = !cb.checked; });
     });

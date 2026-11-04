@@ -28,7 +28,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
       manager: mgr ? U(mgr) : '', jobProfile: 'Executive', password: 'staffpass123' } });
   }
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1400, height: 1000 } });
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   p.on('dialog', (d) => d.accept());

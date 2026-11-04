@@ -27,7 +27,7 @@ const post = (body) => new Promise((res, rej) => {
   await post({ action: 'addUser', token: A, form: { name: 'Payel S', username: 'payel' + RUN,
     email: 'payel' + RUN + '@acme.in', role: 'Doer', jobProfile: 'Executive', password: 'staffpass123' } });
 
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1400, height: 950 } });
   const errs = [];
   p.on('pageerror', (e) => errs.push(e.message));
