@@ -51,6 +51,8 @@ node privacy-test.js         # the pre-launch security audit: who can see and ch
 node whatsapp-lite-test.js   # Lite only: a WhatsApp (Maytapi) on assignment and 2 days before due; never in the full edition, never twice
 node calendar-test.js        # the company's own working days, holidays and reminder times (Admin only); scores follow them, past weeks keep theirs
 node calendar-ui-test.js     # Account > Working days and Account > Reminders, on desktop and phone
+node speed-test.js           # the 30-second Tasks cache and the 'unchanged' check: fresh after any app write, within 30 s of a hand edit, never across companies, SPEED=off
+node speed-ui-test.js        # instant moves against a slow server: shown at once, put back on refusal, 'Saving…' and the leave warning
 
 node server.js &            # then, for the browser tests:
 node ui-test.js

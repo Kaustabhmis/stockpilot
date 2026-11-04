@@ -113,3 +113,12 @@ output folder here** again.
 | Login fails although the address is right | In Apps Script, the deployment must be **Who has access: Anyone**. |
 | A plan's buy button says payment is not available | In Apps Script choose **checkPayments** → **▶ Run**. It tells you whether the Razorpay keys are missing from **this** project, mistyped, swapped, or refused by Razorpay. It also prints this project's address, which must match `apiUrl` in domebox-config.js. Property changes work straight away, with no new deployment. |
 | Changed Code.gs later | **Deploy** → **Manage deployments** → ✏ → **New version** → **Deploy**. The URL stays the same. |
+
+### If anything ever looks wrong: the speed switch
+
+Domebox keeps each company's Tasks tab in Apps Script's own short-term cache for
+30 seconds, shows everyday moves on screen before the server has answered, and
+skips sending the board when nothing has changed. To switch all three off at once,
+with no new code: **Project Settings → Script Properties → add `SPEED` = `off`**.
+Delete the property to switch them back on. Run **speedCheck** in the editor to see
+how long a read takes from the sheet and from the cache.

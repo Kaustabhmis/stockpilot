@@ -123,3 +123,12 @@ for the new date.
 | Changed Code.gs later | **Deploy** → **Manage deployments** → ✏ → **New version** → **Deploy**. The address stays the same. |
 
 Do not run `createDemoAccount` in Lite. It does nothing there, on purpose.
+
+### If anything ever looks wrong: the speed switch
+
+Domebox keeps each company's Tasks tab in Apps Script's own short-term cache for
+30 seconds, shows everyday moves on screen before the server has answered, and
+skips sending the board when nothing has changed. To switch all three off at once,
+with no new code: **Project Settings → Script Properties → add `SPEED` = `off`**.
+Delete the property to switch them back on. Run **speedCheck** in the editor to see
+how long a read takes from the sheet and from the cache.
