@@ -4,7 +4,7 @@
  * in what the server sends — while the owner keeps all of it.
  * Start the test server first: node server.js
  */
-const { chromium } = require('/home/user/stockpilot/node_modules/playwright');
+const { chromium } = require('playwright');
 let pass = 0, fail = 0;
 const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || x === undefined ? '' : '  [' + String(x).slice(0, 260) + ']')); v ? pass++ : fail++; };
 const SHOTS = process.argv[2];

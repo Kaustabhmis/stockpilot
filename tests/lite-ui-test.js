@@ -4,7 +4,7 @@
  * Start a Lite test server first:
  *   DBX_PORT=8096 DBX_CODE=../dist/lite/Code.gs DBX_HTML=../dist/lite-upload/index.html DBX_SITE=../dist/lite-upload node server.js
  */
-const { chromium } = require('/home/user/stockpilot/node_modules/playwright');
+const { chromium } = require('playwright');
 let pass = 0, fail = 0;
 const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || x === undefined ? '' : '  [' + String(x).slice(0, 260) + ']')); v ? pass++ : fail++; };
 const SHOTS = process.argv[2], URL = 'http://localhost:8096/';

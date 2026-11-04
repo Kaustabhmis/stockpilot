@@ -5,7 +5,7 @@
  *   node customise-ui-test.js [shots-dir] [base-url]    (default http://localhost:8095/)
  * Start the matching test server first; for Lite, a fresh one on 8096.
  */
-const { chromium } = require('/home/user/stockpilot/node_modules/playwright');
+const { chromium } = require('playwright');
 let pass = 0, fail = 0;
 const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || x === undefined ? '' : '  [' + String(x).slice(0, 260) + ']')); v ? pass++ : fail++; };
 const SHOTS = process.argv[2] && process.argv[2] !== '-' ? process.argv[2] : '';

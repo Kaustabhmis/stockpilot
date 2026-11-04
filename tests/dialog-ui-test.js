@@ -5,7 +5,7 @@
  * Start the test server first: node server.js
  */
 const fs = require('fs');
-const { chromium } = require('/home/user/stockpilot/node_modules/playwright');
+const { chromium } = require('playwright');
 const http = require('http');
 const hit = (p) => new Promise((r) => http.get('http://localhost:8095' + p, (res) => { let b = ''; res.on('data', (c) => b += c); res.on('end', () => r(b)); }));
 let pass = 0, fail = 0;

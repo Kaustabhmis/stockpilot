@@ -5,7 +5,7 @@
  */
 const fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
 const { execFileSync } = require('child_process');
-const { chromium } = require('/home/user/stockpilot/node_modules/playwright');
+const { chromium } = require('playwright');
 let pass = 0, fail = 0;
 const ok = (n, v, x) => { console.log((v ? '  PASS ' : '  FAIL ') + n + (v || x === undefined ? '' : '  [' + String(x).slice(0, 240) + ']')); v ? pass++ : fail++; };
 const hit = (p) => new Promise((r) => http.get('http://localhost:8095' + p, (res) => { let b = ''; res.on('data', (c) => b += c); res.on('end', () => r(b)); }));
