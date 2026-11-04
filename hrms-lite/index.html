@@ -3542,9 +3542,10 @@ function validateEmployee(row, code) {
   if (row.doj && row.dob && String(row.doj) <= String(row.dob)) errs.push('Date of joining must be after date of birth.');
   if (row.doj && String(row.doj) > today()) errs.push('Date of joining is in the future.');
   var gross = num(row.basic) + num(row.hra) + num(row.special_allowance) + num(row.other_allowance);
-  if (String(row.esi_applicable).toLowerCase() === 'yes' && gross > num(S.settings.esi_wage_ceiling || 21000)) {
-    errs.push('ESI is marked applicable but gross ' + cur() + money(gross) + ' is above the ' +
-      cur() + money(S.settings.esi_wage_ceiling || 21000) + ' ceiling.');
+  var esiOn = statBase('esi_ceiling_base') === 'basic' ? num(row.basic) : gross;
+  if (String(row.esi_applicable).toLowerCase() === 'yes' && esiOn > num(S.settings.esi_wage_ceiling || 21000)) {
+    errs.push('ESI is marked applicable but ' + statBase('esi_ceiling_base') + ' ' + cur() + money(esiOn) +
+      ' is above the ' + cur() + money(S.settings.esi_wage_ceiling || 21000) + ' ceiling.');
   }
   /* The list cannot offer somebody themselves, but it can still be used to
      build a ring - A reports to B, B reports to A - and then neither of them
@@ -5170,31 +5171,10 @@ function computePay(e, ym, prev) {
      days earned about 3,200, and 12% of that is what is due - charging 1,800
      would be taking PF on wages never paid. The cap applies to what was
      earned, which is also what the salary structure's own formula does. */
-  var pfWage = 0, pf = 0, pfEmployer = 0;
-  if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
-    pfWage = Math.min(basic, num(S.settings.pf_wage_ceiling || 15000));
-    pf = pfWage * num(S.settings.pf_employee_pct || 12) / 100;
-    pfEmployer = pfWage * num(S.settings.pf_employer_pct || 13) / 100;
-  }
-  var esi = 0, esiEmployer = 0;
-  if (String(e.esi_applicable || 'no').toLowerCase() === 'yes' &&
-      grossOf(e) <= num(S.settings.esi_wage_ceiling || 21000)) {
-    esi = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
-    esiEmployer = gross * num(S.settings.esi_employer_pct || 3.25) / 100;
-  }
-  /* Professional tax is a slab on the full monthly gross, never prorated. If the
-     CTC structure defines a ptax component, that is the single source of truth,
-     so the payslip and the CTC sheet cannot disagree. */
-  var pt = 0;
-  if (gross > 0) {
-    var ptComp = ctcComponentByCode('ptax');
-    if (ptComp) {
-      var ctcRes = computeCtc({ gross: grossOf(e), month: ctcMonth(ym) }, ctcOverridesFor(e.emp_code));
-      pt = num(ctcRes.values.ptax);
-    } else {
-      pt = num(S.settings.pt_amount || 0);
-    }
-  }
+  var st = statutory(e, { basic: basic, gross: gross }, { basic: num(e.basic), gross: grossOf(e) }, ym,
+                     { pfDefault: 'yes', esiDefault: 'no', overrides: ctcOverridesFor(e.emp_code) });
+  var pfWage = st.pfWage, pf = st.pf, pfEmployer = st.pfEmployer;
+  var esi = st.esi, esiEmployer = st.esiEmployer, pt = st.pt;
   var tds = gross > 0 ? num(e.tds_monthly) : 0;
   var otherDed = prev && prev.other_deduction !== undefined ? num(prev.other_deduction) : 0;
   var advance = prev && prev.advance_deduction !== undefined ? num(prev.advance_deduction) : 0;
@@ -6596,10 +6576,14 @@ var PAYROLL_RULES = [
   ['payroll_rounding', 'Round earnings to the nearest (PF, ESI and P.Tax stay exact)', 'select:1,5,10,100'],
   ['pf_employee_pct', 'PF employee %', 'number'],
   ['pf_employer_pct', 'PF employer %', 'number'],
-  ['pf_wage_ceiling', 'PF wage ceiling', 'number'],
+  ['pf_base', 'PF is worked out on', 'select:basic,gross'],
+  ['pf_wage_ceiling', 'PF wage ceiling (caps the amount PF is worked on; 0 = no cap)', 'number'],
   ['esi_employee_pct', 'ESI employee %', 'number'],
   ['esi_employer_pct', 'ESI employer %', 'number'],
+  ['esi_base', 'ESI is worked out on', 'select:gross,basic'],
   ['esi_wage_ceiling', 'ESI wage ceiling', 'number'],
+  ['esi_ceiling_base', 'ESI ceiling is checked against', 'select:gross,basic'],
+  ['pt_base', 'P.Tax slab is read on', 'select:gross,basic'],
   ['pt_amount', 'Professional tax / month (used only if the CTC structure has no P.Tax slab)', 'number'],
   /* The Payment of Bonus Act numbers. They sit here because these are the
      three Parliament keeps moving, and HR should not need a developer the
@@ -10394,6 +10378,50 @@ function payTab(tab) {
 
 var isSalaried = function (e) { return String(e.wage_type || 'Salary') !== 'Wages'; };
 
+/* PF, ESI and P.Tax, worked out on Basic or on Gross as Settings -> Payroll
+   rules says, one place for salary, wages and every register.
+     pf_base           PF is a % of: basic (default) or gross - capped at the
+                       PF wage ceiling (0 = no cap)
+     esi_base          ESI is a % of: gross (default) or basic
+     esi_ceiling_base  ESI applies while this is within the ESI ceiling:
+                       full-month gross (default) or basic
+     pt_base           the P.Tax slab is read on: full-month gross (default)
+                       or basic
+   earned = what this month pays ({ basic, gross }); full = the full-month
+   figures the ceiling and the slab are tested on. For wages "basic" is
+   basic + DA, as the PF rules have it. */
+var STAT_DEFAULT = { pf_base: 'basic', esi_base: 'gross', esi_ceiling_base: 'gross', pt_base: 'gross' };
+function statBase(key) {
+  var v = String(S.settings[key] || '').trim().toLowerCase();
+  return v === 'basic' || v === 'gross' ? v : STAT_DEFAULT[key];
+}
+function statutory(e, earned, full, ym, opts) {
+  opts = opts || {};
+  var pick = function (key, o) { return statBase(key) === 'basic' ? num(o.basic) : num(o.gross); };
+  var out = { pfWage: 0, pf: 0, pfEmployer: 0, esiWage: 0, esi: 0, esiEmployer: 0, pt: 0 };
+  if (String(e.pf_applicable || opts.pfDefault || 'yes').toLowerCase() === 'yes') {
+    var cap = num(S.settings.pf_wage_ceiling === undefined || S.settings.pf_wage_ceiling === '' ? 15000
+                                                                                                : S.settings.pf_wage_ceiling);
+    out.pfWage = pick('pf_base', earned);
+    if (cap > 0) out.pfWage = Math.min(out.pfWage, cap);
+    out.pf = out.pfWage * num(S.settings.pf_employee_pct || 12) / 100;
+    out.pfEmployer = out.pfWage * num(S.settings.pf_employer_pct || 13) / 100;
+  }
+  if (String(e.esi_applicable || opts.esiDefault || 'no').toLowerCase() === 'yes' &&
+      pick('esi_ceiling_base', full) <= num(S.settings.esi_wage_ceiling || 21000)) {
+    out.esiWage = pick('esi_base', earned);
+    out.esi = out.esiWage * num(S.settings.esi_employee_pct || 0.75) / 100;
+    out.esiEmployer = out.esiWage * num(S.settings.esi_employer_pct || 3.25) / 100;
+  }
+  if (num(earned.gross) > 0) {
+    var ptComp = ctcComponentByCode('ptax');
+    out.pt = ptComp
+      ? num(computeCtc({ gross: pick('pt_base', full), month: ctcMonth(ym) }, opts.overrides || {}).values.ptax)
+      : num(S.settings.pt_amount || 0);
+  }
+  return out;
+}
+
 /* Overtime for one person and month.
      Overtime = No   -> never paid (the hours are still shown)
      Overtime = Yes  -> paid; at their own OT rate (rupees per hour) if one
@@ -10453,23 +10481,11 @@ function computeWage(e, ym, prev) {
 
   var gross = basicDa + hra + arrears + bonus + incentive + ot.amount;
 
-  /* PF on basic + DA, capped the same way salary is - the ceiling is a
-     flat monthly cap, never prorated. */
-  var pf = 0, pfEmployer = 0;
-  if (String(e.pf_applicable || 'yes').toLowerCase() === 'yes') {
-    var pfWage = Math.min(basicDa, num(S.settings.pf_wage_ceiling || 15000));
-    pf         = pfWage * num(S.settings.pf_employee_pct || 12) / 100;
-    pfEmployer = pfWage * num(S.settings.pf_employer_pct || 13) / 100;
-  }
-  var esi = 0, esiEmployer = 0;
-  if (String(e.esi_applicable || 'yes').toLowerCase() === 'yes' &&
-      gross <= num(S.settings.esi_wage_ceiling || 21000)) {
-    esi         = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
-    esiEmployer = gross * num(S.settings.esi_employer_pct || 3.25) / 100;
-  }
-  var ptComp = ctcComponentByCode('ptax');
-  var pt = ptComp ? num(computeCtc({ gross: gross, month: ctcMonth(ym) }, {}).values.ptax)
-                  : num(S.settings.pt_amount || 0);
+  /* PF, ESI and P.Tax on basic + DA or on gross, as the payroll rules say;
+     a wage worker's "full month" is the month as earned. */
+  var st = statutory(e, { basic: basicDa, gross: gross }, { basic: basicDa, gross: gross }, ym,
+                     { pfDefault: 'yes', esiDefault: 'yes' });
+  var pf = st.pf, pfEmployer = st.pfEmployer, esi = st.esi, esiEmployer = st.esiEmployer, pt = st.pt;
 
   var grossR = r(gross);
   var pfR = r(pf), esiR = r(esi), ptR = r(pt);
@@ -10635,18 +10651,9 @@ function wageEdit(i, field, value) {
     fresh = computeWage(Object.assign({}, e), S.wageDraft.month, keep);
     var basic = num(e.daily_rate) * days, da = num(e.da_rate) * days, hra = num(e.hra_rate) * days;
     var gross = basic + da + hra + num(keep.arrears) + num(keep.bonus) + num(keep.incentive);
-    var pfWage = String(e.pf_applicable || 'yes').toLowerCase() === 'yes'
-      ? Math.min(basic + da, num(S.settings.pf_wage_ceiling || 15000)) : 0;
-    var pf = pfWage * num(S.settings.pf_employee_pct || 12) / 100;
-    var pfEr = pfWage * num(S.settings.pf_employer_pct || 13) / 100;
-    var esi = 0, esiEr = 0;
-    if (String(e.esi_applicable || 'yes').toLowerCase() === 'yes' &&
-        gross <= num(S.settings.esi_wage_ceiling || 21000)) {
-      esi = gross * num(S.settings.esi_employee_pct || 0.75) / 100;
-      esiEr = gross * num(S.settings.esi_employer_pct || 3.25) / 100;
-    }
-    var ptC = ctcComponentByCode('ptax');
-    var pt = ptC ? num(computeCtc({ gross: gross, month: ctcMonth(S.wageDraft.month) }, {}).values.ptax) : num(S.settings.pt_amount || 0);
+    var st = statutory(e, { basic: basic + da, gross: gross }, { basic: basic + da, gross: gross },
+                       S.wageDraft.month, { pfDefault: 'yes', esiDefault: 'yes' });
+    var pf = st.pf, pfEr = st.pfEmployer, esi = st.esi, esiEr = st.esiEmployer, pt = st.pt;
     var gR = rr(gross), pfR = rr(pf), esiR = rr(esi), ptR = rr(pt);
     var oR = rr(num(keep.other_deduction)), aR = rr(num(keep.advance_deduction));
     var dR = pfR + esiR + ptR + oR + aR;
@@ -12112,11 +12119,9 @@ function reportWages(ym) {
     var da = num(e.da_rate) * days;
     var hra = num(e.hra_rate) * days;
     var basicDa = basic + da, total = basicDa + hra;
-    var pf = Math.round(basicDa * num(S.settings.pf_employee_pct || 12) / 100);
-    var esi = total <= num(S.settings.esi_wage_ceiling || 21000)
-      ? Math.round(total * num(S.settings.esi_employee_pct || 0.75) / 100) : 0;
-    var ptComp = ctcComponentByCode('ptax');
-    var pt = ptComp ? num(computeCtc({ gross: total, month: ctcMonth(ym) }, {}).values.ptax) : num(S.settings.pt_amount || 0);
+    var st = statutory(e, { basic: basicDa, gross: total }, { basic: basicDa, gross: total }, ym,
+                       { pfDefault: 'yes', esiDefault: 'yes' });
+    var pf = Math.round(st.pf), esi = Math.round(st.esi), pt = st.pt;
     var ded = pf + esi + pt;
     return [i + 1, e.name, e.uan || '', days, num(e.daily_rate), num(e.da_rate), num(e.hra_rate),
             Math.round(basic), Math.round(da), Math.round(hra), Math.round(basicDa),
