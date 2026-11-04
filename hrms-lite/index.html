@@ -3252,6 +3252,8 @@ var EMP_FIELDS = [
   ['daily_rate', 'Daily basic rate (wages)', 'number'],
   ['da_rate', 'Daily DA rate (wages)', 'number'],
   ['hra_rate', 'Daily HRA rate (wages)', 'number'],
+  ['ot_enabled', 'Overtime (blank = company setting)', 'select:,yes,no'],
+  ['ot_rate', 'OT rate, rupees per hour (blank = company rate)', 'number'],
   ['dob', 'Date of birth', 'date'],
   ['gender', 'Gender', 'select:,M,F,Other'],
   ['address', 'Address', 'text'],
@@ -3505,7 +3507,9 @@ function openEmployee(code) {
     '<b>Employee code</b> is yours to set - use whatever your records already use ' +
     '(DE-014, 1024, RK-PROD-3). It cannot be changed later, because attendance, leave and payslips ' +
     'hang off it.<br>Gross = Basic + HRA + Special + Other; payroll prorates these by paid days. ' +
-    '<b>Biometric device ID</b> is the enrolment number on the eSSL machine, used to match punches.</p>';
+    '<b>Biometric device ID</b> is the enrolment number on the eSSL machine, used to match punches. ' +
+    '<b>Overtime</b>: Yes pays the hours worked past the shift end at this person\u2019s OT rate (rupees per hour) ' +
+    '- or at the company rate when the rate is blank; No never pays overtime; blank follows the company setting.</p>';
   showModal(code ? 'Edit ' + e.name : 'Add employee', body, [
     { label: 'Cancel', cls: 'ghost', onClick: closeModal },
     { label: 'Save employee', onClick: function () { saveEmployee(code); } }
@@ -3738,6 +3742,16 @@ function openBulk() {
         'would break your payroll audit trail) - mark those inactive instead.'
       : 'None of these have payslips, so all ' + rows.length + ' can be deleted.') +
     '</div></div>' +
+    '<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">' +
+      '<b>Overtime</b> for these ' + rows.length + ' employee(s)' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">' +
+        '<label class="field" style="min-width:150px">Overtime<select id="bulk-ot">' +
+          '<option value="yes">Yes</option><option value="no">No</option>' +
+          '<option value="">Company setting</option></select></label>' +
+        '<label class="field" style="min-width:200px">OT rate, rupees per hour' +
+          '<input id="bulk-ot-rate" type="number" min="0" step="any" placeholder="blank = company rate"></label>' +
+        '<button class="ghost" onclick="bulkOvertime()">Set overtime (' + rows.length + ')</button>' +
+      '</div></div>' +
     '<label class="field" style="margin-top:14px">To delete, type <b>DELETE</b> here' +
       '<input id="bulk-confirm" placeholder="DELETE" autocomplete="off"></label>',
     [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
@@ -3748,6 +3762,26 @@ function openBulk() {
         }
         runBulk('delete', deletable);
      } }], true);
+}
+
+/* Overtime Yes/No and rate for everyone the list is showing. */
+function bulkOvertime() {
+  var rows = filteredEmployees();
+  var mode = el('bulk-ot').value, rateTxt = String(el('bulk-ot-rate').value || '').trim();
+  if (rateTxt !== '' && !(num(rateTxt) >= 0)) return toast('The OT rate must be a number', 'bad');
+  var updates = rows.map(function (e) {
+    return { emp_code: e.emp_code, ot_enabled: mode, ot_rate: mode === 'yes' ? rateTxt : '', updated_at: today() };
+  });
+  api('saveMany', { sheet: 'Employees', rows: updates }).then(function () {
+    updates.forEach(function (u) {
+      var e = empByCode(u.emp_code);
+      if (e) { e.ot_enabled = u.ot_enabled; e.ot_rate = u.ot_rate; }
+    });
+    closeModal();
+    toast('Overtime ' + (mode === 'yes' ? 'on' + (rateTxt ? ' at \u20b9' + rateTxt + '/h' : ' at the company rate')
+      : mode === 'no' ? 'off' : 'set to the company setting') + ' for ' + updates.length + ' employee(s)', 'good');
+    renderAll();
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 function runBulk(mode, rows) {
@@ -5104,13 +5138,10 @@ function computePay(e, ym, prev) {
   var step = num(S.settings.payroll_rounding || 1) || 1;
   var roundTo = function (v) { return Math.round(v / step) * step; };
 
-  /* overtime, paid only if the policy says so and within the monthly cap */
-  var otHours = s.ot / 60;
-  var otCap = num(S.settings.ot_max_hours_month || 0);
-  if (otCap > 0) otHours = Math.min(otHours, otCap);
-  var otPayOn = String(S.settings.ot_pay_enabled || 'no').toLowerCase() === 'yes';
+  /* overtime - the employee's own Yes/No and rate, else the company policy */
   var hourly = divisor && cfg.fullHours ? grossOf(e) / (divisor * cfg.fullHours) : 0;
-  var otAmount = otPayOn ? hourly * otHours * (num(S.settings.ot_rate_multiplier || 1) || 1) : 0;
+  var ot = otPay(e, s, hourly);
+  var otHours = ot.hours, otAmount = ot.amount;
 
   var basic = num(e.basic) * factor;
   var hra = num(e.hra) * factor;
@@ -6543,8 +6574,8 @@ var ATTENDANCE_RULES = [
   ['default_shift', 'Default shift for new staff', 'text'],
   ['late_mark_slab', 'Late-mark slab \u2014 "lates:half-days", e.g. 6:1, 12:2, 24:3', 'text'],
   ['late_marks_per_halfday', 'Or, every N late marks cost half a day (used only if the slab above is empty)', 'number'],
-  ['ot_pay_enabled', 'Pay overtime', 'select:no,yes'],
-  ['ot_rate_multiplier', 'Overtime rate multiplier', 'number'],
+  ['ot_pay_enabled', 'Pay overtime (for staff whose own Overtime is left blank)', 'select:no,yes'],
+  ['ot_rate_multiplier', 'Overtime rate multiplier (for staff with no OT rate of their own)', 'number'],
   ['ot_max_hours_month', 'Overtime hours paid per month at most', 'number'],
   /* What signing in carries. The office screen used to read five months of
      the whole company's register - ten thousand rows for sixty-odd people -
@@ -10363,6 +10394,29 @@ function payTab(tab) {
 
 var isSalaried = function (e) { return String(e.wage_type || 'Salary') !== 'Wages'; };
 
+/* Overtime for one person and month.
+     Overtime = No   -> never paid (the hours are still shown)
+     Overtime = Yes  -> paid; at their own OT rate (rupees per hour) if one
+                        is set, else at the company rate (hourly pay x the
+                        overtime multiplier)
+     left blank      -> follows the company setting "Pay overtime"
+   Hours are the minutes past the shift end beyond its OT threshold, capped
+   at the company's monthly maximum. */
+function otMode(e) {
+  var v = String((e && e.ot_enabled) || '').trim().toLowerCase();
+  if (v === 'yes' || v === 'no') return v;
+  return String(S.settings.ot_pay_enabled || 'no').toLowerCase() === 'yes' ? 'yes' : 'no';
+}
+function otPay(e, s, hourly) {
+  var hours = (s && s.ot ? s.ot : 0) / 60;
+  var cap = num(S.settings.ot_max_hours_month || 0);
+  if (cap > 0) hours = Math.min(hours, cap);
+  if (otMode(e) !== 'yes') return { hours: hours, amount: 0, rate: 0 };
+  var own = num(e.ot_rate);
+  var rate = own > 0 ? own : hourly * (num(S.settings.ot_rate_multiplier || 1) || 1);
+  return { hours: hours, amount: hours * rate, rate: rate };
+}
+
 /* ---------------------------------------------------------------- */
 /* WAGES                                                             */
 /* ---------------------------------------------------------------- */
@@ -10380,6 +10434,9 @@ function wageDays(ym, code) {
    and PF here is worked out on basic + DA as the rules require. */
 function computeWage(e, ym, prev) {
   var days = wageDays(ym, e.emp_code);
+  var wcfg = shiftCfg(e.emp_code);
+  var dayPay = num(e.daily_rate) + num(e.da_rate) + num(e.hra_rate);
+  var ot = otPay(e, attStats(ym, e.emp_code), wcfg.fullHours ? dayPay / wcfg.fullHours : 0);
   var step = num(S.settings.payroll_rounding || 1) || 1;
   var r = function (v) { return Math.round(v / step) * step; };
 
@@ -10394,7 +10451,7 @@ function computeWage(e, ym, prev) {
   var otherDed  = prev && prev.other_deduction   !== undefined ? num(prev.other_deduction)   : 0;
   var advance   = prev && prev.advance_deduction !== undefined ? num(prev.advance_deduction) : 0;
 
-  var gross = basicDa + hra + arrears + bonus + incentive;
+  var gross = basicDa + hra + arrears + bonus + incentive + ot.amount;
 
   /* PF on basic + DA, capped the same way salary is - the ceiling is a
      flat monthly cap, never prorated. */
@@ -10425,7 +10482,7 @@ function computeWage(e, ym, prev) {
     total_days: daysInMonth(ym), lop_days: 0, paid_days: days,
     basic: r(basic), hra: r(hra), special_allowance: r(da), other_allowance: 0,
     arrears: r(arrears), bonus: r(bonus), incentive: r(incentive),
-    ot_hours: 0, ot_amount: 0,
+    ot_hours: Math.round(ot.hours * 10) / 10, ot_amount: r(ot.amount),
     gross: grossR, pf: pfR, esi: esiR, pt: ptR, tds: 0,
     other_deduction: otherR, advance_deduction: advanceR,
     total_deduction: dedR, net: grossR - dedR,

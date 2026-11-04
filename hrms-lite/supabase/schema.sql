@@ -59,6 +59,10 @@ create table if not exists employees (
   site              text,
   updated_at        date
 );
+-- Overtime per person: 'yes' / 'no', or '' to follow the company setting;
+-- ot_rate is rupees per hour, empty to use the company rate.
+alter table employees add column if not exists ot_enabled text not null default '';
+alter table employees add column if not exists ot_rate numeric(12,2);
 create index if not exists employees_status_idx on employees (status);
 create index if not exists employees_manager_idx on employees (manager);
 create index if not exists employees_device_idx  on employees (device_id);
