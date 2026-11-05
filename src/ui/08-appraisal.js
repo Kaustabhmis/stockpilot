@@ -154,13 +154,13 @@ var PLAN_CARDS = [
     users:10, tag:'',
     blurb:'For a small office that has outgrown WhatsApp.',
     bullets:['Up to 10 users','Unlimited tasks','The whole product — scoring, reports, KRA',
-             'Email and WhatsApp alerts'] },
+             'Email reminders'] },
 
   { key:'Starter', yearKey:'Starter Yearly', name:'Starter', price:2499, yearPrice:24990,
-    users:15, tag:'',
+    users:20, tag:'',
     blurb:'For a first team that needs the work written down.',
-    bullets:['Up to 15 users','Unlimited tasks','Scoring, reports and analytics',
-             'KRA / KPI and appraisals','Projects and milestones','Email and WhatsApp alerts'] },
+    bullets:['Up to 20 users','Unlimited tasks','Scoring, reports and analytics',
+             'KRA / KPI and appraisals','Projects and milestones','Email reminders, and WhatsApp reminders (coming soon)'] },
 
   { key:'Growth', yearKey:'Growth Yearly', name:'Growth', price:5999, yearPrice:59990,
     users:50, tag:'Most popular',
@@ -229,7 +229,7 @@ function openBilling() {
     '<button onclick="closeModal()" class="text-gray-400"><span class="material-icons">close</span></button></div>' +
     '<p class="text-sm text-gray-400 font-semibold mb-4">You are on <strong>' + esc(u.planName) + '</strong>' +
       (u.daysLeft !== null ? ', ' + (u.daysLeft >= 0 ? u.daysLeft + ' day(s) left' : 'expired') : '') + '. ' +
-      'Every paid plan carries the whole product — you pay for the size of your team.</p>' +
+      'Every paid plan carries the whole product, with WhatsApp reminders from Starter up — you pay for the size of your team.</p>' +
     '<div class="mb-5">' + cycleToggle('billingCycle') + '</div>' +
     '<div id="billingPlans" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>' +
     '<div class="mt-5 flex gap-2 items-end">' +

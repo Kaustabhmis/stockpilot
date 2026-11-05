@@ -109,7 +109,7 @@ ok('and the largest legacy plan points at Enterprise', P.nextPlanUp('Yearly')===
 /* The ladder has to stay honest. The old Standard at 2,499/mo was 29,988 a
    year next to a Pro at 19,999 with fifteen times the users, so nobody who did
    the arithmetic ever bought it. Yearly is exactly ten times monthly. */
-[['Team','Team Yearly',10],['Starter','Starter Yearly',15],['Growth','Growth Yearly',50],['Scale','Scale Yearly',150]]
+[['Team','Team Yearly',10],['Starter','Starter Yearly',20],['Growth','Growth Yearly',50],['Scale','Scale Yearly',150]]
   .forEach(([m,y,users])=>{
   ok(m+': yearly is ten times monthly', P.PLANS[y].price === P.PLANS[m].price*10,
      P.PLANS[y].price+' vs '+P.PLANS[m].price);
@@ -117,8 +117,16 @@ ok('and the largest legacy plan points at Enterprise', P.nextPlanUp('Yearly')===
   ok('  and a yearly payment buys a year', P.planTermDays(y)===365 && P.planTermDays(m)===30);
 });
 ok('every paid plan carries the whole product',
-   P.offeredPlans().every(k=>P.PLANS[k].analytics && P.PLANS[k].kraForms && P.PLANS[k].whatsapp),
+   P.offeredPlans().filter(k=>P.PLANS[k].price>0||k==='Enterprise').every(k=>P.PLANS[k].analytics && P.PLANS[k].kraForms && P.PLANS[k].email),
    P.offeredPlans().filter(k=>!P.PLANS[k].analytics).join(','));
+ok('WhatsApp reminders start at Starter: not on Team, on every plan above it',
+   !P.PLANS['Team'].whatsapp && !P.PLANS['Team Yearly'].whatsapp &&
+   ['Starter','Starter Yearly','Growth','Growth Yearly','Scale','Scale Yearly','Enterprise'].every(k=>P.PLANS[k].whatsapp));
+/* At fifteen users Starter cost more than Team plus five extra seats, so
+   nobody who did the sum would buy it. At twenty it costs about the same as
+   Team plus ten seats — and carries WhatsApp reminders as well. */
+ok('Starter costs about what Team plus extra seats would for the same people',
+   Math.abs(P.PLANS['Starter'].price - (P.PLANS['Team'].price + (P.PLANS['Starter'].users - P.PLANS['Team'].users) * 149)) <= 50);
 ok('price per user falls as the band grows',
    P.PLANS['Scale'].price/P.PLANS['Scale'].users < P.PLANS['Growth'].price/P.PLANS['Growth'].users &&
    P.PLANS['Growth'].price/P.PLANS['Growth'].users < P.PLANS['Starter'].price/P.PLANS['Starter'].users);

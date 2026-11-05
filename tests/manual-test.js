@@ -79,7 +79,7 @@ ck('in progress 6', has(`inProgress: 6`));
   ck(n + ' monthly ' + m, has(`'${n}':\\s*\\{[^}]*price:\\s*${m}`), '');
   ck(n + ' yearly ' + y, has(`'${n} Yearly':\\s*\\{[^}]*price:\\s*${y}`), '');
 });
-[['Free',5],['Team',10],['Starter',15],['Growth',50],['Scale',150]].forEach(([n,u]) => {
+[['Free',5],['Team',10],['Starter',20],['Growth',50],['Scale',150]].forEach(([n,u]) => {
   ck(n + ' users ' + u, new RegExp(`'${n}':\\s*\\{[^}]*users:\\s*${u}\\b`).test(C));
 });
 

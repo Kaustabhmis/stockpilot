@@ -21,12 +21,12 @@ module.exports = (C) => {
     slug: 'pricing',
     title: 'Pricing',
     h1: 'Pricing',
-    description: 'Domebox pricing in INR: 14-day free trial, free for 5 users, then ₹999/month for 10, ₹2,499 for 15, ₹5,999 for 50, ₹12,999 for 150. Every feature on every paid plan.',
+    description: 'Domebox pricing in INR: 14-day free trial, free for 5 users, then ₹999/month for 10, ₹2,499 for 20, ₹5,999 for 50, ₹12,999 for 150. The whole product on every paid plan.',
     changefreq: 'monthly', priority: '0.9',
     faq: [
       ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
       ['Is there a free plan?', 'Yes. Up to 5 users and 100 tasks a month, with no card and no time limit. It includes the board, approvals and reminders. A trial that ends without a plan moves here — nothing is deleted.'],
-      ['What is not included in the paid plans?', 'Nothing. Every paid plan carries the whole product — scoring, reports, KRA/KPI, appraisals, projects and WhatsApp alerts. You pay for the size of your team, not for features.'],
+      ['What is not included in the paid plans?', 'Every paid plan carries the whole product — scoring, reports, KRA/KPI, appraisals, projects and email reminders. WhatsApp reminders come with Starter and above, and are being switched on now. You pay for the size of your team, not for features.'],
       ['Is GST extra?', 'If GST applies, it is added at checkout and shown before you pay, and the invoice shows it so a registered business can claim input credit. Every payment gets an invoice.'],
       ['What happens when my plan expires?', 'Your workspace stays fully usable for a week. After that it becomes read-only — nothing is ever deleted, and everything comes back the moment you renew.'],
       ['Can I pay monthly?', 'Yes. Yearly is ten times the monthly price, so two months are free if you pay for the year.'],
@@ -40,7 +40,7 @@ size of your team — from ₹999 a month for 10 people.</p>
 <tbody>
 <tr><td><strong>Free</strong></td><td>5</td><td>₹0</td><td>—</td><td>—</td></tr>
 <tr><td><strong>Team</strong></td><td>10</td><td>₹999</td><td>₹9,990</td><td>₹100</td></tr>
-<tr><td><strong>Starter</strong></td><td>15</td><td>₹2,499</td><td>₹24,990</td><td>₹167</td></tr>
+<tr><td><strong>Starter</strong></td><td>20</td><td>₹2,499</td><td>₹24,990</td><td>₹125</td></tr>
 <tr><td><strong>Growth</strong></td><td>50</td><td>₹5,999</td><td>₹59,990</td><td>₹120</td></tr>
 <tr><td><strong>Scale</strong></td><td>150</td><td>₹12,999</td><td>₹1,29,990</td><td>₹87</td></tr>
 <tr><td><strong>Enterprise</strong></td><td>150+</td><td colspan="3">Custom — write to us</td></tr>
@@ -50,7 +50,7 @@ size of your team — from ₹999 a month for 10 people.</p>
 so paying for the year gives you two months free. Need a handful more seats than
 a band allows? Extra seats are ₹149 per user a month — ask us.</p>
 
-<h2>Why every plan has every feature</h2>
+<h2>Why every plan has the whole product</h2>
 <p>A plan that withholds the scoring and the appraisals is selling a worse task
 board, and it gives a buyer a reason to stay small rather than a reason to grow.
 It also makes the decision harder than it needs to be: "which plan do I need?"
@@ -489,7 +489,7 @@ actually happened week to week. Many customers run both.</p>
 the working shown for every number.</li>
 <li>Managers are measured on the approvals they hold, not just doers on delivery.</li>
 <li>KRA, KPI and appraisal in the same place as the work they are measuring.</li>
-<li>Priced in INR, for team size, with every feature in every paid plan.</li>
+<li>Priced in INR, for team size, with the whole product in every paid plan.</li>
 </ul>
 ${cta('Fourteen days of the full product is enough to compare it properly.')}`,
   },

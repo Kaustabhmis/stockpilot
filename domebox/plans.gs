@@ -36,14 +36,18 @@ var PLANS = {
   'Free':       { name:'Free Tier',  price:0,      termDays:365, users:5,    tasksPerMonth:100,
                   analytics:false, whatsapp:false, email:false, kraForms:false, offered:true },
 
+  /* Team is the whole product except WhatsApp reminders, which start at
+     Starter: the reason to move up once a team outgrows ten people. */
   'Team':           { name:'Team',    price:999,    termDays:30,  users:10,  tasksPerMonth:null,
-                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+                      analytics:true, whatsapp:false, email:true, kraForms:true, offered:true },
   'Team Yearly':    { name:'Team',    price:9990,   termDays:365, users:10,  tasksPerMonth:null,
-                      analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
+                      analytics:true, whatsapp:false, email:true, kraForms:true, offered:true },
 
-  'Starter':        { name:'Starter', price:2499,   termDays:30,  users:15,  tasksPerMonth:null,
+  /* Twenty, not fifteen: at fifteen it cost more per person than every other
+     band, and Team plus five extra seats came to less. */
+  'Starter':        { name:'Starter', price:2499,   termDays:30,  users:20,  tasksPerMonth:null,
                       analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
-  'Starter Yearly': { name:'Starter', price:24990,  termDays:365, users:15,  tasksPerMonth:null,
+  'Starter Yearly': { name:'Starter', price:24990,  termDays:365, users:20,  tasksPerMonth:null,
                       analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
 
   'Growth':         { name:'Growth',  price:5999,   termDays:30,  users:50,  tasksPerMonth:null,

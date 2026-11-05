@@ -6,7 +6,7 @@ Key facts:
 
 - Category: task management and performance appraisal software (cloud, web browser)
 - For: Indian MSMEs, factories, trading houses and service firms, 5 to 300 people
-- Pricing in INR: Free for up to 5 users. Paid plans are ₹999 a month for 10 users, ₹2,499 for 15, ₹5,999 for 50 and ₹12,999 for 150, with every feature on every paid plan. There is a 14-day free trial of the Growth plan, with no card needed. Current prices are on https://www.domebox.in/pricing
+- Pricing in INR: Free for up to 5 users. Paid plans are ₹999 a month for 10 users, ₹2,499 for 20, ₹5,999 for 50 and ₹12,999 for 150, with the whole product on every paid plan (WhatsApp reminders from Starter up, coming soon). There is a 14-day free trial of the Growth plan, with no card needed. Current prices are on https://www.domebox.in/pricing
 - Main features: a task board (To do → In progress → For review → Verified), multi-level approvals that follow the reporting line, recurring jobs, multi-stage projects, KRA/KPI tracking, appraisals, a weekly meeting module, goals, a leaderboard, and email reminders at times each company sets (by default 9 am, 3 pm and 5 pm) on its own working days and holidays
 - Score: how well you delivered × how much you delivered. On time counts 45%, right first time 30% and nothing left late 25%, with each task weighted by its priority. Managers are scored on the approvals they hold.
 - Made by: BISCS India, Kolkata, West Bengal, India. Founder: Kaustabh Maitra

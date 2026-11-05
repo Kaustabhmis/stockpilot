@@ -35,6 +35,21 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
   ok('the home page has no data: icon, which Google ignores', !/rel="icon" href="data:/.test(idx));
   const ico = fs.readFileSync(path.join(PKG, 'favicon.ico'));
   ok('favicon.ico is a real icon file holding a 48px image', ico.readUInt16LE(2) === 1 && [...Array(ico.readUInt16LE(4)).keys()].some((i) => ico[6 + 16 * i] === 48));
+  /* What Google needs to show the icon beside the site in search: every icon
+     the home page links to exists, and each PNG is square and a multiple of
+     48 px (read from the file itself, not trusted from the sizes attribute). */
+  {
+    const home = fs.readFileSync(path.join(PKG, 'index.html'), 'utf8');
+    const linked = [...home.matchAll(/<link rel="icon" href="\/([^"]+)"/g)].map((m) => m[1]);
+    const bad = linked.filter((f) => {
+      if (!fs.existsSync(path.join(PKG, f))) return true;
+      if (!/\.png$/.test(f)) return false;
+      const b = fs.readFileSync(path.join(PKG, f)), w = b.readUInt32BE(16), h = b.readUInt32BE(20);
+      return w !== h || w % 48 !== 0;
+    });
+    ok('every icon the home page links to is there, square, and a multiple of 48 px: ' + linked.join(', '),
+       linked.length >= 4 && bad.length === 0, bad.join(', '));
+  }
   ['favicon.svg', 'favicon-192.png', 'apple-touch-icon.png', 'logo-512.png'].forEach((f) =>
     ok(f + ' is in the folder', fs.existsSync(path.join(PKG, f))));
   const png = fs.readFileSync(path.join(PKG, 'logo-512.png'));
