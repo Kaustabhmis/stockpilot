@@ -23,8 +23,18 @@ console.log('\n=== the front door is open ===');
    the entire domain out of Google — no amount of content pages helps past that. */
 ok('the homepage is indexable', /<meta name="robots" content="index, follow/.test(app));
 ok('it has a canonical', /<link rel="canonical" href="https:\/\/www\.domebox\.in\/">/.test(app));
-ok('a title that says what it is and who for',
-   /<title>Domebox — Task &amp; Team Management Software for Indian MSMEs<\/title>/.test(app));
+ok('a title that says what it is and who for, short enough not to be cut off (under 55 characters)',
+   /<title>Domebox — Task &amp; Team Management for Indian MSMEs<\/title>/.test(app) &&
+   (app.match(/<title>([^<]*)<\/title>/)[1].replace(/&amp;/g, '&').length < 55));
+{
+  /* Google shows a site name only when the page agrees with itself about it;
+     otherwise it falls back to the bare domain. */
+  const ld = JSON.parse(app.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+  const site = ld['@graph'].find((n) => n['@type'] === 'WebSite');
+  const og = (app.match(/og:site_name" content="([^"]*)"/) || [])[1];
+  ok('the site name is the same everywhere Google reads it: ' + site.name, site.name === 'Domebox' && og === 'Domebox' &&
+     /<title>Domebox /.test(app) && !/"name":"DomeBox"/.test(app), site.name + ' / ' + og);
+}
 ok('a description within what Google will show',
    (app.match(/<meta name="description" content="([^"]*)"/) || [, ''])[1].length <= 320);
 ok('Open Graph and Twitter cards, so a shared link is not a bare URL',
