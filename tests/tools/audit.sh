@@ -27,7 +27,6 @@ echo "crawl lite: $(PORT=8099 LITE=1 timeout 600 node tools/crawl.js 2>&1 | tail
 (cd ../dist/lite-upload && nohup python3 -m http.server 8098 > /dev/null 2>&1 &)
 sleep 2
 echo "website pages: $(timeout 300 node tools/site.js 2>&1 | tail -2 | tr '\n' ' ')"
-echo "secrets in repo: $(cd .. && git grep -c '4fc67c60\|6cb63d3f' | wc -l)"
 node tools/lost.js "$BASE" | tail -1
 echo "logs: $L"
 echo AUDITDONE
