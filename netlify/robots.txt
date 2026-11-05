@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Deliberately NOT blocking /?start= or any query string. Google Ads and
+# Facebook both crawl the exact final URL of an ad; a Disallow that matches it
+# gets the ad disapproved for an unreachable destination.
+
+Sitemap: https://www.domebox.in/sitemap.xml
