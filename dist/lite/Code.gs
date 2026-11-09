@@ -122,7 +122,7 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   'Stage'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
-  'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
+  'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn','Avatar'];
 
 /**
  * Serialise a check-then-act sequence.
@@ -476,7 +476,7 @@ function doPost(e) {
    not part of the value read back). Only "=" starts a formula in Sheets — "+",
    "-" and "@" do not — so phone numbers and everything else are untouched.
    Secrets and search terms are never rewritten. */
-var NO_NEUTRALIZE = { action: 1, token: 1, password: 1, newPassword: 1, currentPassword: 1, q: 1, query: 1,
+var NO_NEUTRALIZE = { action: 1, token: 1, password: 1, newPassword: 1, currentPassword: 1, q: 1, query: 1, photo: 1,
                       razorpay_order_id: 1, razorpay_payment_id: 1, razorpay_signature: 1 };
 function neutralizeFormulas_(v, key) {
   if (typeof v === 'string') return (!NO_NEUTRALIZE[key] && v.charAt(0) === '=') ? "'" + v : v;
@@ -507,7 +507,7 @@ var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','conta
 var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getProjects','getOrgChart',
   'getCookies','getAnalytics','getAccountability','getPerformanceReport','getAppraisalForm',
   'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
-  'getMeetings','getMeeting','getLeave'];
+  'getMeetings','getMeeting','getLeave','getAvatarPhotos'];
 
 /* In Domebox Lite there is nothing to buy and nothing to demo. */
 var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
@@ -615,6 +615,8 @@ function route_(p) {
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
     case 'saveStages':          return saveStages_(ctx, p.stages);
     case 'saveCalendar':        return saveCalendar_(ctx, p.calendar);
+    case 'setAvatar':           return setAvatar_(ctx, p.avatar, p.photo);
+    case 'getAvatarPhotos':     return getAvatarPhotos_(ctx, p.keys);
     case 'saveReminders':       return saveReminders_(ctx, p.reminders);
     case 'moveStage':           return moveStage_(ctx, p.taskId, p.stage);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
@@ -765,7 +767,7 @@ function requireCanManage_(ctx, username) {
 function publicPerson_(ctx, u) {
   if (canSeePerson_(ctx, u.username)) return u;
   var out = {};
-  ['name', 'username', 'role', 'jobProfile', 'dept', 'manager', 'active'].forEach(function (k) { if (k in u) out[k] = u[k]; });
+  ['name', 'username', 'role', 'jobProfile', 'dept', 'manager', 'active', 'avatar'].forEach(function (k) { if (k in u) out[k] = u[k]; });
   return out;
 }
 
@@ -1198,7 +1200,7 @@ function ensureTenantTabs_(ss) {
 --------------------------------------------------------------------------- */
 /* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
    upgraded under the previous version is checked and widened again. */
-var SCHEMA_VERSION = '2026-11b';
+var SCHEMA_VERSION = '2026-11c';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -1462,8 +1464,61 @@ function rowToUser_(r, rowIndex) {
     wipLimit: (r[U['WIP Limit']] == null || r[U['WIP Limit']] === '') ? null : Number(r[U['WIP Limit']]),
     kras: safeJson_(r[U['KRAs JSON']], []),
     waOptIn: r[U['WhatsApp OptIn']] === true || String(r[U['WhatsApp OptIn']]).toLowerCase() === 'true',
+    avatar: avatarKey_(r[U['Avatar']]),
     rowIndex: rowIndex,
   };
+}
+
+/* What a person shows beside their name: one of the professional avatars the
+   app draws (src/ui/20-avatars.js), a photo of their own, or nothing — their
+   initials, as before. Anyone sets only their own.
+   A photo is squared and compressed in the browser to a small JPEG before it
+   is sent, and kept in the person's Avatar cell as "photo:" + its data URI.
+   The board does not carry photos: it carries a short key per photo ("p:" +
+   a hash), and the browser fetches each photo once with getAvatarPhotos and
+   keeps it — so a company of 300 does not send 300 pictures every refresh. */
+var AVATAR_IDS = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6'];
+var AVATAR_PHOTO_MAX = 16000;    // characters of data URI: about a 96 px JPEG
+var AVATAR_PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/]+={0,2}$/;
+
+function avatarKey_(cell) {
+  var v = String(cell == null ? '' : cell).trim();
+  if (AVATAR_IDS.indexOf(v) > -1) return v;
+  if (v.indexOf('photo:') === 0 && AVATAR_PHOTO_RE.test(v.slice(6))) {
+    var h = 5381;
+    for (var i = 6; i < v.length; i++) h = ((h * 33) ^ v.charCodeAt(i)) >>> 0;
+    return 'p:' + h.toString(36) + v.length.toString(36);
+  }
+  return '';
+}
+
+function setAvatar_(ctx, avatar, photo) {
+  blockIfStopped_(ctx);
+  var id = String(avatar == null ? '' : avatar).trim(), value = id;
+  if (id === 'photo') {
+    var data = String(photo || '');
+    if (!AVATAR_PHOTO_RE.test(data)) throw new Error('That photo could not be read. Try a JPEG or PNG picture.');
+    if (data.length > AVATAR_PHOTO_MAX) throw new Error('That photo is too large. Choose it again and it will be made smaller.');
+    value = 'photo:' + data;
+  } else if (id && AVATAR_IDS.indexOf(id) < 0) {
+    throw new Error('Pick one of the avatars shown, upload a photo, or keep your initials.');
+  }
+  setUserField_(ctx.ss, ctx.me.rowIndex, 'Avatar', value);
+  dropCache_(ctx);
+  return { status: 'success', avatar: avatarKey_(value),
+           message: id === 'photo' ? 'Photo saved.' : id ? 'Avatar saved.' : 'Back to your initials.' };
+}
+
+/** The photos behind the given keys, for people in this company only. */
+function getAvatarPhotos_(ctx, keys) {
+  var want = {}, out = {};
+  (Array.isArray(keys) ? keys : []).slice(0, 400).forEach(function (k) { want[String(k)] = true; });
+  var sh = ctx.ss.getSheetByName(TAB.USERS), d = sh.getDataRange().getValues();
+  for (var i = 1; i < d.length; i++) {
+    var key = avatarKey_(d[i][U['Avatar']]);
+    if (key.indexOf('p:') === 0 && want[key]) out[key] = String(d[i][U['Avatar']]).trim().slice(6);
+  }
+  return { status: 'success', photos: out };
 }
 
 function findUser_(ss, username) {
@@ -3025,7 +3080,7 @@ function getDashboard_(ctx, since) {
     staff: users.map(function (u) {
       return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
                phone: u.phone, manager: u.manager, dept: u.dept, jobProfile: u.jobProfile,
-               active: u.active }); }),
+               active: u.active, avatar: u.avatar }); }),
     stats: {
       pending:   active.filter(function (t) { return t.status === 'Pending'; }).length,
       progress:  active.filter(function (t) { return t.status === 'In Progress'; }).length,
@@ -5520,6 +5575,14 @@ function createDemoAccount(email, password) {
     } catch (e) { out.push('  could not add ' + t[0] + ': ' + e.message); }
   });
   dropCache_(ctx);
+  /* Most of the team has picked an avatar and two kept their initials, so the
+     demo shows both. */
+  var PICKS = { sruti: 'f1', imran: 'm2', payel: 'f3', vikram: 'm1', nita: 'f2', meera: 'f4' };
+  PICKS[ctx.me.username] = 'm6';
+  readUsers_(ctx).forEach(function (u) {
+    if (PICKS[u.username]) { try { setUserField_(ctx.ss, u.rowIndex, 'Avatar', PICKS[u.username]); } catch (e) {} }
+  });
+  dropCache_(ctx);
   out.push('Team: ' + (readUsers_(ctx).length) + ' people, in a real reporting line.');
 
   /* ---- a month of work ------------------------------------------------- */
@@ -7616,11 +7679,11 @@ function erasePerson(companyOwnerEmail, person, confirm) {
 
   var sh = ss.getSheetByName(TAB.USERS), row = u.rowIndex;
   [['Name', 'Former member'], ['Password', ''], ['Email', ''], ['Phone', ''],
-   ['Active', false], ['WhatsApp OptIn', false]].forEach(function (c) {
+   ['Active', false], ['WhatsApp OptIn', false], ['Avatar', '']].forEach(function (c) {
     if (U[c[0]] != null) sh.getRange(row, U[c[0]] + 1).setValue(c[1]);
   });
 
-  var done = ['name, email, phone and password cleared; deactivated'];
+  var done = ['name, email, phone, photo and password cleared; deactivated'];
   var leave = ss.getSheetByName(TAB.LEAVE);
   if (leave) {
     var d = leave.getDataRange().getValues(), n = 0;

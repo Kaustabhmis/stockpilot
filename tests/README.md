@@ -53,6 +53,8 @@ node calendar-test.js        # the company's own working days, holidays and remi
 node calendar-ui-test.js     # Account > Working days and Account > Reminders, on desktop and phone
 node speed-test.js           # the 30-second Tasks cache and the 'unchanged' check: fresh after any app write, within 30 s of a hand edit, never across companies, SPEED=off
 node speed-ui-test.js        # instant moves against a slow server: shown at once, put back on refusal, 'Saving…' and the leave warning
+node avatar-test.js          # avatars and photos: own only, only the set or a small JPEG/PNG/WebP, the board carries keys not pictures, both editions
+node avatar-ui-test.js       # Account > Choose avatar: pick one, upload and compress a photo, back to initials, on desktop and phone
 
 node server.js &            # then, for the browser tests:
 node ui-test.js

@@ -169,6 +169,14 @@ function createDemoAccount(email, password) {
     } catch (e) { out.push('  could not add ' + t[0] + ': ' + e.message); }
   });
   dropCache_(ctx);
+  /* Most of the team has picked an avatar and two kept their initials, so the
+     demo shows both. */
+  var PICKS = { sruti: 'f1', imran: 'm2', payel: 'f3', vikram: 'm1', nita: 'f2', meera: 'f4' };
+  PICKS[ctx.me.username] = 'm6';
+  readUsers_(ctx).forEach(function (u) {
+    if (PICKS[u.username]) { try { setUserField_(ctx.ss, u.rowIndex, 'Avatar', PICKS[u.username]); } catch (e) {} }
+  });
+  dropCache_(ctx);
   out.push('Team: ' + (readUsers_(ctx).length) + ' people, in a real reporting line.');
 
   /* ---- a month of work ------------------------------------------------- */

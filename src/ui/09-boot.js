@@ -154,6 +154,7 @@ setInterval(function () {
     STATE.data = d; STATE.usage = d.usage;
     renderBanner(); renderTiles(); renderBell();
     if (changed && STATE.tab === 'tasks') renderTasks();
+    loadAvatarPhotos();
   }).catch(function () { /* a failed background poll must not shout at the user */ });
 }, 30000);
 

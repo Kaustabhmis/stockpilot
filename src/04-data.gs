@@ -52,7 +52,7 @@ function ensureTenantTabs_(ss) {
 --------------------------------------------------------------------------- */
 /* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
    upgraded under the previous version is checked and widened again. */
-var SCHEMA_VERSION = '2026-11b';
+var SCHEMA_VERSION = '2026-11c';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -316,8 +316,61 @@ function rowToUser_(r, rowIndex) {
     wipLimit: (r[U['WIP Limit']] == null || r[U['WIP Limit']] === '') ? null : Number(r[U['WIP Limit']]),
     kras: safeJson_(r[U['KRAs JSON']], []),
     waOptIn: r[U['WhatsApp OptIn']] === true || String(r[U['WhatsApp OptIn']]).toLowerCase() === 'true',
+    avatar: avatarKey_(r[U['Avatar']]),
     rowIndex: rowIndex,
   };
+}
+
+/* What a person shows beside their name: one of the professional avatars the
+   app draws (src/ui/20-avatars.js), a photo of their own, or nothing — their
+   initials, as before. Anyone sets only their own.
+   A photo is squared and compressed in the browser to a small JPEG before it
+   is sent, and kept in the person's Avatar cell as "photo:" + its data URI.
+   The board does not carry photos: it carries a short key per photo ("p:" +
+   a hash), and the browser fetches each photo once with getAvatarPhotos and
+   keeps it — so a company of 300 does not send 300 pictures every refresh. */
+var AVATAR_IDS = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6'];
+var AVATAR_PHOTO_MAX = 16000;    // characters of data URI: about a 96 px JPEG
+var AVATAR_PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/]+={0,2}$/;
+
+function avatarKey_(cell) {
+  var v = String(cell == null ? '' : cell).trim();
+  if (AVATAR_IDS.indexOf(v) > -1) return v;
+  if (v.indexOf('photo:') === 0 && AVATAR_PHOTO_RE.test(v.slice(6))) {
+    var h = 5381;
+    for (var i = 6; i < v.length; i++) h = ((h * 33) ^ v.charCodeAt(i)) >>> 0;
+    return 'p:' + h.toString(36) + v.length.toString(36);
+  }
+  return '';
+}
+
+function setAvatar_(ctx, avatar, photo) {
+  blockIfStopped_(ctx);
+  var id = String(avatar == null ? '' : avatar).trim(), value = id;
+  if (id === 'photo') {
+    var data = String(photo || '');
+    if (!AVATAR_PHOTO_RE.test(data)) throw new Error('That photo could not be read. Try a JPEG or PNG picture.');
+    if (data.length > AVATAR_PHOTO_MAX) throw new Error('That photo is too large. Choose it again and it will be made smaller.');
+    value = 'photo:' + data;
+  } else if (id && AVATAR_IDS.indexOf(id) < 0) {
+    throw new Error('Pick one of the avatars shown, upload a photo, or keep your initials.');
+  }
+  setUserField_(ctx.ss, ctx.me.rowIndex, 'Avatar', value);
+  dropCache_(ctx);
+  return { status: 'success', avatar: avatarKey_(value),
+           message: id === 'photo' ? 'Photo saved.' : id ? 'Avatar saved.' : 'Back to your initials.' };
+}
+
+/** The photos behind the given keys, for people in this company only. */
+function getAvatarPhotos_(ctx, keys) {
+  var want = {}, out = {};
+  (Array.isArray(keys) ? keys : []).slice(0, 400).forEach(function (k) { want[String(k)] = true; });
+  var sh = ctx.ss.getSheetByName(TAB.USERS), d = sh.getDataRange().getValues();
+  for (var i = 1; i < d.length; i++) {
+    var key = avatarKey_(d[i][U['Avatar']]);
+    if (key.indexOf('p:') === 0 && want[key]) out[key] = String(d[i][U['Avatar']]).trim().slice(6);
+  }
+  return { status: 'success', photos: out };
 }
 
 function findUser_(ss, username) {

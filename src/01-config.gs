@@ -120,7 +120,7 @@ var TASK_COLS = ['ID','Date Created','Due Date','Title','Description','Assigned 
   'Stage'];
 
 var USER_COLS = ['Name','Username','Password','Email','Role','Job Profile','Dept',
-  'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn'];
+  'Phone','Manager','Active','WIP Limit','KRAs JSON','WhatsApp OptIn','Avatar'];
 
 /**
  * Serialise a check-then-act sequence.

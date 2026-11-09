@@ -80,7 +80,7 @@ function getDashboard_(ctx, since) {
     staff: users.map(function (u) {
       return publicPerson_(ctx, { name: u.name, username: u.username, role: u.role, email: u.email,
                phone: u.phone, manager: u.manager, dept: u.dept, jobProfile: u.jobProfile,
-               active: u.active }); }),
+               active: u.active, avatar: u.avatar }); }),
     stats: {
       pending:   active.filter(function (t) { return t.status === 'Pending'; }).length,
       progress:  active.filter(function (t) { return t.status === 'In Progress'; }).length,

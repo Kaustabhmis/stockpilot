@@ -387,6 +387,8 @@ function openAccount() {
     '<h2 class="text-xl font-black mb-1">' + esc(STATE.user.name) + '</h2>' +
     '<p class="text-sm text-gray-400 font-semibold mb-5">' + esc(STATE.user.email) +
       ' · ' + esc(STATE.user.role) + ' · ' + esc(STATE.company) + '</p>' +
+    '<div class="flex items-center gap-3 mb-5">' + avatar(STATE.user.name, 44) +
+      '<button class="btn btn-g" id="btnPickAvatar" onclick="closeModal();openAvatarPicker()">Choose avatar</button></div>' +
     '<form id="fPw" class="space-y-4 mb-5">' +
       '<div><label class="lb" for="pwOld">Current password</label>' +
       '<input id="pwOld" type="password" class="in" autocomplete="current-password" required></div>' +

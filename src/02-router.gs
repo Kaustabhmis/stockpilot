@@ -68,7 +68,7 @@ function doPost(e) {
    not part of the value read back). Only "=" starts a formula in Sheets — "+",
    "-" and "@" do not — so phone numbers and everything else are untouched.
    Secrets and search terms are never rewritten. */
-var NO_NEUTRALIZE = { action: 1, token: 1, password: 1, newPassword: 1, currentPassword: 1, q: 1, query: 1,
+var NO_NEUTRALIZE = { action: 1, token: 1, password: 1, newPassword: 1, currentPassword: 1, q: 1, query: 1, photo: 1,
                       razorpay_order_id: 1, razorpay_payment_id: 1, razorpay_signature: 1 };
 function neutralizeFormulas_(v, key) {
   if (typeof v === 'string') return (!NO_NEUTRALIZE[key] && v.charAt(0) === '=') ? "'" + v : v;
@@ -99,7 +99,7 @@ var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','conta
 var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getProjects','getOrgChart',
   'getCookies','getAnalytics','getAccountability','getPerformanceReport','getAppraisalForm',
   'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
-  'getMeetings','getMeeting','getLeave'];
+  'getMeetings','getMeeting','getLeave','getAvatarPhotos'];
 
 /* In Domebox Lite there is nothing to buy and nothing to demo. */
 var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
@@ -207,6 +207,8 @@ function route_(p) {
     case 'saveTabLayout':       return saveTabLayout_(ctx, p.layout);
     case 'saveStages':          return saveStages_(ctx, p.stages);
     case 'saveCalendar':        return saveCalendar_(ctx, p.calendar);
+    case 'setAvatar':           return setAvatar_(ctx, p.avatar, p.photo);
+    case 'getAvatarPhotos':     return getAvatarPhotos_(ctx, p.keys);
     case 'saveReminders':       return saveReminders_(ctx, p.reminders);
     case 'moveStage':           return moveStage_(ctx, p.taskId, p.stage);
     case 'updatePriorities':    return updatePriorities_(ctx, p.priorities);
@@ -357,7 +359,7 @@ function requireCanManage_(ctx, username) {
 function publicPerson_(ctx, u) {
   if (canSeePerson_(ctx, u.username)) return u;
   var out = {};
-  ['name', 'username', 'role', 'jobProfile', 'dept', 'manager', 'active'].forEach(function (k) { if (k in u) out[k] = u[k]; });
+  ['name', 'username', 'role', 'jobProfile', 'dept', 'manager', 'active', 'avatar'].forEach(function (k) { if (k in u) out[k] = u[k]; });
   return out;
 }
 

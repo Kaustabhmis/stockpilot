@@ -88,11 +88,11 @@ function erasePerson(companyOwnerEmail, person, confirm) {
 
   var sh = ss.getSheetByName(TAB.USERS), row = u.rowIndex;
   [['Name', 'Former member'], ['Password', ''], ['Email', ''], ['Phone', ''],
-   ['Active', false], ['WhatsApp OptIn', false]].forEach(function (c) {
+   ['Active', false], ['WhatsApp OptIn', false], ['Avatar', '']].forEach(function (c) {
     if (U[c[0]] != null) sh.getRange(row, U[c[0]] + 1).setValue(c[1]);
   });
 
-  var done = ['name, email, phone and password cleared; deactivated'];
+  var done = ['name, email, phone, photo and password cleared; deactivated'];
   var leave = ss.getSheetByName(TAB.LEAVE);
   if (leave) {
     var d = leave.getDataRange().getValues(), n = 0;

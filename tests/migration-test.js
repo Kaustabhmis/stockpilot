@@ -298,7 +298,7 @@ ok('they sign in without anybody running anything', LJ.status === 'success', LJ.
 ok('and their sheet was upgraded on the way in',
    late.getSheetByName('Tasks').getDataRange().getValues()[0].length === 31 && !!late.getSheetByName('Cookie_Points') &&
    !!late.getSheetByName('Goals') && !!late.getSheetByName('Meetings'));
-ok('which is remembered, so it does not run again', env.props.SCHEMA_LATE_SHEET === '2026-11b');
+ok('which is remembered, so it does not run again', env.props.SCHEMA_LATE_SHEET === '2026-11c');
 
 console.log('\n=== the one thing step 12 is for ===');
 ok('the old sheet is still shared publicly until step 12 is run',

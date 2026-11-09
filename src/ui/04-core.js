@@ -212,7 +212,10 @@ function tintChip(key, label, title) {
 }
 /** An avatar bubble, coloured by who it is rather than all the same blue. */
 function avatar(name, px) {
-  var size = px || 28;
+  var size = px || 28, uri = avatarUri(avatarOf(name));
+  /* A person who picked an avatar or uploaded a photo (Account > Choose avatar). */
+  if (uri) return '<img class="av" src="' + uri + '" alt="" title="' + esc(name || '') + '" width="' + size + '" height="' + size + '" ' +
+    'style="width:' + size + 'px;height:' + size + 'px;border-radius:999px;background:none;object-fit:cover">';
   return '<span class="av s-' + tintFor(name) + '" title="' + esc(name || '') + '" ' +
     'style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.37) + 'px">' +
     esc(initials(name)) + '</span>';
@@ -428,6 +431,8 @@ function refresh(quiet) {
        while somebody is signed in. */
     if (d.usage && d.usage.plan) STATE.plan = d.usage.plan;
     if (d.serviceStopped) { renderStopped(d); return; }
+    paintMyAvatar();
+    loadAvatarPhotos();
     renderBanner();
     renderTiles();
     renderBell();

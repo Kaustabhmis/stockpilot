@@ -38,15 +38,18 @@ const tasksOf = (token) => call({ action: 'getDashboard', token }).tasks;
 const find = (token, title) => tasksOf(token).find((t) => t.title === title);
 
 console.log('\n=== a project is a run of stages, each with its own deadline ===');
+/* Dates ahead of today, so stage one is always delivered on time whatever day this runs. */
+const ahead = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const D1 = ahead(10), D2 = ahead(25), D3 = ahead(35);
 const P = mkProject('Fixture line upgrade', [
-  stage('Design the fixture', 'payel', '2026-11-05', 'High'),
-  stage('Fabricate and trial', 'vikram', '2026-11-20'),
-  stage('Train the operators', 'neha', '2026-11-30'),
+  stage('Design the fixture', 'payel', D1, 'High'),
+  stage('Fabricate and trial', 'vikram', D2),
+  stage('Train the operators', 'neha', D3),
 ]);
 ok('the project is created', P.status === 'success', P.message);
 ok('with one task per stage', P.stages === 3, P.stages);
 const s1 = find(A, 'Design the fixture'), s2 = find(A, 'Fabricate and trial'), s3 = find(A, 'Train the operators');
-ok('every stage carries its own deadline', s1.due === '2026-11-05' && s2.due === '2026-11-20' && s3.due === '2026-11-30');
+ok('every stage carries its own deadline', s1.due === D1 && s2.due === D2 && s3.due === D3);
 ok('every stage carries its own owner', s1.assignee === U('payel') && s3.assignee === U('neha'));
 ok('they share a project id', s1.projectId && s1.projectId === s2.projectId && s2.projectId === s3.projectId);
 ok('and are numbered', s1.stageNo === 1 && s2.stageNo === 2 && s3.stageNo === 3);
