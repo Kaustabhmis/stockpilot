@@ -30,8 +30,13 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
      declares one it can fetch by URL (not a data: URI), sized a multiple of
      48px. Without it, results show a grey globe. */
   const pages = fs.readdirSync(PKG).filter((f) => f.endsWith('.html'));
-  const noIcon = pages.filter((f) => !/<link rel="icon" href="\/favicon\.ico" sizes="48x48">/.test(fs.readFileSync(path.join(PKG, f), 'utf8')));
-  ok('every page declares /favicon.ico for search results', noIcon.length === 0, noIcon.join(', '));
+  const noIcon = pages.filter((f) => !/<link rel="icon" href="\/favicon\.ico" sizes="16x16 32x32 48x48">/.test(fs.readFileSync(path.join(PKG, f), 'utf8')));
+  ok('every page declares /favicon.ico for search results, with the sizes it really holds', noIcon.length === 0, noIcon.join(', '));
+  /* Googlebot must be allowed to fetch the icons, or the globe shows instead. */
+  const robots = fs.readFileSync(path.join(PKG, 'robots.txt'), 'utf8');
+  ok('robots.txt lets Google fetch the icons', !/^\s*Disallow:\s*\/(\s|$|favicon|apple)/mi.test(robots) && /Allow: \//.test(robots));
+  const hdr = fs.existsSync(path.join(PKG, '_headers')) ? fs.readFileSync(path.join(PKG, '_headers'), 'utf8') : '';
+  ok('no header tells Google not to index the site or its images', !/^[^#]*X-Robots-Tag/mi.test(hdr));
   ok('the home page has no data: icon, which Google ignores', !/rel="icon" href="data:/.test(idx));
   const ico = fs.readFileSync(path.join(PKG, 'favicon.ico'));
   ok('favicon.ico is a real icon file holding a 48px image', ico.readUInt16LE(2) === 1 && [...Array(ico.readUInt16LE(4)).keys()].some((i) => ico[6 + 16 * i] === 48));
