@@ -76,6 +76,26 @@ console.log('\na day that is over');
 ok(r.st4y === 'A', 'one punch yesterday stays A', 'got ' + r.st4y);
 ok(r.reg3y === 'A(faint)', 'no punch yesterday shows a faint A', r.reg3y);
 ok(r.d === 1 || r.lop3 >= 1, 'and it is LOP as before', 'lop ' + r.lop3);
+console.log('\nthe Joined card shows the times');
+const card = await p.evaluate(() => {
+  const t = localDay();
+  const more = [['JT-11', 'Amit Roy', '08:52'], ['JT-12', 'Bina Sen', '09:31'], ['JT-13', 'Chandan Das', '10:15']];
+  more.forEach(([c, n, at]) => {
+    S.employees.push({ emp_code: c, name: n, status: 'Active', doj: '2020-01-01', basic: 10000, shift: '', department: 'JT', designation: 'T' });
+    S.attendance.push({ id: c + '_' + t, emp_code: c, date: t, status: 'A', in_time: at, out_time: '', hours: 0 });
+  });
+  S.attVersion++;
+  go('dashboard'); renderAll();
+  const k = [...document.querySelectorAll('#view-dashboard .kpi')].map(x => x.innerText.replace(/\s+/g, ' ')).find(x => /JOINED/i.test(x));
+  showPeople('joined');
+  const rows = [...document.querySelectorAll('#modal tbody tr')].map(r => r.innerText.replace(/\s+/g, ' '));
+  closeModal();
+  return { k, rows };
+});
+ok(/4/.test(card.k) && /08:52/.test(card.k) && /10:15/.test(card.k), 'card: 4 joined, from 08:52 to 10:15', card.k);
+ok(card.rows.length === 4 && /08:52/.test(card.rows[0]) && /10:15/.test(card.rows[3]), 'list: each join time, earliest first',
+   card.rows.map(r => r.slice(0, 40)).join(' | '));
+ok(card.rows.some(r => /09:31.*late/.test(r)), 'a late join is marked late', card.rows.find(r => /09:31/.test(r)));
 ok(!errs.length, 'no page errors', errs.join(' | '));
 await b.close();
 console.log(bad ? '\n' + bad + ' check(s) FAILED' : '\nall joined checks passed');

@@ -2887,6 +2887,14 @@ function renderDashboard() {
     leave:     peopleOn('leave', iso).length,
     joined:    peopleOn('joined', iso).length
   };
+  /* who joined and when, for the Joined card: the times themselves when
+     there are a few, else the first and last */
+  var joinedList = peopleOn('joined', iso).map(function (x) {
+    return { name: String(x.e.name || x.e.emp_code).split(' ')[0], t: hhmm(x.rec.in_time) || '' };
+  }).sort(function (a, b) { return a.t.localeCompare(b.t); });
+  var joinedNote = !joinedList.length ? 'nobody waiting to punch out'
+    : joinedList.length <= 3 ? joinedList.map(function (j) { return j.name + ' ' + j.t; }).join(', ')
+    : 'in from ' + joinedList[0].t + ' to ' + joinedList[joinedList.length - 1].t + ' - not out yet';
   /* leave and every other request (missed punch, OD, comp-off) - counting
      leave alone left the card at 4 with 29 requests waiting on HR */
   var pending = S.leave.filter(function (l) { return l.status === 'Pending'; })
@@ -2910,7 +2918,7 @@ function renderDashboard() {
         nonWorking ? offNote : counts.headcount ? Math.round(counts.present * 100 / counts.headcount) + '% of headcount' : '',
         "showPeople('present')", 'k-good', '&#10003;') +
     kpi('Joined ' + dayLabel, dash(counts.joined),
-        nonWorking ? offNote : (counts.joined ? 'punched in, not out yet' : 'nobody waiting to punch out'),
+        nonWorking ? offNote : joinedNote,
         "showPeople('joined')", 'k-blue', '&#8594;') +
     kpi('Absent ' + dayLabel, dash(counts.absent),
         nonWorking ? offNote : (counts.absent ? 'no punch, or marked A' : 'nobody absent'),
@@ -3097,7 +3105,8 @@ function showPeople(kind, iso) {
   var hol = holidayOn(iso);
   var dateText = new Date(iso + 'T00:00:00').toDateString();
 
-  var extraHead = { late: 'In time', present: 'In / out', absent: 'Remarks',
+  if (kind === 'joined') list.sort(function (a, b) { return String(hhmm(a.rec.in_time)).localeCompare(String(hhmm(b.rec.in_time))); });
+  var extraHead = { late: 'In time', present: 'In / out', absent: 'Remarks', joined: 'Joined at',
                     leave: 'Leave type', unmarked: '', headcount: 'Today' }[kind] || '';
   var body = list.map(function (x) {
     var e = x.e, extra = '';
@@ -3107,6 +3116,9 @@ function showPeople(kind, iso) {
     } else if (kind === 'present') {
       extra = '<td class="num-col">' + esc(hhmm(x.rec.in_time) || '-') + ' - ' + esc(hhmm(x.rec.out_time) || '-') +
         (x.st === 'HD' ? ' <span class="badge b-amber">half day</span>' : '') +
+        (x.late ? ' <span class="badge b-amber">' + x.late + 'm late</span>' : '') + '</td>';
+    } else if (kind === 'joined') {
+      extra = '<td class="num-col"><b>' + esc(hhmm(x.rec.in_time) || '-') + '</b>' +
         (x.late ? ' <span class="badge b-amber">' + x.late + 'm late</span>' : '') + '</td>';
     } else if (kind === 'absent') {
       extra = '<td class="num-col">' + esc(x.rec.remarks || '&mdash;') + '</td>';
@@ -3118,7 +3130,7 @@ function showPeople(kind, iso) {
       extra = '<td class="num-col">' + esc(lv ? lv.type + ' (' + lv.from_date + ' to ' + lv.to_date + ')' : 'Leave') + '</td>';
     } else if (kind === 'headcount') {
       extra = '<td class="num-col"><span class="badge ' +
-        (x.st === 'P' ? 'b-green' : x.st === 'A' ? 'b-red' : x.st === 'L' ? 'b-blue' :
+        (x.st === 'P' ? 'b-green' : x.st === 'A' ? 'b-red' : x.st === 'L' ? 'b-blue' : x.st === 'IN' ? 'b-blue' :
          x.st === 'HD' ? 'b-amber' : x.st ? 'b-gray' : 'b-amber') + '">' +
         esc(x.st || 'not marked') + '</span></td>';
     }
