@@ -370,6 +370,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
 .att-cell.late::before{content:'';position:absolute;top:0;left:0;border-top:9px solid #f59e0b;
   border-right:9px solid transparent;}
 .s-P{background:#d1fae5;color:#065f46;} .s-A{background:#fee2e2;color:#991b1b;}
+.s-IN{background:#e0f2fe;color:#075985;box-shadow:inset 0 0 0 1px #7dd3fc;}
+.att-cell.nomark{opacity:.55;font-style:italic;}
 .s-HD{background:#fef3c7;color:#92400e;} .s-L{background:#dbeafe;color:#1e40af;}
 .s-WO{background:#f1f5f9;color:#94a3b8;} .s-H{background:#ede9fe;color:#5b21b6;}
 .s-OD{background:#cffafe;color:#155e75;} .s-CO{background:#ffe4e6;color:#9f1239;}
@@ -758,7 +760,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
         <div class="att-grid" id="att-grid"></div>
         <div class="legend">
           <span><b class="s-P att-cell late" style="display:inline-block;position:relative">P</b>Late (after grace)</span>
-          <span><b class="s-P">P</b>Present</span><span><b class="s-A">A</b>Absent (LOP)</span>
+          <span><b class="s-P">P</b>Present</span><span><b class="s-IN">IN</b>Joined today, not out yet</span>
+          <span><b class="s-A">A</b>Absent (LOP)</span><span><b class="s-A" style="opacity:.55;font-style:italic">A</b>No punch</span>
           <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Leave</span>
           <span><b class="s-OD">OD</b>Out duty</span><span><b class="s-CO">CO</b>Comp-off</span>
           <span><b class="s-WO">WO</b>Weekly off</span><span><b class="s-H">H</b>Holiday</span>
@@ -2882,7 +2885,7 @@ function renderDashboard() {
     absent:    peopleOn('absent', iso).length,
     late:      peopleOn('late', iso).length,
     leave:     peopleOn('leave', iso).length,
-    unmarked:  peopleOn('unmarked', iso).length
+    joined:    peopleOn('joined', iso).length
   };
   /* leave and every other request (missed punch, OD, comp-off) - counting
      leave alone left the card at 4 with 29 requests waiting on HR */
@@ -2906,8 +2909,11 @@ function renderDashboard() {
     kpi('Present ' + dayLabel, dash(counts.present),
         nonWorking ? offNote : counts.headcount ? Math.round(counts.present * 100 / counts.headcount) + '% of headcount' : '',
         "showPeople('present')", 'k-good', '&#10003;') +
+    kpi('Joined ' + dayLabel, dash(counts.joined),
+        nonWorking ? offNote : (counts.joined ? 'punched in, not out yet' : 'nobody waiting to punch out'),
+        "showPeople('joined')", 'k-blue', '&#8594;') +
     kpi('Absent ' + dayLabel, dash(counts.absent),
-        nonWorking ? offNote : (counts.absent ? 'unpaid unless marked otherwise' : 'nobody absent'),
+        nonWorking ? offNote : (counts.absent ? 'no punch, or marked A' : 'nobody absent'),
         "showPeople('absent')", counts.absent ? 'k-critical' : 'k-good', '&#10005;') +
     kpi('Late coming ' + dayLabel, dash(counts.late),
         nonWorking ? offNote : 'in after ' + (S.settings.shift_start || '09:30') + ' + ' +
@@ -2916,9 +2922,6 @@ function renderDashboard() {
     kpi('On leave ' + dayLabel, dash(counts.leave),
         nonWorking ? offNote : (counts.leave ? 'approved leave' : 'nobody on leave'),
         "showPeople('leave')", 'k-blue', '&#127796;') +
-    kpi('Not marked ' + dayLabel, dash(counts.unmarked),
-        nonWorking ? offNote : (counts.unmarked ? 'will be paid as LOP' : 'attendance complete'),
-        "showPeople('unmarked')", counts.unmarked ? 'k-warn' : 'k-good', '&#9633;') +
     kpi('Pending approvals', pending.length, pending.length ? 'leave and requests waiting' : 'nothing waiting',
         "go('leave');leaveTab('requests')", pending.length ? 'k-warn' : 'k-good', '&#128203;') +
     kpi('LOP this month', lopMonth, 'days of unpaid absence',
@@ -3054,20 +3057,18 @@ function peopleOn(kind, iso) {
   var ym = iso.slice(0, 7), d = +iso.slice(8);
   return activeEmployees().map(function (e) {
     var rec = recordFor(ym, e.emp_code, d);
-    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
+    var st = statusFrom(rec, ym, d, e.emp_code);
     /* each employee can be on a different shift, so "non-working" is per person */
-    var off = st === 'WO' || st === 'H';
-    /* punched in today and not out yet: at work now, though the day reads A
-       until the out punch arrives */
-    var inNow = iso === localDay() && rec && rec.in_time && !rec.out_time;
-    if (inNow && st === 'A') st = 'IN';
+    var off = st === 'WO' || st === 'H' || (e.doj && iso < String(e.doj));
     return { e: e, st: st, off: off, rec: rec || {},
              late: (st === 'P' || st === 'HD' || st === 'IN') ? lateMinutes(rec, e.emp_code) : 0 };
   }).filter(function (x) {
     switch (kind) {
       case 'headcount': return true;
-      case 'present':   return !x.off && (x.st === 'P' || x.st === 'HD' || x.st === 'OD' || x.st === 'IN');
-      case 'absent':    return !x.off && x.st === 'A';
+      case 'present':   return !x.off && (x.st === 'P' || x.st === 'HD' || x.st === 'OD');
+      case 'joined':    return !x.off && x.st === 'IN';
+      /* absent: marked A, or nothing at all - no punch and no leave */
+      case 'absent':    return !x.off && (x.st === 'A' || !x.st);
       case 'halfday':   return !x.off && x.st === 'HD';
       case 'late':      return !x.off && x.late > 0;
       case 'leave':     return !x.off && x.st === 'L';
@@ -3079,8 +3080,9 @@ function peopleOn(kind, iso) {
 
 var PEOPLE_KINDS = {
   headcount: { title: 'Active headcount', note: 'Everyone on the payroll right now.' },
-  present:   { title: 'Present', note: 'Marked P or HD on the attendance register, or punched in today and not out yet.' },
-  absent:    { title: 'Absent', note: 'Marked A. These days are unpaid unless the marking changes.' },
+  present:   { title: 'Present', note: 'Marked P, HD or OD - the day is settled.' },
+  joined:    { title: 'Joined - not out yet', note: 'Punched in today and not out yet. The out punch decides P, HD or A by the shift rules; with no out punch by the end of the day it stays A.' },
+  absent:    { title: 'Absent', note: 'No punch and no leave, or marked A. These days are unpaid unless the marking changes.' },
   late:      { title: 'Late coming', note: 'In-time later than the shift start plus the grace period.' },
   leave:     { title: 'On approved leave', note: 'Marked L from an approved leave application.' },
   unmarked:  { title: 'Attendance not marked', note: 'No marking yet. Payroll treats a past unmarked day as LOP.' }
@@ -4032,9 +4034,21 @@ function recordFor(ym, code, d) {
   var key = code + '_' + dateStr(ym, d);
   return S.attDirty[key] || attMap(ym)[key] || null;
 }
+/* The status a day shows. One punch TODAY and no second is "IN" - joined,
+   still at work - not absent and not yet present: the out punch settles it
+   to P / HD / A under the shift rules. A single punch on a day that is over
+   stays what was stored (A). Everything else is the stored status, or the
+   holiday / weekly off, or blank. */
+function statusFrom(rec, ym, d, code) {
+  if (rec && rec.status) {
+    if (rec.in_time && !rec.out_time && (rec.status === 'A' || rec.status === 'P') &&
+        dateStr(ym, d) === localDay()) return 'IN';
+    return rec.status;
+  }
+  return defaultStatus(ym, d, code);
+}
 function statusOf(ym, code, d) {
-  var rec = recordFor(ym, code, d);
-  return (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
+  return statusFrom(recordFor(ym, code, d), ym, d, code);
 }
 
 /* A month is locked once its payroll run has been finalised. */
@@ -4149,7 +4163,7 @@ function attStats(ym, code) {
   var unpaid = unpaidLeaveMap();
   var emp = empByCode(code) || {};
   var joined = String(emp.doj || ''), left = String(emp.exit_date || '');
-  var s = { P: 0, A: 0, HD: 0, L: 0, OD: 0, CO: 0, WO: 0, H: 0, blank: 0, blankDays: [],
+  var s = { P: 0, A: 0, HD: 0, L: 0, OD: 0, CO: 0, WO: 0, H: 0, IN: 0, blank: 0, blankDays: [],
             future: 0, late: 0, ot: 0, unpaidLeave: 0, working: 0, offRoll: 0,
             incomplete: 0, incompleteDays: [] };
   for (var d = 1; d <= dim; d++) {
@@ -4159,12 +4173,13 @@ function attStats(ym, code) {
        started on the 16th three days he was never employed for. */
     if ((joined && iso < joined) || (left && iso > left)) { s.offRoll++; continue; }
     var rec = recordFor(ym, code, d);
-    var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
+    var st = statusFrom(rec, ym, d, code);
     if (st && s[st] !== undefined) s[st]++;
     else if (d <= upTo) { s.blank++; s.blankDays.push(iso); }
     else s.future++;
     if (st !== 'WO' && st !== 'H') s.working++;
     if (st === 'L' && unpaid[code + '_' + iso]) s.unpaidLeave++;
+    if (st === 'IN') s.late += lateMinutes(rec, code) ? 1 : 0;
     if (st === 'P' || st === 'HD') {
       s.late += lateMarks(rec, code, st);
       s.ot += otMinutes(rec, code);
@@ -4320,7 +4335,7 @@ function renderAttendance() {
     for (var d = 1; d <= dim; d++) {
       var key = e.emp_code + '_' + dateStr(ym, d);
       var rec = recordFor(ym, e.emp_code, d);
-      var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, e.emp_code);
+      var st = statusFrom(rec, ym, d, e.emp_code);
       var late = lateMarks(rec, e.emp_code, st);
       var lateIn = late ? lateMinutes(rec, e.emp_code) : 0, earlyOut = late ? earlyMinutes(rec, e.emp_code) : 0;
       var open = rec && rec.in_time && !rec.out_time && dateStr(ym, d) < today();
@@ -4343,9 +4358,12 @@ function renderAttendance() {
           '" title="' + esc(tip) + '"' + handlers + ' id="c_' + esc(key) + '">' +
           timeCellHtml(rec, st, open) + '</div></td>';
       } else {
-        row += '<td><div class="att-cell s-' + esc(st) + (S.attDirty[key] ? ' edited' : '') +
-          (late ? ' late' : '') + (open ? ' open' : '') + '" title="' + esc(tip) + '"' +
-          handlers + ' id="c_' + esc(key) + '">' + esc(st) + '</div></td>';
+        /* a past working day with no punch and nothing marked is absent -
+           shown as a faint A, and counted as LOP as it always was */
+        var gone = !st && dateStr(ym, d) < localDay() && !(e.doj && dateStr(ym, d) < String(e.doj));
+        row += '<td><div class="att-cell s-' + esc(gone ? 'A nomark' : st) + (S.attDirty[key] ? ' edited' : '') +
+          (late ? ' late' : '') + (open ? ' open' : '') + '" title="' + esc(gone ? dateStr(ym, d) + ' - no punch: absent' : tip) + '"' +
+          handlers + ' id="c_' + esc(key) + '">' + esc(gone ? 'A' : st) + '</div></td>';
       }
     }
     if (times) {
@@ -4439,10 +4457,11 @@ function refreshCell(ym, code, d) {
   var cell = el('c_' + key);
   if (!cell) return;
   var rec = recordFor(ym, code, d);
-  var st = (rec && rec.status) ? rec.status : defaultStatus(ym, d, code);
+  var st = statusFrom(rec, ym, d, code);
   var late = lateMarks(rec, code, st);
-  cell.className = 'att-cell s-' + st + (S.attDirty[key] ? ' edited' : '') + (late ? ' late' : '');
-  cell.textContent = st;
+  var gone = !st && dateStr(ym, d) < localDay();
+  cell.className = 'att-cell s-' + (gone ? 'A nomark' : st) + (S.attDirty[key] ? ' edited' : '') + (late ? ' late' : '');
+  cell.textContent = gone ? 'A' : st;
 }
 
 /* Click a date header: set the whole column. */

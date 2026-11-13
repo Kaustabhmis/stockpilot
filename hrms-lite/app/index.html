@@ -163,6 +163,7 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .calsum .c.late b{color:var(--amber);} .calsum .c.pr b{color:var(--green);}
 .calsum .c.ab b{color:var(--red);} .calsum .c.hd b{color:#b45309;}
 .calsum .c.od b{color:#7c3aed;}
+.cal .d.NA{background:#fef2f2;border-color:#fee2e2;color:#b91c1c;opacity:.7;}
 .kpi span{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;
   font-weight:600;}
 
@@ -724,6 +725,13 @@ function statusFor(iso) {
   if (rec && rec.status) return String(rec.status);
   if (holidayOn(iso)) return 'H';
   if (isWeeklyOff(iso)) return 'WO';
+  /* a past working day with no punch and nothing marked is absent */
+  var doj = String((S.me && S.me.doj) || ''), ym = iso.slice(0, 7);
+  /* only for a month this phone has actually loaded - a month not fetched
+     yet is "not known", not "absent" */
+  var loaded = (S.haveMonth && S.haveMonth[ym]) ||
+    (S.att || []).some(function (a) { return String(a.date).slice(0, 7) === ym; });
+  if (loaded && iso < today() && !(doj && iso < doj)) return 'NA';
   return '';
 }
 
@@ -841,7 +849,8 @@ function monthStats(ym) {
     else if (st === 'HD') s.hd++;
     else if (st === 'OD' || st === 'CO') s.od++;
     /* Late: arrived after shift start + grace on a day they were in. */
-    if (st === 'IN') s.present++;
+    if (st === 'IN') s.joined = (s.joined || 0) + 1;    /* at work today - settles at punch out */
+    if (st === 'NA') s.absent++;                          /* no punch at all */
     s.late += dayLateMarks(st, rec);
     var w = workedMinutes(rec);
     if (w) s.minutes += w;
@@ -1012,7 +1021,7 @@ function renderCalendar() {
     var late = dayLateMarks(st, rec) > 0;
     cells += '<div class="d ' + esc(st) + (iso === today() ? ' today' : '') + (late ? ' late' : '') + '"' +
       ' onclick="dayDetail(\'' + iso + '\')">' + d +
-      (st ? '<small>' + esc(st === 'P' && mins ? hoursText(mins) : st) + '</small>' : '') +
+      (st ? '<small>' + esc(st === 'P' && mins ? hoursText(mins) : (st === 'NA' ? 'A' : st)) + '</small>' : '') +
       '</div>';
   }
   var m = monthStats(ym);
@@ -1076,7 +1085,8 @@ function dayDetail(iso) {
   var rec = attFor(iso), st = statusFor(iso), hol = holidayOn(iso);
   var mins = workedMinutes(rec);
   var names = { P:'Present', A:'Absent', HD:'Half day', L:'On leave', OD:'Out duty',
-                CO:'Comp-off', WO:'Weekly off', H:'Holiday' };
+                CO:'Comp-off', WO:'Weekly off', H:'Holiday', NA:'Absent - no punch',
+                IN:'Joined - punched in, not out yet' };
   openSheet('<h3>' + esc(new Date(iso + 'T00:00:00').toLocaleDateString(undefined,
       { weekday:'long', day:'numeric', month:'long' })) + '</h3>' +
     '<div class="rows">' +
