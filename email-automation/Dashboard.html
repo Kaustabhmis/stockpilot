@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { --brand:#4f46e5; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: var(--ink); margin: 14px; }
+    h3 { margin: 0 0 12px; font-size: 16px; }
+    h4 { margin: 18px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .stat { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .stat b { font-variant-numeric: tabular-nums; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; }
+    button { width: 100%; margin-top: 8px; padding: 9px; border: 0; border-radius: 6px; background: var(--brand); color: #fff; font-weight: bold; cursor: pointer; }
+    button.secondary { background: #e5e7eb; color: var(--ink); }
+    button:disabled { opacity: .6; cursor: default; }
+    #msg { margin-top: 10px; color: var(--muted); min-height: 16px; }
+    .error { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <h3>Email automation</h3>
+
+  <div id="stats" class="muted">Loading&hellip;</div>
+
+  <h4>Campaigns</h4>
+  <table>
+    <thead><tr><th>Name</th><th>Status</th><th>Sent</th></tr></thead>
+    <tbody id="camps"></tbody>
+  </table>
+  <p class="muted">Change a campaign's status to <b>scheduled</b> in the Campaigns sheet to send it.</p>
+
+  <button id="run">Run automation now</button>
+  <button id="test" class="secondary">Send test welcome to me</button>
+  <button id="refresh" class="secondary">Refresh</button>
+  <div id="msg"></div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    function setMsg(text, isError) {
+      $('msg').textContent = text;
+      $('msg').className = isError ? 'error' : '';
+    }
+
+    function cell(row, text) {
+      const td = row.insertCell();
+      td.textContent = text == null ? '' : String(text);
+    }
+
+    function render(s) {
+      const stats = $('stats');
+      stats.textContent = '';
+      [
+        ['Active', s.active],
+        ['Pending (double opt-in)', s.pending],
+        ['Unsubscribed', s.unsubscribed],
+        ['Bounced', s.bounced],
+        ['Sends left today', s.budgetLeft + ' of ' + s.dailyCap],
+      ].forEach(([label, value]) => {
+        const row = document.createElement('div');
+        row.className = 'stat';
+        const a = document.createElement('span');
+        a.textContent = label;
+        const b = document.createElement('b');
+        b.textContent = value;
+        row.append(a, b);
+        stats.append(row);
+      });
+
+      const body = $('camps');
+      body.textContent = '';
+      if (!s.campaigns.length) {
+        const r = body.insertRow();
+        cell(r, 'No campaigns yet');
+        return;
+      }
+      s.campaigns.forEach(c => {
+        const r = body.insertRow();
+        cell(r, c.name);
+        cell(r, c.status);
+        cell(r, c.sent_count);
+      });
+    }
+
+    function load() {
+      google.script.run
+        .withSuccessHandler(render)
+        .withFailureHandler(err => setMsg('Could not load stats: ' + err.message, true))
+        .getDashboardStats();
+    }
+
+    $('run').addEventListener('click', () => {
+      $('run').disabled = true;
+      setMsg('Running…');
+      google.script.run
+        .withSuccessHandler(result => { $('run').disabled = false; setMsg(result); load(); })
+        .withFailureHandler(err => { $('run').disabled = false; setMsg(err.message, true); })
+        .runAutomation();
+    });
+
+    $('test').addEventListener('click', () => {
+      setMsg('Sending test…');
+      google.script.run
+        .withSuccessHandler(result => setMsg(result))
+        .withFailureHandler(err => setMsg(err.message, true))
+        .sendTestEmail();
+    });
+
+    $('refresh').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
