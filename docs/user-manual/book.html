@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Domebox — User Manual</title>
+<!-- Source of netlify/user-manual.pdf (the "User manual (PDF)" button in Help).
+     For the people who USE Domebox: no Admin-only screens (billing, adding
+     people, settings), nothing about how the system is built or run.
+     Pictures are real screens from the demo company, in pics/. -->
+<style>
+  :root { --ink:#0f1b2d; --soft:#4b5565; --line:#dfe4ec; --paper:#ffffff; --brand:#1e4fbf; --navy:#13294b; --gold:#d4930f; --red:#b42318; --ok:#0f7b55; --warn:#b54708; --tint:#eef3fb; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#eef1f5; color:var(--ink); font: 16px/1.55 "Segoe UI", Arial, sans-serif; }
+  .page { background:var(--paper); max-width: 820px; margin: 0 auto; padding: 40px 48px; }
+  h1 { font-size: 34px; line-height:1.15; margin: 0 0 8px; }
+  h2 { font-size: 25px; margin: 0 0 6px; padding-top: 12px; border-top: 3px solid var(--ink); display:flex; gap:12px; align-items:center; }
+  h2 .n { display:inline-flex; width:40px; height:40px; border-radius:50%; background:var(--brand); color:#fff; align-items:center; justify-content:center; font-size:19px; flex:none; }
+  h3 { font-size: 18.5px; margin: 24px 0 6px; }
+  p { margin: 7px 0; }
+  ol, ul { margin: 6px 0; padding-left: 24px; } li { margin: 4px 0; }
+  b.k { background:#eef3fb; border:1px solid #c9d7ef; border-radius:6px; padding:0 6px; font-weight:700; white-space:nowrap; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f8; }
+  .lead { font-size: 18px; color: var(--soft); }
+  .tip { margin: 12px 0; padding: 10px 14px; background: #ecf8f2; border-left: 6px solid var(--ok); border-radius: 6px; }
+  .tip::before { content: "Tip  "; font-weight: 800; color: var(--ok); }
+  .note { margin: 12px 0; padding: 10px 14px; background: var(--tint); border-left: 6px solid var(--brand); border-radius: 6px; }
+  .warn { margin: 12px 0; padding: 10px 14px; background: #fff4ea; border-left: 6px solid var(--warn); border-radius: 6px; }
+  .chapter { break-before: page; padding-top: 4px; }
+  .who { display:inline-block; font-size: 12px; font-weight: 800; letter-spacing:.05em; text-transform: uppercase; color: var(--brand); background: var(--tint); border-radius: 20px; padding: 2px 10px; margin: 0 0 8px; }
+  figure { margin: 14px 0 16px; break-inside: avoid; }
+  figure img { display:block; width:88%; margin:0 auto; border: 1.5px solid #c9c6da; border-radius: 10px; }
+  figure.small img { width: 55%; margin: 0 auto; }
+  figure.mid img { width: 70%; }
+  figure.phone img { width: 30%; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--soft); margin-top: 6px; text-align:center; font-style: italic; }
+  .flow { display:flex; flex-wrap: wrap; gap: 6px; align-items:center; margin: 10px 0; font-weight: 700; font-size: 14.5px; }
+  .flow span { border: 2px solid var(--ink); border-radius: 20px; padding: 3px 12px; background:#fff; }
+  .flow i { font-style: normal; color: var(--soft); }
+  .cover { text-align:center; padding: 60px 0 20px; }
+  .cover .logo { display:inline-flex; width:84px; height:84px; border-radius:22px; background:var(--brand); color:#fff; font-size:52px; align-items:center; justify-content:center; font-weight:800; }
+  .cover .big { font-size: 48px; font-weight: 800; margin: 20px 0 4px; }
+  .cover .sub { font-size: 22px; color: var(--soft); }
+  .toc { columns: 2; column-gap: 28px; margin: 34px auto 0; max-width: 620px; text-align:left; font-size: 15.5px; }
+  .toc div { break-inside: avoid; padding: 4px 0; border-bottom: 1px dotted var(--line); }
+  .toc b { color: var(--brand); display:inline-block; width: 26px; }
+  .roles { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
+  .roles div { border: 2px solid var(--ink); border-radius: 12px; padding: 10px 12px; font-size: 14.5px; background:#fff; }
+  .roles b { display:block; font-size: 16px; margin-bottom: 3px; }
+  .qa > b { display:block; margin-top: 12px; break-after: avoid; }
+  .foot { margin-top: 36px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--soft); text-align:center; }
+  h2, h3 { break-after: avoid; } tr, .roles, .tip, .note, .warn, .flow { break-inside: avoid; }
+
+  /* ---------- colour: one corporate palette — navy, blue, a gold accent ---------- */
+  h2 { border-top: 0; padding: 14px 18px; border-radius: 10px; color: #fff; background: linear-gradient(110deg, var(--navy), #1c3d73); border-bottom: 4px solid var(--gold); margin-bottom: 14px; }
+  h2 .n { background: var(--gold); color: #fff; font-weight: 800; }
+  h3 { color: var(--navy); padding-left: 10px; border-left: 4px solid var(--brand); }
+  th { background: var(--navy); color: #fff; border-color: var(--navy); font-weight: 600; }
+  tr:nth-child(even) td { background: #f6f8fb; }
+  b.k { color: var(--brand); }
+  figure img { border: 1px solid #cfd8e6; box-shadow: 0 4px 14px rgba(15,27,45,.10); }
+  ul li::marker, ol li::marker { color: var(--brand); font-weight: 700; }
+  .flow span { border-color: var(--brand); background: var(--tint); color: var(--navy); }
+  .roles div { border: 1px solid var(--line); border-top: 4px solid var(--brand); background: #fff; }
+  .roles div:nth-child(2) { border-top-color: var(--navy); } .roles div:nth-child(3) { border-top-color: var(--gold); }
+  .roles b { color: var(--navy); }
+  .tip { background:#ecf6f1; border-left-color: var(--ok); } .tip::before { color: var(--ok); }
+  .note { background: var(--tint); border-left-color: var(--brand); }
+  .warn { background:#fdf4e7; border-left-color: var(--gold); }
+  .qa > b { color: var(--navy); }
+  .who { background: var(--navy); color: #fff; }
+  .cover { color:#fff; border-radius: 16px; padding: 64px 40px 40px; background: linear-gradient(150deg, #0f1b2d 0%, #13294b 45%, #1e4fbf 100%); border-bottom: 6px solid var(--gold); }
+  .cover .logo { background: #fff; color: var(--brand); }
+  .cover .big { letter-spacing: -.5px; }
+  .cover .sub { color: #dbe6f7; } .cover .lead { color: #b9c8e2; }
+  .toc { background: #fff; color: var(--ink); border-radius: 12px; padding: 16px 20px; }
+  .toc div { border-bottom: 1px solid #edf0f5; }
+  .toc b { display:inline-flex; width:24px; height:24px; border-radius:6px; background: var(--navy); color:#fff; align-items:center; justify-content:center; font-size:12px; margin-right:8px; }
+  .cover .contact { color: #b9c8e2; }
+  .foot { border-top: 3px solid var(--navy); }
+  @media print { body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page { max-width: none; padding: 0; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ================= COVER ================= -->
+<div class="cover">
+  <div class="logo">✓</div>
+  <div class="big">Domebox</div>
+  <div class="sub">User manual — how to use every feature, with pictures</div>
+  <p class="lead" style="margin-top:18px">For everyone on the team: the people who do the work, and the team leads who check it.</p>
+  <div class="toc">
+    <div><b>1</b>Getting started</div>
+    <div><b>2</b>Your task board</div>
+    <div><b>3</b>Working on a task</div>
+    <div><b>4</b>Giving work to someone</div>
+    <div><b>5</b>Repeating tasks</div>
+    <div><b>6</b>Priority — what to do first</div>
+    <div><b>7</b>Projects</div>
+    <div><b>8</b>Your score</div>
+    <div><b>9</b>Leaderboard and cookie points</div>
+    <div><b>10</b>Goals and key numbers</div>
+    <div><b>11</b>The weekly meeting</div>
+    <div><b>12</b>Bell and email reminders</div>
+    <div><b>13</b>For team leads</div>
+    <div><b>14</b>Common questions</div>
+  </div>
+  <p class="contact" style="margin-top:30px;font-size:14px">www.domebox.in · help: info@biscsindia.com</p>
+</div>
+
+<!-- ================= 1 ================= -->
+<section class="chapter">
+<h2><span class="n">1</span>Getting started</h2>
+
+<h3>Sign in</h3>
+<ol>
+  <li>Open <b>www.domebox.in</b> and press <b class="k">Sign in</b>.</li>
+  <li>Type the email (or username) and password your company gave you.</li>
+  <li>Press <b class="k">Sign in</b>.</li>
+</ol>
+<figure class="mid"><img src="pics/01-sign-in.jpg" alt="The sign-in screen"><figcaption>The sign-in screen.</figcaption></figure>
+<p><b>Forgot your password?</b> Press <b class="k">Forgot password?</b> next to the password box. We email you a link. It works <b>once</b> and only for <b>one hour</b>.</p>
+<div class="note">Your very first sign-in can take a few seconds longer than usual. That is normal.</div>
+
+<h3>Who can do what</h3>
+<p>Everyone has one of three roles. Your role is written under your name, top right.</p>
+<div class="roles">
+  <div><b>Doer</b>Does their own tasks. Can ask their manager or a department head for help, but cannot give work to a colleague.</div>
+  <div><b>HOD</b>(head of department) Gives work to people, checks and closes it, sees the team's scores.</div>
+  <div><b>Admin</b>Runs the company's account. Sets up people, plans and settings.</div>
+</div>
+<p>A Doer only sees work that touches them: given to them, raised by them, waiting on them, or offered to them.</p>
+
+<h3>The tabs along the top</h3>
+<table>
+  <tr><th>Tab</th><th>What it is for</th></tr>
+  <tr><td><b>Tasks</b></td><td>Your board — every task, in columns by where it stands.</td></tr>
+  <tr><td><b>Priority</b></td><td>One list: what to do first, and why.</td></tr>
+  <tr><td><b>Projects</b></td><td>Big jobs done in stages, one after another.</td></tr>
+  <tr><td><b>Meetings</b></td><td>The weekly review meeting.</td></tr>
+  <tr><td><b>Goals</b></td><td>Company purpose, values, goals and key numbers.</td></tr>
+  <tr><td><b>Leaderboard</b></td><td>Who is on top this month.</td></tr>
+  <tr><td><b>Reports</b></td><td>Scores and trends (team leads).</td></tr>
+  <tr><td><b>Team</b></td><td>The people and who reports to whom.</td></tr>
+</table>
+<p>The tabs run in the order you use them: your work first, then the weekly meeting and the company’s goals, then the leaderboard, then the tabs for team leads.</p>
+<p>Next to the tabs: the <b>bell</b> (your notifications), the <b>sparkle</b> (ask questions about the numbers, where your plan includes it), the <b>?</b> (help) and your name (your account).</p>
+
+<h3>Help is always one key away</h3>
+<p>Press the <b class="k">?</b> key, or the <b>?</b> button in the top bar. Help opens on the page for the tab you are on. Type in the search box to find anything.</p>
+<p>The <b class="k">User manual (PDF)</b> button under the list downloads this book.</p>
+<figure><img src="pics/14-help.jpg" alt="Help panel with the User manual (PDF) button"><figcaption>Help. The download button is under the list of topics on the left.</figcaption></figure>
+
+<h3>On your phone</h3>
+<p>Domebox works in the phone's browser — no app to install. The tabs move into a bar at the bottom. Help is in your account panel.</p>
+<figure class="phone"><img src="pics/15-phone.jpg" alt="Domebox on a phone"><figcaption>The same board on a phone.</figcaption></figure>
+</section>
+
+<!-- ================= 2 ================= -->
+<section class="chapter">
+<h2><span class="n">2</span>Your task board</h2>
+<p>The <b>Tasks</b> tab is where you spend most of your day. It has two parts.</p>
+<ul>
+  <li><b>The boxes on top</b> count your work: Pending, In progress, For review, Overdue — plus your <b>Delegation</b> score and <b>Final score</b>.</li>
+  <li><b>The columns below</b> hold one card for each task.</li>
+</ul>
+<figure><img src="pics/02-board.jpg" alt="The task board"><figcaption>A doer's board. Each card shows the task, due date, priority and category.</figcaption></figure>
+
+<h3>The columns</h3>
+<table>
+  <tr><th>Column</th><th>Means</th></tr>
+  <tr><td><b>Needs approval</b></td><td>Someone asked for this work. A manager must say yes first.</td></tr>
+  <tr><td><b>To do</b></td><td>Accepted. Not started yet.</td></tr>
+  <tr><td><b>In progress</b></td><td>Being worked on.</td></tr>
+  <tr><td><b>For review</b></td><td>Handed in. Waiting for someone to check it.</td></tr>
+  <tr><td><b>Verified</b></td><td>Checked and closed. Well done.</td></tr>
+</table>
+<p>A <b>red line</b> on the left of a card means it is late or close to late. Small tags on a card show the due date, the priority, the category, a goal it serves, and <b>REWORK 1</b> if it was sent back once.</p>
+
+<h3>Find a task fast</h3>
+<ul>
+  <li><b>Search tasks…</b> — type any word from the title.</li>
+  <li><b>Everyone</b> — pick one person to see only their cards.</li>
+  <li><b>Any status / Any category / Any goal</b> — narrow it down.</li>
+  <li><b>Overdue</b> — tick to see only late work.</li>
+  <li><b>Board / List</b> — cards in columns, or one table.</li>
+</ul>
+<figure><img src="pics/06-search-filter.jpg" alt="Searching for Tata"><figcaption>Typing “Tata” shows only the tasks with Tata in the title.</figcaption></figure>
+
+<h3>When a column gets long</h3>
+<p>Each column shows its <b>20 most urgent</b> cards — late ones first, then the nearest due date. Press <b class="k">Show all</b> at the bottom of the column to see the rest, and <b class="k">Show fewer</b> to fold it again. The number at the top of a column always counts every card.</p>
+
+<h3>Old work: the Archive</h3>
+<p>A closed task leaves the board <b>7 days</b> after it closed, so the board stays about live work. It is not lost. Press <b class="k">Archive</b> to see closed work, newest first, 50 at a time. Press <b class="k">Load 50 more</b> at the bottom for older ones. Search and filters work on the whole archive.</p>
+<figure><img src="pics/07-archive.jpg" alt="The archive list"><figcaption>The Archive. Press Archive again to go back to the live board.</figcaption></figure>
+</section>
+
+<!-- ================= 3 ================= -->
+<section class="chapter">
+<h2><span class="n">3</span>Working on a task</h2>
+<p><b>Click any card.</b> A panel opens on the right with everything about that task.</p>
+<figure class="mid"><img src="pics/03-task-drawer.jpg" alt="An open task"><figcaption>An open task: the details, the buttons, and the history at the bottom.</figcaption></figure>
+
+<h3>The life of a task</h3>
+<div class="flow"><span>To do</span><i>→ Start work →</i><span>In progress</span><i>→ Submit for review →</i><span>For review</span><i>→ checked →</i><span>Verified</span></div>
+<p>If the checker is not happy, they <b>send it back</b>. It returns to <i>In progress</i> with a new deadline and a note saying what to fix. That is called a <b>rework loop</b>.</p>
+
+<h3>The buttons</h3>
+<table>
+  <tr><th>Button</th><th>When to press it</th></tr>
+  <tr><td><b class="k">Start work</b></td><td>When you begin. The card moves to In progress.</td></tr>
+  <tr><td><b class="k">Submit for review</b></td><td>When it is done. Add a short note: what you did, where the proof is. Your on-time score is counted from <b>this moment</b>, not from when somebody gets round to checking it.</td></tr>
+  <tr><td><b class="k">Hand over</b></td><td>When someone else should do it. Pick the person and give a reason. Your manager decides — the task does not just vanish from your list.</td></tr>
+  <tr><td><b class="k">Add blocker</b></td><td>When you cannot start until another task is done. This task then says <i>Blocked by…</i> until that one closes.</td></tr>
+</table>
+
+<h3>Checklist</h3>
+<p>Some tasks come with a checklist. Tick each line as you finish it. The card shows how many are done, like <b>3/5</b>. You can still hand in with lines unticked — it is a reminder, not a lock.</p>
+
+<h3>History</h3>
+<p>At the bottom of every task is its full history: every change, who made it, when, and their note. If you ever think a score is wrong, the history is your proof.</p>
+<div class="warn">You cannot check and close your own work. If you raised a task for yourself, someone else signs it off.</div>
+</section>
+
+<!-- ================= 4 ================= -->
+<section class="chapter">
+<h2><span class="n">4</span>Giving work to someone</h2>
+<p>Press <b class="k">+ Assign</b> on the Tasks tab. Fill in the form.</p>
+<figure><img src="pics/04-assign-form.jpg" alt="The assign form"><figcaption>The Assign form.</figcaption></figure>
+<table>
+  <tr><th>Box</th><th>What to write</th></tr>
+  <tr><td><b>Task</b></td><td>What needs doing. Clear enough that anyone could check it is done.</td></tr>
+  <tr><td><b>Detail</b></td><td>Extra facts, and what “done” looks like.</td></tr>
+  <tr><td><b>Assign to</b></td><td>Tick one person or <b>several</b>. Each person gets their own copy.</td></tr>
+  <tr><td><b>Due date</b></td><td>Must be filled. Scores depend on it.</td></tr>
+  <tr><td><b>Priority</b></td><td>Critical, High, Medium or Low. Important work counts for more.</td></tr>
+  <tr><td><b>Job category</b></td><td>The kind of work, e.g. Despatch, Quality.</td></tr>
+  <tr><td><b>Serves goal</b></td><td>The company goal this task helps (optional).</td></tr>
+  <tr><td><b>Repeats</b></td><td>For work that happens again and again — see chapter 5.</td></tr>
+  <tr><td><b>Checklist</b></td><td>One step per line (optional).</td></tr>
+</table>
+<p>Before you send, the form tells you whether a manager must approve it first.</p>
+
+<h3>Where does the task go?</h3>
+<table>
+  <tr><th>Who gave it</th><th>What happens</th></tr>
+  <tr><td>Your own manager, or an Admin</td><td>Lands straight on your board.</td></tr>
+  <tr><td>You, for yourself</td><td>Lands straight on your board.</td></tr>
+  <tr><td>A Doer asking their manager for help</td><td>The manager accepts or declines it themselves.</td></tr>
+  <tr><td>Anyone else</td><td>Goes to <b>Needs approval</b>. The person's manager says yes or no.</td></tr>
+</table>
+<div class="note"><b>Why can a Doer not give work to a colleague?</b> Work dropped on you by a colleague, with no manager involved, is how people end up with eleven jobs and no way to say no. Ask your manager instead, or use <b>Hand over</b> on the task.</div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section class="chapter">
+<h2><span class="n">5</span>Repeating tasks</h2>
+<p>For work that comes back on a schedule — a daily stock count, a weekly report, a monthly calibration.</p>
+<ol>
+  <li>In the Assign form, open <b>Repeats</b>.</li>
+  <li>Choose how often: Daily, Weekdays (Monday to Friday), Weekly, Fortnightly, Monthly, Quarterly, Half-Yearly or Yearly.</li>
+  <li>Choose when it should <b>stop</b>.</li>
+</ol>
+<figure class="small"><img src="pics/05-repeats.jpg" alt="Stop repeating choices"><figcaption>“After a number of times”: this one will run 6 times, then stop by itself.</figcaption></figure>
+<table>
+  <tr><th>Stop repeating</th><th>Means</th></tr>
+  <tr><td><b>Never</b></td><td>Keeps going until someone stops it.</td></tr>
+  <tr><td><b>On a date</b></td><td>No new copy after that date.</td></tr>
+  <tr><td><b>After a number of times</b></td><td>Stops after that many copies.</td></tr>
+</table>
+<p>Each new copy appears on time, even if the last one has not been checked yet. The card shows how far along it is, like <b>Monthly · 3 of 6</b>.</p>
+<p>Monthly work set for the 31st lands on the last day of shorter months (28th or 30th) instead of slipping into the next month.</p>
+<p>To end a series early, open any copy and press <b class="k">Stop repeating</b>.</p>
+</section>
+
+<!-- ================= 6 ================= -->
+<section class="chapter">
+<h2><span class="n">6</span>Priority — what to do first</h2>
+<p>The <b>Priority</b> tab answers one question: <b>what should I do next?</b> It puts all your open work in one list, most pressing on top, and every line says <b>why</b> it is there.</p>
+<figure><img src="pics/08-priority.jpg" alt="The priority list"><figcaption>Every row has its reason: overdue, due today, someone is waiting on it, and so on.</figcaption></figure>
+<p>What pushes a task up the list:</p>
+<ul>
+  <li><b>It is late</b> — and it climbs a little more each day it stays late.</li>
+  <li><b>It is due today</b>, tomorrow, or this week.</li>
+  <li><b>Other people are waiting on it</b> — their task is blocked by yours.</li>
+  <li><b>You have already started it</b> — finishing beats starting.</li>
+  <li><b>Its priority</b> — a Critical task outranks a Low one with the same date.</li>
+</ul>
+<p>Use the <b>horizon</b> buttons — Today, This week, This month, This quarter, This year, Everything — to look further ahead. Late work shows in <b>every</b> horizon, even Today.</p>
+<p>Below the main list:</p>
+<ul>
+  <li><b>Waiting</b> — blocked on someone else. Not your move yet.</li>
+  <li><b>Decisions</b> — things waiting for <b>you</b> to approve or check.</li>
+  <li><b>Handed in</b> — your work waiting to be checked.</li>
+</ul>
+</section>
+
+<!-- ================= 7 ================= -->
+<section class="chapter">
+<h2><span class="n">7</span>Projects</h2>
+<p>A project is a big job done in <b>stages, one after another</b> — an audit, a new-part approval, a machine install. Each stage has its own owner and its own deadline.</p>
+<figure><img src="pics/11-projects.jpg" alt="A project with three stages"><figcaption>A three-stage project. Stage 1 is live; stages 2 and 3 wait for the one before.</figcaption></figure>
+<ul>
+  <li>Every stage is a normal task on its owner's board.</li>
+  <li>Only <b>stage 1</b> is live at the start. The others say <i>Blocked</i>.</li>
+  <li>When a stage is verified, the <b>next stage starts by itself</b> and its owner gets an email. Nobody has to remember to pass it on.</li>
+</ul>
+<div class="tip">If the stage before yours finished late, <b>your deadline moves by the same number of days</b>. You get back the time that was planned for you. You are never marked late for someone else's delay.</div>
+<p>To start one: <b>Projects → New project</b>. Give it a name, then add at least two stages — title, owner, deadline and priority for each.</p>
+</section>
+
+<!-- ================= 8 ================= -->
+<section class="chapter">
+<h2><span class="n">8</span>Your score</h2>
+<p>Your score is between <b>0 and 100</b>. Click <b>See why</b> on the Final score box to see exactly how it was worked out, task by task. There are no hidden marks.</p>
+<p>It is <b>this month's</b> score: the work you closed this month and what you are still holding. The leaderboard, Reports and your appraisal all use the same number. Until you close something in the month it says <b>no data yet</b> — that is not a zero.</p>
+<figure><img src="pics/09-score-why.jpg" alt="See why — the score breakdown"><figcaption>“See why” shows every part of the score and the tasks behind it.</figcaption></figure>
+
+<h3>Three things are measured</h3>
+<table>
+  <tr><th>Part</th><th>Share</th><th>The question it asks</th></tr>
+  <tr><td><b>On time</b></td><td>45%</td><td>Did you hand it in by the due date?</td></tr>
+  <tr><td><b>First-time right</b></td><td>30%</td><td>Was it accepted without being sent back?</td></tr>
+  <tr><td><b>Nothing left late</b></td><td>25%</td><td>Is any work you are still holding overdue?</td></tr>
+</table>
+<p>On a project, a part of the score also comes from meeting each stage's deadline.</p>
+<ul>
+  <li>Each <b>working day late</b> takes <b>10 points</b> off that task (weekends and approved leave are not counted). Ten working days late = zero for that task.</li>
+  <li>Each <b>send-back</b> (rework) takes <b>25 points</b> off that task.</li>
+  <li>Critical tasks count for more than Low ones.</li>
+</ul>
+
+<h3>Doing more work counts</h3>
+<p>Someone who does one easy task on time should not beat someone who carries ten and delivers seven on time. So the score also looks at <b>how much work you carried</b> compared with what is normal for your job. Ten jobs with seven on time scores far higher than one easy job.</p>
+<p>If you had very little work in a month, the score is marked <b>provisional</b> — too little to judge, not a bad mark.</p>
+
+<h3>These never count against you</h3>
+<ol>
+  <li><b>Approved leave and holidays.</b> Late days do not add up while you are on leave your manager has recorded.</li>
+  <li><b>A slow checker.</b> You are timed until you press <i>Submit for review</i> — not until someone checks it.</li>
+  <li><b>Work out of your hands.</b> Tasks waiting for review or approval do not count as late on you.</li>
+</ol>
+
+<h3>Bands</h3>
+<table>
+  <tr><th>Band</th><th>Score</th><th>Means</th></tr>
+  <tr><td><b>A</b></td><td>85 and above</td><td>Top performer</td></tr>
+  <tr><td><b>B</b></td><td>60 to 84</td><td>Solid, can get sharper</td></tr>
+  <tr><td><b>C</b></td><td>below 60</td><td>Needs help</td></tr>
+</table>
+<div class="note"><b>Think your score is wrong?</b> Open See why, find the task, and look at its history. Then talk to your manager. A due date changed only by word of mouth is not in the system — ask for it to be changed in the task, with the reason.</div>
+</section>
+
+<!-- ================= 9 ================= -->
+<section class="chapter">
+<h2><span class="n">9</span>Leaderboard and cookie points</h2>
+<h3>The leaderboard</h3>
+<p>The <b>Leaderboard</b> tab ranks the team from top to bottom for a week, month, quarter or year. It uses the same score as your dashboard. ▲ and ▼ show movement since last time.</p>
+<figure><img src="pics/10-leaderboard.jpg" alt="The leaderboard"><figcaption>The leaderboard for the month.</figcaption></figure>
+<ul>
+  <li><b>Nobody is ranked on nothing.</b> If you closed no work in the period (for example, you were on leave), you are listed under <b>Not ranked</b> with the reason — not at the bottom.</li>
+  <li><b>One easy task cannot win it</b>, because workload counts.</li>
+  <li>People with the same score share a rank.</li>
+</ul>
+<p>Your company decides who sees the whole table. You always see your own place.</p>
+
+<h3>Cookie points</h3>
+<p>Some good work does not show in a score: staying late to clear a backlog, catching a mistake nobody saw, helping a colleague finish. Managers can thank you for it with <b>cookie points</b>.</p>
+<ul>
+  <li>1 to 5 points each time, always with a written reason.</li>
+  <li>You get an email when you receive them.</li>
+  <li>They can lift your score by <b>10 points at most</b>, however many you get.</li>
+</ul>
+</section>
+
+<!-- ================= 10 ================= -->
+<section class="chapter">
+<h2><span class="n">10</span>Goals and key numbers</h2>
+<p>The <b>Goals</b> tab shows where the company is going and how it wants to get there.</p>
+<figure><img src="pics/12-goals.jpg" alt="Purpose, values and goals"><figcaption>Purpose and values at the top; goals below, each with its owner, progress and status.</figcaption></figure>
+<ul>
+  <li><b>Our purpose</b> — one sentence: why the company exists.</li>
+  <li><b>Our values</b> — how we behave. Each has a short code that people say out loud.</li>
+  <li><b>Year goals</b> — what the company will achieve this financial year (April to March).</li>
+  <li><b>Quarter goals</b> — the few things this quarter that move a year goal. Q1 is April to June.</li>
+</ul>
+
+<h3>Progress is counted, not guessed</h3>
+<p>The bar shows how much of the work linked to the goal has been <b>verified</b> — for example <b>6/9</b>. To link your task to a goal, choose it under <b>Serves goal</b> when you assign the task.</p>
+
+<h3>Goal status</h3>
+<table>
+  <tr><th>Status</th><th>Means</th></tr>
+  <tr><td><b>On course</b></td><td>Will be done in time.</td></tr>
+  <tr><td><b>At risk</b></td><td>Might not be. You must write one line saying why.</td></tr>
+  <tr><td><b>Done</b></td><td>Finished.</td></tr>
+  <tr><td><b>Dropped</b></td><td>No longer being chased.</td></tr>
+</table>
+<p>If you <b>own</b> a goal, you can change its status yourself — the person closest to the work knows first when it is at risk.</p>
+
+<h3>Key numbers</h3>
+<p>Further down are the few weekly numbers that say if the week went well — despatches, rejections, collections. Each has an owner and a target. If you own one, enter this week's figure. A miss shows in red and should be raised as a roadblock in the weekly meeting.</p>
+</section>
+
+<!-- ================= 11 ================= -->
+<section class="chapter">
+<h2><span class="n">11</span>The weekly meeting</h2>
+<p>The <b>Meetings</b> tab runs your weekly review. One person — usually a manager — <b>chairs</b> it. Everyone else opens the same meeting on their own screen, and it follows the chair by itself.</p>
+<figure><img src="pics/22-meetings-list.jpg" alt="The Meetings tab"><figcaption>When a meeting is live, press it to join.</figcaption></figure>
+
+<h3>The eight parts, always in this order</h3>
+<table>
+  <tr><th>Part</th><th>What happens</th></tr>
+  <tr><td><b>1 · Wins</b></td><td>Who is here, and one good thing each — from work or home.</td></tr>
+  <tr><td><b>2 · Values in action</b></td><td>A short story of someone living one of the company values. It must name the value.</td></tr>
+  <tr><td><b>3 · Goal check</b></td><td>Each quarter goal: on course, at risk or done. No discussion here.</td></tr>
+  <tr><td><b>4 · Key numbers</b></td><td>This week's figures against their targets.</td></tr>
+  <tr><td><b>5 · Updates</b></td><td>Anything everyone should know. One line each.</td></tr>
+  <tr><td><b>6 · Roadblocks</b></td><td>Problems and chances, solved one at a time.</td></tr>
+  <tr><td><b>7 · Actions</b></td><td>Last week's actions — done or not? This week's: who, what, by when.</td></tr>
+  <tr><td><b>8 · Close</b></td><td>Everyone rates the meeting from 1 to 10.</td></tr>
+</table>
+<p>A clock shows how long each part is taking. It turns red when a part runs over.</p>
+
+<h3>Share a win, a story or an update</h3>
+<p>Type in the box and press <b class="k">Share</b>. Your point appears for everyone straight away.</p>
+<figure><img src="pics/23-meeting-wins.jpg" alt="Wins segment"><figcaption>Wins: who is here (ticked), and the wins shared so far.</figcaption></figure>
+
+<h3>Roadblocks</h3>
+<p>Raise a problem in part 6. It stays on the list from one week to the next until someone clears it. You can also raise one between meetings: <b>Meetings → Raise a roadblock</b>.</p>
+<figure><img src="pics/24-meeting-roadblocks.jpg" alt="Roadblocks segment"><figcaption>Roadblocks are worked one at a time.</figcaption></figure>
+
+<h3>Turn any point into a task — Delegate</h3>
+<p>Every point in the meeting has a <b class="k">Delegate</b> button. Press it, write what will be done, tick <b>who</b> (one person or several), and set the due date. Each person gets a real task on their board, with reminders, and it counts in their score. The point then shows who it went to and how far it has got, so nobody hands out the same job twice. Next week's meeting opens with every open action on the list.</p>
+
+<h3>Close — rate the meeting</h3>
+<p>Press a number from 1 to 10. If you give less than 8, say why. Ratings are <b>anonymous</b>: everyone sees how many have rated, nobody sees who gave what.</p>
+<figure><img src="pics/25-meeting-rate.jpg" alt="Rating the meeting"><figcaption>Your rating. 1 = a waste of time, 10 = exactly what we needed.</figcaption></figure>
+<p>When the chair ends the meeting, everyone who was there gets a summary by email, with <b>their own actions at the top</b>.</p>
+<p>Press <b class="k">Leave screen</b> to go back to your other work; you can come back while the meeting is live.</p>
+</section>
+
+<!-- ================= 12 ================= -->
+<section class="chapter">
+<h2><span class="n">12</span>Bell and email reminders</h2>
+<h3>The bell</h3>
+<p>The <b>bell</b> at the top shows a red number when something new needs you: a task given to you, a task sent back, a request for approval, cookie points, and so on. Click it to see the list; click a line to open that task.</p>
+<figure class="mid"><img src="pics/13-bell.jpg" alt="The notifications list"><figcaption>Your notifications.</figcaption></figure>
+
+<h3>Email reminders</h3>
+<p>Domebox emails you about your <b>open</b> tasks (To do or In progress) at <b>9 am, 3 pm and 5 pm</b>, most urgent first:</p>
+<ul>
+  <li>on the <b>day the task is given</b> to you,</li>
+  <li><b>2 days before it is due</b> (the Friday before, if that falls on a weekend),</li>
+  <li>and <b>every working day while it is late</b>.</li>
+</ul>
+<p>Hand the task in and the reminders stop. Nothing is sent about work waiting for review or approval, about closed work, or while you are on approved leave. On a day with nothing to say, nothing is sent at all.</p>
+<p>If other people are waiting on <b>your</b> decision — an approval or a check — you also get one short email each morning listing them.</p>
+<div class="tip">All emails come from <b>info@biscsindia.com</b>. If you cannot find them, look in Spam and mark them “Not spam”.</div>
+</section>
+
+<!-- ================= 13 ================= -->
+<section class="chapter">
+<h2><span class="n">13</span>For team leads</h2>
+<span class="who">HODs and managers</span>
+<p>As a team lead, your board also shows your team's work. Work waiting on <b>you</b> sits in <b>Needs approval</b> and <b>For review</b>.</p>
+<figure><img src="pics/16-lead-board.jpg" alt="A team lead's board"><figcaption>A team lead's board. Payel's packed bearings are waiting in For review.</figcaption></figure>
+
+<h3>Approve or refuse new work</h3>
+<p>A card in <b>Needs approval</b> is someone asking for your person's time. Open it and press <b class="k">Approve</b> to put it on their board, or <b class="k">Reject</b> with a reason.</p>
+
+<h3>Check handed-in work</h3>
+<p>Open a card in <b>For review</b>. Read the note and look at the proof.</p>
+<figure><img src="pics/17-verify.jpg" alt="Verifying a task"><figcaption>A task waiting for your check.</figcaption></figure>
+<ul>
+  <li>Happy with it? Press <b class="k">Verify &amp; close</b>.</li>
+  <li>Not right? Press <b class="k">Send back</b>. Say what to fix and give a <b>new deadline</b>.</li>
+</ul>
+<figure><img src="pics/18-send-back.jpg" alt="Sending a task back"><figcaption>Sending work back: a clear note and a fair new date.</figcaption></figure>
+<div class="warn"><b>You are timed too.</b> Try to approve or check within <b>2 working days</b>. After that, your own score loses a little each working day (never more than 20 points in total). Your team is never marked late for your slow check.</div>
+
+<h3>Give cookie points</h3>
+<p>Open the cookie panel, pick the person, give 1 to 5 points and write why. They get an email.</p>
+<figure><img src="pics/19-cookies.jpg" alt="Cookie points"><figcaption>Cookie points — always with a written reason.</figcaption></figure>
+
+<h3>Reports</h3>
+<p>The <b>Reports</b> tab shows your team for a week, month, quarter or year: the team score, work delivered, the on-time share, rework loops and late work, the trend over twelve periods, how many people sit in each band, and each person's score.</p>
+<figure><img src="pics/20-reports.jpg" alt="Reports"><figcaption>Reports for the month.</figcaption></figure>
+<p><b>Accountability</b> shows rework by person and who is holding work up. <b>Review history</b> lists past appraisals.</p>
+
+<h3>Appraisal</h3>
+<p><b>Reports → Appraisal</b>. Pick the person. Rate each responsibility area (KRA) and each behaviour from 0 to 5, add up to 5 bonus points if deserved, and write your remarks.</p>
+<figure><img src="pics/21-appraisal.jpg" alt="The appraisal form"><figcaption>The appraisal: half your judgement, half the task record.</figcaption></figure>
+<p>The final appraisal score is half your ratings and half the person's score from their task record. A new joiner with no closed work is judged only on your ratings — a new joiner is not a poor performer.</p>
+
+<h3>Reading a score fairly</h3>
+<ul>
+  <li><b>Provisional</b> means too little work to judge.</li>
+  <li>Good on-time work but a low “nothing left late” part usually means <b>too much work</b>, not slow work.</li>
+  <li>Many rework loops are usually about <b>unclear briefing</b>, not effort.</li>
+  <li>Open <b>See why</b> together before any performance talk.</li>
+</ul>
+<div class="note">Leave must be recorded in Domebox (<b>Team → Leave</b>) so late days stop counting for that person. Adding people, setting up categories and changing company settings are done by your Admin.</div>
+</section>
+
+<!-- ================= 14 ================= -->
+<section class="chapter">
+<h2><span class="n">14</span>Common questions</h2>
+<div class="qa">
+<b>I cannot give a task to my colleague.</b>
+<p>That is on purpose. Ask your manager to assign it, or raise it to them. If a task you hold should go to a colleague, use <b>Hand over</b>.</p>
+<b>Why can I not close my own task?</b>
+<p>A job nobody checked is not really closed. Someone else signs it off.</p>
+<b>My task disappeared from the board.</b>
+<p>Closed work leaves the board 7 days after it closed. Press <b>Archive</b> to find it.</p>
+<b>My due date was changed, but it still says late.</b>
+<p>Only a change made inside the task counts. Ask the person who gave it to change the due date in the task, with the reason.</p>
+<b>I was on leave and it still says I was late.</b>
+<p>Your leave must be recorded in Domebox. Ask your manager to add it.</p>
+<b>I am not on the leaderboard.</b>
+<p>You closed no work in that period, so you are listed under <b>Not ranked</b>. That is not last place.</p>
+<b>A task says “Blocked”. What do I do?</b>
+<p>Open it to see which task it is waiting on. You can start when that one is verified. If it is stuck, raise it with your manager or as a roadblock in the weekly meeting.</p>
+<b>I am not getting any emails.</b>
+<p>Look in Spam for mail from <b>info@biscsindia.com</b>. Still nothing? Tell your Admin.</p>
+<b>I forgot my password.</b>
+<p>Press <b>Forgot password?</b> on the sign-in screen. The email link works once, for one hour.</p>
+</div>
+<div class="foot">Still stuck? Press <b>?</b> and choose <b>Contact support</b> at the foot of any help page, or write to <b>info@biscsindia.com</b>. We reply within one working day.<br>Domebox · www.domebox.in · The pictures in this book show a demo company; your names and tasks will differ.</div>
+</section>
+
+</div>
+</body>
+</html>
