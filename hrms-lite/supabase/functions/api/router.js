@@ -18,7 +18,11 @@ export function createRouter(db, opts = {}) {
       case 'bootstrap':     return act.bootstrap(caller, p && p.months);
 
       case 'list':          return api.listSheet(p.sheet);
-      case 'save':          return api.upsertRow(p.sheet, p.row, dirty);
+      case 'save':          /* an employee's own leave or request starts Pending, at step one */
+                            if (!api.isHrOrAbove(caller.role) && (p.sheet === 'Leave' || p.sheet === 'Requests')) {
+                              p.row = await act.ownApplication(p.sheet, p.row, caller.emp_code);
+                            }
+                            return api.upsertRow(p.sheet, p.row, dirty);
       case 'saveMany':      return api.upsertMany(p.sheet, p.rows, dirty);
       case 'remove':        return api.removeRow(p.sheet, p.id, dirty);
       case 'removeMany':    return api.removeMany(p.sheet, p.ids, dirty);
@@ -33,6 +37,7 @@ export function createRouter(db, opts = {}) {
 
       case 'myMonth':       return act.myMonth(caller && caller.emp_code, p.month);
       case 'monthAtt':      return act.monthAtt(p.month);
+      case 'teamMonth':     return act.teamMonth(caller, p.month);
 
       case 'punchState':    return act.punchState(
                               api.isHrOrAbove(caller.role) && p.emp_code
@@ -107,7 +112,7 @@ export function createRouter(db, opts = {}) {
      the single global queue that made the sheet version take minutes has no
      equivalent here. */
   const READ_ACTIONS = new Set(['ping', 'rev', 'bootstrap', 'login', 'list',
-    'myMonth', 'monthAtt', 'punchState', 'punchLog', 'listUsers', 'payslipMailLog',
+    'myMonth', 'teamMonth', 'monthAtt', 'punchState', 'punchLog', 'listUsers', 'payslipMailLog',
     'tally', 'secretStatus', 'testIntegration']);
 
   /* A trusted, auth-free path for the eSSL push endpoint in index.ts: the

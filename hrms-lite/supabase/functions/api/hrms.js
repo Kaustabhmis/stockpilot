@@ -191,7 +191,7 @@ export function createApi(db, opts = {}) {
 
   const PUBLIC_ACTIONS = new Set(['login', 'ping', 'setup']);
   const EMPLOYEE_ACTIONS = new Set(['bootstrap', 'changePassword', 'punchState',
-    'webPunch', 'ping', 'rev', 'myMonth', 'save', 'remove', 'decide']);
+    'webPunch', 'ping', 'rev', 'myMonth', 'teamMonth', 'save', 'remove', 'decide']);
   const OWNER_ACTIONS = new Set(['saveUser', 'removeUser', 'listUsers',
     'setSecret', 'secretStatus', 'testIntegration', 'esslPull', 'esslPush',
     /* writes every table, password hashes included - the owner's alone */
@@ -236,7 +236,7 @@ export function createApi(db, opts = {}) {
       throw new Error('Not allowed. Your account does not have permission for this.');
     }
     const code = String(caller.emp_code || '');
-    if (['bootstrap', 'ping', 'rev', 'myMonth', 'decide', 'punchState', 'webPunch',
+    if (['bootstrap', 'ping', 'rev', 'myMonth', 'teamMonth', 'decide', 'punchState', 'webPunch',
          'changePassword'].includes(action)) return;
 
     if (action === 'save') {

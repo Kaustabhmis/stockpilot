@@ -195,6 +195,21 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .geo-note{font-size:.72rem;margin-top:4px;color:var(--muted);}
 .cal .d.today{outline:2px solid var(--primary);outline-offset:1px;}
 .cal .d.IN{background:#ecfdf5;border-color:#a7f3d0;color:#065f46;}
+.pick{flex:1;min-width:0;padding:12px 10px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);
+  font:inherit;font-size:.9rem;color:var(--text);}
+.seg{display:flex;gap:6px;background:#eef2f7;border-radius:13px;padding:4px;margin:0 0 14px;}
+.seg button{flex:1;padding:10px 4px;border-radius:10px;font-weight:700;font-size:.82rem;color:var(--muted);position:relative;}
+.seg button.on{background:var(--card);color:var(--primary);box-shadow:0 2px 8px rgba(15,23,42,.08);}
+.seg button i{font-style:normal;background:var(--red);color:#fff;border-radius:9px;padding:1px 6px;font-size:.68rem;margin-left:4px;}
+.trow{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);font-size:.86rem;}
+.trow:last-child{border-bottom:0;}
+.trow .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.trow .nm small{display:block;color:var(--muted);font-weight:500;font-size:.72rem;}
+.trow .st{flex:none;font-size:.72rem;font-weight:800;border-radius:8px;padding:4px 8px;min-width:34px;text-align:center;}
+.st.P,.st.IN{background:#d1fae5;color:#065f46;} .st.A,.st.NA{background:#fee2e2;color:#991b1b;}
+.st.HD,.st.COP{background:#fef3c7;color:#92400e;} .st.L{background:#dbeafe;color:#1e40af;}
+.st.OD,.st.CO{background:#ede9fe;color:#5b21b6;} .st.WO,.st.H,.st.none{background:#f1f5f9;color:#64748b;}
+.cnt{display:flex;gap:5px;flex:none;} .cnt b{font-size:.7rem;border-radius:7px;padding:3px 6px;font-weight:800;}
 .cal .d.COP{background:#fef3c7;border-color:#f59e0b;color:#92400e;font-weight:700;}
 .cal .d{position:relative;}
 .cal .d.late::after{content:'';position:absolute;top:0;left:0;border-top:10px solid #f59e0b;
@@ -719,29 +734,36 @@ function isWeeklyOff(iso) {
   var d = ['sun','mon','tue','wed','thu','fri','sat'][new Date(iso + 'T00:00:00').getDay()];
   return d === off;
 }
-function statusFor(iso) {
-  var rec = attFor(iso);
+function coNeedHours() {
+  var need = S.settings.co_min_hours;
+  return need === undefined || need === null || need === '' ? 5 : num(need);
+}
+/* The status one day shows - mine, or (for a manager) one of my people's. */
+function statusOfRec(rec, iso, doj, loaded) {
   /* in today and not out yet: at work, not absent - the day settles at punch out */
   if (rec && rec.in_time && !rec.out_time && iso === today()) return 'IN';
-  /* CO+ : the weekly off was worked - out duty, or enough hours - so a
-     comp-off is earned. Fewer hours than that is still just the weekly off. */
-  if (rec && rec.status && { P: 1, HD: 1, A: 1, OD: 1 }[rec.status] && isWeeklyOff(iso) && !holidayOn(iso)) {
-    var need = S.settings.co_min_hours, mins = workedMinutes(rec);
-    need = need === undefined || need === null || need === '' ? 5 : num(need);
+  /* CO+ : a weekly off or a holiday that was worked - out duty, or enough
+     hours - earns a comp-off. Fewer hours than that is still just the day off. */
+  var hol = holidayOn(iso);
+  if (rec && rec.status && { P: 1, HD: 1, A: 1, OD: 1 }[rec.status] && (hol || isWeeklyOff(iso))) {
+    var need = coNeedHours(), mins = workedMinutes(rec);
     if (String(rec.status) === 'OD' || (need > 0 && mins && mins >= need * 60)) return 'CO+';
-    if (rec.in_time) return 'WO';
+    if (rec.in_time) return hol ? 'H' : 'WO';
   }
   if (rec && rec.status) return String(rec.status);
-  if (holidayOn(iso)) return 'H';
+  if (hol) return 'H';
   if (isWeeklyOff(iso)) return 'WO';
-  /* a past working day with no punch and nothing marked is absent */
-  var doj = String((S.me && S.me.doj) || ''), ym = iso.slice(0, 7);
-  /* only for a month this phone has actually loaded - a month not fetched
-     yet is "not known", not "absent" */
+  /* a past working day with no punch and nothing marked is absent - but only
+     in a month this phone has actually loaded: a month not fetched yet is
+     "not known", not "absent" */
+  if (loaded && iso < today() && !(doj && iso < String(doj))) return 'NA';
+  return '';
+}
+function statusFor(iso) {
+  var ym = iso.slice(0, 7);
   var loaded = (S.haveMonth && S.haveMonth[ym]) ||
     (S.att || []).some(function (a) { return String(a.date).slice(0, 7) === ym; });
-  if (loaded && iso < today() && !(doj && iso < doj)) return 'NA';
-  return '';
+  return statusOfRec(attFor(iso), iso, (S.me && S.me.doj) || '', loaded);
 }
 
 function renderPunch() {
@@ -813,12 +835,13 @@ function renderPunch() {
 /* The signed-in person's shift (their own, else the company default), so we
    can tell a late arrival from an on-time one. Returns null if shifts were
    not sent, in which case "late" simply stays 0 rather than guessing. */
-function myShift() {
+function myShift() { return shiftOfPerson(S.me); }
+function shiftOfPerson(who) {
   var list = S.shifts || [];
   if (!list.length) return null;
   var byName = {};
   list.forEach(function (x) { byName[String(x.name || '').trim().toLowerCase()] = x; });
-  var mine = String((S.me && S.me.shift) || '').trim().toLowerCase();
+  var mine = String((who && who.shift) || '').trim().toLowerCase();
   var def = String(S.settings.default_shift || '').trim().toLowerCase();
   return byName[mine] || byName[def] || byName.general || list[0] || null;
 }
@@ -831,9 +854,9 @@ function lateAfterMins() {
 /* Late marks on a day: coming in after start + grace, and leaving before
    end - grace, each count - on a P day (or today, still in). A day already cut
    to HD for being more than an hour out carries none. Same rule as HR's. */
-function dayLateMarks(st, rec) {
+function dayLateMarks(st, rec, shift) {
   if (!rec || !(st === 'P' || st === 'IN')) return 0;
-  var sh = myShift();
+  var sh = shift || myShift();
   if (!sh) return 0;
   var g = num(sh.grace_minutes) || 0, start = minutesOf(sh.start_time), end = minutesOf(sh.end_time);
   var n = 0, inM = minutesOf(rec.in_time), outM = minutesOf(rec.out_time);
@@ -1055,7 +1078,7 @@ function renderCalendar() {
     '</div>' +
     '<div class="legend">' +
       [['P','#d1fae5','Present'],['A','#fee2e2','Absent'],['HD','#fef3c7','Half day'],
-       ['L','#dbeafe','Leave'],['OD','#ede9fe','OD / comp-off'],['CO+','#fde68a','CO+ worked weekly off'],['WO','#f1f5f9','Off / holiday']]
+       ['L','#dbeafe','Leave'],['OD','#ede9fe','OD / comp-off'],['CO+','#fde68a','CO+ worked off day'],['WO','#f1f5f9','Off / holiday']]
       .map(function (x) { return '<span><i style="background:' + x[1] + '"></i>' + x[2] + '</span>'; }).join('') +
     '</div>';
 }
@@ -1095,7 +1118,7 @@ function dayDetail(iso) {
   var rec = attFor(iso), st = statusFor(iso), hol = holidayOn(iso);
   var mins = workedMinutes(rec);
   var names = { P:'Present', A:'Absent', HD:'Half day', L:'On leave', OD:'Out duty',
-                CO:'Comp-off', 'CO+':'Worked the weekly off - comp-off earned (paid, or set against an absent day by HR)',
+                CO:'Comp-off', 'CO+':'Worked a weekly off or holiday - comp-off earned. Use it from Requests.',
                 WO:'Weekly off', H:'Holiday', NA:'Absent - no punch',
                 IN:'Joined - punched in, not out yet' };
   openSheet('<h3>' + esc(new Date(iso + 'T00:00:00').toLocaleDateString(undefined,
@@ -1146,10 +1169,80 @@ function askTypes() {
     out.push({ key: code, name: t.name || t.code, raw: t,
       hint: code === 'od' ? 'Working, but away from the unit'
           : code === 'swipe' ? 'You were here but the machine missed it'
-          : code === 'co' ? 'Worked a Sunday or a holiday'
+          : isCoKind(code) ? 'A weekly off or holiday you worked (CO+) - get it paid, or set it against an absent day'
           : '' });
   });
   return out;
+}
+
+/* ---- comp-off ---------------------------------------------------
+   The same comp-off the office sees: every weekly off or holiday worked
+   (CO+ on the calendar) is one credit, used once - paid, or set against an
+   absent day - and it goes through the same approval as everything else. */
+function coType() {
+  return (S.reqTypes || []).filter(function (t) {
+    return String(t.effect) === 'comp_off' && String(t.active || 'yes').toLowerCase() !== 'no';
+  })[0] || null;
+}
+function isCoKind(kind) {
+  var t = coType();
+  return !!t && String(t.code).toLowerCase() === String(kind).toLowerCase();
+}
+function coRequests() {
+  return (S.reqs || []).filter(function (r) {
+    return isCoKind(r.type) && ['Pending', 'Approved'].indexOf(String(r.status || 'Pending')) >= 0;
+  });
+}
+function myCoPlus() {
+  var used = {};
+  coRequests().forEach(function (r) { used[String(r.date).slice(0, 10)] = r; });
+  var valid = num(S.settings.co_validity_days === undefined || S.settings.co_validity_days === '' ? 90 : S.settings.co_validity_days);
+  return (S.att || []).filter(function (a) {
+    var iso = String(a.date).slice(0, 10);
+    return iso <= today() && statusFor(iso) === 'CO+';
+  }).map(function (a) {
+    var iso = String(a.date).slice(0, 10), r = used[iso];
+    var age = Math.round((new Date(today()) - new Date(iso)) / 86400000);
+    var m = r ? String(r.mode || '') : '';
+    return { iso: iso, rec: a, req: r,
+      state: !r ? (valid > 0 && age > valid ? 'lapsed' : 'open')
+        : String(r.status) !== 'Approved' ? 'pending'
+        : (m === 'payout' || m === 'pay' || m === 'arrear') ? 'paid' : 'adjusted' };
+  }).sort(function (x, y) { return String(y.iso).localeCompare(String(x.iso)); });
+}
+/* my absent days a comp-off could cover: marked A, or no punch at all */
+function myAbsentDays() {
+  var taken = {};
+  coRequests().forEach(function (r) { if (r.adjust_date) taken[String(r.adjust_date).slice(0, 10)] = 1; });
+  var out = [], seen = {};
+  (S.att || []).forEach(function (a) { seen[String(a.date).slice(0, 7)] = 1; });
+  Object.keys(seen).forEach(function (ym) {
+    for (var d = 1; d <= daysInMonth(ym); d++) {
+      var iso = dateStr(ym, d), st = statusFor(iso);
+      if (iso < today() && (st === 'A' || st === 'NA') && !taken[iso]) out.push(iso);
+    }
+  });
+  return out.sort().reverse();
+}
+function coCardHtml() {
+  var list = myCoPlus();
+  if (!list.length) return '';
+  var tag = { open: ['Pending', 'not used yet'], pending: ['Pending', 'waiting for approval'],
+              paid: ['Approved', 'paid'], adjusted: ['Approved', 'set against a day'], lapsed: ['Rejected', 'lapsed'] };
+  return '<div class="card" style="margin-bottom:14px"><h3>Comp-off earned (CO+)</h3>' +
+    '<div class="cs">A weekly off or holiday you worked. Get it paid, or set it against an absent day.</div>' +
+    list.slice(0, 12).map(function (x) {
+      var w = workedMinutes(x.rec);
+      return '<div class="item" style="margin:10px 0 0;box-shadow:none"><div class="hd"><b>' + esc(fmtDate(x.iso)) +
+        ' <span style="color:var(--muted);font-weight:500">' + esc(dayName(x.iso).slice(0, 3)) +
+        (String(x.rec.status) === 'OD' ? ' · out duty' : (w ? ' · ' + hoursText(w) : '')) + '</span></b>' +
+        '<span class="tag ' + tag[x.state][0] + '">' + tag[x.state][1] +
+          (x.state === 'adjusted' && x.req.adjust_date ? ' ' + esc(fmtDate(String(x.req.adjust_date).slice(0, 10))) : '') + '</span></div>' +
+        (x.state === 'open'
+          ? '<div class="acts"><button class="yes" onclick="openRequest(\'' + esc(String(coType() ? coType().code : 'co').toLowerCase()) +
+            '\',\'' + x.iso + '\')">Use this comp-off</button></div>' : '') +
+        '</div>';
+    }).join('') + '</div>';
 }
 
 function renderRequests() {
@@ -1171,6 +1264,7 @@ function renderRequests() {
   el('v-req').innerHTML =
     '<h2 class="vt">My requests</h2>' +
     '<p class="vs">Leave, out duty, a missed punch or a comp-off.</p>' +
+    coCardHtml() +
     (mine.length ? mine.map(itemHtml).join('')
       : '<div class="empty">Nothing yet.<br>Tap + to ask for something.</div>') +
     '<button class="fab" onclick="openRequest()">+</button>';
@@ -1272,18 +1366,38 @@ function requestFields(forDate) {
         esc(hhmm(S.settings.shift_start) || '09:30') + '">' +
       '<label>Out time</label><input type="time" id="rq-out" value="' +
         esc(hhmm(S.settings.shift_end) || '18:30') + '">';
-  } else if (kind === 'co') {
-    html += '<label>Day you worked</label><input type="date" id="rq-from" value="' + esc(d) + '" max="' + today() + '">' +
-      '<label>What to do with it</label><select id="rq-mode">' +
-        '<option value="off">Take a day off instead</option>' +
-        '<option value="pay">Pay it as an incentive</option></select>' +
-      '<label>Day to take off (if taking one)</label><input type="date" id="rq-adjust">';
+  } else if (isCoKind(kind)) {
+    var open = myCoPlus().filter(function (x) { return x.state === 'open'; });
+    var absent = myAbsentDays();
+    var canPay = String(S.settings.co_payout_enabled || 'yes').toLowerCase() !== 'no';
+    if (!open.length) {
+      html += '<div class="empty" style="padding:18px 6px">No comp-off waiting to be used.<br>' +
+        'One is earned by out duty, or ' + coNeedHours() + ' hours or more, on a weekly off or a holiday.</div>' +
+        '<input type="hidden" id="rq-from" value="">';
+    } else {
+      var opt = function (iso) { return fmtDate(iso) + ' (' + dayName(iso).slice(0, 3) + ')'; };
+      html += '<label>Day you worked (CO+)</label><select id="rq-from">' + open.map(function (x) {
+          return '<option value="' + x.iso + '"' + (x.iso === forDate ? ' selected' : '') + '>' + esc(opt(x.iso)) + '</option>';
+        }).join('') + '</select>' +
+        '<label>What to do with it</label><select id="rq-mode" onchange="coModeChanged()">' +
+          (absent.length ? '<option value="adjust">Set against an absent day</option>' : '') +
+          (canPay ? '<option value="payout">Get it paid</option>' : '') + '</select>' +
+        '<div id="rq-adjust-box"><label>Absent day to cover</label><select id="rq-adjust">' +
+          absent.map(function (iso) { return '<option value="' + iso + '">' + esc(opt(iso)) + '</option>'; }).join('') +
+        '</select></div>' +
+        (!absent.length ? '<p class="vs" style="margin:10px 0 0">You have no absent day to set it against, so it can only be paid.</p>' : '');
+    }
   } else {
     html += '<label>From</label><input type="date" id="rq-from" value="' + esc(d) + '">' +
       '<label>To</label><input type="date" id="rq-to" value="' + esc(d) + '">';
   }
   html += '<label>Reason</label><textarea id="rq-why" placeholder="A line is enough"></textarea>';
   el('rq-fields').innerHTML = html;
+  coModeChanged();
+}
+function coModeChanged() {
+  var m = el('rq-mode'), box = el('rq-adjust-box');
+  if (box) box.style.display = m && m.value === 'adjust' ? '' : 'none';
 }
 
 function leaveLeft(typeName) {
@@ -1314,7 +1428,7 @@ function submitRequest() {
   var from = el('rq-from') ? el('rq-from').value : '';
   var fail = function (m) { err.textContent = m; err.className = 'err on'; };
   err.className = 'err';
-  if (!from) return fail('Pick a date.');
+  if (!from) return fail(isCoKind(kind) ? 'There is no comp-off to use yet.' : 'Pick a date.');
 
   var payload, sheet;
   if (kind === 'leave') {
@@ -1341,12 +1455,15 @@ function submitRequest() {
       payload.to_date = from;
       if (!payload.in_time && !payload.out_time) return fail('Give at least one of the two times.');
     }
-    if (kind === 'co') {
-      payload.mode = el('rq-mode').value;
-      payload.adjust_date = el('rq-adjust').value || '';
-      if (payload.mode === 'off' && !payload.adjust_date) {
-        return fail('Pick the day you want to take off.');
+    if (isCoKind(kind)) {
+      payload.mode = el('rq-mode') ? el('rq-mode').value : '';
+      if (!payload.mode) return fail('This comp-off cannot be used right now. Ask HR.');
+      payload.to_date = from; payload.days = 1;
+      if (payload.mode === 'adjust') {
+        payload.adjust_date = el('rq-adjust').value || '';
+        if (!payload.adjust_date) return fail('Pick the absent day it should cover.');
       }
+      if (!why) payload.reason = 'CO+ - worked ' + from;
     }
   }
 
@@ -1369,7 +1486,7 @@ function submitRequest() {
    4. TEAM — only for people who have people
    ================================================================= */
 function teamName(code) {
-  var hit = (S.inbox.team || []).filter(function (t) {
+  var hit = (S.inbox.team || []).concat(S.inbox.others || []).filter(function (t) {
     return String(t.emp_code) === String(code);
   })[0];
   return hit ? hit.name : code;
@@ -1402,10 +1519,19 @@ function renderTeam() {
   var byDate = function (a, b) { return String(b.at) < String(a.at) ? -1 : 1; };
   waiting.sort(byDate); elsewhere.sort(byDate); decided.sort(byDate);
 
-  el('v-team').innerHTML =
-    '<h2 class="vt">My team</h2>' +
+  var tab = S.teamTab || 'ok';
+  var seg = function (k, label, n) {
+    return '<button class="' + (tab === k ? 'on' : '') + '" onclick="teamTab(\'' + k + '\')">' + label +
+      (n ? '<i>' + n + '</i>' : '') + '</button>';
+  };
+  var top = '<h2 class="vt">My team</h2>' +
     '<p class="vs">' + S.inbox.team.length + ' people report to you' +
       (waiting.length ? ' · ' + waiting.length + ' waiting on you' : '') + '.</p>' +
+    '<div class="seg">' + seg('ok', 'Approvals', waiting.length) + seg('att', 'Attendance') + seg('lv', 'Leave') + '</div>';
+  if (tab === 'att') { el('v-team').innerHTML = top + teamAttHtml(); return; }
+  if (tab === 'lv') { el('v-team').innerHTML = top + teamLeaveHtml(); return; }
+
+  el('v-team').innerHTML = top +
     (waiting.length
       ? waiting.map(function (x) { return decideCard(x, true); }).join('')
       : '<div class="empty">Nothing waiting on you. </div>') +
@@ -1423,6 +1549,144 @@ function renderTeam() {
           (t.designation ? ' <span style="color:var(--muted);width:auto">· ' + esc(t.designation) + '</span>' : '') +
           '</b></div>';
       }).join('') + '</div></div>';
+}
+
+function teamTab(k) {
+  S.teamTab = k;
+  if (k === 'att') loadTeamMonth(S.teamYm || thisMonth());
+  renderTeam();
+}
+
+/* ---- the team's attendance ---------------------------------------
+   One month of the register for the people who report to me, fetched when
+   the tab is opened and kept. Today first - who is in, who is not - then
+   the month, person by person. */
+S.teamAtt = {};
+function loadTeamMonth(ym, force) {
+  if (!force && (S.teamAtt[ym] || S.teamBusy === ym)) return;
+  S.teamBusy = ym;
+  api('teamMonth', { month: ym }).then(function (r) {
+    S.teamBusy = null;
+    var by = {};
+    (r.rows || []).forEach(function (a) { by[a.emp_code + '_' + String(a.date).slice(0, 10)] = a; });
+    S.teamAtt[ym] = by;
+    if (S.view === 'team') renderTeam();
+  }).catch(function (e) {
+    S.teamBusy = null; S.teamAtt[ym] = S.teamAtt[ym] || null;
+    S.teamErr = e.message;
+    if (S.view === 'team') renderTeam();
+  });
+}
+function teamShiftMonth(by) {
+  var ym = S.teamYm || thisMonth();
+  var d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + by, 1);
+  var next = d.getFullYear() + '-' + pad(d.getMonth() + 1);
+  if (next > thisMonth()) return;
+  S.teamYm = next; S.teamErr = '';
+  loadTeamMonth(next);
+  renderTeam();
+}
+function teamStatus(member, iso) {
+  var by = S.teamAtt[iso.slice(0, 7)] || {};
+  var rec = by[member.emp_code + '_' + iso] || null;
+  return { rec: rec, st: statusOfRec(rec, iso, member.doj || '', true) };
+}
+function teamLate(st, rec, member) { return dayLateMarks(st, rec, shiftOfPerson(member)) > 0; }
+function teamMonthStats(member, ym) {
+  var s = { P: 0, A: 0, HD: 0, L: 0, late: 0 };
+  var upTo = ym === thisMonth() ? new Date().getDate() : daysInMonth(ym);
+  for (var d = 1; d <= upTo; d++) {
+    var x = teamStatus(member, dateStr(ym, d)), st = x.st;
+    if (st === 'P' || st === 'OD' || st === 'CO' || st === 'CO+' || st === 'IN') s.P++;
+    else if (st === 'HD') s.HD++;
+    else if (st === 'A' || st === 'NA') s.A++;
+    else if (st === 'L') s.L++;
+    if (teamLate(st, x.rec, member)) s.late++;
+  }
+  return s;
+}
+function stTag(st) {
+  var cls = st === 'CO+' ? 'COP' : (st || 'none');
+  return '<span class="st ' + esc(cls) + '">' + esc(st === 'NA' ? 'A' : (st || '-')) + '</span>';
+}
+function teamAttHtml() {
+  var ym = S.teamYm || thisMonth();
+  var nav = '<div class="cal-top"><button onclick="teamShiftMonth(-1)">&lsaquo;</button><b>' + esc(monthLabel(ym)) +
+    '</b><button onclick="teamShiftMonth(1)"' + (ym >= thisMonth() ? ' style="opacity:.35"' : '') + '>&rsaquo;</button></div>';
+  if (!S.teamAtt[ym]) {
+    return nav + '<div class="empty">' + (S.teamBusy === ym ? 'Loading the register...' :
+      esc(S.teamErr || 'Could not load.') + '<br><button class="cancel" style="color:var(--primary)" onclick="loadTeamMonth(\'' + ym + '\',true)">Try again</button>') + '</div>';
+  }
+  var team = S.inbox.team || [], html = nav;
+  if (ym === thisMonth()) {
+    var iso = today(), n = { in: 0, out: 0 };
+    var rows = team.map(function (m) {
+      var x = teamStatus(m, iso), st = x.st;
+      if (st === 'P' || st === 'IN' || st === 'HD' || st === 'OD' || st === 'CO+') n.in++;
+      else if (st !== 'WO' && st !== 'H') n.out++;
+      var when = x.rec && x.rec.in_time ? hhmm(x.rec.in_time) + (x.rec.out_time ? ' - ' + hhmm(x.rec.out_time) : ' - not out yet') : '';
+      return '<div class="trow" onclick="teamMember(\'' + esc(m.emp_code) + '\')"><div class="nm">' + esc(m.name) +
+        '<small>' + esc(when || ({ L: 'On leave', WO: 'Weekly off', H: 'Holiday', CO: 'Comp-off' }[st] || 'No punch yet')) +
+        (teamLate(st, x.rec, m) ? ' · late' : '') + '</small></div>' + stTag(st || 'A') + '</div>';
+    }).join('');
+    html += '<div class="card"><h3>Today</h3><div class="cs">' + n.in + ' in · ' + n.out + ' not in</div>' + rows + '</div>';
+  }
+  html += '<div class="card"><h3>' + esc(monthLabel(ym)) + '</h3><div class="cs">Tap a name for the day-by-day register</div>' +
+    team.map(function (m) {
+      var c = teamMonthStats(m, ym);
+      var b = function (v, bg, fg, t) { return v ? '<b style="background:' + bg + ';color:' + fg + '">' + t + ' ' + v + '</b>' : ''; };
+      return '<div class="trow" onclick="teamMember(\'' + esc(m.emp_code) + '\')"><div class="nm">' + esc(m.name) +
+        '<small>' + esc(m.emp_code) + (m.designation ? ' · ' + esc(m.designation) : '') + '</small></div>' +
+        '<div class="cnt">' + b(c.P, '#d1fae5', '#065f46', 'P') + b(c.HD, '#fef3c7', '#92400e', 'HD') +
+          b(c.A, '#fee2e2', '#991b1b', 'A') + b(c.L, '#dbeafe', '#1e40af', 'L') + b(c.late, '#ffedd5', '#9a3412', 'Late') +
+          (!(c.P + c.HD + c.A + c.L) ? '<b style="background:#f1f5f9;color:#64748b">-</b>' : '') + '</div></div>';
+    }).join('') + '</div>';
+  return html;
+}
+function teamMember(code) {
+  var m = (S.inbox.team || []).filter(function (t) { return String(t.emp_code) === String(code); })[0];
+  if (!m) return;
+  var ym = S.teamYm || thisMonth(), c = teamMonthStats(m, ym);
+  var upTo = ym === thisMonth() ? new Date().getDate() : daysInMonth(ym), rows = '';
+  for (var d = upTo; d >= 1; d--) {
+    var iso = dateStr(ym, d), x = teamStatus(m, iso), mins = workedMinutes(x.rec);
+    rows += '<div class="trow"><div class="nm">' + esc(fmtDate(iso)) + ' <span style="color:var(--muted);font-weight:500">' +
+      esc(dayName(iso).slice(0, 3)) + '</span><small>' +
+      esc(x.rec && x.rec.in_time ? hhmm(x.rec.in_time) + ' - ' + (hhmm(x.rec.out_time) || '?') + (mins ? ' · ' + hoursText(mins) : '') : '') +
+      (teamLate(x.st, x.rec, m) ? ' · late' : '') + '</small></div>' + stTag(x.st) + '</div>';
+  }
+  openSheet('<h3>' + esc(m.name) + '</h3><div class="cs" style="margin:-6px 0 10px">' + esc(monthLabel(ym)) + ' · ' +
+    c.P + ' present · ' + c.HD + ' half · ' + c.A + ' absent · ' + c.L + ' leave · ' + c.late + ' late</div>' +
+    rows + '<button class="cancel" onclick="closeSheet()">Close</button>');
+}
+
+/* ---- the team's leave: who is away, who will be, who was ---------- */
+function teamLeaveHtml() {
+  var t = today(), mine = {};
+  (S.inbox.team || []).forEach(function (m) { mine[m.emp_code] = 1; });
+  var all = (S.inbox.teamLeave || []).filter(function (l) {
+    return mine[l.emp_code] && ['Approved', 'Pending'].indexOf(String(l.status || 'Pending')) >= 0;
+  });
+  var row = function (l) {
+    var from = String(l.from_date).slice(0, 10), to = String(l.to_date || l.from_date).slice(0, 10);
+    return '<div class="trow"><div class="nm">' + esc(teamName(l.emp_code)) + '<small>' + esc(l.type || 'Leave') + ' · ' +
+      esc(from === to ? fmtDate(from) : fmtDate(from) + ' – ' + fmtDate(to)) +
+      (l.days ? ' · ' + esc(l.days) + ' day' + (num(l.days) === 1 ? '' : 's') : '') + '</small></div>' +
+      '<span class="tag ' + esc(l.status || 'Pending') + '">' + esc(l.status || 'Pending') + '</span></div>';
+  };
+  var end = function (l) { return String(l.to_date || l.from_date).slice(0, 10); };
+  var now = all.filter(function (l) { return String(l.from_date).slice(0, 10) <= t && end(l) >= t && l.status === 'Approved'; });
+  var next = all.filter(function (l) { return String(l.from_date).slice(0, 10) > t || (end(l) >= t && l.status !== 'Approved'); })
+    .sort(function (a, b) { return String(a.from_date).localeCompare(String(b.from_date)); });
+  var past = all.filter(function (l) { return end(l) < t && l.status === 'Approved'; })
+    .sort(function (a, b) { return String(b.from_date).localeCompare(String(a.from_date)); });
+  var card = function (title, list, none) {
+    return '<div class="card"><h3>' + title + '</h3>' +
+      (list.length ? list.map(row).join('') : '<div class="cs" style="margin:6px 0 0">' + none + '</div>') + '</div>';
+  };
+  return card('On leave today', now, 'Nobody is on leave today.') +
+    card('Coming up', next, 'No leave applied for the days ahead.') +
+    card('Last four months', past.slice(0, 40), 'No leave taken.');
 }
 
 function decideCard(x, open) {
@@ -1521,23 +1785,7 @@ function renderMe() {
 
     /* The payslips the server sends. Finalised runs only - a draft is not
        a payslip and must never be shown as one. */
-    (function () {
-      var slips = mySlips();
-      if (!slips.length) {
-        return '<div class="card"><h3>Payslips</h3><div class="rows">' +
-          '<div><span>&mdash;</span><b>Nothing finalised yet</b></div></div>' +
-          '<div class="cs" style="margin:10px 0 0">A payslip appears here once HR ' +
-          'finalises that month\'s run.</div></div>';
-      }
-      return '<div class="card"><h3>Payslips</h3>' +
-        '<div class="cs">Tap a month to see how it was worked out</div>' +
-        '<div class="rows">' + slips.map(function (p, i) {
-          return '<div style="cursor:pointer" onclick="showSlip(' + i + ')">' +
-            '<span>' + esc(monthLabel(String(p.month))) + '</span>' +
-            '<b>' + cur() + money(p.net) + ' <span style="color:var(--muted);width:auto">&rsaquo;</span></b>' +
-          '</div>';
-        }).join('') + '</div></div>';
-    })() +
+    slipCardHtml() +
 
     /* Bonus and gratuity: their own, from their own tabs. Shown apart from
        the payslips because neither is a month's pay - one is a year's, the
@@ -1603,12 +1851,162 @@ function mySlips() {
   }).sort(function (a, b) { return String(b.month).localeCompare(String(a.month)); });
 }
 
+/* Pick the month and the year, then preview the payslip or download it. */
+function slipCardHtml() {
+  var slips = mySlips();
+  if (!slips.length) {
+    return '<div class="card"><h3>Payslips</h3><div class="rows">' +
+      '<div><span>&mdash;</span><b>Nothing finalised yet</b></div></div>' +
+      '<div class="cs" style="margin:10px 0 0">A payslip appears here once HR ' +
+      'finalises that month\'s run.</div></div>';
+  }
+  var pick = S.slipPick && slipFor(S.slipPick) ? S.slipPick : String(slips[0].month);
+  S.slipPick = pick;
+  var years = {}, M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  slips.forEach(function (p) { years[String(p.month).slice(0, 4)] = 1; });
+  var yr = pick.slice(0, 4), have = {};
+  slips.forEach(function (p) { if (String(p.month).slice(0, 4) === yr) have[String(p.month).slice(5, 7)] = 1; });
+  var p = slipFor(pick);
+  return '<div class="card"><h3>Payslips</h3>' +
+    '<div class="cs">Choose the month and the year</div>' +
+    '<div style="display:flex;gap:9px;margin:10px 0 12px">' +
+      '<select id="slip-m" class="pick" onchange="slipPicked()">' + M.map(function (n, i) {
+        var mm = pad(i + 1);
+        return '<option value="' + mm + '"' + (mm === pick.slice(5, 7) ? ' selected' : '') +
+          (have[mm] ? '' : ' disabled') + '>' + n + (have[mm] ? '' : ' - no payslip') + '</option>';
+      }).join('') + '</select>' +
+      '<select id="slip-y" class="pick" style="flex:0 0 96px" onchange="slipPicked(true)">' +
+        Object.keys(years).sort().reverse().map(function (y) {
+          return '<option value="' + y + '"' + (y === yr ? ' selected' : '') + '>' + y + '</option>';
+        }).join('') + '</select>' +
+    '</div>' +
+    '<div class="rows"><div><span>' + esc(monthLabel(pick)) + '</span><b>Net ' + cur() + money(p.net) + '</b></div>' +
+      '<div><span>Days paid</span><b>' + esc(p.paid_days) + ' of ' + esc(p.total_days) + '</b></div></div>' +
+    '<div class="acts"><button class="no" style="border-color:var(--line);color:var(--primary)" onclick="showSlip(\'' + pick + '\')">Preview</button>' +
+      '<button class="yes" onclick="downloadSlip(\'' + pick + '\')">Download PDF</button></div></div>';
+}
+function slipFor(ym) {
+  return mySlips().filter(function (p) { return String(p.month) === String(ym); })[0] || null;
+}
+function slipPicked(yearChanged) {
+  var y = el('slip-y').value, m = el('slip-m').value;
+  if (yearChanged || !slipFor(y + '-' + m)) {
+    /* the newest payslip of that year */
+    var first = mySlips().filter(function (p) { return String(p.month).slice(0, 4) === y; })[0];
+    S.slipPick = first ? String(first.month) : S.slipPick;
+  } else S.slipPick = y + '-' + m;
+  renderMe();
+}
+/* the lines of a payslip, in one place for the preview and the PDF */
+function slipLines(p) {
+  var pick = function (rows) { return rows.filter(function (r) { return Number(r[1]); }); };
+  return {
+    earn: pick([['Basic', p.basic], ['HRA', p.hra], ['Special allowance', p.special_allowance],
+                ['Other allowance', p.other_allowance], ['Overtime', p.ot_amount], ['Arrears', p.arrears],
+                ['Bonus', p.bonus], ['Incentive', p.incentive]]),
+    ded: pick([['PF', p.pf], ['ESI', p.esi], ['Professional tax', p.pt], ['TDS', p.tds],
+               ['Advance', p.advance_deduction], ['Other', p.other_deduction]])
+  };
+}
+
+/* ---- the payslip as a PDF ----------------------------------------
+   Written out by hand - one A4 page, two standard fonts - so it works with
+   no connection and nothing to load. The standard fonts have no rupee sign,
+   so amounts read "Rs." */
+function slipPdf(p) {
+  var e = S.me || {}, L = slipLines(p), ops = [];
+  var clean = function (t) {
+    return String(t === undefined || t === null ? '' : t).replace(/[^\x20-\x7e]/g, '?')
+      .replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  };
+  var width = function (t, size, bold) { return String(t).length * size * (bold ? 0.56 : 0.52); };
+  var text = function (x, y, t, size, bold, right) {
+    t = String(t === undefined || t === null ? '' : t);
+    if (right) x -= width(t, size, bold);
+    ops.push('BT /' + (bold ? 'F2' : 'F1') + ' ' + size + ' Tf ' + x.toFixed(1) + ' ' + y.toFixed(1) + ' Td (' + clean(t) + ') Tj ET');
+  };
+  var line = function (x1, y, x2, w) { ops.push((w || 0.6) + ' w ' + x1 + ' ' + y + ' m ' + x2 + ' ' + y + ' l S'); };
+  var rs = function (v) { return 'Rs. ' + money(v); };
+  var y = 790;
+  text(50, y, S.settings.company_name || 'Payslip', 16, true); y -= 16;
+  if (S.settings.company_address) { text(50, y, String(S.settings.company_address).slice(0, 95), 9); y -= 14; }
+  text(50, y, 'Payslip for ' + monthLabel(String(p.month)), 11, true); y -= 10;
+  line(50, y, 545, 1); y -= 20;
+  var pairs = [['Employee', e.name], ['Employee code', e.emp_code], ['Designation', e.designation],
+               ['Department', e.department], ['Date of joining', e.doj], ['PAN', e.pan], ['UAN', e.uan],
+               ['ESIC number', e.esic_no], ['Bank account', e.bank_account],
+               ['Days paid', p.paid_days + ' of ' + p.total_days], ['Days lost (LOP)', Number(p.lop_days) ? p.lop_days : '']]
+    .filter(function (r) { return r[1] !== undefined && r[1] !== null && String(r[1]) !== ''; });
+  for (var i = 0; i < pairs.length; i += 2) {
+    text(50, y, pairs[i][0], 9); text(150, y, pairs[i][1], 9, true);
+    if (pairs[i + 1]) { text(310, y, pairs[i + 1][0], 9); text(410, y, pairs[i + 1][1], 9, true); }
+    y -= 15;
+  }
+  y -= 6; line(50, y, 545); y -= 16;
+  text(50, y, 'Earnings', 10, true); text(290, y, 'Amount', 10, true, true);
+  text(310, y, 'Deductions', 10, true); text(545, y, 'Amount', 10, true, true);
+  y -= 6; line(50, y, 545); y -= 15;
+  var rows = Math.max(L.earn.length, L.ded.length, 1);
+  for (var k = 0; k < rows; k++) {
+    if (L.earn[k]) { text(50, y, L.earn[k][0], 9.5); text(290, y, rs(L.earn[k][1]), 9.5, false, true); }
+    if (L.ded[k]) { text(310, y, L.ded[k][0], 9.5); text(545, y, rs(L.ded[k][1]), 9.5, false, true); }
+    y -= 15;
+  }
+  y += 4; line(50, y, 545); y -= 15;
+  text(50, y, 'Gross earnings', 10, true); text(290, y, rs(p.gross), 10, true, true);
+  text(310, y, 'Total deductions', 10, true); text(545, y, rs(p.total_deduction), 10, true, true);
+  y -= 8; line(50, y, 545, 1); y -= 24;
+  text(50, y, 'Net pay', 13, true); text(545, y, rs(p.net), 13, true, true); y -= 30;
+  text(50, y, 'This is a computer-generated payslip and needs no signature.', 8);
+
+  var stream = ops.join('\n');
+  var objs = ['<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R ' +
+      '/Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>',
+    '<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'];
+  var out = '%PDF-1.4\n', at = [];
+  objs.forEach(function (o, n) { at.push(out.length); out += (n + 1) + ' 0 obj\n' + o + '\nendobj\n'; });
+  var xref = out.length;
+  out += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n' +
+    at.map(function (n) { return ('0000000000' + n).slice(-10) + ' 00000 n \n'; }).join('') +
+    'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n';
+  return out;
+}
+function downloadSlip(ym) {
+  var p = slipFor(ym);
+  if (!p) return toast('No payslip for that month', 'bad');
+  var name = 'Payslip-' + String((S.me && S.me.emp_code) || '') + '-' + ym + '.pdf';
+  var blob = new Blob([slipPdf(p)], { type: 'application/pdf' });
+  var done = function () { toast('Payslip saved: ' + name, 'good'); };
+  /* a phone that can hand a file to another app gets the share sheet - save
+     it, print it or send it on; anything else gets a plain download */
+  try {
+    var file = new File([blob], name, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      return navigator.share({ files: [file], title: name }).catch(function (err) {
+        if (err && err.name !== 'AbortError') saveBlob(blob, name, done);
+      });
+    }
+  } catch (err) { /* fall through to the download */ }
+  saveBlob(blob, name, done);
+}
+function saveBlob(blob, name, then) {
+  var url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 4000);
+  if (then) then();
+}
+
 /* One payslip, broken out the way a payslip has to read: what was earned,
    what was taken off, and what is left - with the arithmetic shown, because
    a net figure nobody can check is a net figure nobody trusts. */
-function showSlip(i) {
-  var p = mySlips()[i];
-  if (!p) return;
+function showSlip(ym) {
+  /* by month, or by its place in the list (newest first) */
+  var p = typeof ym === 'number' ? mySlips()[ym] : slipFor(ym);
+  if (!p) return toast('No payslip for that month', 'bad');
   var line = function (k, v, strong) {
     if (!Number(v)) return '';
     return '<div><span>' + esc(k) + '</span><b' + (strong ? ' style="font-weight:800"' : '') +
@@ -1646,7 +2044,9 @@ function showSlip(i) {
         cur() + money(earned - taken) + '</b></div>' +
     '</div>' +
     '<div class="cs" style="margin:10px 0 0">Something wrong? Ask HR &mdash; a ' +
-      'finalised payslip keeps the figures it was saved with.</div></div>');
+      'finalised payslip keeps the figures it was saved with.</div></div>' +
+    '<button class="go" style="margin-top:14px" onclick="downloadSlip(\'' + esc(String(p.month)) + '\')">Download PDF</button>' +
+    '<button class="cancel" onclick="closeSheet()">Close</button>');
 }
 
 /* The details a worker is the best source for. A new phone number reaching

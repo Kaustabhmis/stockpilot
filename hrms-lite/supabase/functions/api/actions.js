@@ -796,6 +796,20 @@ export function createActions(api, db, deps) {
     const t = await one('select effect from hrms.request_types where upper(code) = upper($1)',
       [String(req.type || '')]);
     const effect = t ? String(t.effect || 'none') : '';
+    /* A comp-off set against an absent day: that day becomes a paid CO. It is
+       written here so that an approval on a phone does what an approval in
+       the office does. A day that is no longer absent is left alone. */
+    if (effect === 'comp_off') {
+      const adj = String(req.adjust_date || '');
+      if (!['adjust', 'off'].includes(String(req.mode || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(adj)) return 0;
+      const cur = (await attendanceBetween(adj, adj, req.emp_code))[0];
+      if (cur && cur.status && !['A', 'CO'].includes(String(cur.status))) return 0;
+      await upsertRow('Attendance', {
+        id: req.emp_code + '_' + adj, date: adj, emp_code: req.emp_code, status: 'CO',
+        in_time: '', out_time: '', hours: 0, remarks: 'comp-off for working ' + iso, updated_at: today()
+      }, dirty);
+      return 1;
+    }
     if (effect !== 'present' && effect !== 'times') return 0;
 
     let to = String(req.to_date || iso);
@@ -842,6 +856,74 @@ export function createActions(api, db, deps) {
     return 1;
   }
 
+  /* The approval chain for one application: the active levels written for its
+     kind - "Leave", "Requests", or one request type by its code - together
+     with those written for everything, in level order. */
+  async function chainFor(sheet, r, cache) {
+    const kind = sheet === 'Leave' ? 'leave' : 'requests';
+    const type = sheet === 'Leave' ? '' : String((r && r.type) || '').toLowerCase();
+    const key = kind + '|' + type;
+    if (cache && cache[key]) return cache[key];
+    const rows = (await all(
+      `select * from hrms.approval_levels
+        where active is true
+          and lower(coalesce(applies_to, '')) = any($1)
+        order by level`, [['', 'all', kind].concat(type ? [type] : [])])).map(rowOut);
+    if (cache) cache[key] = rows;
+    return rows;
+  }
+  const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  /* Is this person the reporting manager (the HOD) of that employee? The
+     employee record names the manager by code or by name. */
+  async function isManagerOf(caller, empCode, cache) {
+    const code = String(caller.emp_code || '');
+    if (!code || same(code, empCode)) return false;
+    const c = cache || {};
+    if (!c.me) c.me = (await one('select name from hrms.employees where emp_code = $1', [code])) || {};
+    c.mgr = c.mgr || {};
+    if (!(empCode in c.mgr)) {
+      const e = await one('select manager from hrms.employees where emp_code = $1', [empCode]);
+      c.mgr[empCode] = String((e && e.manager) || '');
+    }
+    const m = c.mgr[empCode];
+    return !!m && (same(m, code) || (!!c.me.name && same(m, c.me.name)));
+  }
+  /* May this caller sign this step? HR and the owner may sign any step, as
+     they always could. Anyone else signs only the step that is theirs: the
+     reporting manager's, or one that names them - and never their own
+     application. */
+  async function maySign(stage, caller, r, cache) {
+    if (isHrOrAbove(caller.role)) return true;
+    const code = String(caller.emp_code || '');
+    if (!code || same(code, r.emp_code)) return false;
+    const who = String((stage && stage.approver) || 'manager').trim().toLowerCase();
+    if (who === 'manager' || who === 'manager_or_hr') return isManagerOf(caller, r.emp_code, cache);
+    if (who.indexOf('emp:') === 0) return same(who.slice(4), code);
+    return false;
+  }
+  /* Where an application has got to, for the screens that show it: which
+     step, of how many, who it is waiting on, who has signed - and whether it
+     is waiting on the person looking at it. */
+  async function stampStage(sheet, r, caller, cache) {
+    const levels = await chainFor(sheet, r, cache);
+    const total = levels.length || 1;
+    const at = Math.max(1, Math.min(Number(r.level || 0) + 1, total));
+    const stage = levels[at - 1];
+    r._step = at; r._steps = total;
+    r._waiting_on = stage ? (stage.label || stage.approver || '') : '';
+    r._signed = String(r.approvals || '').split('|').filter(Boolean).map(part => {
+      const b = part.split('~');
+      return { level: Number(b[0]) || 0, by: b[1] || '', at: b[2] || '', note: b[3] || '' };
+    });
+    r._mine = String(r.status || 'Pending') === 'Pending' && await maySign(stage, caller, r, cache);
+    return r;
+  }
+  async function stampAll(sheet, rows, caller, cache) {
+    const c = cache || {};
+    for (const r of rows) await stampStage(sheet, r, caller, c);
+    return rows;
+  }
+
   async function decide(sheet, id, status, note, caller, dirty) {
     const t = tableFor(sheet);
     const row = await one(`select * from hrms.${t} where id = $1`, [id]);
@@ -850,11 +932,12 @@ export function createActions(api, db, deps) {
     if (String(r.status) === 'Rejected') throw new Error('This has already been rejected.');
     if (String(r.status) === 'Approved') throw new Error('This has already been approved.');
 
-    const kind = sheet === 'Leave' ? 'Leave' : 'Requests';
-    const levels = (await all(
-      `select * from hrms.approval_levels
-        where active is true and (applies_to = $1 or applies_to = '' or applies_to = 'All')
-        order by level`, [kind])).map(rowOut);
+    const levels = await chainFor(sheet, r);
+    if (!(await maySign(levels[Number(r.level || 0)], caller, r))) {
+      throw new Error(same(caller.emp_code, r.emp_code)
+        ? 'Not allowed. You cannot approve your own application.'
+        : 'Not allowed. This is not waiting on you.');
+    }
 
     const total = levels.length || 1;
     const cleared = Number(r.level || 0) + 1;
@@ -911,7 +994,7 @@ export function createActions(api, db, deps) {
         employees: await listSheet('Employees'),
         attendance: await attendanceBetween(from, to),
         attMonths: months,
-        leave: await listSheet('Leave'),
+        leave: await stampAll('Leave', await listSheet('Leave'), caller),
         payroll: await listSheet('Payroll'),
         bonus: await listSheet('Bonus'),
         gratuity: await listSheet('Gratuity'),
@@ -922,7 +1005,7 @@ export function createActions(api, db, deps) {
         shifts: await listSheet('Shifts'),
         leaveTypes: await listSheet('LeaveTypes'),
         requestTypes: await listSheet('RequestTypes'),
-        requests: await listSheet('Requests'),
+        requests: await stampAll('Requests', await listSheet('Requests'), caller),
         ctcVariables: await listSheet('CtcVariables'),
         ctcComponents: await listSheet('CtcComponents'),
         ctcValues: await listSheet('CtcValues'),
@@ -941,7 +1024,7 @@ export function createActions(api, db, deps) {
     const staffSettings = {};
     ['company_name', 'currency', 'web_punch_enabled', 'punch_out_mandatory',
      'geofence_enabled', 'geofence_mode', 'geofence_accuracy_m', 'default_shift',
-     'weekly_off', 'co_min_hours'].forEach(k => { if (st[k] !== undefined) staffSettings[k] = st[k]; });
+     'weekly_off', 'co_min_hours', 'co_payout_enabled', 'co_validity_days', 'company_address'].forEach(k => { if (st[k] !== undefined) staffSettings[k] = st[k]; });
 
     return {
       role: 'employee',
@@ -950,14 +1033,14 @@ export function createActions(api, db, deps) {
       attendance: mine,
       attMonths: months,
       punch: code ? await punchState(code) : null,
-      leave: code ? (await all('select * from hrms.leave where emp_code = $1', [code])).map(rowOut) : [],
+      leave: code ? await stampAll('Leave', (await all('select * from hrms.leave where emp_code = $1', [code])).map(rowOut), caller) : [],
       payroll: code ? (await all('select * from hrms.payroll where emp_code = $1 order by month', [code])).map(rowOut) : [],
       /* Their own only. Bonus and gratuity are money owed to them and
          belong on their payslip screen; increment is their own pay history. */
       bonus: code ? (await all('select * from hrms.bonus where emp_code = $1 order by fy', [code])).map(rowOut) : [],
       gratuity: code ? (await all('select * from hrms.gratuity where emp_code = $1 order by as_on', [code])).map(rowOut) : [],
       increment: code ? (await all('select * from hrms.increment where emp_code = $1 order by effective_from', [code])).map(rowOut) : [],
-      requests: code ? (await all('select * from hrms.requests where emp_code = $1', [code])).map(rowOut) : [],
+      requests: code ? await stampAll('Requests', (await all('select * from hrms.requests where emp_code = $1', [code])).map(rowOut), caller) : [],
       ctcValues: code ? (await all('select * from hrms.ctc_values where emp_code = $1', [code])).map(rowOut) : [],
       holidays: await listSheet('Holidays'),
       events: await listSheet('Events'),
@@ -974,25 +1057,104 @@ export function createActions(api, db, deps) {
             and (start_date is null or start_date <= current_date)
             and (end_date is null or end_date >= current_date)`)).map(rowOut),
       approvalLevels: await listSheet('ApprovalLevels'),
-      inbox: await inboxFor(code)
+      inbox: await inboxFor(code, caller)
     };
   }
 
-  async function inboxFor(code) {
-    if (!code) return { isManager: false, team: [], teamLeave: [], teamRequests: [] };
-    const me = await one('select emp_code, name from hrms.employees where emp_code = $1', [code]);
-    const team = (await all(
-      `select * from hrms.employees
-        where manager = $1 or manager = $2`, [code, (me && me.name) || code])).map(rowOut);
-    if (!team.length) return { isManager: false, team: [], teamLeave: [], teamRequests: [] };
+  /* The people who report to this person - what a manager needs to know
+     them by, and nothing about their pay. */
+  async function teamOf(code) {
+    if (!code) return [];
+    const me = await one('select name from hrms.employees where emp_code = $1', [code]);
+    return (await all(
+      `select emp_code, name, designation, department, shift, doj, status
+         from hrms.employees
+        where emp_code <> $1 and coalesce(status, 'Active') = 'Active'
+          and (lower(trim(manager)) = lower($1) or lower(trim(manager)) = lower($2))
+        order by name`, [code, String((me && me.name) || code).trim()])).map(rowOut);
+  }
+
+  /* What a manager sees: their people, those people's leave and requests -
+     waiting, and the last few months' decided ones - and anything that names
+     this person as its approver. Each row says whether it is waiting on them. */
+  async function inboxFor(code, caller) {
+    const none = { isManager: false, team: [], teamLeave: [], teamRequests: [] };
+    if (!code) return none;
+    const team = await teamOf(code);
+    const named = (await all(
+      `select 1 from hrms.approval_levels where active is true and lower(approver) = lower($1) limit 1`,
+      ['emp:' + code])).length > 0;
+    if (!team.length && !named) return none;
     const codes = team.map(t => t.emp_code);
-    return {
-      isManager: true, team,
-      teamLeave: (await all(
-        `select * from hrms.leave where emp_code = any($1) and status = 'Pending'`, [codes])).map(rowOut),
-      teamRequests: (await all(
-        `select * from hrms.requests where emp_code = any($1) and status = 'Pending'`, [codes])).map(rowOut)
-    };
+    const since = new Date(now().getTime() - 120 * 86400000).toISOString().slice(0, 10);
+    const who = caller || { role: 'employee', emp_code: code };
+    const cache = {};
+    let leave = (await all(
+      `select * from hrms.leave
+        where emp_code <> $2 and ((emp_code = any($1) and (status = 'Pending' or to_date >= $3))
+           or ($4 and status = 'Pending'))`, [codes, code, since, named])).map(rowOut);
+    let reqs = (await all(
+      `select * from hrms.requests
+        where emp_code <> $2 and ((emp_code = any($1) and (status = 'Pending' or date >= $3))
+           or ($4 and status = 'Pending'))`, [codes, code, since, named])).map(rowOut);
+    await stampAll('Leave', leave, who, cache);
+    await stampAll('Requests', reqs, who, cache);
+    const inTeam = {}; codes.forEach(c => inTeam[c] = 1);
+    /* outside the team, only what is at this person's own step */
+    leave = leave.filter(r => inTeam[r.emp_code] || r._mine);
+    reqs = reqs.filter(r => inTeam[r.emp_code] || r._mine);
+    /* names for the applicants who are not in the team */
+    const extra = {};
+    leave.concat(reqs).forEach(r => { if (!inTeam[r.emp_code]) extra[r.emp_code] = 1; });
+    const others = Object.keys(extra).length ? (await all(
+      `select emp_code, name, designation, department from hrms.employees where emp_code = any($1)`,
+      [Object.keys(extra)])).map(rowOut) : [];
+    return { isManager: true, team, others, teamLeave: leave, teamRequests: reqs };
+  }
+
+  /* One month of the register for the people who report to the caller. */
+  async function teamMonth(caller, ym) {
+    const want = String(ym || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(want)) throw new Error('Which month? Use YYYY-MM.');
+    const codes = (await teamOf(String((caller && caller.emp_code) || ''))).map(t => t.emp_code);
+    if (!codes.length) return { month: want, rows: [] };
+    const rows = (await attendanceBetween(monthStart(want), monthEnd(want)))
+      .filter(a => codes.includes(String(a.emp_code)));
+    return { month: want, rows };
+  }
+
+  /* An employee's own application, before it is stored: it always starts
+     Pending at step one, and one worked day earns one comp-off - not two. */
+  async function ownApplication(sheet, row, code) {
+    const t = tableFor(sheet);
+    const out = Object.assign({}, row, { emp_code: code, status: 'Pending', level: 0,
+      approvals: '', decided_by: '', decided_at: '' });
+    if (out.id) {
+      const was = await one(`select emp_code, status from hrms.${t} where id = $1`, [out.id]);
+      if (was && (String(was.emp_code) !== String(code) || String(was.status || 'Pending') !== 'Pending')) {
+        throw new Error('Not allowed. That application can no longer be changed.');
+      }
+    }
+    if (sheet !== 'Requests') return out;
+    const ty = await one('select effect from hrms.request_types where upper(code) = upper($1)', [String(out.type || '')]);
+    if (!ty || String(ty.effect) !== 'comp_off') return out;
+    if (out.mode === 'off') out.mode = 'adjust';
+    if (out.mode === 'pay') out.mode = 'payout';
+    const dup = await one(
+      `select id from hrms.requests
+        where emp_code = $1 and date = $2 and upper(type) = upper($3)
+          and status in ('Pending', 'Approved') and id <> $4 limit 1`,
+      [code, out.date, String(out.type), String(out.id || '')]);
+    if (dup) throw new Error('A comp-off for that day has already been asked for.');
+    if (out.mode === 'adjust' && out.adjust_date) {
+      const used = await one(
+        `select id from hrms.requests
+          where emp_code = $1 and adjust_date = $2 and mode = 'adjust'
+            and status in ('Pending', 'Approved') and id <> $3 limit 1`,
+        [code, out.adjust_date, String(out.id || '')]);
+      if (used) throw new Error('Another comp-off is already set against ' + out.adjust_date + '.');
+    }
+    return out;
   }
 
   /* How many rows every table holds, so a migration can be checked against
@@ -1194,7 +1356,7 @@ export function createActions(api, db, deps) {
 
   return {
     nowParts, today, login, changePassword, listUsers, saveUser, removeUser,
-    backfillAccounts, makeAccountsFor, bootstrap, monthAtt, myMonth,
+    backfillAccounts, makeAccountsFor, bootstrap, monthAtt, myMonth, teamMonth, ownApplication,
     punchState, webPunch, punchLog, ingestPunches, decide, payslipMailLog, tally,
     attendanceBetween, isRestDay, rebuildDay, setPassword, checkPassword, rejudgeForShift,
     shiftNamed, shiftTable, sameDayRules, shiftOf,
