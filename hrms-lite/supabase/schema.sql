@@ -227,6 +227,8 @@ create table if not exists payroll (
   ctc                 numeric(12,2) not null default 0,
   late_deduction_days numeric(6,2) not null default 0,
   unpaid_leave_days   numeric(6,2) not null default 0,
+  co_payout_days      numeric(6,2) not null default 0,   -- comp-off paid in this run
+  co_payout_amount    numeric(12,2) not null default 0,  -- ...and what it came to (inside incentive)
   status              text not null default 'Draft',
   generated_at        date,
   generated_by        text,

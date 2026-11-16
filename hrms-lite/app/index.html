@@ -195,6 +195,7 @@ p.vs{color:var(--muted);font-size:.83rem;margin-bottom:16px;}
 .geo-note{font-size:.72rem;margin-top:4px;color:var(--muted);}
 .cal .d.today{outline:2px solid var(--primary);outline-offset:1px;}
 .cal .d.IN{background:#ecfdf5;border-color:#a7f3d0;color:#065f46;}
+.cal .d.COP{background:#fef3c7;border-color:#f59e0b;color:#92400e;font-weight:700;}
 .cal .d{position:relative;}
 .cal .d.late::after{content:'';position:absolute;top:0;left:0;border-top:10px solid #f59e0b;
   border-right:10px solid transparent;border-top-left-radius:8px;}
@@ -722,6 +723,14 @@ function statusFor(iso) {
   var rec = attFor(iso);
   /* in today and not out yet: at work, not absent - the day settles at punch out */
   if (rec && rec.in_time && !rec.out_time && iso === today()) return 'IN';
+  /* CO+ : the weekly off was worked - out duty, or enough hours - so a
+     comp-off is earned. Fewer hours than that is still just the weekly off. */
+  if (rec && rec.status && { P: 1, HD: 1, A: 1, OD: 1 }[rec.status] && isWeeklyOff(iso) && !holidayOn(iso)) {
+    var need = S.settings.co_min_hours, mins = workedMinutes(rec);
+    need = need === undefined || need === null || need === '' ? 5 : num(need);
+    if (String(rec.status) === 'OD' || (need > 0 && mins && mins >= need * 60)) return 'CO+';
+    if (rec.in_time) return 'WO';
+  }
   if (rec && rec.status) return String(rec.status);
   if (holidayOn(iso)) return 'H';
   if (isWeeklyOff(iso)) return 'WO';
@@ -849,6 +858,7 @@ function monthStats(ym) {
     else if (st === 'HD') s.hd++;
     else if (st === 'OD' || st === 'CO') s.od++;
     /* Late: arrived after shift start + grace on a day they were in. */
+    if (st === 'CO+') s.coPlus = (s.coPlus || 0) + 1;      /* weekly off worked - comp-off earned */
     if (st === 'IN') s.joined = (s.joined || 0) + 1;    /* at work today - settles at punch out */
     if (st === 'NA') s.absent++;                          /* no punch at all */
     s.late += dayLateMarks(st, rec);
@@ -1019,7 +1029,7 @@ function renderCalendar() {
     var iso = dateStr(ym, d), st = statusFor(iso), rec = attFor(iso);
     var mins = workedMinutes(rec);
     var late = dayLateMarks(st, rec) > 0;
-    cells += '<div class="d ' + esc(st) + (iso === today() ? ' today' : '') + (late ? ' late' : '') + '"' +
+    cells += '<div class="d ' + esc(st === 'CO+' ? 'COP' : st) + (iso === today() ? ' today' : '') + (late ? ' late' : '') + '"' +
       ' onclick="dayDetail(\'' + iso + '\')">' + d +
       (st ? '<small>' + esc(st === 'P' && mins ? hoursText(mins) : (st === 'NA' ? 'A' : st)) + '</small>' : '') +
       '</div>';
@@ -1045,7 +1055,7 @@ function renderCalendar() {
     '</div>' +
     '<div class="legend">' +
       [['P','#d1fae5','Present'],['A','#fee2e2','Absent'],['HD','#fef3c7','Half day'],
-       ['L','#dbeafe','Leave'],['OD','#ede9fe','OD / comp-off'],['WO','#f1f5f9','Off / holiday']]
+       ['L','#dbeafe','Leave'],['OD','#ede9fe','OD / comp-off'],['CO+','#fde68a','CO+ worked weekly off'],['WO','#f1f5f9','Off / holiday']]
       .map(function (x) { return '<span><i style="background:' + x[1] + '"></i>' + x[2] + '</span>'; }).join('') +
     '</div>';
 }
@@ -1085,7 +1095,8 @@ function dayDetail(iso) {
   var rec = attFor(iso), st = statusFor(iso), hol = holidayOn(iso);
   var mins = workedMinutes(rec);
   var names = { P:'Present', A:'Absent', HD:'Half day', L:'On leave', OD:'Out duty',
-                CO:'Comp-off', WO:'Weekly off', H:'Holiday', NA:'Absent - no punch',
+                CO:'Comp-off', 'CO+':'Worked the weekly off - comp-off earned (paid, or set against an absent day by HR)',
+                WO:'Weekly off', H:'Holiday', NA:'Absent - no punch',
                 IN:'Joined - punched in, not out yet' };
   openSheet('<h3>' + esc(new Date(iso + 'T00:00:00').toLocaleDateString(undefined,
       { weekday:'long', day:'numeric', month:'long' })) + '</h3>' +
