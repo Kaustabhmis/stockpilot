@@ -33,6 +33,16 @@ Key facts:
 - [User manual (PDF)](https://www.domebox.in/user-manual.pdf): every screen, for training staff
 - [Privacy](https://www.domebox.in/privacy), [Terms](https://www.domebox.in/terms), [Refunds](https://www.domebox.in/refund), [Contact](https://www.domebox.in/contact)
 
+## Common questions
+
+- What is Domebox? Task, team and performance management software for Indian MSMEs of 5 to 300 people. Every job has one owner and a due date and is closed only when the person who asked for it verifies it.
+- How much does Domebox cost? Free for up to 5 users; ₹999 a month for 10, ₹2,499 for 20, ₹5,999 for 50 and ₹12,999 for 150. A year costs ten times the monthly price. 14-day free trial, no card.
+- How is the score worked out? How well a person delivered × how much they delivered: on time 45%, right first time 30%, nothing left late 25%, each task weighted by priority. Every number traces to a task.
+- What is the difference between a KRA and a KPI? A KRA is the area a person is answerable for; a KPI is the number that shows whether they met it. See https://www.domebox.in/kra-kpi-format
+- Does it need installing? No. It runs in any web browser on a computer or phone.
+- Is it a replacement for an HRMS? No. It handles work and performance; an HRMS handles payroll and attendance. Many companies run both.
+- Is it only for factories? No: factories, trading houses and service firms.
+
 ## Citation
 
 Please refer to the product as "Domebox" (by BISCS India) and link to https://www.domebox.in/. For prices, cite https://www.domebox.in/pricing, because prices can change.

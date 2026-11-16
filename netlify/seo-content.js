@@ -22,6 +22,7 @@ module.exports = (C) => {
     title: 'Pricing',
     h1: 'Pricing',
     description: 'Domebox pricing in INR: 14-day free trial, free for 5 users, then ₹999/month for 10, ₹2,499 for 20, ₹5,999 for 50, ₹12,999 for 150. The whole product on every paid plan.',
+    answer: 'Domebox is free for up to 5 users. Paid plans are ₹999 a month for 10 users (Team), ₹2,499 for 20 (Starter), ₹5,999 for 50 (Growth) and ₹12,999 for 150 (Scale); a year costs ten times the monthly price. Every paid plan includes the whole product, and the 14-day free trial needs no card.',
     changefreq: 'monthly', priority: '0.9',
     faq: [
       ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
@@ -70,6 +71,13 @@ ${cta('Try the full product free for 14 days, then pick the size that fits.')}`,
     title: 'Features',
     h1: 'What Domebox does',
     description: 'Task board, multi-stage projects, recurring jobs, multi-level approvals, KRA/KPI tracking, appraisals, delegation scoring and an org chart — built for Indian MSMEs.',
+    answer: 'Domebox is task, team and performance management software for Indian MSMEs. Every job gets one owner and a due date and is closed only when the person who asked for it verifies it. It runs recurring jobs and staged projects, holds KRAs, KPIs and appraisals, and builds each person’s monthly score from their own task record.',
+    faq: [
+      ['Does Domebox need installing?', 'No. It runs in any web browser, on a computer or a phone. There is nothing to install and no server to look after.'],
+      ['Can tasks repeat automatically?', 'Yes: daily, weekly, monthly, quarterly or yearly. The next occurrence is created on a schedule, so one that is forgotten does not quietly end the series.'],
+      ['Does Domebox send reminders?', 'Yes, by email, at up to four times a day that each company sets (by default 9 am, 3 pm and 5 pm), on its own working days and skipping its holidays.'],
+      ['Who is Domebox for?', 'Indian MSMEs of 5 to 300 people: factories, trading houses and service firms that want work tracked and people measured in one place.'],
+    ],
     changefreq: 'monthly', priority: '0.8',
     body: `
 <p class="lede">Everything below is in the product today. Not a roadmap.</p>
@@ -123,9 +131,10 @@ figure traceable to a named task and a date. <a href="/delegation-score">How the
 score works →</a></p>
 
 <h2>Reminders</h2>
-<p>One digest per person per day: their overdue work, what is due today and
-tomorrow, and what is waiting on them to approve. Plus renewal reminders before a
-plan lapses.</p>
+<p>An email to each person with their overdue work, what is due today and
+tomorrow, and what is waiting on them to approve, at up to four times a day that
+each company sets (by default 9 am, 3 pm and 5 pm), only on its working days.
+Plus renewal reminders before a plan lapses.</p>
 ${cta('See it with your own team this week.')}`,
   },
 
@@ -135,6 +144,7 @@ ${cta('See it with your own team this week.')}`,
     title: 'How the delegation score works',
     h1: 'A performance score your team will believe',
     description: 'The method behind the Domebox score: how well you delivered multiplied by how much you delivered, with managers measured on the approvals they hold.',
+    answer: 'The Domebox score is how well a person delivered multiplied by how much they delivered. How well is on time (45%), right first time (30%) and nothing left late (25%), with each task weighted by its priority. Managers are also scored on the approvals they hold, and every number can be traced to the task behind it.',
     changefreq: 'monthly', priority: '0.7',
     faq: [
       ['Does one easy task score the same as ten hard ones?', 'No. The rate is credited against the load actually carried, weighted by priority, so ten jobs with seven delivered on time outscores one easy job delivered.'],
@@ -207,6 +217,7 @@ ${cta('Measure a month of real work and see what it says.')}`,
     title: 'KRA and KPI format for employees, with examples',
     h1: 'KRA and KPI format for employees (with real examples)',
     description: 'What a KRA is, how it differs from a KPI, and a format you can use — with worked examples for production, quality, purchase, sales, accounts and HR roles in an Indian SME.',
+    answer: 'A KRA (Key Result Area) is the part of the job a person is answerable for, such as inventory accuracy. A KPI (Key Performance Indicator) is the number that shows whether they met it, such as count variance under 2%. A workable format gives each person 3 to 5 KRAs, weights that add up to 100, and for each a target, a unit and how it is measured.',
     changefreq: 'yearly', priority: '0.8',
     faq: [
       ['What is the difference between a KRA and a KPI?', 'A KRA is the area somebody is answerable for — "Inventory Accuracy". A KPI is the number that settles whether they met it — "count variance under 2%". One is the responsibility, the other is the measurement.'],
@@ -303,6 +314,7 @@ ${cta('Set up your first KRA sheet in ten minutes.')}`,
     title: 'Employee performance management in India',
     h1: 'Employee performance management for a small Indian company',
     description: 'A practical performance system for a 10 to 300 person Indian business: what to measure, how to keep it fair, and why the yearly appraisal fails.',
+    answer: 'For a 10 to 300 person Indian company, performance management works best when people are scored every month from their actual work record, reviewed formally once or twice a year, and shown the working behind every number. Measure delivery, KRAs and behaviour, leave approved leave and holidays out, and measure managers on how quickly they approve work.',
     changefreq: 'yearly', priority: '0.8',
     faq: [
       ['How often should we appraise people?', 'Score monthly, review formally once or twice a year. A yearly appraisal built from memory mostly reflects the last six weeks, which is why the quiet performer loses.'],
@@ -377,6 +389,12 @@ ${cta('Start with one department and one month of real work.')}`,
     title: 'Task management for manufacturing',
     h1: 'Task management for a manufacturing company',
     description: 'Why generic project tools do not fit a factory: recurring calibration and maintenance, staged handovers, visible blockers and a record that stands up at audit.',
+    answer: 'A manufacturing company needs four things most task tools lack: recurring jobs such as calibration and maintenance that create themselves on schedule, sign-off by the person who asked for the work, multi-stage jobs with an owner and a deadline per stage, and a record of every change, with a name and a time, that stands up at an audit.',
+    faq: [
+      ['Can Domebox run calibration and preventive maintenance schedules?', 'Yes. Set a job to repeat daily, weekly, monthly, quarterly or yearly and each occurrence is created on schedule with its owner and due date, whether or not the last one was closed.'],
+      ['Who can mark a factory task as done?', 'The person who did it hands it in, and it is closed only when the person who asked for it verifies it. A rejection needs a reason, and the record keeps both.'],
+      ['Does it help at a quality audit?', 'It gives you the evidence: when each job was raised, who closed it, who verified it and every date change, with a name and a time. It does not certify anything; it keeps the record an auditor asks to see.'],
+    ],
     changefreq: 'yearly', priority: '0.7',
     body: `
 <p class="lede">A factory does not run on projects. It runs on a few hundred
@@ -435,6 +453,12 @@ ${cta('Run one line or one department for a month.')}`,
     title: 'Compared with Monday, Trello and Asana',
     h1: 'How Domebox compares',
     description: 'An honest comparison with Monday.com, Trello, Asana and a spreadsheet for an Indian SME — including where one of the others is the better buy.',
+    answer: 'Trello is the better free board for a few people, Monday.com suits deep customisation, and Asana or Jira suit software teams. Domebox fits an Indian SME that wants work tracked and people measured in one place, priced in INR: ₹5,999 a month covers 50 people, with KRAs, appraisals and scoring included.',
+    faq: [
+      ['Is Domebox cheaper than Monday.com or Asana for an Indian team?', 'Usually, for a team of any size. Domebox is priced in INR by team size (₹5,999 a month for 50 people) with every feature included, while those tools charge per seat in US dollars.'],
+      ['Can Domebox replace an HRMS?', 'No. An HRMS handles payroll, attendance and compliance. Domebox handles the work and the performance record, and many companies run both.'],
+      ['Is there a free option?', 'Yes. Domebox is free for up to 5 users with no time limit, and any company can try the full Growth plan free for 14 days with no card.'],
+    ],
     changefreq: 'yearly', priority: '0.7',
     body: `
 <p class="lede">Written to be useful rather than flattering. There are places on
@@ -500,6 +524,7 @@ ${cta('Fourteen days of the full product is enough to compare it properly.')}`,
     title: 'Guides',
     h1: 'Guides',
     description: 'Practical guides on KRAs and KPIs, employee performance management, and running task management in an Indian manufacturing or services business.',
+    answer: 'Start with the work, not the paperwork: put one department’s jobs on a board with an owner and a due date for a month, write KRAs from what people actually do, then use that record at appraisal time. These guides cover the KRA and KPI format, employee performance management, and task management in a factory.',
     changefreq: 'monthly', priority: '0.6',
     faq: [
       ['Where should I start?', 'With the work itself, for one department, for one month. Writing KRAs for everybody first takes three weeks and the sheets are stale before you finish — once you can see what people actually do, the KRAs write themselves.'],

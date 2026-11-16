@@ -83,6 +83,10 @@ nav a:hover{color:#1e4fbf}
 .nav-cta{background:#1e4fbf;color:#fff !important;padding:9px 16px;border-radius:10px}
 main{max-width:800px;margin:0 auto;padding:44px 24px 72px}
 h1{font-size:36px;font-weight:900;letter-spacing:-.025em;margin:0 0 10px;line-height:1.15}
+.byline{font-size:13px;color:#667085;margin:0 0 20px}
+.answer{background:#eef3ff;border-left:4px solid #1e4fbf;border-radius:10px;padding:14px 18px;margin:0 0 28px}
+.answer strong{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#1e4fbf}
+.answer p{margin:6px 0 0;color:#0f1b2d}
 .lede{font-size:18px;color:#344054;font-weight:600;margin:0 0 34px}
 h2{font-size:23px;font-weight:900;margin:44px 0 12px;letter-spacing:-.015em}
 h3{font-size:17px;font-weight:800;margin:28px 0 6px}
@@ -129,6 +133,14 @@ footer .copy{color:#8a94a6;font-size:13px}
 @media(max-width:600px){h1{font-size:28px}main{padding:32px 18px 56px}nav a{margin-left:12px}}
 ` + SOCIAL_CSS;
 
+/* Who stands behind the guides. AI answers and Google both weigh a named,
+   accountable author over an anonymous page; the same @id as the home page's
+   Person, so it is one founder everywhere. */
+const FOUNDER = 'Kaustabh Maitra';
+const { lastmodFor: modOf, firstPublished } = require('./lastmod.js');
+const human = (d) => { const [y, m, dd] = d.split('-').map(Number);
+  return dd + ' ' + ['January','February','March','April','May','June','July','August','September','October','November','December'][m - 1] + ' ' + y; };
+
 function jsonld(p) {
   const graph = [
     { '@type': 'BreadcrumbList', itemListElement: [
@@ -139,7 +151,12 @@ function jsonld(p) {
       mainEntityOfPage: BASE + '/' + p.slug, inLanguage: 'en-IN',
       /* The same @id as the home page's Organization, so every page points at
          one BISCS India rather than describing a new one each time. */
-      author: { '@type': 'Organization', '@id': BASE + '/#org', name: C.legalEntity },
+      author: { '@type': 'Person', '@id': BASE + '/#founder', name: FOUNDER,
+                jobTitle: 'Founder, ' + C.legalEntity, worksFor: { '@id': BASE + '/#org' } },
+      datePublished: firstPublished(p.slug), dateModified: modOf(p.slug),
+      image: BASE + '/og-cover.png',
+      ...(p.answer ? { abstract: p.answer } : {}),
+      about: { '@id': BASE + '/#software' },
       publisher: { '@type': 'Organization', '@id': BASE + '/#org', name: C.legalEntity,
                    logo: { '@type': 'ImageObject', url: BASE + '/logo-512.png', width: 512, height: 512 } } },
   ];
@@ -193,6 +210,8 @@ ${nav}
 <main>
 <p class="crumb"><a href="/">Home</a> › ${esc(p.title)}</p>
 <h1>${esc(p.h1)}</h1>
+<p class="byline">By ${FOUNDER}, founder of ${esc(C.legalEntity)} · Updated <time datetime="${modOf(p.slug)}">${human(modOf(p.slug))}</time></p>
+${p.answer ? `<div class="answer"><strong>In short</strong><p>${esc(p.answer)}</p></div>` : ''}
 ${p.body}
 ${faqHtml(p)}
 </main>

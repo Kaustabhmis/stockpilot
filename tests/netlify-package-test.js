@@ -37,6 +37,40 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
   ok('robots.txt lets Google fetch the icons', !/^\s*Disallow:\s*\/(\s|$|favicon|apple)/mi.test(robots) && /Allow: \//.test(robots));
   const hdr = fs.existsSync(path.join(PKG, '_headers')) ? fs.readFileSync(path.join(PKG, '_headers'), 'utf8') : '';
   ok('no header tells Google not to index the site or its images', !/^[^#]*X-Robots-Tag/mi.test(hdr));
+  /* AI Overviews (and ChatGPT, Perplexity, Copilot) quote pages that answer
+     first, name who wrote them and when, and mark up only questions a reader
+     can see. */
+  {
+    const graphOf = (t) => [].concat(...[...t.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])['@graph'] || []));
+    const txt = (t) => t.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+    const guides = ['pricing', 'features', 'delegation-score', 'kra-kpi-format', 'employee-performance-management', 'task-management-for-manufacturing', 'alternatives', 'guides'];
+    const noAns = [], noFaq = [], noAuthor = [], hidden = [];
+    guides.forEach((g) => {
+      const t = fs.readFileSync(path.join(PKG, g + '.html'), 'utf8');
+      const a = (t.match(/<div class="answer"><strong>In short<\/strong><p>([^<]+)<\/p>/) || [])[1] || '';
+      const w = a.split(/\s+/).length;
+      if (w < 35 || w > 75) noAns.push(g + ':' + w);
+      const gr = graphOf(t), art = gr.find((x) => x['@type'] === 'Article') || {};
+      if (!(art.author && art.author['@type'] === 'Person' && /^\d{4}-\d\d-\d\d$/.test(art.dateModified) && art.datePublished <= art.dateModified &&
+            new RegExp('Updated <time datetime="' + art.dateModified + '"').test(t))) noAuthor.push(g);
+      if (!gr.some((x) => x['@type'] === 'FAQPage')) noFaq.push(g);
+    });
+    pages.forEach((f) => {
+      const t = fs.readFileSync(path.join(PKG, f), 'utf8'), seen = txt(t);
+      graphOf(t).filter((x) => x['@type'] === 'FAQPage').forEach((fq) => fq.mainEntity.forEach((q) => {
+        if (seen.indexOf(q.name) < 0 || seen.indexOf(q.acceptedAnswer.text) < 0) hidden.push(f + ': ' + q.name);
+      }));
+    });
+    ok('every guide opens with a short direct answer (35 to 75 words)', noAns.length === 0, noAns.join(', '));
+    ok('every guide names its author and when it was updated, on the page and in its data', noAuthor.length === 0, noAuthor.join(', '));
+    ok('every guide carries its common questions as FAQ data', noFaq.length === 0, noFaq.join(', '));
+    ok('the home page marks up its buyer questions too', graphOf(idx).some((x) => x['@type'] === 'FAQPage' && x.mainEntity.length >= 6));
+    ok('every question in the data is one a reader can see on that page, word for word', hidden.length === 0, hidden.join(' | '));
+    ok('robots.txt names the AI search crawlers and lets them in', ['Googlebot', 'Google-Extended', 'OAI-SearchBot', 'PerplexityBot', 'ClaudeBot', 'Bingbot'].every((b) => new RegExp('User-agent: ' + b).test(robots)) && !/Disallow: \/\s*$/m.test(robots));
+    ok('llms.txt answers the common questions', /## Common questions/.test(fs.readFileSync(path.join(PKG, 'llms.txt'), 'utf8')));
+    const lite = fs.readFileSync(path.join(PKG, '..', 'lite-upload', 'index.html'), 'utf8');
+    ok('Lite is untouched: no search data, no buyer questions', !/FAQPage|ld\+json|Questions buyers ask/.test(lite));
+  }
   ok('the home page has no data: icon, which Google ignores', !/rel="icon" href="data:/.test(idx));
   const ico = fs.readFileSync(path.join(PKG, 'favicon.ico'));
   ok('favicon.ico is a real icon file holding a 48px image', ico.readUInt16LE(2) === 1 && [...Array(ico.readUInt16LE(4)).keys()].some((i) => ico[6 + 16 * i] === 48));

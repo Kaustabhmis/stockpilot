@@ -32,4 +32,15 @@ function lastmodFor(slug) {
   return lastChanged(SOURCES[kind]);
 }
 
-module.exports = { lastmodFor, lastChanged };
+/** The date a page first went out: the first commit of the file its content
+    lives in. Shown as datePublished; it never moves once set. */
+function firstPublished(slug) {
+  const kind = !slug ? 'home' : LEGAL_SLUGS.indexOf(slug) > -1 ? 'legal' : 'content';
+  try {
+    const out = execFileSync('git', ['log', '--diff-filter=A', '--format=%cs', '--', SOURCES[kind][0]],
+      { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim().split('\n');
+    return out[out.length - 1] || lastmodFor(slug);
+  } catch (e) { return lastmodFor(slug); }
+}
+
+module.exports = { lastmodFor, lastChanged, firstPublished };
