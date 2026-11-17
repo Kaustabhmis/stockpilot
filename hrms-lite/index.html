@@ -4060,14 +4060,23 @@ function recordFor(ym, code, d) {
    compensatory off. The day itself stays the paid day off it was; the credit is
    then either paid, or set against an absent day - see coPlusList(). */
 var WORKED_ON_OFF = { P: 1, HD: 1, A: 1, OD: 1 };
-function coMinHours() {
-  var v = S.settings.co_min_hours;
-  return v === undefined || v === null || v === '' ? 5 : num(v);
+/* Hours of work that earn the comp-off: one figure for a weekly off (Sunday),
+   and one for a holiday - which follows the weekly off's when left blank. */
+function coMinHours(holiday) {
+  var blank = function (v) { return v === undefined || v === null || String(v).trim() === ''; };
+  var wo = blank(S.settings.co_min_hours) ? 5 : num(S.settings.co_min_hours);
+  if (!holiday) return wo;
+  return blank(S.settings.co_min_hours_holiday) ? wo : num(S.settings.co_min_hours_holiday);
 }
-function earnsCompOff(rec) {
+function coHoursText() {
+  var a = coMinHours(false), b = coMinHours(true);
+  return a === b ? a + ' hours or more on a weekly off or a holiday'
+    : a + ' hours or more on a weekly off, ' + b + ' on a holiday';
+}
+function earnsCompOff(rec, holiday) {
   if (!rec) return false;
   if (rec.status === 'OD') return true;
-  var min = coMinHours(), mins = workedMinutes(rec);
+  var min = coMinHours(holiday), mins = workedMinutes(rec);
   return min > 0 && mins !== null && mins >= min * 60;
 }
 /* the CSS class for a status - "CO+" is not a class name */
@@ -4085,7 +4094,7 @@ function statusFrom(rec, ym, d, code) {
     if (WORKED_ON_OFF[rec.status]) {
       var hol = !!holidayOn(dateStr(ym, d));
       if (hol || isWeeklyOff(ym, d, code)) {
-        if (earnsCompOff(rec)) return 'CO+';
+        if (earnsCompOff(rec, hol)) return 'CO+';
         /* came in on the day off but not for long enough: it is still the
            weekly off or the holiday - no credit, and never an absence */
         if (rec.in_time) return hol ? 'H' : 'WO';
@@ -6659,6 +6668,8 @@ var WORKING_HOURS = [
   ['halfday_after_minutes', 'Half day when in later / out earlier than this many minutes (default 60)', 'number'],
   ['ot_after_minutes', 'Overtime starts after (minutes past shift end)', 'number'],
   ['weekly_off', 'Weekly off (e.g. Sun, or Sun,Sat)', 'text'],
+  ['co_min_hours', 'Sunday / weekly off worked: hours that earn a comp-off, CO+ (default 5)', 'number'],
+  ['co_min_hours_holiday', 'Holiday worked: hours that earn a comp-off, CO+ (blank = same as Sunday)', 'number'],
   ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt']
 ];
 var ATTENDANCE_RULES = [
@@ -7121,7 +7132,9 @@ function shiftsPane() {
     '<h3 style="margin-top:22px">Default working hours</h3>' +
     '<div class="card-sub">Used for any shift cell left blank and for staff with no shift. ' +
     'Worked hours at or above the full-day minimum are <b>P</b>, at or above the half-day ' +
-    'minimum are <b>HD</b>, below that <b>A</b>. A shift above can set its own values.</div>' +
+    'minimum are <b>HD</b>, below that <b>A</b>. A shift above can set its own values. ' +
+    'On a Sunday (weekly off) or a holiday those rules do not apply: working the hours set here, or out duty, ' +
+    'earns a comp-off (<b>CO+</b>); fewer hours leaves the day a normal off day.</div>' +
     '<div class="grid2">' + WORKING_HOURS.map(function (f) {
       return fieldInput(f, S.settings[f[0]]);
     }).join('') + '</div>' +
@@ -12665,7 +12678,7 @@ function renderCoPlus() {
   var mine = isAdmin() ? null : myCode();
   var list = coPlusList().filter(function (x) { return !mine || String(x.e.emp_code) === mine; });
   var open = list.filter(function (x) { return x.state === 'open'; }).length;
-  el('coplus-sub').innerHTML = 'Out duty, or ' + coMinHours() + ' hours or more, on a weekly off or a holiday earns one comp-off ' +
+  el('coplus-sub').innerHTML = 'Out duty, or ' + coHoursText() + ', earns one comp-off ' +
     '(<b class="s-COP" style="padding:1px 5px;border-radius:5px">CO+</b> on the register). ' +
     'Pay it, or set it against an absent day.' +
     (open ? ' <span class="badge b-amber">' + open + ' waiting</span>' : '');
@@ -13027,8 +13040,7 @@ function requestsPane() {
                  S.settings.co_payout_enabled) +
       fieldInput(['co_validity_days', 'Comp-off lapses after (days, 0 = never)', 'number'],
                  S.settings.co_validity_days) +
-      fieldInput(['co_min_hours', 'Hours worked on a weekly off or holiday that earn a comp-off (CO+)', 'number'],
-                 S.settings.co_min_hours === undefined || S.settings.co_min_hours === '' ? 5 : S.settings.co_min_hours) +
+
     '</div>' +
     '<div class="locked-note" style="background:#f1f5f9;color:var(--text-dark);align-items:flex-start;margin-top:14px">' +
     '<div>&#9432;</div><div style="font-weight:500;line-height:1.8">' +

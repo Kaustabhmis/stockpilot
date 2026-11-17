@@ -12,7 +12,8 @@ const BASE = process.argv[2] || 'http://127.0.0.1:8105';
 
 /* THE RULES
    - On a weekly off (Sunday here) or a holiday: out duty, or 5 hours or more of work,
-     shows CO+ - one comp-off earned. 5 is "co_min_hours" in Settings.
+     shows CO+ - one comp-off earned. 5 is "co_min_hours" in Settings; a holiday
+     can have its own figure, "co_min_hours_holiday" (blank = the same).
    - Fewer hours than that is still the weekly off (WO): no credit, and never
      an absence or LOP, whatever the shift rules made of the hours.
    - A CO+ day is paid as the weekly off it is. Working days are untouched.
@@ -85,6 +86,10 @@ const r = await p.evaluate(async () => {
   S.settings.co_min_hours = '6'; S.attVersion++;
   out.six = st('CP-04') + ',' + st('CP-01');
   S.settings.co_min_hours = '';
+  /* the holiday has hours of its own: at 7, six hours on the holiday is not enough - Sunday stays at 5 */
+  S.settings.co_min_hours_holiday = '7'; S.attVersion++;
+  out.hol7 = statusOf(H0.slice(0, 7), 'CP-05', +H0.slice(8)) + ',' + st('CP-04');
+  S.settings.co_min_hours_holiday = ''; S.attVersion++;
   return out;
 });
 
@@ -109,6 +114,7 @@ ok(r.table.length === 4 && r.table.some(t => /Full Sunday.*paid/i.test(t)) && r.
 
 console.log('\nthe hours are a setting');
 ok(r.six === 'WO,CO+', 'at 6 hours, 5 h is no longer enough', r.six);
+ok(r.hol7 === 'H,CO+', 'holiday hours set to 7: 6 h on the holiday is not enough, Sunday unchanged', r.hol7);
 ok(!errs.length, 'no page errors', errs.join(' | '));
 await b.close();
 console.log(bad ? '\n' + bad + ' check(s) FAILED' : '\nall CO+ checks passed');

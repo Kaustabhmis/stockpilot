@@ -1024,7 +1024,7 @@ export function createActions(api, db, deps) {
     const staffSettings = {};
     ['company_name', 'currency', 'web_punch_enabled', 'punch_out_mandatory',
      'geofence_enabled', 'geofence_mode', 'geofence_accuracy_m', 'default_shift',
-     'weekly_off', 'co_min_hours', 'co_payout_enabled', 'co_validity_days', 'company_address'].forEach(k => { if (st[k] !== undefined) staffSettings[k] = st[k]; });
+     'weekly_off', 'co_min_hours', 'co_min_hours_holiday', 'co_payout_enabled', 'co_validity_days', 'company_address'].forEach(k => { if (st[k] !== undefined) staffSettings[k] = st[k]; });
 
     return {
       role: 'employee',

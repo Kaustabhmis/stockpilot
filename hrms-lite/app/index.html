@@ -734,9 +734,11 @@ function isWeeklyOff(iso) {
   var d = ['sun','mon','tue','wed','thu','fri','sat'][new Date(iso + 'T00:00:00').getDay()];
   return d === off;
 }
-function coNeedHours() {
-  var need = S.settings.co_min_hours;
-  return need === undefined || need === null || need === '' ? 5 : num(need);
+function coNeedHours(holiday) {
+  var blank = function (v) { return v === undefined || v === null || String(v).trim() === ''; };
+  var wo = blank(S.settings.co_min_hours) ? 5 : num(S.settings.co_min_hours);
+  if (!holiday) return wo;
+  return blank(S.settings.co_min_hours_holiday) ? wo : num(S.settings.co_min_hours_holiday);
 }
 /* The status one day shows - mine, or (for a manager) one of my people's. */
 function statusOfRec(rec, iso, doj, loaded) {
@@ -746,7 +748,7 @@ function statusOfRec(rec, iso, doj, loaded) {
      hours - earns a comp-off. Fewer hours than that is still just the day off. */
   var hol = holidayOn(iso);
   if (rec && rec.status && { P: 1, HD: 1, A: 1, OD: 1 }[rec.status] && (hol || isWeeklyOff(iso))) {
-    var need = coNeedHours(), mins = workedMinutes(rec);
+    var need = coNeedHours(!!hol), mins = workedMinutes(rec);
     if (String(rec.status) === 'OD' || (need > 0 && mins && mins >= need * 60)) return 'CO+';
     if (rec.in_time) return hol ? 'H' : 'WO';
   }
@@ -1372,7 +1374,9 @@ function requestFields(forDate) {
     var canPay = String(S.settings.co_payout_enabled || 'yes').toLowerCase() !== 'no';
     if (!open.length) {
       html += '<div class="empty" style="padding:18px 6px">No comp-off waiting to be used.<br>' +
-        'One is earned by out duty, or ' + coNeedHours() + ' hours or more, on a weekly off or a holiday.</div>' +
+        'One is earned by out duty, or ' + (coNeedHours(false) === coNeedHours(true)
+          ? coNeedHours(false) + ' hours or more, on a weekly off or a holiday'
+          : coNeedHours(false) + ' hours or more on a weekly off, ' + coNeedHours(true) + ' on a holiday') + '.</div>' +
         '<input type="hidden" id="rq-from" value="">';
     } else {
       var opt = function (iso) { return fmtDate(iso) + ' (' + dayName(iso).slice(0, 3) + ')'; };
