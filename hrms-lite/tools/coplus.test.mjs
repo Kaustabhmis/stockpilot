@@ -14,6 +14,8 @@ const BASE = process.argv[2] || 'http://127.0.0.1:8105';
    - On a weekly off (Sunday here) or a holiday: out duty, or 5 hours or more of work,
      shows CO+ - one comp-off earned. 5 is "co_min_hours" in Settings; a holiday
      can have its own figure, "co_min_hours_holiday" (blank = the same).
+   - The shift's grace is allowed at each end: with 15 minutes, 4 h 30 of a
+     5-hour Sunday is enough.
    - Fewer hours than that is still the weekly off (WO): no credit, and never
      an absence or LOP, whatever the shift rules made of the hours.
    - A CO+ day is paid as the weekly off it is. Working days are untouched.
@@ -83,6 +85,13 @@ const r = await p.evaluate(async () => {
   go('leave'); renderRequests();
   out.table = [...document.querySelectorAll('#coplus-table tbody tr')].map(t => t.innerText.replace(/\s+/g, ' '));
 
+  /* the grace: 09:17 - 14:10 is 4 h 53 - a 5-hour Sunday with 15 min grace at each end; 09:30 - 13:55 is not */
+  S.attendance = S.attendance.filter(a => !(a.emp_code === 'CP-02' && a.date === S0));
+  S.attendance.push(day('CP-02', S0, 'A', '09:17', '14:10', 4.9)); S.attVersion++;
+  out.grace = st('CP-02');
+  S.attendance = S.attendance.filter(a => !(a.emp_code === 'CP-02' && a.date === S0));
+  S.attendance.push(day('CP-02', S0, 'A', '09:30', '13:55', 4.4)); S.attVersion++;
+  out.grace += ',' + st('CP-02');
   S.settings.co_min_hours = '6'; S.attVersion++;
   out.six = st('CP-04') + ',' + st('CP-01');
   S.settings.co_min_hours = '';
@@ -113,6 +122,7 @@ ok(r.table.length === 4 && r.table.some(t => /Full Sunday.*paid/i.test(t)) && r.
    'the CO+ list shows all four', r.table.map(t => t.slice(0, 60)).join(' | '));
 
 console.log('\nthe hours are a setting');
+ok(r.grace === 'CO+,WO', '4 h 53 counts (15 min grace in and out); 4 h 25 does not', r.grace);
 ok(r.six === 'WO,CO+', 'at 6 hours, 5 h is no longer enough', r.six);
 ok(r.hol7 === 'H,CO+', 'holiday hours set to 7: 6 h on the holiday is not enough, Sunday unchanged', r.hol7);
 ok(!errs.length, 'no page errors', errs.join(' | '));

@@ -741,15 +741,18 @@ function coNeedHours(holiday) {
   return blank(S.settings.co_min_hours_holiday) ? wo : num(S.settings.co_min_hours_holiday);
 }
 /* The status one day shows - mine, or (for a manager) one of my people's. */
-function statusOfRec(rec, iso, doj, loaded) {
+function statusOfRec(rec, iso, doj, loaded, shift) {
   /* in today and not out yet: at work, not absent - the day settles at punch out */
   if (rec && rec.in_time && !rec.out_time && iso === today()) return 'IN';
   /* CO+ : a weekly off or a holiday that was worked - out duty, or enough
      hours - earns a comp-off. Fewer hours than that is still just the day off. */
   var hol = holidayOn(iso);
   if (rec && rec.status && { P: 1, HD: 1, A: 1, OD: 1 }[rec.status] && (hol || isWeeklyOff(iso))) {
+    /* the grace at each end of the shift is allowed, as on any other day */
     var need = coNeedHours(!!hol), mins = workedMinutes(rec);
-    if (String(rec.status) === 'OD' || (need > 0 && mins && mins >= need * 60)) return 'CO+';
+    var sh = shift || myShift(), g = sh && sh.grace_minutes !== undefined && sh.grace_minutes !== null && sh.grace_minutes !== ''
+      ? num(sh.grace_minutes) : 15;
+    if (String(rec.status) === 'OD' || (need > 0 && mins && mins >= Math.max(1, need * 60 - 2 * Math.max(0, g)))) return 'CO+';
     if (rec.in_time) return hol ? 'H' : 'WO';
   }
   if (rec && rec.status) return String(rec.status);
@@ -1593,7 +1596,7 @@ function teamShiftMonth(by) {
 function teamStatus(member, iso) {
   var by = S.teamAtt[iso.slice(0, 7)] || {};
   var rec = by[member.emp_code + '_' + iso] || null;
-  return { rec: rec, st: statusOfRec(rec, iso, member.doj || '', true) };
+  return { rec: rec, st: statusOfRec(rec, iso, member.doj || '', true, shiftOfPerson(member)) };
 }
 function teamLate(st, rec, member) { return dayLateMarks(st, rec, shiftOfPerson(member)) > 0; }
 function teamMonthStats(member, ym) {
