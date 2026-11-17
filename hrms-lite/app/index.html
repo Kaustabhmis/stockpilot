@@ -662,7 +662,34 @@ function reload(given) {
     });
 }
 
+/* The colours HR picked for each kind of day, if any - the same ones the
+   office register uses. Nothing picked leaves the app's own. */
+function statusColors() {
+  var out = {};
+  try { out = JSON.parse(S.settings.status_colors || '{}') || {}; } catch (e) { out = {}; }
+  Object.keys(out).forEach(function (k) { if (!/^#[0-9a-f]{6}$/i.test(String(out[k]))) delete out[k]; });
+  return out;
+}
+function inkFor(hex) {
+  var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  if ((0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5) return '#ffffff';
+  var d = function (v) { return ('0' + Math.round(v * 0.32).toString(16)).slice(-2); };
+  return '#' + d(r) + d(g) + d(b);
+}
+function applyStatusColors() {
+  var tag = document.getElementById('status-colors');
+  if (!tag) { tag = document.createElement('style'); tag.id = 'status-colors'; document.head.appendChild(tag); }
+  var picked = statusColors();
+  if (picked.A && !picked.NA) picked.NA = picked.A;        /* no punch is drawn as absent */
+  tag.textContent = Object.keys(picked).map(function (k) {
+    var c = k === 'CO+' ? 'COP' : k;
+    return '.cal .d.' + c + ',.st.' + c + '{background:' + picked[k] + ';border-color:' + picked[k] + ';color:' + inkFor(picked[k]) + ';}';
+  }).join('\n');
+}
+function legendColor(code, fallback) { return statusColors()[code] || fallback; }
+
 function paintHeader() {
+  applyStatusColors();
   var name = (S.me && S.me.name) || (S.user && S.user.email) || '';
   el('nm').textContent = name;
   el('cd').textContent = (S.me ? S.me.emp_code + (S.me.designation ? ' · ' + S.me.designation : '') : '');
@@ -1084,7 +1111,7 @@ function renderCalendar() {
     '<div class="legend">' +
       [['P','#d1fae5','Present'],['A','#fee2e2','Absent'],['HD','#fef3c7','Half day'],
        ['L','#dbeafe','Leave'],['OD','#ede9fe','OD / comp-off'],['CO+','#fde68a','CO+ worked off day'],['WO','#f1f5f9','Off / holiday']]
-      .map(function (x) { return '<span><i style="background:' + x[1] + '"></i>' + x[2] + '</span>'; }).join('') +
+      .map(function (x) { return '<span><i style="background:' + legendColor(x[0], x[1]) + '"></i>' + x[2] + '</span>'; }).join('') +
     '</div>';
 }
 function shiftMonth(by) {
