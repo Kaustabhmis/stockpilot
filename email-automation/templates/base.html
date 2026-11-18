@@ -3,35 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
   <meta name="x-apple-disable-message-reformatting">
   <title><?= companyName ?></title>
   <style>
-    body { margin: 0; padding: 0; background: #f4f5f7; font-family: Arial, Helvetica, sans-serif; color: #1f2937; }
-    .wrap { width: 100%; background: #f4f5f7; padding: 24px 0; }
-    .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; }
-    .header { background: #4f46e5; color: #ffffff; padding: 20px 32px; font-size: 20px; font-weight: bold; }
-    .content { padding: 28px 32px; font-size: 16px; line-height: 1.6; }
-    .content h1 { font-size: 22px; margin: 0 0 16px; }
-    .content a { color: #4f46e5; }
-    .btn { display: inline-block; background: #4f46e5; color: #ffffff !important; text-decoration: none; padding: 12px 22px; border-radius: 6px; font-weight: bold; }
-    .footer { padding: 20px 32px; font-size: 12px; color: #6b7280; text-align: center; line-height: 1.5; border-top: 1px solid #e5e7eb; }
-    .footer a { color: #6b7280; }
-    @media (max-width: 620px) {
-      .header, .content, .footer { padding-left: 20px !important; padding-right: 20px !important; }
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    body { margin: 0; padding: 0; background: #f3efe6; }
+    img { border: 0; display: block; }
+    .brand { font-family: Georgia, 'Times New Roman', serif; font-size: 13px; letter-spacing: 6px; text-transform: uppercase; color: #1a1a1a; }
+    .content { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.75; color: #3d3a35; }
+    .content h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: normal; font-size: 30px; line-height: 1.25; color: #1a1a1a; margin: 0 0 22px; }
+    .content p { margin: 0 0 18px; }
+    .content ol, .content ul { margin: 0 0 18px; padding-left: 20px; }
+    .content li { margin-bottom: 8px; }
+    .content a { color: #1a1a1a; }
+    .content .signoff { font-family: Georgia, 'Times New Roman', serif; font-style: italic; color: #6b6458; margin-top: 28px; }
+    .btn { display: inline-block; background: #1a1a1a; color: #ffffff !important; text-decoration: none; padding: 15px 38px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; }
+    .gold-rule { width: 44px; height: 1px; background: #b8975a; margin: 18px auto 0; font-size: 0; line-height: 0; }
+    .footer { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 12px; line-height: 1.9; color: #8a8377; }
+    .footer a { color: #8a8377; text-decoration: underline; }
+    @media only screen and (max-width: 620px) {
+      .outer { width: 100% !important; max-width: 100% !important; }
+      .pad { padding-left: 26px !important; padding-right: 26px !important; }
+      .content h1 { font-size: 25px !important; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="header"><?= companyName ?></div>
-      <div class="content"><?!= body ?></div>
-      <div class="footer">
-        <p><?= companyName ?> &middot; <?= companyAddress ?></p>
-        <p>You are receiving this because you signed up at <?= companyName ?>.<br>
-        <a href="<?= unsubscribeUrl ?>">Unsubscribe</a> &middot; <a href="<?= productUrl ?>">Visit our website</a></p>
-      </div>
-    </div>
-  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3efe6;">
+    <tr>
+      <td align="center" style="padding: 40px 12px;">
+        <table role="presentation" class="outer" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px; background:#ffffff;">
+          <tr>
+            <td align="center" class="pad" style="padding: 48px 48px 28px; border-bottom: 1px solid #ebe5d8;">
+              <div class="brand"><?= companyName ?></div>
+              <div class="gold-rule">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td class="pad content" style="padding: 44px 48px;"><?!= body ?></td>
+          </tr>
+          <tr>
+            <td class="pad footer" align="center" style="padding: 28px 48px 40px; border-top: 1px solid #ebe5d8;">
+              <?= companyName ?><br>
+              <?= companyAddress ?><br><br>
+              You received this email because you signed up at <?= companyName ?>.<br>
+              <a href="<?= unsubscribeUrl ?>">Unsubscribe</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="<?= productUrl ?>">Website</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

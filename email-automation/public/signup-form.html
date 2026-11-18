@@ -5,53 +5,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Subscribe</title>
   <style>
-    :root { --brand: #4f46e5; --ink: #1f2937; --muted: #6b7280; }
-    body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: var(--ink); background: #f9fafb; }
-    .box { max-width: 420px; margin: 48px auto; padding: 28px; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
-    h2 { margin: 0 0 6px; }
-    p.lead { margin: 0 0 20px; color: var(--muted); }
-    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
-    input { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; }
-    input:focus { outline: 2px solid var(--brand); border-color: transparent; }
-    button { width: 100%; margin-top: 18px; padding: 12px; border: 0; border-radius: 8px; background: var(--brand); color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; }
+    :root { --ink: #1a1a1a; --ivory: #f7f4ee; --paper: #ffffff; --gold: #b8975a; --muted: #8a8377; --hair: #e4ddcd; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--ivory); color: var(--ink);
+           font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+    .card { width: 100%; max-width: 440px; background: var(--paper); padding: 52px 44px 44px; border: 1px solid var(--hair); }
+    .eyebrow { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); text-align: center; margin: 0 0 14px; }
+    h2 { font-family: Georgia, 'Times New Roman', serif; font-weight: normal; font-size: 30px; line-height: 1.2; text-align: center; margin: 0 0 12px; }
+    p.lead { font-size: 14px; line-height: 1.7; color: var(--muted); text-align: center; margin: 0 0 34px; }
+    .rule { width: 44px; height: 1px; background: var(--gold); margin: 0 auto 34px; }
+    .field { margin-bottom: 22px; }
+    label { display: block; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    input[type=text], input[type=email] { width: 100%; border: 0; border-bottom: 1px solid var(--hair); background: transparent;
+           padding: 8px 0 10px; font-size: 16px; color: var(--ink); border-radius: 0; font-family: inherit; }
+    input:focus { outline: none; border-bottom-color: var(--gold); }
+    button { width: 100%; margin-top: 10px; padding: 17px; border: 0; background: var(--ink); color: #fff; cursor: pointer;
+             font-size: 12px; letter-spacing: 3px; text-transform: uppercase; font-family: inherit; }
+    button:hover { background: #000; }
     button:disabled { opacity: .6; cursor: default; }
-    #msg { margin-top: 14px; font-size: 14px; min-height: 18px; }
-    .ok { color: #047857; }
-    .err { color: #b91c1c; }
+    #msg { margin-top: 22px; font-size: 14px; line-height: 1.6; text-align: center; min-height: 20px; color: var(--muted); }
+    #msg.ok { color: #6b5a33; font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 16px; }
+    #msg.err { color: #9b2c2c; }
+    .fine { margin-top: 26px; font-size: 11px; line-height: 1.6; color: var(--muted); text-align: center; }
     .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-    @media (max-width: 480px) { .box { margin: 16px; padding: 20px; } }
+    @media (max-width: 480px) { .card { padding: 40px 26px 34px; } h2 { font-size: 26px; } }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h2>Get product updates</h2>
-    <p class="lead">Tips, release notes and offers. Unsubscribe anytime.</p>
+  <main class="card">
+    <p class="eyebrow">The Journal</p>
+    <h2>Stay in the loop</h2>
+    <div class="rule"></div>
+    <p class="lead">Considered updates, product news and occasional invitations, delivered sparingly. Unsubscribe at any time.</p>
 
     <form id="signup" novalidate>
-      <label for="first_name">First name</label>
-      <input id="first_name" name="first_name" autocomplete="given-name" maxlength="100">
+      <div class="field">
+        <label for="first_name">First name</label>
+        <input id="first_name" name="first_name" type="text" autocomplete="given-name" maxlength="100">
+      </div>
+      <div class="field">
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" autocomplete="email" required maxlength="254">
+      </div>
+      <div class="field">
+        <label for="company">Company</label>
+        <input id="company" name="company" type="text" autocomplete="organization" maxlength="100">
+      </div>
 
-      <label for="email">Work email</label>
-      <input id="email" name="email" type="email" autocomplete="email" required maxlength="254">
-
-      <label for="company">Company</label>
-      <input id="company" name="company" autocomplete="organization" maxlength="100">
-
-      <!-- Honeypot: hidden from people, bots tend to fill it in -->
+      <!-- Honeypot: hidden from people; bots tend to fill it in -->
       <div class="hp" aria-hidden="true">
         <label for="website">Leave this empty</label>
-        <input id="website" name="website" tabindex="-1" autocomplete="off">
+        <input id="website" name="website" type="text" tabindex="-1" autocomplete="off">
       </div>
 
       <input type="hidden" name="plan" value="free">
       <input type="hidden" name="source" value="landing-page">
-      <!-- Soft spam guard only: this value is visible to anyone who views the page source. -->
+      <!-- Soft spam guard only: this value is visible in the page source. -->
       <input type="hidden" name="api_key" value="PASTE_SIGNUP_API_KEY_HERE">
 
       <button id="submit" type="submit">Subscribe</button>
       <div id="msg" role="status"></div>
     </form>
-  </div>
+
+    <p class="fine">By subscribing you agree to receive occasional emails. We respect your privacy and will never share your details.</p>
+  </main>
 
   <script>
     // Paste the deployed Apps Script web app URL (ends in /exec).
@@ -75,10 +92,10 @@
       }
 
       btn.disabled = true;
-      show('Subscribing…');
+      show('One moment…');
       try {
         // no-cors + text/plain avoids a CORS preflight. The response is opaque,
-        // so we confirm success optimistically; the Logs sheet records every signup.
+        // so success is shown optimistically; the Logs sheet records every signup.
         await fetch(WEBAPP_URL, {
           method: 'POST',
           mode: 'no-cors',
@@ -86,9 +103,9 @@
           body: JSON.stringify(data),
         });
         form.reset();
-        show('Almost done! Check your inbox to confirm your subscription.', 'ok');
+        show('Thank you. Please check your inbox to confirm.', 'ok');
       } catch (err) {
-        show('Something went wrong. Please try again in a moment.', 'err');
+        show('We could not complete that just now. Please try again shortly.', 'err');
       } finally {
         btn.disabled = false;
       }
