@@ -112,6 +112,19 @@ const day = (c, d) => (att.find(a => a.emp_code === c && String(a.date).slice(0,
 ok(day('HM-03', '2026-11-19') === 'OD', 'out duty approved: OD on the register', day('HM-03', '2026-11-19'));
 ok(day('HM-02', '2026-11-06') === 'CO', 'comp-off approved: the absent day is a paid CO', day('HM-02', '2026-11-06'));
 
+console.log('\nout duty on a Sunday or holiday');
+/* a one-day OD on Sunday 22 Nov, and a Saturday-to-Monday OD over Sunday 29 Nov */
+const odSun = await call('save', { sheet: 'Requests', row: { type: 'OD', date: '2026-11-22', to_date: '2026-11-22', days: 1,
+  reason: 'Sunday site work', status: 'Pending', applied_at: '2026-11-16' } }, tok['HM-03']);
+const odRange = await call('save', { sheet: 'Requests', row: { type: 'OD', date: '2026-12-05', to_date: '2026-12-07', days: 2,
+  reason: 'trip', status: 'Pending', applied_at: '2026-11-16' } }, tok['HM-03']);
+for (const id of [odSun.id, odRange.id]) { await call('decide', { sheet: 'Requests', id, status: 'Approved' }, tok['HM-01']);
+  await call('decide', { sheet: 'Requests', id, status: 'Approved' }, admin); }
+att = (await call('monthAtt', { month: '2026-11' }, admin)).rows.concat((await call('monthAtt', { month: '2026-12' }, admin)).rows);
+ok(day('HM-03', '2026-11-22') === 'OD', 'a one-day OD on a Sunday marks the Sunday OD (so CO+ shows)', day('HM-03', '2026-11-22'));
+ok(day('HM-03', '2026-12-05') === 'OD' && day('HM-03', '2026-12-07') === 'OD' && !day('HM-03', '2026-12-06'),
+   'a Sunday in the middle of a longer OD stays a day off', [day('HM-03', '2026-12-05'), day('HM-03', '2026-12-06'), day('HM-03', '2026-12-07')].join(','));
+
 console.log('\nthe team\'s register');
 const tm = await call('teamMonth', { month: '2026-11' }, tok['HM-01']);
 const codes = [...new Set(tm.rows.map(a => a.emp_code))].sort().join(',');

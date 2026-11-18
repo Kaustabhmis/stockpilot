@@ -118,7 +118,7 @@ ok(r.absent3 && r.friNow === 'CO', 'the absent day became a paid comp-off', r.F0
 ok(r.pay.days === 1 && Math.abs(r.pay.inc - r.pay.perDay) <= 1, 'payout is one day\'s pay', JSON.stringify(r.pay));
 ok(r.pay.incAgain === r.pay.inc, 're-working the row does not pay it twice', r.pay.inc + ' -> ' + r.pay.incAgain);
 ok(r.pay.plainInc === 0, 'nobody else is paid anything');
-ok(r.table.length === 4 && r.table.some(t => /Full Sunday.*paid/i.test(t)) && r.table.some(t => /Five Hours.*not used yet.*Pay/i.test(t)),
+ok(r.table.length === 4 && r.table.some(t => /Full Sunday.*Paid 1 day/i.test(t)) && r.table.some(t => /Five Hours.*Not used yet.*day.s pay/i.test(t)),
    'the CO+ list shows all four', r.table.map(t => t.slice(0, 60)).join(' | '));
 
 console.log('\nthe hours are a setting');

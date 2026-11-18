@@ -823,7 +823,13 @@ export function createActions(api, db, deps) {
       for (let d = new Date(iso + 'T00:00:00Z'), end = new Date(to + 'T00:00:00Z');
            d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         const day = d.toISOString().slice(0, 10);
-        if ((await isRestDay(req.emp_code, day)) || holidays[day]) continue;
+        /* A Sunday or holiday is marked OD - worked, which earns the extra day
+           (CO+) - when the OD asks for that day itself: a one-day OD on it, or
+           an OD that starts or ends on it. Days off in the MIDDLE of a longer
+           OD stay days off: a Monday-to-Saturday trip does not mean the
+           Sunday between was worked. */
+        const off = (await isRestDay(req.emp_code, day)) || holidays[day];
+        if (off && day !== iso && day !== to) continue;
         const was = have[day] || {};
         await upsertRow('Attendance', {
           id: req.emp_code + '_' + day, date: day, emp_code: req.emp_code, status: 'OD',

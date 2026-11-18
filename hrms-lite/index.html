@@ -765,8 +765,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <span><b class="s-P">P</b>Present</span><span><b class="s-IN">IN</b>Joined today, not out yet</span>
           <span><b class="s-A">A</b>Absent (LOP)</span><span><b class="s-A" style="opacity:.55;font-style:italic">A</b>No punch</span>
           <span><b class="s-HD">HD</b>Half day</span><span><b class="s-L">L</b>Leave</span>
-          <span><b class="s-OD">OD</b>Out duty</span><span><b class="s-CO">CO</b>Comp-off taken</span>
-          <span><b class="s-COP" style="min-width:34px">CO+</b>Worked weekly off / holiday &mdash; comp-off earned</span>
+          <span><b class="s-OD">OD</b>Out duty</span><span><b class="s-CO">CO</b>Absent day covered by an extra day &mdash; no pay cut</span>
+          <span><b class="s-COP" style="min-width:34px">CO+</b>Worked on Sunday / holiday &mdash; 1 extra day earned</span>
           <span><b class="s-WO">WO</b>Weekly off</span><span><b class="s-H">H</b>Holiday</span>
           <span style="margin-left:auto;" id="att-legend-note">Click a cell to cycle &middot; double-click for times &middot; click a date header to fill the column</span>
         </div>
@@ -821,15 +821,14 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <div class="table-wrap"><table id="req-table"></table></div>
         </div>
         <div class="card">
-          <h3>CO+ &mdash; weekly offs and holidays worked</h3>
-          <div class="card-sub" id="coplus-sub">Out duty or enough hours on a weekly off or a holiday earns one comp-off.
-            Pay it, or set it against an absent day.</div>
+          <h3>Extra days earned (CO+) &mdash; worked on Sunday or a holiday</h3>
+          <div class="card-sub" id="coplus-sub">Each one is 1 extra day. Use it once: give 1 day's pay, or cover an absent day.</div>
           <div class="table-wrap"><table id="coplus-table"></table></div>
         </div>
         <div class="card">
-          <h3>Comp-off balance</h3>
-          <div class="card-sub">Earned by working a weekly off or a holiday, spent against an absence
-            or paid out. Credits lapse after the validity set in Settings.</div>
+          <h3>Extra days &mdash; summary per person</h3>
+          <div class="card-sub">How many extra days each person earned, and how they were used.
+            An extra day not used within the time set in Settings expires.</div>
           <div class="table-wrap"><table id="co-balance"></table></div>
         </div>
       </div>
@@ -2789,8 +2788,8 @@ var VIEW_RENDER = {
    is coloured to be read against whatever was picked. */
 var STATUS_COLORS = [
   ['P', 'Present', '#d1fae5'], ['A', 'Absent', '#fee2e2'], ['HD', 'Half day', '#fef3c7'],
-  ['L', 'Leave', '#dbeafe'], ['OD', 'Out duty', '#cffafe'], ['CO', 'Comp-off taken', '#ffe4e6'],
-  ['CO+', 'CO+ worked off day', '#fef3c7'], ['WO', 'Weekly off', '#f1f5f9'], ['H', 'Holiday', '#ede9fe'],
+  ['L', 'Leave', '#dbeafe'], ['OD', 'Out duty', '#cffafe'], ['CO', 'Absent day covered (CO)', '#ffe4e6'],
+  ['CO+', 'Extra day earned (CO+)', '#fef3c7'], ['WO', 'Weekly off', '#f1f5f9'], ['H', 'Holiday', '#ede9fe'],
   ['IN', 'Joined today', '#e0f2fe']
 ];
 function statusColors() {
@@ -4487,7 +4486,7 @@ function renderAttendance() {
       var tip = dateStr(ym, d) + (rec && rec.in_time ? ' ' + hhmm(rec.in_time) + '-' + (hhmm(rec.out_time) || '?') : '') +
         (lateIn ? ' (late ' + lateIn + 'm)' : '') + (earlyOut ? ' (out ' + earlyOut + 'm early)' : '') +
         (open ? ' - never punched out' : '') +
-        (st === 'CO+' ? ' - worked the day off: comp-off earned' : '') +
+        (st === 'CO+' ? ' - worked on Sunday / holiday: 1 extra day earned' : '') +
         (rec && rec.remarks ? ' ' + rec.remarks : '');
       var handlers = editable
         ? (times ? ' onclick="openCell(\'' + esc(e.emp_code) + '\',' + d + ')"'
@@ -4640,7 +4639,7 @@ function fillRow(code) {
 }
 function statusName(s) {
   return { P: 'Present', A: 'Absent (LOP)', HD: 'Half day', L: 'Leave', OD: 'Out of office duty',
-           CO: 'Comp-off taken', 'CO+': 'Worked weekly off / holiday - comp-off earned', WO: 'Weekly off', H: 'Holiday' }[s] || s;
+           CO: 'Absent day covered by an extra day', 'CO+': 'Worked on Sunday / holiday - 1 extra day earned', WO: 'Weekly off', H: 'Holiday' }[s] || s;
 }
 function applyFill(kind, target, status) {
   var ym = el('att-month').value || thisMonth();
@@ -4757,7 +4756,7 @@ function mergeAttendance(rows) {
 function renderAttSummary(ym, emps) {
   var head = '<thead><tr><th>Employee</th><th class="num-col">Present</th><th class="num-col">Absent</th>' +
     '<th class="num-col">Half day</th><th class="num-col">Leave</th><th class="num-col">OD</th>' +
-    '<th class="num-col">CO</th><th class="num-col" title="Weekly offs and holidays worked - comp-off earned">CO+</th><th class="num-col">Weekly off</th><th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">Late</th>' +
+    '<th class="num-col">CO</th><th class="num-col" title="Extra days earned - worked on Sunday or a holiday">CO+</th><th class="num-col">Weekly off</th><th class="num-col">Holiday</th><th class="num-col">Not marked</th><th class="num-col">Late</th>' +
     '<th class="num-col">Late ded.</th><th class="num-col">Unpaid leave</th>' +
     '<th class="num-col">OT hrs</th><th class="num-col">LOP</th><th class="num-col">Paid days</th></tr></thead>';
   var body = emps.map(function (e) {
@@ -6265,7 +6264,7 @@ function renderReports() {
 }
 
 var DAY_WORDS = { P: 'Present', A: 'Absent', HD: 'Half day', L: 'On leave', OD: 'Out duty',
-                  CO: 'Comp-off', 'CO+': 'Worked weekly off / holiday (comp-off earned)', WO: 'Weekly off', H: 'Holiday' };
+                  CO: 'Absent day covered (CO)', 'CO+': 'Extra day earned (CO+)', WO: 'Weekly off', H: 'Holiday' };
 
 /* Staff are on a monthly salary, workers on a daily wage. It is the same
    division payroll already makes - "Paid as" on the employee record. */
@@ -6889,8 +6888,8 @@ var WORKING_HOURS = [
   ['halfday_after_minutes', 'Half day when in later / out earlier than this many minutes (default 60)', 'number'],
   ['ot_after_minutes', 'Overtime starts after (minutes past shift end)', 'number'],
   ['weekly_off', 'Weekly off (e.g. Sun, or Sun,Sat)', 'text'],
-  ['co_min_hours', 'Sunday / weekly off worked: hours that earn a comp-off, CO+ (default 5; the in / out grace is allowed)', 'number'],
-  ['co_min_hours_holiday', 'Holiday worked: hours that earn a comp-off, CO+ (blank = same as Sunday)', 'number'],
+  ['co_min_hours', 'Hours of work on a Sunday that earn 1 extra day, CO+ (default 5; grace allowed)', 'number'],
+  ['co_min_hours_holiday', 'Hours of work on a holiday that earn 1 extra day, CO+ (blank = same as Sunday)', 'number'],
   ['saturday_policy', 'Saturdays', 'select:working,all_off,2_4,1_3,alt']
 ];
 var ATTENDANCE_RULES = [
@@ -12835,9 +12834,10 @@ function renderRequests() {
     if (requestEffect(r.type) === 'times') {
       detail = esc((hhmm(r.in_time) || '--') + ' to ' + (hhmm(r.out_time) || '--'));
     } else if (requestEffect(r.type) === 'comp_off') {
-      detail = r.mode === 'arrear' ? '<span class="badge b-violet">paid as arrear</span>'
-        : r.mode === 'payout' ? '<span class="badge b-violet">pay out</span>'
-        : 'adjust against ' + esc(r.adjust_date || '-');
+      detail = (r.date ? 'worked ' + esc(String(r.date).slice(0, 10)) + ' &rarr; ' : '') +
+        (r.mode === 'arrear' ? '<span class="badge b-violet">paid in arrears</span>'
+        : r.mode === 'payout' ? '<span class="badge b-violet">1 day\'s pay</span>'
+        : 'covers absent day ' + esc(r.adjust_date || '-'));
     } else if (r.to_date && r.to_date !== r.date) {
       detail = esc(r.date + ' to ' + r.to_date);
     }
@@ -12900,33 +12900,33 @@ function renderCoPlus() {
   var mine = isAdmin() ? null : myCode();
   var list = coPlusList().filter(function (x) { return !mine || String(x.e.emp_code) === mine; });
   var open = list.filter(function (x) { return x.state === 'open'; }).length;
-  el('coplus-sub').innerHTML = 'Out duty, or ' + coHoursText() + ', earns one comp-off ' +
+  el('coplus-sub').innerHTML = 'Out duty, or ' + coHoursText() + ', earns <b>1 extra day</b> ' +
     '(<b class="s-COP" style="padding:1px 5px;border-radius:5px">CO+</b> on the register). ' +
-    'Pay it, or set it against an absent day.' +
-    (open ? ' <span class="badge b-amber">' + open + ' waiting</span>' : '');
+    'Use each one once: <b>give 1 day\'s pay</b>, or <b>cover an absent day</b> so it is not a pay cut.' +
+    (open ? ' <span class="badge b-amber">' + open + ' not used yet</span>' : '');
   var canPay = String(S.settings.co_payout_enabled || 'yes').toLowerCase() === 'yes';
-  el('coplus-table').innerHTML = '<thead><tr><th>Employee</th><th>Day off worked</th><th>Work</th>' +
-    '<th>Comp-off</th><th></th></tr></thead><tbody>' +
+  el('coplus-table').innerHTML = '<thead><tr><th>Employee</th><th>Sunday / holiday worked</th><th>Work</th>' +
+    '<th>Extra day</th><th>Use it</th></tr></thead><tbody>' +
     (list.map(function (x) {
       var mins = workedMinutes(x.rec);
       var work = x.rec.status === 'OD' ? 'Out duty'
         : (hhmm(x.rec.in_time) || '--') + ' - ' + (hhmm(x.rec.out_time) || '--') +
           (mins ? ' <span class="sub-line" style="display:inline">(' + (Math.round(mins / 6) / 10) + ' h)</span>' : '');
-      var what = { open: '<span class="badge b-amber">not used yet</span>',
-                   pending: '<span class="badge b-amber">request waiting for approval</span>',
-                   lapsed: '<span class="badge b-red">lapsed</span>',
-                   paid: '<span class="badge b-violet">paid</span>',
-                   adjusted: '<span class="badge b-green">set against ' + esc((x.req || {}).adjust_date || '-') + '</span>' }[x.state];
+      var what = { open: '<span class="badge b-amber">Not used yet</span>',
+                   pending: '<span class="badge b-amber">Waiting for approval</span>',
+                   lapsed: '<span class="badge b-red">Expired</span>',
+                   paid: '<span class="badge b-violet">Paid 1 day</span>',
+                   adjusted: '<span class="badge b-green">Covered absent day ' + esc((x.req || {}).adjust_date || '-') + '</span>' }[x.state];
       var act = '';
       if (isAdmin() && (x.state === 'open' || x.state === 'lapsed')) {
         var arg = '(\'' + esc(x.e.emp_code) + '\',\'' + x.iso + '\')';
-        act = (canPay ? '<button class="ok sm" onclick="coPlusPay' + arg + '">Pay</button> ' : '') +
-          '<button class="ghost sm" onclick="coPlusAdjust' + arg + '">Set against absent</button>';
+        act = (canPay ? '<button class="ok sm" onclick="coPlusPay' + arg + '">Give 1 day\'s pay</button> ' : '') +
+          '<button class="ghost sm" onclick="coPlusAdjust' + arg + '">Cover an absent day</button>';
       }
       return '<tr><td>' + esc(x.e.name) + '<div class="sub-line">' + esc(x.e.emp_code) + '</div></td>' +
         '<td>' + esc(x.iso) + '<div class="sub-line">' + esc(new Date(x.iso + 'T00:00:00').toDateString().slice(0, 3)) + '</div></td>' +
         '<td>' + work + '</td><td>' + what + '</td><td style="white-space:nowrap">' + act + '</td></tr>';
-    }).join('') || '<tr><td colspan="5" class="empty">Nobody has worked a weekly off or a holiday in the last three months.</td></tr>') +
+    }).join('') || '<tr><td colspan="5" class="empty">Nobody has worked on a Sunday or a holiday in the last three months.</td></tr>') +
     '</tbody>';
 }
 /* the request type that carries a comp-off */
@@ -12951,13 +12951,13 @@ function coPlusPay(code, iso) {
   var e = empByCode(code) || {}, ym = thisMonth();
   var perDay = isWorker(e) ? num(e.daily_rate) + num(e.da_rate) + num(e.hra_rate)
     : grossOf(e) / (payrollDivisor(ym, code, attStats(ym, code)) || daysInMonth(ym));
-  showModal('Pay the comp-off',
-    '<p style="line-height:1.7">Pay <b>' + esc(e.name || code) + '</b> one day for working the day off on <b>' +
-    esc(iso) + '</b>?</p><p style="margin-top:10px">About <b>&#8377;' + money(Math.round(perDay)) + '</b> is added to the ' +
+  showModal('Give 1 day\'s pay',
+    '<p style="line-height:1.7"><b>' + esc(e.name || code) + '</b> worked on <b>' + esc(iso) +
+    '</b> (Sunday / holiday). Pay 1 extra day for it?</p><p style="margin-top:10px">About <b>&#8377;' + money(Math.round(perDay)) + '</b> is added to the ' +
     esc(monthLabel(ym)) + ' pay' + (runFinalised(ym) ? ' &mdash; that run is finalised, so it goes out through Arrears' : '') + '.</p>',
     [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
-     { label: 'Pay it', cls: 'ok', onClick: function () {
-        coPlusSave(code, iso, 'payout').then(function () { toast('Comp-off will be paid', 'good'); })
+     { label: 'Yes, pay 1 day', cls: 'ok', onClick: function () {
+        coPlusSave(code, iso, 'payout').then(function () { toast('1 extra day will be paid', 'good'); })
           .catch(function (err) { if (err.message !== 'no type') toast(err.message, 'bad'); });
      } }]);
 }
@@ -12979,20 +12979,20 @@ function coAbsentDays(code) {
 function coPlusAdjust(code, iso) {
   var e = empByCode(code) || {}, days = coAbsentDays(code);
   if (!days.length) {
-    return showModal('Set against an absent day', '<p style="line-height:1.7"><b>' + esc(e.name || code) +
-      '</b> has no absent day in the last three months to set this against. It can be paid instead, or kept for later.</p>',
+    return showModal('Cover an absent day', '<p style="line-height:1.7"><b>' + esc(e.name || code) +
+      '</b> has no absent day in the last three months to cover. Give 1 day\'s pay instead, or keep it for later.</p>',
       [{ label: 'Close', cls: 'ghost', onClick: closeModal }]);
   }
-  showModal('Set against an absent day',
-    '<p style="line-height:1.7;margin-bottom:12px">The comp-off <b>' + esc(e.name || code) + '</b> earned on <b>' +
-    esc(iso) + '</b> turns one absent day into a paid comp-off (CO).</p>' +
+  showModal('Cover an absent day',
+    '<p style="line-height:1.7;margin-bottom:12px"><b>' + esc(e.name || code) + '</b> earned 1 extra day by working on <b>' +
+    esc(iso) + '</b>. Pick an absent day to cover with it &mdash; that day will show <b>CO</b> and will <b>not</b> be a pay cut.</p>' +
     '<label class="field">Absent day to cover<select id="coplus-day">' + days.map(function (d) {
       return '<option value="' + d + '">' + d + ' (' + new Date(d + 'T00:00:00').toDateString().slice(0, 3) + ')</option>';
     }).join('') + '</select></label>',
     [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
-     { label: 'Set against it', cls: 'ok', onClick: function () {
+     { label: 'Cover this day', cls: 'ok', onClick: function () {
         var day = el('coplus-day').value;
-        coPlusSave(code, iso, 'adjust', day).then(function () { toast(day + ' is now a paid comp-off', 'good'); })
+        coPlusSave(code, iso, 'adjust', day).then(function () { toast(day + ' is covered - no pay cut', 'good'); })
           .catch(function (err) { if (err.message !== 'no type') toast(err.message, 'bad'); });
      } }]);
 }
@@ -13068,8 +13068,8 @@ function requestFormChanged() {
   } else if (effect === 'comp_off') {
     extra.innerHTML = '<div class="grid2">' +
       '<label class="field">What to do with it<select data-f="mode" onchange="requestFormChanged()">' +
-        '<option value="adjust"' + (keep.mode === 'payout' ? '' : ' selected') + '>Set against an absent day</option>' +
-        '<option value="payout"' + (keep.mode === 'payout' ? ' selected' : '') + '>Pay it as an incentive</option>' +
+        '<option value="adjust"' + (keep.mode === 'payout' ? '' : ' selected') + '>Cover an absent day (no pay cut)</option>' +
+        '<option value="payout"' + (keep.mode === 'payout' ? ' selected' : '') + '>Give 1 day\'s pay</option>' +
       '</select></label>' +
       (keep.mode === 'payout' ? ''
         : '<label class="field">Absent day to cover<input data-f="adjust_date" type="date" value="' +

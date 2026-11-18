@@ -1111,7 +1111,7 @@ function renderCalendar() {
     '</div>' +
     '<div class="legend">' +
       [['P','#d1fae5','Present'],['A','#fee2e2','Absent'],['HD','#fef3c7','Half day'],
-       ['L','#dbeafe','Leave'],['OD','#ede9fe','OD / comp-off'],['CO+','#fde68a','CO+ worked off day'],['WO','#f1f5f9','Off / holiday']]
+       ['L','#dbeafe','Leave'],['OD','#ede9fe','OD / CO covered'],['CO+','#fde68a','CO+ extra day earned'],['WO','#f1f5f9','Off / holiday']]
       .map(function (x) { return '<span><i style="background:' + legendColor(x[0], x[1]) + '"></i>' + x[2] + '</span>'; }).join('') +
     '</div>';
 }
@@ -1151,7 +1151,8 @@ function dayDetail(iso) {
   var rec = attFor(iso), st = statusFor(iso), hol = holidayOn(iso);
   var mins = workedMinutes(rec);
   var names = { P:'Present', A:'Absent', HD:'Half day', L:'On leave', OD:'Out duty',
-                CO:'Comp-off', 'CO+':'Worked a weekly off or holiday - comp-off earned. Use it from Requests.',
+                CO:'Absent day covered by an extra day - no pay cut',
+                'CO+':'You worked on a Sunday / holiday - you earned 1 extra day. Use it from Requests: get 1 day\'s pay, or cover an absent day.',
                 WO:'Weekly off', H:'Holiday', NA:'Absent - no punch',
                 IN:'Joined - punched in, not out yet' };
   openSheet('<h3>' + esc(new Date(iso + 'T00:00:00').toLocaleDateString(undefined,
@@ -1199,10 +1200,10 @@ function askTypes() {
     return String(t.active || 'yes').toLowerCase() !== 'no';
   }).forEach(function (t) {
     var code = String(t.code || '').toLowerCase();
-    out.push({ key: code, name: t.name || t.code, raw: t,
+    out.push({ key: code, name: String(t.effect) === 'comp_off' ? 'Use an extra day (CO+)' : (t.name || t.code), raw: t,
       hint: code === 'od' ? 'Working, but away from the unit'
           : code === 'swipe' ? 'You were here but the machine missed it'
-          : isCoKind(code) ? 'A weekly off or holiday you worked (CO+) - get it paid, or set it against an absent day'
+          : isCoKind(code) ? 'You worked on a Sunday or holiday (CO+). Get 1 day\'s pay for it, or use it to cover a day you were absent.'
           : '' });
   });
   return out;
@@ -1261,9 +1262,10 @@ function coCardHtml() {
   var list = myCoPlus();
   if (!list.length) return '';
   var tag = { open: ['Pending', 'not used yet'], pending: ['Pending', 'waiting for approval'],
-              paid: ['Approved', 'paid'], adjusted: ['Approved', 'set against a day'], lapsed: ['Rejected', 'lapsed'] };
-  return '<div class="card" style="margin-bottom:14px"><h3>Comp-off earned (CO+)</h3>' +
-    '<div class="cs">A weekly off or holiday you worked. Get it paid, or set it against an absent day.</div>' +
+              paid: ['Approved', 'paid'], adjusted: ['Approved', 'covered'], lapsed: ['Rejected', 'expired'] };
+  return '<div class="card" style="margin-bottom:14px"><h3>My extra days (CO+)</h3>' +
+    '<div class="cs">You worked on these Sundays / holidays, so each one is 1 extra day for you. ' +
+    'Use each one once: get 1 day\'s pay, or cover a day you were absent.</div>' +
     list.slice(0, 12).map(function (x) {
       var w = workedMinutes(x.rec);
       return '<div class="item" style="margin:10px 0 0;box-shadow:none"><div class="hd"><b>' + esc(fmtDate(x.iso)) +
@@ -1273,7 +1275,7 @@ function coCardHtml() {
           (x.state === 'adjusted' && x.req.adjust_date ? ' ' + esc(fmtDate(String(x.req.adjust_date).slice(0, 10))) : '') + '</span></div>' +
         (x.state === 'open'
           ? '<div class="acts"><button class="yes" onclick="openRequest(\'' + esc(String(coType() ? coType().code : 'co').toLowerCase()) +
-            '\',\'' + x.iso + '\')">Use this comp-off</button></div>' : '') +
+            '\',\'' + x.iso + '\')">Use this extra day</button></div>' : '') +
         '</div>';
     }).join('') + '</div>';
 }
@@ -1296,7 +1298,7 @@ function renderRequests() {
 
   el('v-req').innerHTML =
     '<h2 class="vt">My requests</h2>' +
-    '<p class="vs">Leave, out duty, a missed punch or a comp-off.</p>' +
+    '<p class="vs">Leave, out duty, a missed punch, or use an extra day (CO+).</p>' +
     coCardHtml() +
     (mine.length ? mine.map(itemHtml).join('')
       : '<div class="empty">Nothing yet.<br>Tap + to ask for something.</div>') +
@@ -1308,6 +1310,7 @@ function reqName(code) {
   var hit = (S.reqTypes || []).filter(function (t) {
     return String(t.code).toLowerCase() === n.toLowerCase();
   })[0];
+  if (hit && String(hit.effect) === 'comp_off') return 'Extra day (CO+) used';
   return hit ? (hit.name || hit.code) : (n || 'Request');
 }
 
@@ -1404,23 +1407,23 @@ function requestFields(forDate) {
     var absent = myAbsentDays();
     var canPay = String(S.settings.co_payout_enabled || 'yes').toLowerCase() !== 'no';
     if (!open.length) {
-      html += '<div class="empty" style="padding:18px 6px">No comp-off waiting to be used.<br>' +
-        'One is earned by out duty, or ' + (coNeedHours(false) === coNeedHours(true)
-          ? coNeedHours(false) + ' hours or more, on a weekly off or a holiday'
-          : coNeedHours(false) + ' hours or more on a weekly off, ' + coNeedHours(true) + ' on a holiday') + '.</div>' +
+      html += '<div class="empty" style="padding:18px 6px">You have no extra day to use right now.<br>' +
+        'You earn 1 extra day by out duty, or ' + (coNeedHours(false) === coNeedHours(true)
+          ? coNeedHours(false) + ' hours or more of work, on a Sunday or a holiday'
+          : coNeedHours(false) + ' hours or more of work on a Sunday, ' + coNeedHours(true) + ' on a holiday') + '.</div>' +
         '<input type="hidden" id="rq-from" value="">';
     } else {
       var opt = function (iso) { return fmtDate(iso) + ' (' + dayName(iso).slice(0, 3) + ')'; };
-      html += '<label>Day you worked (CO+)</label><select id="rq-from">' + open.map(function (x) {
+      html += '<label>Sunday / holiday you worked</label><select id="rq-from">' + open.map(function (x) {
           return '<option value="' + x.iso + '"' + (x.iso === forDate ? ' selected' : '') + '>' + esc(opt(x.iso)) + '</option>';
         }).join('') + '</select>' +
-        '<label>What to do with it</label><select id="rq-mode" onchange="coModeChanged()">' +
-          (absent.length ? '<option value="adjust">Set against an absent day</option>' : '') +
-          (canPay ? '<option value="payout">Get it paid</option>' : '') + '</select>' +
-        '<div id="rq-adjust-box"><label>Absent day to cover</label><select id="rq-adjust">' +
+        '<label>What do you want?</label><select id="rq-mode" onchange="coModeChanged()">' +
+          (absent.length ? '<option value="adjust">Cover a day I was absent (no pay cut)</option>' : '') +
+          (canPay ? '<option value="payout">Get 1 day\'s pay</option>' : '') + '</select>' +
+        '<div id="rq-adjust-box"><label>The day you were absent</label><select id="rq-adjust">' +
           absent.map(function (iso) { return '<option value="' + iso + '">' + esc(opt(iso)) + '</option>'; }).join('') +
         '</select></div>' +
-        (!absent.length ? '<p class="vs" style="margin:10px 0 0">You have no absent day to set it against, so it can only be paid.</p>' : '');
+        (!absent.length ? '<p class="vs" style="margin:10px 0 0">You have no absent day to cover, so you can take 1 day\'s pay.</p>' : '');
     }
   } else {
     html += '<label>From</label><input type="date" id="rq-from" value="' + esc(d) + '">' +
@@ -1472,7 +1475,7 @@ function submitRequest() {
   var from = el('rq-from') ? el('rq-from').value : '';
   var fail = function (m) { err.textContent = m; err.className = 'err on'; };
   err.className = 'err';
-  if (!from) return fail(isCoKind(kind) ? 'There is no comp-off to use yet.' : 'Pick a date.');
+  if (!from) return fail(isCoKind(kind) ? 'You have no extra day to use yet.' : 'Pick a date.');
 
   var payload, sheet;
   if (kind === 'leave') {
@@ -1501,13 +1504,13 @@ function submitRequest() {
     }
     if (isCoKind(kind)) {
       payload.mode = el('rq-mode') ? el('rq-mode').value : '';
-      if (!payload.mode) return fail('This comp-off cannot be used right now. Ask HR.');
+      if (!payload.mode) return fail('This extra day cannot be used right now. Ask HR.');
       payload.to_date = from; payload.days = 1;
       if (payload.mode === 'adjust') {
         payload.adjust_date = el('rq-adjust').value || '';
         if (!payload.adjust_date) return fail('Pick the absent day it should cover.');
       }
-      if (!why) payload.reason = 'CO+ - worked ' + from;
+      if (!why) payload.reason = 'Worked on ' + from + ' (Sunday / holiday)';
     }
   }
 
@@ -1670,7 +1673,7 @@ function teamAttHtml() {
       else if (st !== 'WO' && st !== 'H') n.out++;
       var when = x.rec && x.rec.in_time ? hhmm(x.rec.in_time) + (x.rec.out_time ? ' - ' + hhmm(x.rec.out_time) : ' - not out yet') : '';
       return '<div class="trow" onclick="teamMember(\'' + esc(m.emp_code) + '\')"><div class="nm">' + esc(m.name) +
-        '<small>' + esc(when || ({ L: 'On leave', WO: 'Weekly off', H: 'Holiday', CO: 'Comp-off' }[st] || 'No punch yet')) +
+        '<small>' + esc(when || ({ L: 'On leave', WO: 'Weekly off', H: 'Holiday', CO: 'Absent day covered (CO)' }[st] || 'No punch yet')) +
         (teamLate(st, x.rec, m) ? ' · late' : '') + '</small></div>' + stTag(st || 'A') + '</div>';
     }).join('');
     html += '<div class="card"><h3>Today</h3><div class="cs">' + n.in + ' in · ' + n.out + ' not in</div>' + rows + '</div>';

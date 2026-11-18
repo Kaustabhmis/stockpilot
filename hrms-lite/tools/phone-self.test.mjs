@@ -102,7 +102,7 @@ const r = await p.evaluate(async () => {
 console.log('\nCO+ on the phone');
 ok(r.st === 'CO+,WO,CO+,H,A', 'Sunday 9 h, Sunday 3 h, holiday OD, holiday 2 h, absent', r.st);
 ok(r.list0 === [r.S1 + ':open', r.holWorked + ':open'].sort().join(','), 'two comp-offs earned, both unused', r.list0);
-ok(/Comp-off earned/.test(r.card) && r.useButtons === 2, 'the Requests screen lists them with a Use button', 'buttons ' + r.useButtons);
+ok(/My extra days \(CO\+\)/.test(r.card) && r.useButtons === 2, 'the Requests screen lists them with a Use button', 'buttons ' + r.useButtons);
 ok(r.kind === 'co' && r.from === r.holWorked && r.modes === 'adjust,payout', 'the form opens on that day: set against absent, or paid', r.modes);
 const offered = r.absentOpts.split(',');
 ok(offered.includes(r.absent) && offered.includes(r.absent2) && !r.offDays.some(d => offered.includes(d)),
