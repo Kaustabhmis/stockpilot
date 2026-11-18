@@ -12,15 +12,17 @@ No server, no monthly ESP fee, and you own the data.
 | Unsubscribe | HMAC-signed one-click link in every email; status is updated instantly |
 | Safety | Daily send cap, Gmail quota check, bounce detection, no double-sends, formula-injection guard |
 | Audit trail | `Logs` sheet records every signup, send, bounce, confirm and unsubscribe |
-| Dashboard | Sidebar in the sheet: subscriber counts, sends left today, campaign status, run now |
+| Admin app | **Dispatch**: a full web UI inside the sheet (Email Automation → Open Dispatch). Overview, audience, campaigns with a block builder and live preview, automations, saved templates, reports, settings |
+| Tracking | Open pixel and click redirects served by the web app, signed with HMAC, feeding the Reports view |
 | Templates | Responsive HTML emails in `templates/` with a shared `base.html` layout |
 
 ## Folder layout
 
 ```
 email-automation/
-├── Code.gs              # all server logic
-├── Dashboard.html       # sidebar UI inside the Google Sheet
+├── Code.gs              # core: sheets, drip + campaign engine, signup/unsubscribe web app
+├── Api.gs               # admin API used by the Dispatch UI, block renderer, tracking, reports
+├── Admin.html           # Dispatch: the email marketing app shown inside the sheet
 ├── appsscript.json      # manifest: timezone, scopes, web app settings
 ├── templates/
 │   ├── base.html        # layout: header, footer, unsubscribe link (shared)
@@ -38,7 +40,7 @@ email-automation/
 1. **Create the sheet.** Go to [sheets.new](https://sheets.new) and name it e.g. *SaaS Email Bot*.
 2. **Add the script.** Extensions → Apps Script. Delete the default `Code.gs` content.
    Create files with the same names as in this folder and paste the contents:
-   - `Code.gs`, `appsscript.json` (enable *Show manifest file* in Project Settings first), `Dashboard.html`
+   - `Code.gs`, `Api.gs`, `appsscript.json` (enable *Show manifest file* in Project Settings first), `Admin.html`
    - Each file in `templates/` as an HTML file named e.g. `templates/welcome` (Apps Script keeps the folder in the name).
    - Or use [clasp](https://github.com/google/clasp): `cd email-automation && clasp create --type sheets --title "SaaS Email Bot"`, then `clasp push` (you must `clasp create` from a bound script; see clasp docs for Sheets-bound projects).
 3. **Reload the sheet.** A menu **Email Automation** appears (it may take a few seconds). Choose **Set up workbook** and authorize the script.
@@ -114,3 +116,19 @@ You can import existing users here. Set `status` to `active` and `signup_at` to 
 - Brand colors and layout: edit `templates/base.html` (inline styles are kept for email client compatibility).
 - Run more often: change `everyHours(1)` in `installTriggers()` to `everyMinutes(15)`. Hourly is fine for onboarding and cheaper on quota.
 - Plan-based automation: add rows in `Sequences` per plan by extending the `Subscribers.plan` filter in `runDrip_`.
+
+## Dispatch: using the admin app
+
+Open the sheet and choose **Email Automation → Open Dispatch**. The app opens in a window over the sheet.
+
+- **Overview:** active, pending and unsubscribed counts, sends left today, recent activity.
+- **Audience:** search and filter contacts, add one at a time, or import CSV. Contacts without consent are saved as pending and are never emailed automatically.
+- **Campaigns:** create a campaign, design it from blocks (heading, text, button, image, divider, spacer) with a live preview, send a test, schedule it, pause or resume it, or send it now. Sent campaigns are read-only.
+- **Automations:** the welcome journey as a timeline of steps. Each step has a delay from signup, a subject, a template and an on/off switch.
+- **Templates:** save a campaign's blocks as a reusable layout, then start new campaigns from it.
+- **Reports:** sent, unique opens and clicks, bounces, and top links for each campaign.
+- **Settings:** company details, sending limits, double opt-in, and the signup endpoint and key.
+
+The sheet is still the database. Columns are added automatically when you update the script, so you do not need to re-run setup.
+
+Limits: opens use a tracking pixel, so mail apps that preload images inflate them. Journeys are a single welcome journey for now; the Automations view edits the Sequences sheet. Templates for journey steps are still HTML files in the script.

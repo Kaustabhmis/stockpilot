@@ -1,0 +1,774 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { --ink:#1a1a1a; --ivory:#f7f4ee; --paper:#ffffff; --gold:#b8975a; --muted:#7d766b; --hair:#e7e1d4; --soft:#f1ece1; --ok:#2f6b4f; --okbg:#e5f1ea; --warn:#8a5f0c; --warnbg:#f6eedb; --bad:#9b2c2c; --badbg:#f6e3e3; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; font: 14px/1.5 'Helvetica Neue', Helvetica, Arial, sans-serif; color: var(--ink); background: var(--ivory); display: flex; overflow: hidden; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+
+    aside { width: 212px; flex-shrink: 0; background: var(--ink); color: #e9e4d8; display: flex; flex-direction: column; padding: 22px 14px; }
+    .brand { font-family: Georgia, 'Times New Roman', serif; letter-spacing: .3em; text-transform: uppercase; font-size: 12px; padding: 0 8px; }
+    .brand-rule { width: 28px; height: 1px; background: var(--gold); margin: 12px 8px 24px; }
+    nav { display: flex; flex-direction: column; gap: 2px; }
+    nav button { display: block; width: 100%; background: none; border: 0; color: #cfc8b8; text-align: left; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
+    nav button:hover { background: rgba(255,255,255,.06); }
+    nav button.on { background: rgba(255,255,255,.12); color: #fff; }
+    .foot { margin-top: auto; font-size: 11px; color: #8d8779; padding: 0 8px; line-height: 1.6; }
+
+    main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    header.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 20px 28px; border-bottom: 1px solid var(--hair); }
+    h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: normal; font-size: 24px; margin: 0; }
+    h2 { font-family: Georgia, 'Times New Roman', serif; font-weight: normal; font-size: 20px; margin: 0 0 14px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .content { flex: 1; overflow: auto; padding: 24px 28px 40px; min-height: 0; }
+    .section { margin-top: 28px; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; color: var(--muted); }
+
+    .btn { border: 1px solid var(--hair); background: var(--paper); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+    .btn:hover { border-color: #cfc6b3; }
+    .btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+    .btn.ghost { background: transparent; }
+    .btn.danger { color: var(--bad); }
+    .btn.small-btn { padding: 4px 10px; font-size: 12px; }
+    .btn:disabled { opacity: .45; cursor: default; }
+
+    .card { background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; padding: 20px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+    .stat .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .stat .val { font-family: Georgia, serif; font-size: 28px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+    table { width: 100%; border-collapse: collapse; background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--hair); vertical-align: middle; font-size: 13px; }
+    th { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: normal; background: #fbf9f4; }
+    tr:last-child td { border-bottom: 0; }
+    td.num { font-variant-numeric: tabular-nums; }
+    .tablewrap { overflow-x: auto; border-radius: 12px; }
+    a.link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; background: var(--soft); color: #4a463f; white-space: nowrap; }
+    .pill.active, .pill.sent { color: var(--ok); background: var(--okbg); }
+    .pill.pending, .pill.scheduled, .pill.sending { color: var(--warn); background: var(--warnbg); }
+    .pill.unsubscribed, .pill.bounced, .pill.error { color: var(--bad); background: var(--badbg); }
+
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    .toolbar .grow { flex: 1; min-width: 180px; }
+    input, select, textarea { width: 100%; border: 1px solid var(--hair); background: #fff; border-radius: 8px; padding: 9px 11px; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: var(--gold); }
+    input[type=checkbox] { width: auto; }
+    textarea { resize: vertical; line-height: 1.5; }
+    .field { margin-bottom: 14px; }
+    .lbl { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+    .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: #3d3a35; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; height: calc(100vh - 170px); min-height: 460px; }
+    .editor { overflow: auto; padding-right: 4px; }
+    .preview { width: 100%; height: 100%; border: 1px solid var(--hair); border-radius: 12px; background: #f3efe6; }
+    .blockadd { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 16px; }
+    .block { background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .block .bh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .block .bh .lbl { margin: 0; }
+    .block .ctrls { display: flex; gap: 4px; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .notice { background: var(--warnbg); color: var(--warn); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+
+    .steps { display: grid; gap: 14px; }
+    .step { display: grid; grid-template-columns: 96px 1fr; gap: 18px; background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; padding: 18px; }
+    .step .day { font-family: Georgia, serif; font-size: 22px; }
+    .step .day small { display: block; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .step .meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+    .tcard { background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .tcard h3 { font-family: Georgia, serif; font-weight: normal; font-size: 18px; margin: 0; }
+
+    .bars { display: grid; gap: 10px; margin-top: 8px; }
+    .bar { display: grid; grid-template-columns: 1fr 60px; gap: 12px; align-items: center; }
+    .bar .track { height: 8px; background: var(--soft); border-radius: 99px; overflow: hidden; }
+    .bar .fill { height: 100%; background: var(--gold); }
+
+    .modal-bg { position: fixed; inset: 0; background: rgba(20,20,20,.35); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+    .modal-bg.show { display: flex; }
+    .modal { background: var(--paper); border-radius: 14px; padding: 26px; width: min(520px, 100%); max-height: 90vh; overflow: auto; }
+    .modal .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: var(--ink); color: #fff; padding: 12px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; max-width: 380px; z-index: 60; pointer-events: none; }
+    .toast.show { opacity: 1; }
+    .toast.err { background: var(--bad); }
+    .empty { text-align: center; color: var(--muted); padding: 36px 10px; }
+    .row-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .row-actions input { width: auto; min-width: 220px; }
+
+    @media (max-width: 860px) {
+      .split { grid-template-columns: 1fr; height: auto; }
+      .preview { height: 520px; }
+      .grid2 { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <div class="brand">Dispatch</div>
+    <div class="brand-rule"></div>
+    <nav id="nav">
+      <button data-view="overview">Overview</button>
+      <button data-view="audience">Audience</button>
+      <button data-view="campaigns">Campaigns</button>
+      <button data-view="automations">Automations</button>
+      <button data-view="templates">Templates</button>
+      <button data-view="reports">Reports</button>
+      <button data-view="settings">Settings</button>
+    </nav>
+    <div class="foot">Sends run hourly.<br>Data lives in this spreadsheet.</div>
+  </aside>
+
+  <main>
+    <header class="top">
+      <h1 id="title">Overview</h1>
+      <div class="actions" id="actions"></div>
+    </header>
+    <div class="content" id="content"></div>
+  </main>
+
+  <div class="modal-bg" id="modal-bg"></div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    /* ---------- tiny DOM helpers (no innerHTML, so contact data cannot inject markup) ---------- */
+    const $ = (s) => document.querySelector(s);
+    function el(tag, props, ...kids) {
+      const n = document.createElement(tag);
+      if (props) {
+        for (const k of Object.keys(props)) {
+          const v = props[k];
+          if (v === undefined || v === null || v === false) continue;
+          if (k === 'class') n.className = v;
+          else if (k === 'on') { for (const ev of Object.keys(v)) n.addEventListener(ev, v[ev]); }
+          else if (k === 'style') Object.assign(n.style, v);
+          else if (k === 'value') n.value = v;
+          else if (k === 'checked') n.checked = !!v;
+          else if (k === 'disabled') n.disabled = !!v;
+          else if (v === true) n.setAttribute(k, '');
+          else n.setAttribute(k, String(v));
+        }
+      }
+      kids.flat().forEach(c => {
+        if (c === null || c === undefined || c === false) return;
+        n.append(c instanceof Node ? c : document.createTextNode(String(c)));
+      });
+      return n;
+    }
+    const btn = (label, onClick, cls, extra) => el('button', Object.assign({ class: 'btn ' + (cls || ''), on: { click: onClick } }, extra || {}), label);
+    const pill = (status) => el('span', { class: 'pill ' + String(status || '').toLowerCase() }, status || '—');
+    const field = (label, node) => el('div', { class: 'field' }, el('span', { class: 'lbl' }, label), node);
+    const select = (options, value, onChange, disabled) => el('select', { on: { change: onChange }, disabled },
+      options.map(o => el('option', { value: o.value, selected: o.value === value }, o.label)));
+    const num = (n) => Number(n || 0).toLocaleString();
+
+    function table(headers, rows, emptyText) {
+      if (!rows.length) return el('div', { class: 'card empty' }, emptyText || 'Nothing here yet.');
+      return el('div', { class: 'tablewrap' }, el('table', {},
+        el('thead', {}, el('tr', {}, headers.map(h => el('th', {}, h)))),
+        el('tbody', {}, rows.map(r => el('tr', {}, r.map(c => el('td', {}, c)))))
+      ));
+    }
+
+    /* ---------- server calls ---------- */
+    function call(fn, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(e => reject(new Error((e && e.message) || String(e))))
+          [fn](...args);
+      });
+    }
+
+    function toast(msg, bad) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (bad ? ' err' : '');
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => { t.className = 'toast'; }, 3600);
+    }
+    const fail = (e) => toast(e.message || String(e), true);
+
+    /* ---------- modal ---------- */
+    function openModal(title, body, buttons) {
+      const bg = $('#modal-bg');
+      const box = el('div', { class: 'modal', role: 'dialog' },
+        el('h2', {}, title), body, el('div', { class: 'row' }, buttons));
+      bg.replaceChildren(box);
+      bg.classList.add('show');
+      return box;
+    }
+    function closeModal() { $('#modal-bg').classList.remove('show'); }
+    $('#modal-bg').addEventListener('click', (e) => { if (e.target.id === 'modal-bg') closeModal(); });
+
+    /* ---------- shell ---------- */
+    const S = { view: 'overview', page: 1, q: '', status: '', info: null, reportName: '', B: null, previewTimer: null };
+
+    function setHeader(title, actions) {
+      $('#title').textContent = title;
+      $('#actions').replaceChildren(...(actions || []));
+    }
+    function setNav(view) {
+      document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
+    }
+    function content(...nodes) { $('#content').replaceChildren(...nodes); }
+
+    async function go(view, arg) {
+      S.view = view;
+      if (arg !== undefined && view === 'reports') S.reportName = arg;
+      setNav(view === 'builder' ? 'campaigns' : view);
+      try {
+        if (!S.info) S.info = await call('adminGetInfo');
+        const views = {
+          overview: viewOverview, audience: viewAudience, campaigns: viewCampaigns,
+          automations: viewAutomations, templates: viewTemplates, reports: viewReports, settings: viewSettings,
+        };
+        await views[view]();
+      } catch (e) { fail(e); }
+    }
+
+    document.getElementById('nav').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-view]');
+      if (b) { S.info = null; go(b.dataset.view); }
+    });
+
+    /* ---------- overview ---------- */
+    async function viewOverview() {
+      const d = await call('adminGetOverview');
+      setHeader('Overview', [btn('New campaign', newCampaignModal, 'primary')]);
+      content(
+        el('div', { class: 'stats' },
+          stat('Active subscribers', num(d.active)),
+          stat('Awaiting confirmation', num(d.pending)),
+          stat('Unsubscribed', num(d.unsubscribed)),
+          stat('Sends left today', num(d.budgetLeft) + ' of ' + num(d.dailyCap))),
+        el('div', { class: 'section' }, el('h2', {}, 'Recent activity'),
+          table(['Time', 'Event', 'Contact', 'Result'],
+            d.recent.map(r => [r.time, r.type, r.email, pill(r.status)]), 'No activity yet.')),
+        el('div', { class: 'section' }, el('h2', {}, 'Campaigns'),
+          campaignTable(d.campaigns))
+      );
+    }
+    function stat(label, value) {
+      return el('div', { class: 'card stat' }, el('div', { class: 'lbl' }, label), el('div', { class: 'val' }, value));
+    }
+
+    /* ---------- audience ---------- */
+    async function viewAudience() {
+      const res = await call('adminListContacts', { q: S.q, status: S.status, page: S.page });
+      setHeader('Audience', [btn('Import CSV', importModal), btn('Add contact', addContactModal, 'primary')]);
+      const search = el('input', {
+        placeholder: 'Search email, name or company', value: S.q,
+        on: { input: debounce((e) => { S.q = e.target.value; S.page = 1; S.keepFocus = true; viewAudience().catch(fail); }, 350) },
+      });
+      const statusSel = select([
+        { value: '', label: 'All statuses' }, { value: 'active', label: 'Active' },
+        { value: 'pending', label: 'Pending' }, { value: 'unsubscribed', label: 'Unsubscribed' },
+        { value: 'bounced', label: 'Bounced' },
+      ], S.status, (e) => { S.status = e.target.value; S.page = 1; viewAudience().catch(fail); });
+
+      const rows = res.rows.map(r => [
+        el('span', {}, r.email),
+        [r.first_name, r.company].filter(Boolean).join(' · ') || el('span', { class: 'muted' }, '—'),
+        r.plan || '—',
+        pill(r.status),
+        el('span', { class: 'small' }, r.signup_at),
+        el('span', { class: 'row-actions' },
+          r.status === 'active'
+            ? btn('Unsubscribe', () => setContactStatus(r.email, 'unsubscribed'), 'small-btn')
+            : btn('Set active', () => confirmSetActive(r.email), 'small-btn'),
+          btn('Remove', () => removeContact(r.email), 'small-btn danger')),
+      ]);
+
+      content(
+        el('div', { class: 'toolbar' }, el('div', { class: 'grow' }, search), statusSel),
+        table(['Contact', 'Name / company', 'Plan', 'Status', 'Signed up', ''], rows, 'No contacts match. Add one or import a CSV.'),
+        el('div', { class: 'toolbar', style: { marginTop: '14px' } },
+          btn('Previous', () => { S.page = Math.max(1, res.page - 1); viewAudience().catch(fail); }, 'ghost', { disabled: res.page <= 1 }),
+          el('span', { class: 'small' }, 'Page ' + res.page + ' of ' + res.pages + ' · ' + num(res.total) + ' contacts'),
+          btn('Next', () => { S.page = res.page + 1; viewAudience().catch(fail); }, 'ghost', { disabled: res.page >= res.pages }))
+      );
+      if (S.keepFocus) {
+        S.keepFocus = false;
+        search.focus();
+        search.setSelectionRange(search.value.length, search.value.length);
+      }
+    }
+
+    function debounce(fn, ms) {
+      let t;
+      return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+    }
+
+    async function setContactStatus(email, status) {
+      try { toast(await call('adminSetContactStatus', email, status)); viewAudience(); } catch (e) { fail(e); }
+    }
+    function confirmSetActive(email) {
+      const consent = el('input', { type: 'checkbox' });
+      openModal('Set contact active', el('div', {},
+        el('p', {}, 'Only do this if ' + email + ' has agreed to receive email from you.'),
+        el('label', { class: 'check' }, consent, 'I confirm this person has consented.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Set active', async () => {
+          if (!consent.checked) return toast('Tick the consent box first.', true);
+          closeModal();
+          await setContactStatus(email, 'active');
+        }, 'primary')]);
+    }
+    function removeContact(email) {
+      openModal('Remove contact', el('p', {}, 'Delete ' + email + ' from the sheet? This cannot be undone.'),
+        [btn('Cancel', closeModal, 'ghost'), btn('Remove', async () => {
+          closeModal();
+          try { toast(await call('adminRemoveContact', email)); viewAudience(); } catch (e) { fail(e); }
+        }, 'danger')]);
+    }
+
+    function addContactModal() {
+      const email = el('input', { type: 'email', placeholder: 'name@company.com' });
+      const first = el('input', { placeholder: 'First name' });
+      const company = el('input', { placeholder: 'Company' });
+      const plan = el('input', { placeholder: 'free', value: 'free' });
+      const consent = el('input', { type: 'checkbox' });
+      openModal('Add contact', el('div', {},
+        el('div', { class: 'grid2' }, field('Email', email), field('First name', first)),
+        el('div', { class: 'grid2' }, field('Company', company), field('Plan', plan)),
+        el('label', { class: 'check' }, consent, 'This person has agreed to receive email from us. Without this, they wait for confirmation.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Add contact', async () => {
+          try {
+            const msg = await call('adminAddContact', {
+              email: email.value, first_name: first.value, company: company.value, plan: plan.value, consent: consent.checked,
+            });
+            closeModal(); toast(msg); viewAudience();
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    function importModal() {
+      const text = el('textarea', { rows: 8, placeholder: 'email,first_name,company,plan\njane@acme.io,Jane,Acme,pro' });
+      const consent = el('input', { type: 'checkbox' });
+      openModal('Import contacts', el('div', {},
+        field('Paste CSV', text),
+        el('p', { class: 'hint' }, 'The first row can be a header with an email column. Without a header, the columns are email, first name, company, plan.'),
+        el('label', { class: 'check' }, consent, 'These contacts have agreed to receive email from us.'),
+        el('p', { class: 'hint' }, 'Contacts without consent are saved as pending and are never emailed automatically.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Import', async () => {
+          try {
+            const r = await call('adminImportContacts', text.value, consent.checked);
+            closeModal();
+            toast('Imported ' + r.added + ' · skipped ' + r.skipped + ' duplicates · ' + r.invalid + ' invalid');
+            viewAudience();
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    /* ---------- campaigns ---------- */
+    function campaignTable(list) {
+      return table(['Campaign', 'Status', 'Audience', 'Sent', ''],
+        list.map(c => [
+          el('a', { class: 'link', on: { click: () => openBuilder(c.name) } }, c.name),
+          pill(c.status),
+          audienceLabel(c.segment_plan),
+          num(c.sent_count),
+          el('span', { class: 'row-actions' },
+            btn('Open', () => openBuilder(c.name), 'small-btn'),
+            btn('Report', () => go('reports', c.name), 'small-btn')),
+        ]), 'No campaigns yet. Create one to get started.');
+    }
+
+    function audienceLabel(seg) {
+      return !seg || seg === 'all' ? 'Everyone' : 'Plan: ' + seg;
+    }
+
+    async function viewCampaigns() {
+      const list = await call('adminListCampaigns');
+      setHeader('Campaigns', [btn('New campaign', newCampaignModal, 'primary')]);
+      content(campaignTable(list));
+    }
+
+    function segmentOptions() {
+      const opts = [{ value: 'all', label: 'Everyone (' + num(S.info.active) + ' active)' }];
+      S.info.plans.forEach(p => opts.push({ value: p.plan, label: 'Plan: ' + p.plan + ' (' + num(p.count) + ')' }));
+      return opts;
+    }
+
+    function newCampaignModal() {
+      if (!S.info) { call('adminGetInfo').then(i => { S.info = i; newCampaignModal(); }).catch(fail); return; }
+      const name = el('input', { placeholder: 'e.g. April product update' });
+      const subject = el('input', { placeholder: 'Subject line. You can use {{first_name}}' });
+      const preheader = el('input', { placeholder: 'Preview text shown next to the subject' });
+      const seg = select(segmentOptions(), 'all');
+      openModal('New campaign', el('div', {},
+        field('Internal name', name), field('Subject', subject), field('Preview text', preheader), field('Audience', seg)),
+        [btn('Cancel', closeModal, 'ghost'), btn('Create and design', async () => {
+          try {
+            const n = name.value.trim();
+            if (!n) return toast('Give it a name.', true);
+            await call('adminSaveCampaign', {
+              name: n, subject: subject.value, preheader: preheader.value, segment_plan: seg.value,
+              blocks: [
+                { type: 'heading', text: 'Your headline' },
+                { type: 'text', text: 'Hi {{first_name}},\n\nWrite your message here.' },
+                { type: 'button', text: 'Call to action', url: 'https://example.com' },
+              ],
+            });
+            closeModal();
+            openBuilder(n);
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    const BLOCK_LABELS = { heading: 'Heading', text: 'Text', button: 'Button', image: 'Image', divider: 'Divider', spacer: 'Spacer' };
+    const BLOCK_DEFAULTS = {
+      heading: () => ({ type: 'heading', text: 'Heading' }),
+      text: () => ({ type: 'text', text: 'Write something here.' }),
+      button: () => ({ type: 'button', text: 'Call to action', url: 'https://' }),
+      image: () => ({ type: 'image', url: '', alt: '' }),
+      divider: () => ({ type: 'divider' }),
+      spacer: () => ({ type: 'spacer', height: 24 }),
+    };
+
+    async function openBuilder(name) {
+      try {
+        const c = await call('adminGetCampaign', name);
+        S.B = {
+          name: c.name, subject: c.subject, preheader: c.preheader, segment_plan: c.segment_plan,
+          status: c.status, blocks: c.blocks || [], sent: c.status === 'sent' || c.status === 'sending',
+        };
+        S.view = 'builder';
+        setNav('campaigns');
+        renderBuilder();
+      } catch (e) { fail(e); }
+    }
+
+    function renderBuilder() {
+      const B = S.B;
+      const ro = B.sent;
+      const actions = [btn('Back', () => go('campaigns'), 'ghost'), btn('Save', () => saveBuilder().catch(fail))];
+      if (!ro) {
+        actions.push(btn('Test', testModal));
+        actions.push(btn('Save as template', saveTemplateModal));
+        if (B.status === 'scheduled' || B.status === 'sending') actions.push(btn('Pause', () => campaignAction('pause')));
+        if (B.status === 'paused') actions.push(btn('Resume', () => campaignAction('resume')));
+        actions.push(btn('Schedule', scheduleModal));
+        actions.push(btn('Send now', sendNowModal, 'primary'));
+      }
+      setHeader(B.name, actions);
+
+      const subject = el('input', { value: B.subject || '', disabled: ro, placeholder: 'Subject line',
+        on: { input: (e) => { B.subject = e.target.value; } } });
+      const preheader = el('input', { value: B.preheader || '', disabled: ro, placeholder: 'Preview text',
+        on: { input: (e) => { B.preheader = e.target.value; schedulePreview(); } } });
+      const seg = select(segmentOptions(), B.segment_plan || 'all', (e) => { B.segment_plan = e.target.value; }, ro);
+
+      const addBar = el('div', { class: 'blockadd' },
+        Object.keys(BLOCK_LABELS).map(t => btn('+ ' + BLOCK_LABELS[t], () => addBlock(t), 'small-btn', { disabled: ro })));
+
+      const editor = el('div', { class: 'editor' },
+        ro ? el('div', { class: 'notice' }, 'This campaign has been sent, so it is read-only. Save it as a template to reuse it.') : null,
+        el('div', { class: 'card' }, field('Subject', subject), field('Preview text', preheader), field('Audience', seg)),
+        el('div', { class: 'section', style: { marginTop: '18px' } }, addBar),
+        B.blocks.length ? B.blocks.map((b, i) => blockEditor(b, i)) : el('div', { class: 'card empty' }, 'Add a block to start designing your email.')
+      );
+
+      const frame = el('iframe', { class: 'preview', id: 'preview', title: 'Email preview' });
+      content(el('div', { class: 'split' }, editor, frame));
+      schedulePreview(0);
+    }
+
+    function blockEditor(b, i) {
+      const ro = S.B.sent;
+      const B = S.B;
+      const redraw = () => { renderBuilder(); };
+      const change = (fn) => (e) => { fn(e.target.value); schedulePreview(); };
+      let body;
+      if (b.type === 'heading') {
+        body = el('input', { value: b.text, maxlength: 200, disabled: ro, on: { input: change(v => { b.text = v; }) } });
+      } else if (b.type === 'text') {
+        body = el('div', {},
+          el('textarea', { rows: 5, disabled: ro, on: { input: change(v => { b.text = v; }) } }, ''),
+          el('p', { class: 'hint' }, 'Personalize with {{first_name}}, {{company}} or {{plan}}. Leave a blank line for a new paragraph.'));
+        body.querySelector('textarea').value = b.text;
+      } else if (b.type === 'button') {
+        body = el('div', { class: 'grid2' },
+          field('Label', el('input', { value: b.text, disabled: ro, on: { input: change(v => { b.text = v; }) } })),
+          field('Link (https://)', el('input', { value: b.url, disabled: ro, on: { input: change(v => { b.url = v; }) } })));
+      } else if (b.type === 'image') {
+        body = el('div', { class: 'grid2' },
+          field('Image URL (https://)', el('input', { value: b.url, disabled: ro, on: { input: change(v => { b.url = v; }) } })),
+          field('Alt text', el('input', { value: b.alt, disabled: ro, on: { input: change(v => { b.alt = v; }) } })));
+      } else if (b.type === 'spacer') {
+        body = field('Height (px)', el('input', { type: 'number', min: 8, max: 120, value: b.height, disabled: ro,
+          on: { input: change(v => { b.height = Number(v) || 24; }) } }));
+      } else {
+        body = el('p', { class: 'hint' }, 'A horizontal rule.');
+      }
+      const ctrls = ro ? null : el('span', { class: 'ctrls' },
+        btn('↑', () => { if (i > 0) { [B.blocks[i - 1], B.blocks[i]] = [B.blocks[i], B.blocks[i - 1]]; redraw(); schedulePreview(0); } }, 'small-btn ghost', { disabled: i === 0 }),
+        btn('↓', () => { if (i < B.blocks.length - 1) { [B.blocks[i + 1], B.blocks[i]] = [B.blocks[i], B.blocks[i + 1]]; redraw(); schedulePreview(0); } }, 'small-btn ghost', { disabled: i === B.blocks.length - 1 }),
+        btn('Delete', () => { B.blocks.splice(i, 1); redraw(); schedulePreview(0); }, 'small-btn danger'));
+      return el('div', { class: 'block' },
+        el('div', { class: 'bh' }, el('span', { class: 'lbl' }, BLOCK_LABELS[b.type] || b.type), ctrls),
+        body);
+    }
+
+    function addBlock(type) {
+      S.B.blocks.push(BLOCK_DEFAULTS[type]());
+      renderBuilder();
+      schedulePreview(0);
+    }
+
+    function schedulePreview(delay) {
+      clearTimeout(S.previewTimer);
+      S.previewTimer = setTimeout(async () => {
+        const frame = $('#preview');
+        if (!frame || !S.B) return;
+        try {
+          frame.srcdoc = await call('adminPreview', { blocks: S.B.blocks, preheader: S.B.preheader || '' });
+        } catch (e) { fail(e); }
+      }, delay === undefined ? 450 : delay);
+    }
+
+    async function saveBuilder() {
+      const B = S.B;
+      const msg = await call('adminSaveCampaign', {
+        name: B.name, subject: B.subject, preheader: B.preheader, segment_plan: B.segment_plan, blocks: B.blocks,
+      });
+      toast(msg);
+      return msg;
+    }
+
+    function testModal() {
+      const addr = el('input', { type: 'email', placeholder: 'you@company.com' });
+      openModal('Send a test', el('div', {}, field('Send to', addr),
+        el('p', { class: 'hint' }, 'The test uses sample details and is not tracked.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Send test', async () => {
+          try {
+            await saveBuilder();
+            const msg = await call('adminSendTest', S.B.name, addr.value);
+            closeModal(); toast(msg);
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    function scheduleModal() {
+      const when = el('input', { type: 'datetime-local' });
+      openModal('Schedule campaign', el('div', {}, field('Send at (your local time)', when),
+        el('p', { class: 'hint' }, 'The hourly trigger picks it up, so the send starts within the hour.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Schedule', async () => {
+          if (!when.value) return toast('Pick a date and time.', true);
+          try {
+            await saveBuilder();
+            const msg = await call('adminCampaignAction', S.B.name, 'schedule', new Date(when.value).toISOString());
+            closeModal(); toast(msg); openBuilder(S.B.name);
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    function sendNowModal() {
+      const B = S.B;
+      const count = B.segment_plan === 'all' || !B.segment_plan
+        ? S.info.active
+        : (S.info.plans.find(p => p.plan === B.segment_plan) || { count: 0 }).count;
+      openModal('Send this campaign now?', el('div', {},
+        el('p', {}, 'This emails about ' + num(count) + ' active contacts in ' + audienceLabel(B.segment_plan).toLowerCase() + '.'),
+        el('p', { class: 'hint' }, 'It is queued and sent in batches within your daily limit. Contacts who unsubscribe are skipped.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Send now', async () => {
+          closeModal();
+          try {
+            await saveBuilder();
+            toast('Sending…');
+            const msg = await call('adminCampaignAction', B.name, 'send');
+            toast(msg);
+            S.info = null;
+            go('campaigns');
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    async function campaignAction(action) {
+      try {
+        const msg = await call('adminCampaignAction', S.B.name, action);
+        toast(msg);
+        openBuilder(S.B.name);
+      } catch (e) { fail(e); }
+    }
+
+    function saveTemplateModal() {
+      const name = el('input', { value: S.B.name + ' layout', placeholder: 'Template name' });
+      openModal('Save as template', el('div', {}, field('Name', name),
+        el('p', { class: 'hint' }, 'Saves the blocks, not the subject or audience, so you can reuse the layout.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Save template', async () => {
+          try {
+            const msg = await call('adminSaveTemplate', name.value, S.B.blocks);
+            closeModal(); toast(msg);
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    /* ---------- automations ---------- */
+    async function viewAutomations() {
+      const steps = await call('adminListSteps');
+      setHeader('Automations', [btn('Add step', () => stepModal(null, steps.length ? Math.max(...steps.map(s => s.step)) + 1 : 0), 'primary')]);
+      const intro = el('p', { class: 'muted' },
+        'The welcome journey. Each contact moves through these steps in order, counted from signup. Unsubscribed contacts stop automatically.');
+      content(intro, el('div', { class: 'steps section' },
+        steps.length ? steps.map(s => el('div', { class: 'step' },
+          el('div', { class: 'day' }, 'Day ' + s.delay_days, el('small', {}, 'Step ' + s.step)),
+          el('div', {},
+            el('div', { class: 'meta' },
+              el('strong', {}, s.subject),
+              el('span', {}, pill(s.active ? 'active' : 'paused'))),
+            el('p', { class: 'small', style: { margin: '6px 0 12px' } }, 'Template: ' + s.template),
+            el('span', { class: 'row-actions' },
+              btn('Edit', () => stepModal(s), 'small-btn'),
+              btn('Remove', () => removeStep(s), 'small-btn danger')))))
+          : el('div', { class: 'card empty' }, 'No steps yet. Add a welcome step to start the journey.')));
+    }
+
+    function stepModal(step, nextStep) {
+      const isEdit = !!step;
+      const stepNo = isEdit ? step.step : nextStep;
+      const delay = el('input', { type: 'number', min: 0, max: 365, value: isEdit ? step.delay_days : 0 });
+      const subject = el('input', { value: isEdit ? step.subject : '', placeholder: 'Subject line. You can use {{first_name}}' });
+      const tpl = select((S.info.stepTemplates || []).map(t => ({ value: t, label: t })), isEdit ? step.template : (S.info.stepTemplates || [])[0]);
+      const active = el('input', { type: 'checkbox', checked: isEdit ? step.active : true });
+      openModal(isEdit ? 'Edit step ' + stepNo : 'Add step ' + stepNo, el('div', {},
+        el('div', { class: 'grid2' }, field('Days after signup', delay), field('Template', tpl)),
+        field('Subject', subject),
+        el('label', { class: 'check' }, active, 'Active'),
+        el('p', { class: 'hint' }, 'To add a new design, create a template file in the templates folder of the script, then pick it here.')),
+        [btn('Cancel', closeModal, 'ghost'), btn('Save step', async () => {
+          try {
+            const msg = await call('adminSaveStep', {
+              step: stepNo, delay_days: delay.value, subject: subject.value, template: tpl.value, active: active.checked,
+            });
+            closeModal(); toast(msg); viewAutomations();
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    function removeStep(s) {
+      openModal('Remove step ' + s.step + '?', el('p', {}, 'Contacts who have not reached this step will skip it.'),
+        [btn('Cancel', closeModal, 'ghost'), btn('Remove', async () => {
+          closeModal();
+          try { toast(await call('adminDeleteStep', s.step)); viewAutomations(); } catch (e) { fail(e); }
+        }, 'danger')]);
+    }
+
+    /* ---------- templates ---------- */
+    async function viewTemplates() {
+      const list = await call('adminListTemplates');
+      setHeader('Templates', [btn('New campaign', newCampaignModal, 'primary')]);
+      content(list.length
+        ? el('div', { class: 'cards' }, list.map(t => el('div', { class: 'tcard' },
+            el('h3', {}, t.name),
+            el('span', { class: 'small' }, t.blocks.length + ' blocks · updated ' + (t.updated_at || '—')),
+            el('span', { class: 'row-actions' },
+              btn('Use', () => useTemplate(t), 'small-btn primary'),
+              btn('Delete', () => deleteTemplate(t), 'small-btn danger')))))
+        : el('div', { class: 'card empty' }, 'No templates yet. Open a campaign and choose "Save as template".'));
+    }
+
+    function useTemplate(t) {
+      const name = el('input', { placeholder: 'Name for the new campaign' });
+      openModal('New campaign from template', el('div', {}, field('Internal name', name)),
+        [btn('Cancel', closeModal, 'ghost'), btn('Create', async () => {
+          try {
+            const n = name.value.trim();
+            if (!n) return toast('Give it a name.', true);
+            await call('adminSaveCampaign', { name: n, subject: '', preheader: '', segment_plan: 'all', blocks: t.blocks });
+            closeModal();
+            S.info = null;
+            openBuilder(n);
+          } catch (e) { fail(e); }
+        }, 'primary')]);
+    }
+
+    function deleteTemplate(t) {
+      openModal('Delete template?', el('p', {}, 'Delete "' + t.name + '"? Campaigns already built from it are not affected.'),
+        [btn('Cancel', closeModal, 'ghost'), btn('Delete', async () => {
+          closeModal();
+          try { toast(await call('adminDeleteTemplate', t.name)); viewTemplates(); } catch (e) { fail(e); }
+        }, 'danger')]);
+    }
+
+    /* ---------- reports ---------- */
+    async function viewReports() {
+      const list = await call('adminListCampaigns');
+      setHeader('Reports', []);
+      if (!list.length) return content(el('div', { class: 'card empty' }, 'Send a campaign to see its report here.'));
+      if (!S.reportName) S.reportName = list[0].name;
+      const picker = select(list.map(c => ({ value: c.name, label: c.name + ' · ' + c.status })), S.reportName,
+        (e) => { S.reportName = e.target.value; viewReports().catch(fail); });
+      const r = await call('adminGetReport', S.reportName);
+      const bar = (label, value, pctValue) => el('div', { class: 'bar' },
+        el('div', {}, el('div', { class: 'small' }, label), el('div', { class: 'track' }, el('div', { class: 'fill', style: { width: Math.min(100, pctValue) + '%' } }))),
+        el('strong', { style: { textAlign: 'right' } }, value));
+      setHeader('Reports', [picker]);
+      content(
+        el('div', { class: 'stats' },
+          stat('Sent', num(r.sent)),
+          stat('Unique opens', r.openRate + '%'),
+          stat('Unique clicks', r.clickRate + '%'),
+          stat('Bounced', num(r.bounced))),
+        el('div', { class: 'section card' }, el('h2', {}, 'Engagement'),
+          bar('Opened', num(r.uniqueOpens), r.openRate),
+          bar('Clicked', num(r.uniqueClicks), r.clickRate),
+          el('p', { class: 'hint' }, 'Opens come from a tracking pixel. Some mail apps load images automatically, so opens are an upper estimate.')),
+        el('div', { class: 'section' }, el('h2', {}, 'Top links'),
+          table(['Link', 'Clicks'], r.links.map(l => [el('span', { class: 'small' }, l.url), num(l.clicks)]), 'No clicks yet.'))
+      );
+    }
+
+    /* ---------- settings ---------- */
+    async function viewSettings() {
+      const s = await call('adminGetSettings');
+      setHeader('Settings', [btn('Save changes', () => saveSettings().catch(fail), 'primary')]);
+      const inputs = {};
+      const txt = (key, label, ph) => {
+        inputs[key] = el('input', { value: s[key] || '', placeholder: ph || '' });
+        return field(label, inputs[key]);
+      };
+      inputs.DOUBLE_OPT_IN = select([{ value: 'yes', label: 'Yes, confirm by email' }, { value: 'no', label: 'No' }], s.DOUBLE_OPT_IN || 'yes');
+      const copy = (text) => btn('Copy', () => navigator.clipboard && navigator.clipboard.writeText(text).then(() => toast('Copied.')).catch(() => toast('Select and copy manually.', true)), 'small-btn');
+      S.settingsInputs = inputs;
+      content(
+        el('div', { class: 'grid2' },
+          el('div', { class: 'card' }, el('h2', {}, 'Company'),
+            txt('COMPANY_NAME', 'Company name'),
+            txt('COMPANY_ADDRESS', 'Postal address (required in footers)'),
+            txt('PRODUCT_URL', 'Website (https://)')),
+          el('div', { class: 'card' }, el('h2', {}, 'Sending'),
+            txt('FROM_NAME', 'From name'),
+            txt('REPLY_TO', 'Reply-to email'),
+            txt('DAILY_SEND_CAP', 'Daily send cap'),
+            field('Double opt-in', inputs.DOUBLE_OPT_IN))),
+        el('div', { class: 'card section' }, el('h2', {}, 'Signup endpoint'),
+          el('p', { class: 'muted' }, 'Your website posts new subscribers to this URL. Keep the key private if you can.'),
+          field('Web app URL', el('div', { class: 'row-actions' }, el('input', { value: s.webAppUrl, readonly: true }), copy(s.webAppUrl))),
+          field('Signup key', el('div', { class: 'row-actions' }, el('input', { value: s.signupKey, readonly: true }), copy(s.signupKey))),
+          txt('WEBAPP_URL', 'Saved web app URL (https://…/exec)', 'Paste the deployed URL here'))
+      );
+    }
+
+    async function saveSettings() {
+      const payload = {};
+      Object.keys(S.settingsInputs).forEach(k => { payload[k] = S.settingsInputs[k].value.trim(); });
+      const msg = await call('adminSaveSettings', payload);
+      S.info = null;
+      toast(msg);
+    }
+
+    /* ---------- boot ---------- */
+    go('overview');
+  </script>
+</body>
+</html>

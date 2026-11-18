@@ -29,8 +29,9 @@ const HEADERS = {
   Settings: ['key', 'value'],
   Subscribers: ['email', 'first_name', 'company', 'plan', 'status', 'source', 'signup_at', 'drip_step', 'last_sent_at'],
   Sequences: ['step', 'delay_days', 'subject', 'template', 'active'],
-  Campaigns: ['name', 'subject', 'template', 'headline', 'body_html', 'segment_plan', 'status', 'scheduled_at', 'sent_at', 'sent_count'],
+  Campaigns: ['name', 'subject', 'preheader', 'template', 'headline', 'body_html', 'blocks', 'segment_plan', 'status', 'scheduled_at', 'sent_at', 'sent_count'],
   Logs: ['timestamp', 'type', 'email', 'ref', 'status', 'message'],
+  Templates: ['name', 'blocks', 'updated_at'],
 };
 
 const DEFAULT_SETTINGS = {
@@ -55,8 +56,9 @@ const DEFAULT_SEQUENCES = [
 ];
 
 const SAMPLE_CAMPAIGN = [
-  'March product update', 'What is new at {{company}} this month', 'newsletter',
-  'New this month', '<p>Hi {{first_name}},</p><p>Here is what we shipped this month.</p>',
+  'March product update', 'What is new at {{company}} this month', 'A quick look at what we shipped', 'newsletter', '',
+  '<h2 style="font-family:Georgia,serif;font-weight:normal;font-size:24px;margin:0 0 16px;">New this month</h2><p style="margin:0 0 16px;">Hi {{first_name}}, here is what we shipped this month.</p>',
+  '[{"type":"heading","text":"New this month"},{"type":"text","text":"Hi {{first_name}}, here is what we shipped this month."}]',
   'all', 'draft', '', '', 0,
 ];
 
@@ -67,7 +69,7 @@ const SAMPLE_CAMPAIGN = [
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Email Automation')
-    .addItem('Open dashboard', 'showDashboard')
+    .addItem('Open Dispatch', 'showDashboard')
     .addSeparator()
     .addItem('Set up workbook', 'setupWorkbook')
     .addItem('Install hourly trigger', 'installTriggers')
@@ -77,8 +79,10 @@ function onOpen() {
 }
 
 function showDashboard() {
-  SpreadsheetApp.getUi().showSidebar(
-    HtmlService.createHtmlOutputFromFile('Dashboard').setTitle('Email Automation')
+  ensureSchema_();
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutputFromFile('Admin').setWidth(1200).setHeight(820),
+    'Dispatch · Email marketing'
   );
 }
 
@@ -86,14 +90,7 @@ function showDashboard() {
 function setupWorkbook() {
   const ss = SpreadsheetApp.getActive();
 
-  Object.keys(HEADERS).forEach(name => {
-    let sh = ss.getSheetByName(name);
-    if (!sh) sh = ss.insertSheet(name);
-    if (sh.getLastRow() === 0) {
-      sh.getRange(1, 1, 1, HEADERS[name].length).setValues([HEADERS[name]]).setFontWeight('bold');
-      sh.setFrozenRows(1);
-    }
-  });
+  ensureSchema_();
 
   // Settings: add missing keys only, generate secrets once, never overwrite user values.
   const settingsSheet = ss.getSheetByName(SHEET_NAMES.settings);
@@ -215,10 +212,7 @@ function runCampaigns_(settings, subs) {
       const res = sendEmail_(sub, c.subject, c.template, settings, {
         type: 'campaign',
         ref: name,
-        extra: {
-          headline: merge_(c.headline, sub, false),
-          bodyHtml: merge_(c.body_html, sub, true),
-        },
+        extra: campaignExtra_(c, sub, settings, true),
       });
       if (res.ok) {
         passSent++;
@@ -280,7 +274,17 @@ function renderEmail_(templateName, sub, settings, extra) {
     companyAddress: settings.COMPANY_ADDRESS || '',
     unsubscribeUrl: buildActionUrl_('unsubscribe', sub.email, settings),
     confirmUrl: '',
+    headline: '',
+    bodyHtml: '',
+    preheader: '',
+    pixel: '',
   }, extra || {});
+
+  // Campaign sends get click links rewritten and an open-tracking pixel added (see Api.gs).
+  if (data.track && data.campaignName) {
+    data.bodyHtml = trackLinks_(data.bodyHtml, data.campaignName, sub.email, settings);
+    data.pixel = openPixel_(data.campaignName, sub.email, settings);
+  }
 
   const body = fillTemplate_('templates/' + templateName, data);
   return fillTemplate_('templates/base', Object.assign({}, data, { body }));
@@ -342,6 +346,7 @@ function doPost(e) {
 function doGet(e) {
   const p = (e && e.parameter) || {};
   const action = String(p.action || '').toLowerCase();
+  if (action === 'click' || action === 'open') return handleTracking_(action, p);
   const email = normalizeEmail_(p.email);
 
   const page = withLock_(() => {
