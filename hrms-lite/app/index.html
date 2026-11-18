@@ -643,6 +643,7 @@ function reload(given) {
     S.leave = d.leave || [];
     S.reqs = d.requests || [];
     S.types = d.leaveTypes || [];
+    S.opening = d.leaveOpening || [];
     S.reqTypes = d.requestTypes || [];
     S.shifts = d.shifts || [];
     S.holidays = d.holidays || [];
@@ -1434,15 +1435,24 @@ function coModeChanged() {
   if (box) box.style.display = m && m.value === 'adjust' ? '' : 'none';
 }
 
+/* The same balance HR sees: the quota less this year's approved leave - or,
+   where HR brought in an opening balance, that balance less the leave
+   applied since its date. */
 function leaveLeft(typeName) {
   var t = (S.types || []).filter(function (x) { return String(x.name) === String(typeName); })[0];
   if (!t) return 0;
   var year = String(new Date().getFullYear());
+  var op = (S.opening || []).filter(function (o) {
+    return String(o.type) === String(typeName) && String(o.year) === year;
+  })[0];
+  var asOn = op ? String(op.as_on).slice(0, 10) : '';
   var taken = S.leave.reduce(function (n, l) {
-    return (String(l.status) === 'Approved' && String(l.type) === String(typeName) &&
-            String(l.from_date).slice(0, 4) === year) ? n + num(l.days) : n;
+    if (String(l.status) !== 'Approved' || String(l.type) !== String(typeName) ||
+        String(l.from_date).slice(0, 4) !== year) return n;
+    if (op && String(l.applied_at || l.from_date).slice(0, 10) <= asOn) return n;   /* already inside the opening */
+    return n + num(l.days);
   }, 0);
-  return Math.max(0, num(t.quota) - taken);
+  return Math.max(0, (op ? num(op.balance) : num(t.quota)) - taken);
 }
 
 function workingDaysBetween(from, to) {

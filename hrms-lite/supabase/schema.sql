@@ -138,6 +138,20 @@ create index if not exists leave_emp_idx    on leave (emp_code);
 create index if not exists leave_status_idx on leave (status);
 create index if not exists leave_from_idx   on leave (from_date);
 
+-- A balance brought in from outside - from the sheet kept before this system,
+-- or set by HR - for one person, one leave type, one year. The balance is what
+-- was left as on that date; leave applied after it comes off it.
+create table if not exists leave_opening (
+  id        text primary key,              -- emp_code || '_' || year || '_' || type
+  emp_code  text not null references employees(emp_code) on delete cascade,
+  year      integer not null,
+  type      text not null,
+  balance   numeric(6,2) not null default 0,
+  as_on     date not null,
+  note      text,
+  unique (emp_code, year, type)
+);
+
 create table if not exists leave_types (
   id              text primary key,
   name            text not null,

@@ -1004,6 +1004,7 @@ export function createActions(api, db, deps) {
         sites: await listSheet('Sites'),
         shifts: await listSheet('Shifts'),
         leaveTypes: await listSheet('LeaveTypes'),
+        leaveOpening: await listSheet('LeaveOpening'),
         requestTypes: await listSheet('RequestTypes'),
         requests: await stampAll('Requests', await listSheet('Requests'), caller),
         ctcVariables: await listSheet('CtcVariables'),
@@ -1050,6 +1051,8 @@ export function createActions(api, db, deps) {
          authoritative fence is still checked server-side on every webPunch. */
       sites: await listSheet('Sites'),
       leaveTypes: await listSheet('LeaveTypes'),
+      /* their own opening balances, so the phone shows the same balance HR sees */
+      leaveOpening: code ? (await all('select * from hrms.leave_opening where upper(emp_code) = upper($1)', [code])).map(rowOut) : [],
       requestTypes: await listSheet('RequestTypes'),
       notices: (await all(
         `select * from hrms.notices

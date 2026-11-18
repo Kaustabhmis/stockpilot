@@ -843,8 +843,11 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
       </div>
       <div id="leave-pane-balance" style="display:none;">
         <div class="card">
-          <h3>Leave balances</h3>
-          <div class="card-sub">Approved days against the annual quota set in Settings</div>
+          <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:240px"><h3>Leave balances</h3>
+              <div class="card-sub" id="leave-balance-sub">Approved days against the annual quota set in Settings</div></div>
+            <button class="ghost sm" id="op-open" onclick="openOpeningBalances()">Set opening balances</button>
+          </div>
           <div class="table-wrap"><table id="leave-balance"></table></div>
         </div>
       </div>
@@ -1379,6 +1382,11 @@ function unpaidLeaveMap() {
       var quota = type ? num(type.quota) : 0;
       var year = String(l.from_date).slice(0, 4);
       var key = l.emp_code + '|' + String(l.type) + '|' + year;
+      /* with an opening balance, what was used before it is the quota less
+         that balance, and leave already inside it is not counted again */
+      var op = openingFor(l.emp_code, l.type, year);
+      if (op && coveredByOpening(l, op)) return;
+      if (op && used[key] === undefined) used[key] = Math.max(0, quota - num(op.balance));
       var a = new Date(l.from_date), b = new Date(l.to_date);
       for (var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
         var iso = d.toISOString().slice(0, 10);
@@ -2138,7 +2146,7 @@ var SHEET_TO_LIST = {
   Events: 'events', Sites: 'sites', RequestTypes: 'requestTypes', Requests: 'requests', Shifts: 'shifts', LeaveTypes: 'leaveTypes', CtcVariables: 'ctcVariables',
   CtcComponents: 'ctcComponents', CtcValues: 'ctcValues', Notices: 'notices',
   ApprovalLevels: 'approvalLevels',
-  Bonus: 'bonus', Gratuity: 'gratuity', Increment: 'increment'
+  Bonus: 'bonus', Gratuity: 'gratuity', Increment: 'increment', LeaveOpening: 'leaveOpening'
 };
 /* The demo has no server to work out where an application has got to, so the
    same rules are applied here. Kept deliberately small and next to the demo
@@ -2584,6 +2592,7 @@ function reload(given) {
     S.sites = d.sites || [];
     S.shifts = d.shifts || [];
     S.leaveTypes = d.leaveTypes || [];
+    S.leaveOpening = d.leaveOpening || [];
     S.requestTypes = d.requestTypes || [];
     S.requests = d.requests || [];
     S.ctcVariables = d.ctcVariables || [];
@@ -4959,11 +4968,37 @@ function visibleLeave() {
   var mine = S.leave.filter(function (l) { return String(l.emp_code) === myCode(); });
   return mergeInbox(mine, inboxOf('teamLeave'));
 }
+/* ---- opening balances ---------------------------------------------
+   A balance brought in from outside (the sheet kept before this system, or
+   set by HR): for one person, one leave type, one year, what was LEFT as on
+   a date. Leave applied up to that date is already inside it; leave applied
+   after it comes off it. With no opening, the balance is the quota less the
+   approved leave of the year, as it always was. */
+function openingFor(code, type, year) {
+  var want = String(code).toUpperCase(), hit = null;
+  (S.leaveOpening || []).forEach(function (o) {
+    if (String(o.emp_code).toUpperCase() === want && String(o.type) === String(type) &&
+        String(o.year) === String(year)) hit = o;
+  });
+  return hit;
+}
+/* is this leave already counted inside the opening balance? */
+function coveredByOpening(l, op) {
+  if (!op) return false;
+  var when = String(l.applied_at || l.from_date || '').slice(0, 10);
+  return !!when && when <= String(op.as_on).slice(0, 10);
+}
+/* Days of a leave type used in the year. With an opening balance this is
+   the quota less that balance, plus what was applied since - so every
+   screen that works out "quota - taken" lands on the opening balance less
+   the leave since. */
 function takenDays(code, type, year) {
-  return S.leave.filter(function (l) {
-    return String(l.emp_code) === String(code) && l.type === type && l.status === 'Approved' &&
-      String(l.from_date).slice(0, 4) === String(year);
+  var op = openingFor(code, type, year);
+  var since = S.leave.filter(function (l) {
+    return String(l.emp_code).toUpperCase() === String(code).toUpperCase() && l.type === type &&
+      l.status === 'Approved' && String(l.from_date).slice(0, 4) === String(year) && !coveredByOpening(l, op);
   }).reduce(function (s, l) { return s + num(l.days); }, 0);
+  return op ? Math.round((quotaFor(type) - num(op.balance) + since) * 100) / 100 : since;
 }
 
 function leaveTab(tab) {
@@ -5047,8 +5082,118 @@ function renderLeaveBalance(year) {
     }).join('');
     return '<tr><td>' + esc(e.name) + '</td>' + cells + '<td class="num-col"><b>' + total + '</b></td></tr>';
   }).join('');
+  if (el('op-open')) el('op-open').style.display = isAdmin() ? '' : 'none';
+  var ops = (S.leaveOpening || []).filter(function (o) { return String(o.year) === String(year); });
+  if (el('leave-balance-sub')) {
+    var dates = {};
+    ops.forEach(function (o) { dates[String(o.as_on).slice(0, 10)] = 1; });
+    el('leave-balance-sub').innerHTML = ops.length
+      ? 'Opening balances for ' + esc(year) + ' as on ' + esc(Object.keys(dates).sort().join(', ')) +
+        ' (' + Object.keys(ops.reduce(function (m, o) { m[String(o.emp_code).toUpperCase()] = 1; return m; }, {})).length +
+        ' people), less leave applied since. Everyone else: approved days against the annual quota.'
+      : 'Approved days against the annual quota set in Settings';
+  }
   el('leave-balance').innerHTML = head + '<tbody>' + (body ||
     '<tr><td colspan="6" class="empty">No active employees.</td></tr>') + '</tbody>';
+}
+
+/* ---- setting opening balances --------------------------------------
+   Paste the balance sheet straight from Excel or Google Sheets: one row per
+   person, the employee code first, the balances as the LAST numbers on the
+   row. Which leave type each of those numbers is, is chosen here. Nothing is
+   saved until the preview has been looked at. */
+function openOpeningBalances() {
+  if (!isAdmin()) return;
+  var types = activeLeaveTypes().filter(function (t) { return String(t.paid || 'yes') !== 'no' && num(t.quota) > 0; })
+    .map(function (t) { return String(t.name); });
+  var guess = function (want, i) {
+    var hit = types.filter(function (t) { return want.test(t); })[0];
+    return hit || types[i] || '';
+  };
+  var pick = function (id, chosen) {
+    return '<select id="' + id + '" onchange="previewOpening()"><option value="">(skip)</option>' + types.map(function (t) {
+      return '<option' + (t === chosen ? ' selected' : '') + '>' + esc(t) + '</option>';
+    }).join('') + '</select>';
+  };
+  showModal('Set opening leave balances',
+    '<p style="line-height:1.6;margin-bottom:10px">Paste the rows from your sheet: the <b>employee code first</b>, ' +
+    'the <b>balances last</b>. A header row is ignored. Leave applied <b>after</b> the date below comes off these ' +
+    'balances; leave applied up to it is taken to be already inside them.</p>' +
+    '<div class="grid2">' +
+      '<label class="field">Balance as on<input type="date" id="op-ason" value="' + today() + '" onchange="previewOpening()"></label>' +
+      '<label class="field">Last three numbers are, in order' +
+        '<div style="display:flex;gap:6px">' + pick('op-t1', guess(/earn|privil|pl/i, 0)) + pick('op-t2', guess(/casual|cl/i, 1)) +
+          pick('op-t3', guess(/sick|sl|medical/i, 2)) + '</div></label>' +
+    '</div>' +
+    '<label class="field">Rows<textarea id="op-rows" rows="7" style="font-family:monospace;font-size:12px" ' +
+      'placeholder="ST0001\tKaustabh Maitra\t3\t3\t4\t13\t2\t1" oninput="previewOpening()"></textarea></label>' +
+    '<div id="op-preview" style="margin-top:10px"></div>',
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
+     { label: 'Save balances', cls: 'ok', onClick: saveOpening }], true);
+}
+function parseOpening() {
+  var ason = el('op-ason').value, year = String(ason).slice(0, 4);
+  var types = [el('op-t1').value, el('op-t2').value, el('op-t3').value];
+  var rows = [], problems = [], seen = {};
+  String(el('op-rows').value || '').split(/\r?\n/).forEach(function (line, i) {
+    if (!line.trim()) return;
+    var cells = line.split(/\t|,(?=\s*\S)/).map(function (c) { return c.trim(); }).filter(function (c) { return c !== ''; });
+    var nums = [];
+    for (var k = cells.length - 1; k >= 1 && /^-?\d+(\.\d+)?$/.test(cells[k]); k--) nums.unshift(+cells[k]);
+    if (nums.length < 3) { if (i > 0 || !/code/i.test(line)) problems.push('Line ' + (i + 1) + ': needs the code and three balances'); return; }
+    var code = cells[0], e = empByCode(code) || S.employees.filter(function (x) { return String(x.emp_code).toUpperCase() === String(code).toUpperCase(); })[0];
+    var sheetName = cells.slice(1, cells.length - nums.length).filter(function (c) { return !/^-?\d+(\.\d+)?$/.test(c); }).join(' ');
+    var bal = nums.slice(-3);
+    var r = { code: code, e: e, sheetName: sheetName, bal: bal, line: i + 1, warn: '' };
+    if (!e) r.warn = 'no employee with this code - skipped';
+    else if (sheetName && String(e.name).replace(/\s+/g, ' ').toLowerCase() !== sheetName.replace(/\s+/g, ' ').toLowerCase())
+      r.warn = 'the HRMS has this code as ' + e.name;
+    if (seen[String(code).toUpperCase()]) r.warn = 'this code is on the sheet twice - the last row wins';
+    seen[String(code).toUpperCase()] = 1;
+    rows.push(r);
+  });
+  return { ason: ason, year: year, types: types, rows: rows, problems: problems };
+}
+function previewOpening() {
+  var p = parseOpening();
+  var named = p.types.filter(Boolean);
+  var good = p.rows.filter(function (r) { return r.e; });
+  el('op-preview').innerHTML = !p.rows.length ? (p.problems.length ? '<div class="sub-line">' + esc(p.problems.join(' · ')) + '</div>' : '')
+    : '<div class="sub-line" style="margin-bottom:6px"><b>' + good.length + '</b> people will get balances for ' + esc(p.year) +
+      ' as on ' + esc(p.ason) + (p.rows.length - good.length ? ' · <b style="color:var(--danger,#dc2626)">' +
+      (p.rows.length - good.length) + ' skipped</b>' : '') + '</div>' +
+      '<div class="table-wrap" style="max-height:300px"><table><thead><tr><th>Code</th><th>In the HRMS</th>' +
+      p.types.map(function (t) { return t ? '<th class="num-col">' + esc(t) + '</th>' : ''; }).join('') + '<th></th></tr></thead><tbody>' +
+      p.rows.map(function (r) {
+        return '<tr' + (r.e ? '' : ' style="opacity:.55"') + '><td>' + esc(r.code) + '</td><td>' + esc(r.e ? r.e.name : '-') + '</td>' +
+          r.bal.map(function (b, i) { return p.types[i] ? '<td class="num-col">' + b + '</td>' : ''; }).join('') +
+          '<td>' + (r.warn ? '<span class="badge ' + (r.e ? 'b-amber' : 'b-red') + '">' + esc(r.warn) + '</span>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      (named.length < 3 ? '<div class="sub-line">A column set to (skip) is not saved.</div>' : '');
+}
+function saveOpening() {
+  var p = parseOpening();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.ason)) return toast('Pick the "as on" date', 'bad');
+  var out = [];
+  p.rows.forEach(function (r) {
+    if (!r.e) return;
+    r.bal.forEach(function (b, i) {
+      var t = p.types[i];
+      if (!t) return;
+      out.push({ id: r.e.emp_code + '_' + p.year + '_' + t, emp_code: r.e.emp_code, year: +p.year, type: t,
+                 balance: b, as_on: p.ason, note: 'opening balance' });
+    });
+  });
+  if (!out.length) return toast('Nothing to save - paste the rows first', 'bad');
+  api('saveMany', { sheet: 'LeaveOpening', rows: out }).then(function () {
+    var keep = (S.leaveOpening || []).filter(function (o) {
+      return !out.some(function (n) { return n.id === o.id; });
+    });
+    S.leaveOpening = keep.concat(out);
+    S.leaveVersion++;
+    closeModal(); toast('Opening balances saved for ' + (out.length / p.types.filter(Boolean).length) + ' people', 'good');
+    renderLeave();
+  }).catch(function (e) { toast(e.message, 'bad'); });
 }
 
 function renderLeaveCalendar() {

@@ -32,7 +32,8 @@ const TABLE = {
   CtcValues: 'ctc_values', Notices: 'notices',
   ApprovalLevels: 'approval_levels', PayslipMail: 'payslip_mail',
   Punches: 'punches', Leave: 'leave', Payroll: 'payroll',
-  Bonus: 'bonus', Gratuity: 'gratuity', Increment: 'increment'
+  Bonus: 'bonus', Gratuity: 'gratuity', Increment: 'increment',
+  LeaveOpening: 'leave_opening'
 };
 
 /* Columns the front ends send as 'yes'/'no' but Postgres holds as booleans,
@@ -134,7 +135,7 @@ export function createApi(db, opts = {}) {
   /* The revision counter the screens poll                           */
   /* -------------------------------------------------------------- */
   const STAFF_TABS = new Set(['Leave', 'Requests', 'Notices', 'Holidays', 'Settings',
-    'Employees', 'Payroll', 'Shifts', 'LeaveTypes', 'RequestTypes',
+    'Employees', 'Payroll', 'Shifts', 'LeaveTypes', 'LeaveOpening', 'RequestTypes',
     'ApprovalLevels', 'Sites', 'Users',
     /* a staff screen shows their own bonus and gratuity, so a run has to
        reach the phone the same way a payslip does */
