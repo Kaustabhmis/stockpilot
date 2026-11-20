@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VibeStar · Private threads with the people you follow</title>
+  <meta name="description" content="Private one-on-one threads with creators. Posts that retire after thirty days instead of trailing you forever.">
+  <meta name="theme-color" content="#0A0908">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    /**
+     * The whole app is styled with Tailwind utility classes, so the palette is
+     * remapped here rather than edited across hundreds of class strings.
+     * Every existing slate/indigo/amber utility now resolves to a warm
+     * obsidian-and-champagne scheme instead of the stock cold blue-grey.
+     */
+    if (window.tailwind) tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            display: ['"Playfair Display"', 'Georgia', 'serif']
+          },
+          colors: {
+            // Base: warm near-black through ivory. Warmth is what separates
+            // "luxury" from "dark mode dashboard".
+            slate: {
+              50:  '#FBF8F3', 100: '#F5F0E8', 200: '#E4DCD1', 300: '#C7BCAF',
+              400: '#9A8F84', 500: '#6E645B', 600: '#463F38', 700: '#2E2822',
+              800: '#211C17', 900: '#141110', 950: '#0A0908'
+            },
+            // Primary accent: champagne gold.
+            indigo: {
+              50:  '#FDF9EC', 100: '#FAF2D6', 200: '#F3E3AC', 300: '#EAD07C',
+              400: '#DCB854', 500: '#C9A227', 600: '#A8811C', 700: '#836218',
+              800: '#5C4413', 900: '#3B2C0D', 950: '#221907'
+            },
+            // Secondary accent: antique bronze, for gradients against the gold.
+            purple: {
+              50:  '#FBF4EE', 100: '#F5E6D8', 200: '#E8C9AE', 300: '#D6A87F',
+              400: '#C08A55', 500: '#A46E3C', 600: '#85572F', 700: '#674327',
+              800: '#472F1D', 900: '#2C1D13', 950: '#18100A'
+            },
+            fuchsia: {
+              300: '#D3A2B4', 400: '#B87F97', 500: '#9B5F7A', 600: '#7E4A62'
+            },
+            // Verified tick: cool platinum, so it reads apart from the gold.
+            sky: {
+              300: '#B6D2DE', 400: '#8FB8CC', 500: '#6E9FB8', 600: '#547F96'
+            },
+            amber: {
+              300: '#EBCE86', 400: '#D9A83C', 500: '#C08A22', 600: '#9C6D19'
+            },
+            emerald: {
+              300: '#9FCFB4', 400: '#69AC86', 500: '#448C67', 600: '#336B4F'
+            },
+            rose: {
+              300: '#DE9FA8', 400: '#C4636F', 500: '#A3424F', 600: '#83323D'
+            },
+            pink: {
+              300: '#DFAFBB', 400: '#C4788C', 500: '#A85C72', 600: '#8A475C'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      --gilt: #C9A227;
+      --gilt-soft: rgba(201, 162, 39, .22);
+      --gilt-faint: rgba(201, 162, 39, .09);
+      --ivory: #F5F0E8;
+    }
+
+    /* ---- Editorial typography -------------------------------------------
+       A serif display face is the single strongest luxury signal. Applied to
+       headings globally so it lands everywhere without touching markup. */
+    h1, h2, h3, .display {
+      font-family: 'Playfair Display', Georgia, serif;
+      letter-spacing: -0.015em;
+      font-weight: 600;
+    }
+    h1 { letter-spacing: -0.025em; }
+
+    /* Small caps labels get real tracking — cramped uppercase reads cheap. */
+    .uppercase { letter-spacing: 0.14em; }
+
+    body {
+      background-color: #0A0908;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- Atmosphere ------------------------------------------------------
+       A film grain plus a vignette. Both sit above the background and below
+       everything else, and neither intercepts pointer events. */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: .035;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(120% 80% at 50% -10%, rgba(201,162,39,.10), transparent 60%),
+        radial-gradient(100% 100% at 50% 120%, rgba(164,110,60,.07), transparent 55%);
+    }
+    body > * { position: relative; z-index: 1; }
+
+    /* ---- Gilt hairlines --------------------------------------------------
+       Warm borders instead of grey ones, with a faint gold cast on cards. */
+    .border-slate-800, .border-slate-800\/60 { border-color: #241E18 !important; }
+
+    /* ---- Buttons ---------------------------------------------------------
+       Gold with near-black text. A gold field with white text is the classic
+       tell of a template; dark-on-gold is what a luxury house actually does. */
+    .btn-primary {
+      background: linear-gradient(135deg, #E3C767 0%, #C9A227 46%, #A8811C 100%);
+      color: #14110F;
+      border: 1px solid rgba(255, 245, 214, .28);
+      box-shadow: 0 10px 30px -14px rgba(201, 162, 39, .55),
+                  inset 0 1px 0 rgba(255, 250, 230, .45);
+      letter-spacing: .01em;
+      transition: filter .35s cubic-bezier(.2,.7,.3,1), box-shadow .35s ease, transform .35s ease;
+    }
+    .btn-primary:hover:not(:disabled) {
+      filter: brightness(1.07) saturate(1.05);
+      box-shadow: 0 14px 38px -14px rgba(201, 162, 39, .7),
+                  inset 0 1px 0 rgba(255, 250, 230, .55);
+    }
+    .btn-primary:active:not(:disabled) { transform: translateY(1px); }
+    .btn-primary:disabled { opacity: .38; box-shadow: none; cursor: not-allowed; }
+
+    /* Unhurried motion. Luxury is never in a rush. */
+    button, a, input, textarea, select { transition-duration: .3s; }
+
+    .thin-scroll { scrollbar-width: thin; scrollbar-color: #463F38 transparent; }
+    .thin-scroll::-webkit-scrollbar { width: 6px; }
+    .thin-scroll::-webkit-scrollbar-track { background: transparent; }
+    .thin-scroll::-webkit-scrollbar-thumb { background: #463F38; border-radius: 9999px; }
+    .thin-scroll::-webkit-scrollbar-thumb:hover { background: var(--gilt); }
+
+    @keyframes msgIn { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+    .msg-in { animation: msgIn .28s cubic-bezier(.21,1.02,.73,1) both; }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .fade-up { animation: fadeUp .35s ease both; }
+
+    .bubble {
+      max-width: 78%; padding: .5rem .875rem; font-size: .8125rem; line-height: 1.5;
+      word-break: break-word; white-space: pre-wrap; position: relative;
+    }
+    #threadPane {
+      --own-from: #C9A227; --own-to: #A46E3C;
+      --peer-bg: #211C17; --canvas: #0A0908; --accent: #DCB854;
+    }
+    /* Own bubbles are gold, so their text must go dark to stay readable. */
+    .bubble-me { color: #14110F !important; font-weight: 500; }
+    .bubble-me {
+      background: linear-gradient(135deg, var(--own-from) 0%, var(--own-to) 100%); color: #fff;
+      box-shadow: 0 6px 20px -8px color-mix(in srgb, var(--own-from) 65%, transparent);
+    }
+    .bubble-them { background: var(--peer-bg); color: #e2e8f0; border: 1px solid #ffffff0f; }
+    #messagesContainer { background: var(--canvas); transition: background .3s ease; }
+    .theme-swatch { transition: transform .15s ease, box-shadow .15s ease; }
+    .theme-swatch:hover { transform: translateY(-2px); }
+    .theme-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
+    .bubble-pending { opacity: .6; }
+
+    @keyframes presence {
+      0% { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+      70% { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+    .presence-dot { animation: presence 2.2s ease-out infinite; }
+
+    @keyframes typingBounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+      30% { transform: translateY(-4px); opacity: 1; }
+    }
+    .typing-dot { animation: typingBounce 1.3s ease-in-out infinite; }
+    .typing-dot:nth-child(2) { animation-delay: .16s; }
+    .typing-dot:nth-child(3) { animation-delay: .32s; }
+
+    .lock-glow {
+      background:
+        radial-gradient(circle at 50% 0%, rgba(201,162,39,.20), transparent 62%),
+        radial-gradient(circle at 50% 100%, rgba(164,110,60,.14), transparent 55%);
+    }
+    .auth-glow {
+      background:
+        radial-gradient(circle at 18% 12%, rgba(201,162,39,.20), transparent 55%),
+        radial-gradient(circle at 85% 88%, rgba(164,110,60,.18), transparent 55%);
+    }
+    /* Full-bleed imagery reads richer with a scrim under the text. */
+    #view-reels img { filter: saturate(1.05) contrast(1.04); }
+
+    .focus-ring { transition: border-color .3s ease, box-shadow .3s ease; }
+    .focus-ring:focus-within, .focus-ring:focus {
+      border-color: var(--gilt-soft); box-shadow: 0 0 0 4px rgba(201, 162, 39, .10); outline: none;
+    }
+
+    .field {
+      width: 100%; background: rgba(33, 28, 23, .72); border: 1px solid rgba(245, 240, 232, .09);
+      border-radius: .875rem; padding: .72rem .95rem; font-size: .8125rem; color: var(--ivory);
+      transition: border-color .3s ease, box-shadow .3s ease, background .3s ease;
+    }
+    .field::placeholder { color: #6E645B; }
+    .field:focus {
+      outline: none; background: rgba(33, 28, 23, .9);
+      border-color: var(--gilt-soft); box-shadow: 0 0 0 4px rgba(201, 162, 39, .10);
+    }
+    select.field option { background: #141110; color: var(--ivory); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px; border-radius: 9999px;
+      border: 2px solid rgba(20, 17, 15, .3); border-top-color: #14110F;
+      animation: spin .7s linear infinite;
+    }
+
+    #chatInput::-webkit-scrollbar { width: 0; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased min-h-screen">
+
+<!-- ========================================================== SHARE PAGE -->
+<div id="shareScreen" class="hidden min-h-screen flex flex-col items-center px-4 py-8">
+  <a id="shareBrand" href="#" target="_blank" rel="noopener" class="flex items-center gap-2.5 mb-7">
+    <div class="w-9 h-9 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-black text-xl text-slate-950 shadow-lg shadow-indigo-500/25">V</div>
+    <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VibeStar</span>
+  </a>
+  <div id="shareBody" class="w-full max-w-md"></div>
+</div>
+
+<!-- =========================================================== AUTH SCREEN -->
+<div id="authScreen" class="min-h-screen grid md:grid-cols-2">
+
+  <!-- Brand panel -->
+  <div class="auth-glow hidden md:flex flex-col justify-between p-10 border-r border-white/5">
+    <div class="flex items-center gap-2.5">
+      <div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-black text-xl text-slate-950 shadow-lg shadow-indigo-500/25">V</div>
+      <span class="text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">VibeStar</span>
+    </div>
+
+    <div class="max-w-md">
+      <p class="text-[10px] font-semibold uppercase text-indigo-400 mb-5">By invitation only</p>
+      <h1 class="text-[3.4rem] leading-[0.98] text-slate-100 mb-6">
+        A direct line to the people you actually want to hear from.
+      </h1>
+      <div class="w-16 h-px bg-gradient-to-r from-indigo-500 to-transparent mb-6"></div>
+      <p class="text-sm text-slate-400 leading-relaxed font-light">
+        Private one-on-one threads with the people you follow. Posts that retire
+        after thirty days instead of trailing you forever.
+      </p>
+
+      <div class="mt-10 divide-y divide-white/[0.06] border-y border-white/[0.06]">
+        <div class="flex items-center gap-4 py-3.5">
+          <i data-lucide="message-circle-heart" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+          <span class="text-xs text-slate-300 font-light tracking-wide">Subscriber-only messaging, enforced server-side</span>
+        </div>
+        <div class="flex items-center gap-4 py-3.5">
+          <i data-lucide="hourglass" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+          <span class="text-xs text-slate-300 font-light tracking-wide">Every post expires on a thirty-day clock</span>
+        </div>
+        <div class="flex items-center gap-4 py-3.5">
+          <i data-lucide="shield-check" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+          <span class="text-xs text-slate-300 font-light tracking-wide">Your thread is visible only to the two of you</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-[11px] text-slate-600">
+      <div class="flex flex-wrap gap-x-4 gap-y-1 mb-2">
+        <a href="/legal/terms.html" class="hover:text-indigo-300 transition-colors">Terms</a>
+        <a href="/legal/privacy.html" class="hover:text-indigo-300 transition-colors">Privacy</a>
+        <a href="/legal/content-policy.html" class="hover:text-indigo-300 transition-colors">Content Policy</a>
+        <a href="/legal/refunds.html" class="hover:text-indigo-300 transition-colors">Refunds</a>
+      </div>
+      <p>© <span data-year>—</span> VibeStar · Adults only, 18+</p>
+    </div>
+  </div>
+
+  <!-- Form panel -->
+  <div class="flex items-center justify-center p-6">
+    <div class="w-full max-w-sm fade-up">
+
+      <div class="md:hidden flex items-center gap-2.5 mb-8">
+        <div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-black text-xl text-slate-950">V</div>
+        <span class="text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">VibeStar</span>
+      </div>
+
+      <!-- Mode switch -->
+      <div class="flex gap-1 p-1 bg-slate-900/80 border border-white/5 rounded-2xl mb-6">
+        <button id="authTabLogin" onclick="setAuthMode('login')" class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all">Log in</button>
+        <button id="authTabSignup" onclick="setAuthMode('signup')" class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all">Create account</button>
+      </div>
+
+      <!-- LOGIN -->
+      <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-3.5">
+        <div>
+          <h2 class="text-2xl text-slate-100">Welcome back</h2>
+          <p class="text-xs text-slate-500 mt-1.5 font-light">Pick up where you left off.</p>
+        </div>
+
+        <label class="block">
+          <span class="text-[11px] font-semibold text-slate-400 mb-1.5 block">Email</span>
+          <input id="loginEmail" type="email" autocomplete="email" class="field" placeholder="you@example.com" />
+        </label>
+
+        <label class="block">
+          <span class="text-[11px] font-semibold text-slate-400 mb-1.5 block">Password</span>
+          <div class="relative">
+            <input id="loginPassword" type="password" autocomplete="current-password" class="field pr-11" placeholder="••••••••" />
+            <button type="button" onclick="togglePassword('loginPassword', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </label>
+
+        <p id="loginError" class="hidden text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
+
+        <button type="submit" id="loginBtn" class="btn-primary w-full py-3 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all">
+          Log in
+        </button>
+
+        <div class="pt-1 text-center">
+          <button type="button" onclick="fillDemo()" class="text-[11px] text-slate-500 hover:text-indigo-300 transition-colors">
+            Use the demo creator account
+          </button>
+        </div>
+      </form>
+
+      <!-- SIGNUP -->
+      <form id="signupForm" onsubmit="handleSignUp(event)" class="space-y-3.5 hidden">
+        <div>
+          <h2 class="text-2xl text-slate-100">Create your account</h2>
+          <p class="text-xs text-slate-500 mt-1.5 font-light">Takes about twenty seconds.</p>
+        </div>
+
+        <!-- Role choice -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="roleCardFan" onclick="setSignupRole('FAN')"
+                  class="text-left p-3 rounded-2xl border transition-all">
+            <i data-lucide="heart" class="w-4 h-4 mb-1.5"></i>
+            <span class="block text-xs font-bold">I'm a fan</span>
+            <span class="block text-[10px] opacity-70 mt-0.5">Follow &amp; message creators</span>
+          </button>
+          <button type="button" id="roleCardCeleb" onclick="setSignupRole('CELEBRITY')"
+                  class="text-left p-3 rounded-2xl border transition-all">
+            <i data-lucide="sparkles" class="w-4 h-4 mb-1.5"></i>
+            <span class="block text-xs font-bold">I'm a creator</span>
+            <span class="block text-[10px] opacity-70 mt-0.5">Post &amp; earn from subscribers</span>
+          </button>
+        </div>
+
+        <label class="block">
+          <span class="text-[11px] font-semibold text-slate-400 mb-1.5 block">Full name</span>
+          <input id="signupName" class="field" placeholder="Aarohi Sharma" />
+        </label>
+
+        <label class="block">
+          <span class="text-[11px] font-semibold text-slate-400 mb-1.5 block">Username</span>
+          <div class="relative">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-[13px]">@</span>
+            <input id="signupUsername" class="field pl-7" placeholder="aarohi" oninput="this.value = this.value.toLowerCase()" />
+          </div>
+        </label>
+
+        <label class="block">
+          <span class="text-[11px] font-semibold text-slate-400 mb-1.5 block">Email</span>
+          <input id="signupEmail" type="email" autocomplete="email" class="field" placeholder="you@example.com" />
+        </label>
+
+        <label class="block">
+          <span class="text-[11px] font-semibold text-slate-400 mb-1.5 block">Password</span>
+          <div class="relative">
+            <input id="signupPassword" type="password" autocomplete="new-password" class="field pr-11"
+                   placeholder="At least 8 characters" oninput="renderPasswordMeter()" />
+            <button type="button" onclick="togglePassword('signupPassword', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <div class="flex gap-1 mt-2">
+            <span id="pwBar1" class="h-1 flex-1 rounded-full bg-slate-800"></span>
+            <span id="pwBar2" class="h-1 flex-1 rounded-full bg-slate-800"></span>
+            <span id="pwBar3" class="h-1 flex-1 rounded-full bg-slate-800"></span>
+          </div>
+          <span id="pwHint" class="text-[10px] text-slate-500 mt-1 block"></span>
+        </label>
+
+        <p id="signupError" class="hidden text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
+
+        <button type="submit" id="signupBtn" class="btn-primary w-full py-3 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all">
+          Create account
+        </button>
+
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <input id="signupConsent" type="checkbox" class="mt-0.5 accent-indigo-500 w-3.5 h-3.5 shrink-0" />
+          <span class="text-[10px] text-slate-500 leading-relaxed">
+            I am <strong class="text-slate-300">18 or older</strong> and I accept the
+            <a href="/legal/terms.html" target="_blank" class="text-indigo-400 hover:text-indigo-300">Terms of Use</a>,
+            <a href="/legal/privacy.html" target="_blank" class="text-indigo-400 hover:text-indigo-300">Privacy Policy</a> and
+            <a href="/legal/content-policy.html" target="_blank" class="text-indigo-400 hover:text-indigo-300">Content Policy</a>.
+          </span>
+        </label>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= APP SHELL -->
+<div id="appShell" class="hidden">
+
+  <header class="sticky top-0 z-40 bg-slate-950/75 backdrop-blur-xl border-b border-indigo-500/[0.14] px-4 py-3.5">
+    <div class="max-w-6xl mx-auto flex items-center justify-between gap-4">
+      <div class="flex items-center gap-2 cursor-pointer" onclick="switchTab('feed')">
+        <div class="w-9 h-9 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-black text-xl text-slate-950 shadow-lg shadow-indigo-500/25">V</div>
+        <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VibeStar</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+      <div class="relative">
+        <button onclick="toggleNotifications()" title="Notifications"
+                class="relative p-2 rounded-full bg-slate-800/70 border border-white/10 hover:border-white/20 text-slate-300 transition-all">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+          <span id="bellBadge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-slate-900"></span>
+        </button>
+
+        <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[21rem] bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-white/5">
+            <h3 class="text-xs font-bold text-white">Notifications</h3>
+            <button id="markAllBtn" onclick="markAllNotificationsRead()"
+                    class="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">Mark all read</button>
+          </div>
+          <div id="notifList" class="thin-scroll max-h-[22rem] overflow-y-auto"></div>
+        </div>
+      </div>
+
+      <div class="relative">
+        <button onclick="toggleUserMenu()" class="flex items-center gap-2.5 pl-1 pr-2.5 py-1 rounded-full bg-slate-800/70 border border-white/10 hover:border-white/20 transition-all">
+          <span id="headerAvatar"></span>
+          <span class="text-left hidden sm:block">
+            <span id="headerName" class="block text-xs font-semibold text-slate-100 leading-tight"></span>
+            <span id="headerRole" class="block text-[10px] text-slate-500 leading-tight"></span>
+          </span>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-500"></i>
+        </button>
+
+        <div id="userMenu" class="hidden absolute right-0 mt-2 w-52 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+          <button onclick="openMyProfile()" class="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-medium text-slate-300 hover:bg-white/5 transition-colors">
+            <i data-lucide="user" class="w-4 h-4 text-indigo-400"></i> My profile
+          </button>
+          <button onclick="handleLogOut()" class="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors border-t border-white/5">
+            <i data-lucide="log-out" class="w-4 h-4"></i> Log out
+          </button>
+        </div>
+      </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6 p-4">
+
+    <!-- NAV -->
+    <nav class="md:col-span-1 space-y-2">
+      <button onclick="switchTab('feed')" id="nav-feed" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-slate-400 hover:bg-slate-900 transition-all">
+        <i data-lucide="compass" class="w-5 h-5 text-indigo-400"></i> Discovery
+      </button>
+      <button onclick="switchTab('reels')" id="nav-reels" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-slate-400 hover:bg-slate-900 transition-all">
+        <i data-lucide="clapperboard" class="w-5 h-5 text-rose-400"></i> Reels
+      </button>
+      <button onclick="switchTab('search')" id="nav-search" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-slate-400 hover:bg-slate-900 transition-all">
+        <i data-lucide="search" class="w-5 h-5 text-cyan-400"></i> Search
+      </button>
+      <button onclick="switchTab('saved')" id="nav-saved" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-slate-400 hover:bg-slate-900 transition-all">
+        <i data-lucide="bookmark" class="w-5 h-5 text-violet-400"></i>
+        <span class="flex-1 text-left">Saved</span>
+        <span id="navSaved" class="hidden min-w-5 h-5 px-1.5 rounded-full bg-slate-700 text-slate-200 text-[10px] font-bold flex items-center justify-center"></span>
+      </button>
+      <button onclick="switchTab('chat')" id="nav-chat" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-slate-400 hover:bg-slate-900 transition-all">
+        <i data-lucide="message-square" class="w-5 h-5 text-emerald-400"></i>
+        <span class="flex-1 text-left">Messages</span>
+        <span id="navUnread" class="hidden min-w-5 h-5 px-1.5 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center"></span>
+      </button>
+      <button onclick="switchTab('profile')" id="nav-profile" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-slate-400 hover:bg-slate-900 transition-all">
+        <i data-lucide="user-round" class="w-5 h-5 text-amber-400"></i> Profile
+      </button>
+
+      <button onclick="switchTab('admin')" id="nav-admin" class="hidden w-full items-center gap-3 px-4 py-3 rounded-xl font-semibold text-slate-400 hover:bg-slate-900 transition-all">
+        <i data-lucide="shield-check" class="w-5 h-5 text-sky-400"></i>
+        <span class="flex-1 text-left">Verification</span>
+        <span id="navQueue" class="hidden min-w-5 h-5 px-1.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold flex items-center justify-center"></span>
+      </button>
+
+      <div id="creatorActionContainer" class="pt-4 hidden">
+        <button onclick="openCreateModal()" class="w-full py-3 btn-primary rounded-xl font-bold transition-all">
+          + Create 30-Day Post
+        </button>
+      </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main id="mainCol" class="md:col-span-2">
+
+      <!-- DISCOVERY -->
+      <section id="view-feed" class="space-y-6">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg text-slate-100">Feed</h2>
+          <div class="flex items-center gap-2">
+            <span id="feedRefreshedAt" class="text-[10px] text-slate-600"></span>
+            <button onclick="refreshDiscoveryNow()" title="Refresh now"
+                    class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+        <div class="flex gap-1 p-1 bg-slate-900/80 border border-white/5 rounded-2xl mb-4">
+          <button onclick="setFeedScope('ALL')" id="fscope-ALL" class="flex-1 py-2.5 rounded-xl text-[11px] font-semibold transition-all">Discover</button>
+          <button onclick="setFeedScope('FOLLOWING')" id="fscope-FOLLOWING" class="flex-1 py-2.5 rounded-xl text-[11px] font-semibold transition-all">Following</button>
+        </div>
+        <p id="feedScopeNote" class="text-[10px] text-slate-600 mb-4 px-1"></p>
+        <div id="feedContainer" class="space-y-6"></div>
+      </section>
+
+      <!-- REELS -->
+      <section id="view-reels" class="hidden">
+        <div id="reelsContainer" class="space-y-6"></div>
+      </section>
+
+      <!-- SEARCH -->
+      <section id="view-search" class="hidden space-y-5">
+        <div class="rounded-[26px] p-[1px] bg-gradient-to-b from-white/10 via-white/5 to-transparent">
+          <div class="bg-slate-900 rounded-[25px] p-4">
+            <div class="relative">
+              <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
+              <input id="searchInput" type="search" autocomplete="off"
+                     placeholder="Search people, handles or captions…"
+                     oninput="onSearchInput()" onkeydown="if(event.key==='Enter')runSearch()"
+                     class="w-full bg-slate-950/70 border border-white/10 rounded-2xl pl-11 pr-11 py-3 text-sm
+                            text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 transition-colors">
+              <button id="searchClearBtn" onclick="clearSearch()"
+                      class="hidden absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-500 hover:text-slate-200 transition-colors">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="flex gap-1 p-1 bg-slate-950/60 border border-white/5 rounded-2xl mt-3">
+              <button onclick="setSearchScope('ALL')" id="sscope-ALL" class="flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all">Everything</button>
+              <button onclick="setSearchScope('PEOPLE')" id="sscope-PEOPLE" class="flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all">People</button>
+              <button onclick="setSearchScope('POSTS')" id="sscope-POSTS" class="flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all">Posts</button>
+            </div>
+          </div>
+        </div>
+        <div id="searchResults" class="space-y-5"></div>
+      </section>
+
+      <!-- SAVED -->
+      <section id="view-saved" class="hidden space-y-5">
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="text-lg text-slate-100">Saved</h2>
+          <span id="savedCountNote" class="text-[10px] text-slate-600"></span>
+        </div>
+        <p class="text-[10px] text-slate-600 px-1">
+          Only you can see this. Saving a post does not tell the person who posted it.
+        </p>
+        <div id="savedContainer" class="space-y-6"></div>
+      </section>
+
+      <!-- MESSENGER -->
+      <section id="view-chat" class="hidden">
+        <div class="rounded-[26px] p-[1px] bg-gradient-to-b from-white/10 via-white/5 to-transparent shadow-[0_24px_70px_-30px_rgba(79,70,229,.55)]">
+          <div class="bg-slate-950/95 rounded-[25px] overflow-hidden flex h-[620px]">
+
+            <!-- Conversation rail -->
+            <div id="convRail" class="w-[240px] shrink-0 border-r border-white/5 bg-slate-900/40 flex flex-col">
+              <div class="px-4 py-3.5 border-b border-white/5">
+                <h3 class="text-sm font-bold text-white tracking-tight">Messages</h3>
+                <p id="convSubtitle" class="text-[10px] text-slate-500 mt-0.5"></p>
+              </div>
+              <div id="convList" class="thin-scroll flex-1 overflow-y-auto p-2 space-y-1"></div>
+            </div>
+
+            <!-- Thread -->
+            <div class="flex-1 min-w-0 flex flex-col">
+
+              <div id="threadEmpty" class="flex-1 flex flex-col items-center justify-center text-center px-8">
+                <div class="w-14 h-14 rounded-2xl bg-slate-800/60 border border-white/5 flex items-center justify-center text-slate-500 mb-3">
+                  <i data-lucide="messages-square" class="w-6 h-6"></i>
+                </div>
+                <p class="text-sm font-semibold text-slate-300">No conversation selected</p>
+                <p class="text-xs text-slate-500 mt-1 max-w-[16rem] leading-relaxed">
+                  Pick someone on the left, or subscribe to a creator to start a private thread.
+                </p>
+              </div>
+
+              <div id="threadPane" class="hidden flex-1 min-h-0 flex flex-col">
+
+                <!-- Thread header -->
+                <div class="flex items-center justify-between gap-3 px-4 py-3 bg-slate-900/70 backdrop-blur-xl border-b border-white/5">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <button onclick="viewProfile(state.activePeer && state.activePeer.id)" class="relative shrink-0">
+                      <span id="threadAvatar"></span>
+                      <span class="presence-dot absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-900"></span>
+                    </button>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5">
+                        <h3 id="threadName" class="font-semibold text-sm text-white truncate"></h3>
+                        <span id="threadVerified" class="inline-flex"></span>
+                      </div>
+                      <p id="threadPresence" class="text-[11px] text-emerald-400 font-medium">Active now</p>
+                    </div>
+                  </div>
+
+                  <div class="shrink-0 flex items-center gap-2">
+                    <button onclick="tipActivePeer()" title="Send a tip"
+                              class="p-2 rounded-full text-slate-400 hover:text-pink-300 hover:bg-white/5 transition-colors">
+                        <i data-lucide="gift" class="w-4 h-4"></i>
+                    </button>
+                    <div class="relative">
+                      <button onclick="toggleThemePicker()" title="Chat colour"
+                              class="p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                        <i data-lucide="palette" class="w-4 h-4"></i>
+                      </button>
+                      <div id="themePicker" class="hidden absolute right-0 mt-2 w-60 p-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2.5">Chat colour</p>
+                        <div id="themeSwatches" class="grid grid-cols-4 gap-2"></div>
+                        <p class="text-[10px] text-slate-600 mt-2.5 leading-relaxed">Saved to your account and applied to every thread.</p>
+                      </div>
+                    </div>
+                    <div id="chatStatusPill" class="hidden items-center gap-1.5 pl-2 pr-2.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300">
+                      <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                      <span id="chatStatusText" class="text-[11px] font-semibold tracking-tight"></span>
+                    </div>
+                    <button id="subscribeBtn" onclick="subscribeToActivePeer()"
+                            class="hidden items-center gap-1.5 px-3.5 py-2 btn-primary text-[11px] font-bold rounded-full transition-all">
+                      <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> <span id="subscribeBtnLabel">Subscribe</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Stream -->
+                <div class="relative flex-1 min-h-0">
+                  <div id="chatLockOverlay" class="lock-glow hidden absolute inset-0 bg-slate-950/92 backdrop-blur-xl flex-col items-center justify-center px-7 text-center z-20">
+                    <div class="relative mb-5">
+                      <div class="absolute inset-0 blur-2xl bg-indigo-500/30 rounded-full"></div>
+                      <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-400/25 flex items-center justify-center text-indigo-300">
+                        <i data-lucide="lock-keyhole" class="w-7 h-7"></i>
+                      </div>
+                    </div>
+                    <span class="text-[10px] font-bold tracking-[0.18em] text-indigo-400 uppercase mb-2">Private access</span>
+                    <h3 id="lockTitle" class="text-xl font-bold text-white mb-1.5 tracking-tight"></h3>
+                    <p class="text-xs text-slate-400 max-w-[19rem] leading-relaxed mb-5">
+                      A one-on-one thread — no algorithms, no crowd. Just the two of you.
+                    </p>
+                    <ul class="space-y-2 mb-6 text-left">
+                      <li class="flex items-center gap-2.5 text-xs text-slate-300">
+                        <i data-lucide="message-circle-heart" class="w-4 h-4 text-indigo-400 shrink-0"></i> Unlimited private messaging
+                      </li>
+                      <li class="flex items-center gap-2.5 text-xs text-slate-300">
+                        <i data-lucide="eye-off" class="w-4 h-4 text-indigo-400 shrink-0"></i> Visible only to the two of you
+                      </li>
+                      <li class="flex items-center gap-2.5 text-xs text-slate-300">
+                        <i data-lucide="calendar-check" class="w-4 h-4 text-indigo-400 shrink-0"></i> Full 30 days of access
+                      </li>
+                    </ul>
+                    <button onclick="subscribeToActivePeer()"
+                            class="group w-full max-w-[17rem] px-6 py-3.5 btn-primary font-bold rounded-2xl text-sm transition-all flex items-center justify-center gap-2">
+                      <span id="lockCta">Unlock</span>
+                      <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-0.5 transition-transform"></i>
+                    </button>
+                    <p class="mt-3 text-[10px] text-slate-500 flex items-center gap-1.5">
+                      <i data-lucide="lock" class="w-3 h-3"></i> Demo checkout · nothing is charged
+                    </p>
+                  </div>
+
+                  <div id="messagesContainer" class="thin-scroll absolute inset-0 px-4 py-4 overflow-y-auto"></div>
+                </div>
+
+                <div id="typingStrip" class="hidden px-5 pb-1.5">
+                  <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/70 border border-white/5">
+                    <span class="flex items-center gap-1">
+                      <span class="typing-dot w-1.5 h-1.5 rounded-full bg-slate-300 inline-block"></span>
+                      <span class="typing-dot w-1.5 h-1.5 rounded-full bg-slate-300 inline-block"></span>
+                      <span class="typing-dot w-1.5 h-1.5 rounded-full bg-slate-300 inline-block"></span>
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-medium">sending</span>
+                  </div>
+                </div>
+
+                <!-- Composer -->
+                <form onsubmit="handleSendMessage(event)" class="px-3 pb-3 pt-2 bg-slate-900/70 backdrop-blur-xl border-t border-white/5">
+                  <div class="focus-ring flex items-end gap-2 bg-slate-800/70 border border-white/10 rounded-[22px] px-2 py-1.5">
+                    <button type="button" onclick="toggleEmojiPanel()" title="Emoji"
+                            class="shrink-0 p-2 rounded-full text-slate-400 hover:text-amber-300 hover:bg-white/5 transition-colors">
+                      <i data-lucide="smile" class="w-[18px] h-[18px]"></i>
+                    </button>
+                    <textarea id="chatInput" rows="1" maxlength="1000"
+                              oninput="handleComposerInput()" onkeydown="handleComposerKey(event)"
+                              placeholder="Write a message…"
+                              class="flex-1 bg-transparent resize-none border-0 outline-none px-1 py-2 text-[13px] leading-relaxed text-slate-100 placeholder:text-slate-500 max-h-28"></textarea>
+                    <button type="submit" id="sendBtn" disabled title="Send"
+                            class="shrink-0 w-9 h-9 flex items-center justify-center rounded-full btn-primary transition-all active:scale-95">
+                      <i data-lucide="arrow-up" class="w-[18px] h-[18px]"></i>
+                    </button>
+                  </div>
+
+                  <div id="emojiPanel" class="hidden mt-2 p-2 bg-slate-800/80 border border-white/10 rounded-2xl flex flex-wrap gap-1"></div>
+
+                  <div class="flex items-center justify-between px-2 pt-1.5">
+                    <span class="text-[10px] text-slate-600 flex items-center gap-1">
+                      <i data-lucide="shield" class="w-3 h-3"></i> Private thread
+                    </span>
+                    <span id="charCount" class="text-[10px] text-slate-600 tabular-nums"></span>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILE -->
+      <section id="view-profile" class="hidden">
+        <div id="profileContainer"></div>
+      </section>
+
+      <!-- ADMIN PANEL -->
+      <section id="view-admin" class="hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-slate-200">Admin panel</h2>
+          <span class="text-xs bg-sky-500/10 text-sky-400 px-2.5 py-1 rounded-full border border-sky-500/20">Admin</span>
+        </div>
+
+        <div class="flex gap-1 p-1 bg-slate-900/80 border border-white/5 rounded-2xl mb-4">
+          <button onclick="switchAdminPane('overview')" id="apane-overview" class="flex-1 py-2.5 rounded-xl text-[11px] font-semibold transition-all">Overview</button>
+          <button onclick="switchAdminPane('users')" id="apane-users" class="flex-1 py-2.5 rounded-xl text-[11px] font-semibold transition-all">Users</button>
+          <button onclick="switchAdminPane('posts')" id="apane-posts" class="flex-1 py-2.5 rounded-xl text-[11px] font-semibold transition-all">Posts</button>
+          <button onclick="switchAdminPane('payments')" id="apane-payments" class="flex-1 py-2.5 rounded-xl text-[11px] font-semibold transition-all">Payments</button>
+          <button onclick="switchAdminPane('verification')" id="apane-verification" class="flex-1 py-2.5 rounded-xl text-[11px] font-semibold transition-all">Verification</button>
+        </div>
+
+        <div id="adminOverviewPane" class="hidden"></div>
+        <div id="adminUsersPane" class="hidden"></div>
+        <div id="adminPostsPane" class="hidden"></div>
+        <div id="adminPaymentsPane" class="hidden"></div>
+        <div id="adminContainer" class="hidden"></div>
+      </section>
+    </main>
+
+    <!-- ASIDE -->
+    <aside id="asideCol" class="md:col-span-1 space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-800">
+          <h3 class="text-xs font-bold text-slate-200">Creators to discover</h3>
+          <p id="creatorRailNote" class="text-[9px] text-slate-600 mt-0.5"></p>
+        </div>
+        <div id="creatorList" class="p-2 space-y-1"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+
+<!-- =============================================================== FOOTER -->
+<footer class="relative z-10 border-t border-slate-800 mt-10 px-4 py-8">
+  <div class="max-w-6xl mx-auto text-center">
+    <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-slate-500">
+      <a href="/legal/terms.html" class="hover:text-indigo-300 transition-colors">Terms of Use</a>
+      <a href="/legal/privacy.html" class="hover:text-indigo-300 transition-colors">Privacy Policy</a>
+      <a href="/legal/content-policy.html" class="hover:text-indigo-300 transition-colors">Content Policy</a>
+      <a href="/legal/refunds.html" class="hover:text-indigo-300 transition-colors">Refunds</a>
+    </div>
+    <p class="text-[10px] text-slate-600 mt-4 leading-relaxed max-w-md mx-auto">
+      Adults only, 18+. Posts expire after thirty days.
+      <span class="block mt-1">© <span data-year>—</span> VibeStar</span>
+    </p>
+  </div>
+</footer>
+
+<!-- ========================================================= CAMERA MODAL -->
+<div id="cameraModal" class="fixed inset-0 bg-black z-[60] hidden flex flex-col">
+  <div class="flex items-center justify-between px-4 py-3 bg-black/70 backdrop-blur-xl border-b border-white/10">
+    <button onclick="closeCamera()" class="p-2 rounded-full text-slate-300 hover:text-white">
+      <i data-lucide="x" class="w-5 h-5"></i>
+    </button>
+    <span class="text-xs font-semibold uppercase text-slate-400">Camera</span>
+    <div class="flex items-center gap-1">
+      <button onclick="toggleMirror()" title="Mirror" class="p-2 rounded-full text-slate-300 hover:text-white">
+        <i data-lucide="flip-horizontal" class="w-5 h-5"></i>
+      </button>
+      <button onclick="flipCamera()" title="Switch camera" class="p-2 rounded-full text-slate-300 hover:text-white">
+        <i data-lucide="switch-camera" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="flex-1 min-h-0 flex items-center justify-center p-3">
+    <div class="relative w-full max-w-md aspect-square rounded-3xl overflow-hidden bg-slate-950 border border-white/10">
+      <!-- The <video> is the source; the visible frame is the filtered canvas. -->
+      <video id="cameraVideo" class="hidden" playsinline muted></video>
+      <canvas id="cameraCanvas" class="w-full h-full block"></canvas>
+      <p id="cameraError" class="hidden absolute inset-0 m-auto h-fit mx-4 text-center text-xs
+         text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded-xl px-4 py-3"></p>
+    </div>
+  </div>
+
+  <div class="bg-black/70 backdrop-blur-xl border-t border-white/10 px-4 pt-3 pb-5 space-y-3">
+    <div id="camFilterRow" class="flex gap-2 overflow-x-auto thin-scroll pb-1"></div>
+
+    <div class="flex items-center gap-3">
+      <span class="text-[10px] font-bold uppercase text-slate-500 shrink-0">Strength</span>
+      <input type="range" min="0" max="100" value="100" oninput="setCameraIntensity(this.value)"
+             class="flex-1 accent-indigo-500" />
+      <span id="camIntensityValue" class="text-[10px] text-slate-400 tabular-nums w-9 text-right">100%</span>
+    </div>
+
+    <div id="camEffectRow" class="flex flex-wrap gap-2"></div>
+
+    <button onclick="captureFromCamera()"
+            class="w-full py-4 btn-primary rounded-2xl font-bold text-sm flex items-center justify-center gap-2">
+      <i data-lucide="camera" class="w-4 h-4"></i> Capture
+    </button>
+  </div>
+</div>
+
+<!-- hidden input shared by the profile picture and banner pickers -->
+<input id="profileImageFile" type="file" accept="image/*" class="hidden"
+       onchange="handleProfileImagePicked(this.files[0], this.dataset.target)" />
+
+<!-- ================================================= CREATE POST MODAL -->
+<div id="createModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl overflow-hidden fade-up max-h-[92vh] flex flex-col">
+
+    <div class="flex justify-between items-center px-6 py-4 border-b border-slate-800 shrink-0">
+      <div>
+        <h3 class="text-lg text-slate-100">Create post</h3>
+        <p class="text-[11px] text-slate-500 mt-0.5 font-light">Expires automatically after thirty days</p>
+      </div>
+      <button onclick="closeCreateModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+
+    <div class="thin-scroll overflow-y-auto px-6 py-5 space-y-4">
+
+      <!-- source: upload or link -->
+      <div class="flex gap-1 p-1 bg-slate-800/60 rounded-xl">
+        <button type="button" id="src-UPLOAD" onclick="setPostSource('UPLOAD')" class="flex-1 py-2 rounded-lg text-xs font-semibold transition-all">Upload</button>
+        <button type="button" id="src-LINK" onclick="setPostSource('LINK')" class="flex-1 py-2 rounded-lg text-xs font-semibold transition-all">Paste link</button>
+      </div>
+
+      <!-- UPLOAD -->
+      <div id="uploadPane" class="space-y-4">
+        <label id="dropZone"
+               class="block border border-dashed border-slate-700 hover:border-indigo-500/50 rounded-2xl px-6 py-9 text-center cursor-pointer transition-colors">
+          <input id="mediaFile" type="file" accept="image/*,video/*" class="hidden" onchange="handleMediaPicked(this.files[0])" />
+          <i data-lucide="image-plus" class="w-7 h-7 text-indigo-400 mx-auto mb-3"></i>
+          <p class="text-xs font-semibold text-slate-200">Choose a photo or video</p>
+          <p class="text-[10px] text-slate-500 mt-1.5 font-light">Photos up to 6MB · video up to 12MB</p>
+        </label>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="openCameraFor('POST')"
+                  class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold transition-colors flex items-center justify-center gap-1.5">
+            <i data-lucide="camera" class="w-3.5 h-3.5"></i> Selfie / Camera
+          </button>
+          <input id="mediaCamera" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleMediaPicked(this.files[0])" />
+          <button type="button" onclick="document.getElementById('mediaFile').click()"
+                  class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold transition-colors flex items-center justify-center gap-1.5">
+            <i data-lucide="folder-open" class="w-3.5 h-3.5"></i> Library
+          </button>
+        </div>
+
+        <!-- photo studio -->
+        <div id="studio" class="hidden space-y-3">
+          <div class="relative rounded-2xl overflow-hidden bg-black border border-slate-800">
+            <canvas id="studioCanvas" class="w-full block"></canvas>
+            <button type="button" onclick="clearMedia()" title="Remove"
+                    class="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/70 backdrop-blur text-slate-200 hover:text-white flex items-center justify-center">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div>
+            <p class="text-[10px] font-bold uppercase text-slate-500 mb-2">Look</p>
+            <div id="filterRow" class="flex gap-2 overflow-x-auto thin-scroll pb-1"></div>
+          </div>
+
+          <div id="intensityWrap">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-bold uppercase text-slate-500">Strength</span>
+              <span id="intensityValue" class="text-[10px] text-slate-400 tabular-nums">100%</span>
+            </div>
+            <input id="intensity" type="range" min="0" max="100" value="100" oninput="setIntensity(this.value)"
+                   class="w-full accent-indigo-500" />
+          </div>
+
+          <div>
+            <p class="text-[10px] font-bold uppercase text-slate-500 mb-2">Effects</p>
+            <div id="overlayRow" class="flex flex-wrap gap-2"></div>
+          </div>
+
+          <div>
+            <p class="text-[10px] font-bold uppercase text-slate-500 mb-2">Stickers</p>
+            <div id="stickerRow" class="flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+
+        <!-- video preview -->
+        <div id="videoPane" class="hidden space-y-2">
+          <div class="relative rounded-2xl overflow-hidden bg-black border border-slate-800">
+            <video id="videoPreview" class="w-full block max-h-64" controls muted></video>
+            <button type="button" onclick="clearMedia()" title="Remove"
+                    class="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/70 backdrop-blur text-slate-200 hover:text-white flex items-center justify-center">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-500 flex items-start gap-1.5">
+            <i data-lucide="info" class="w-3 h-3 shrink-0 mt-0.5"></i>
+            Filters apply to photos only — a video would need re-encoding, which the browser cannot do here.
+          </p>
+        </div>
+      </div>
+
+      <!-- LINK -->
+      <div id="linkPane" class="hidden space-y-3">
+        <div class="flex gap-1 p-1 bg-slate-800/60 rounded-xl">
+          <button type="button" id="postTypeIMAGE" onclick="setPostType('IMAGE')" class="flex-1 py-2 rounded-lg text-xs font-semibold transition-all">Image</button>
+          <button type="button" id="postTypeVIDEO" onclick="setPostType('VIDEO')" class="flex-1 py-2 rounded-lg text-xs font-semibold transition-all">Reel</button>
+        </div>
+        <input type="text" id="postMediaUrl" placeholder="https://… media URL" class="field" oninput="renderPostPreview()" />
+        <img id="postPreview" class="hidden w-full max-h-48 object-cover rounded-xl bg-black border border-white/5" />
+        <p class="text-[10px] text-slate-500 flex items-start gap-1.5">
+          <i data-lucide="info" class="w-3 h-3 shrink-0 mt-0.5"></i>
+          Filters need the original file, so they are unavailable for linked media.
+        </p>
+      </div>
+
+      <div>
+        <p class="text-[10px] font-bold uppercase text-slate-500 mb-2">Who can see this</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="vis-PUBLIC" onclick="setPostVisibility('PUBLIC')"
+                  class="text-left p-3 rounded-2xl border transition-all">
+            <i data-lucide="globe" class="w-4 h-4 mb-1.5"></i>
+            <span class="block text-xs font-bold">Everyone</span>
+            <span class="block text-[10px] opacity-70 mt-0.5">Public feed</span>
+          </button>
+          <button type="button" id="vis-SUBSCRIBERS" onclick="setPostVisibility('SUBSCRIBERS')"
+                  class="text-left p-3 rounded-2xl border transition-all">
+            <i data-lucide="lock" class="w-4 h-4 mb-1.5"></i>
+            <span class="block text-xs font-bold">Subscribers</span>
+            <span class="block text-[10px] opacity-70 mt-0.5">Private gallery</span>
+          </button>
+        </div>
+      </div>
+
+      <textarea id="postCaption" rows="3" maxlength="2000" placeholder="Say something…" class="field resize-none"></textarea>
+      <p id="postError" class="hidden text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
+    </div>
+
+    <div class="px-6 py-4 border-t border-slate-800 shrink-0">
+      <button onclick="submitPost()" id="postBtn" class="btn-primary w-full py-3 font-bold rounded-2xl transition-all text-sm flex items-center justify-center gap-2">
+        Publish for thirty days
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================== COMMENT MODAL -->
+<div id="commentModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center hidden p-0 sm:p-4">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden fade-up flex flex-col max-h-[85vh]">
+    <div class="flex justify-between items-center px-5 py-4 border-b border-slate-800 shrink-0">
+      <h3 id="commentCount" class="text-sm text-slate-100"></h3>
+      <button onclick="closeComments()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div id="commentList" class="thin-scroll flex-1 overflow-y-auto px-4 py-2 divide-y divide-white/[0.05]"></div>
+    <form onsubmit="submitComment(event)" class="px-4 py-3 border-t border-slate-800 shrink-0 flex items-center gap-2">
+      <input id="commentInput" maxlength="500" placeholder="Add a comment…"
+             class="field flex-1" />
+      <button type="submit" class="shrink-0 w-10 h-10 rounded-full btn-primary flex items-center justify-center">
+        <i data-lucide="arrow-up" class="w-4 h-4"></i>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================ TIP MODAL -->
+<div id="tipModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 space-y-4 fade-up">
+    <div class="flex justify-between items-center">
+      <h3 id="tipModalName" class="font-bold text-sm text-white"></h3>
+      <button onclick="closeTipModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <p class="text-[11px] text-slate-500 leading-relaxed">A one-off gift. It unlocks nothing — it just goes to them.</p>
+    <div id="tipPresets" class="grid grid-cols-4 gap-2"></div>
+    <label class="block">
+      <span class="text-[11px] font-semibold text-slate-400 mb-1.5 block">Amount (₹)</span>
+      <input id="tipAmount" type="number" min="10" max="100000" class="field" placeholder="e.g. 200" />
+    </label>
+    <p id="tipError" class="hidden text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
+    <button onclick="sendTip()" class="btn-primary w-full py-3 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+      <i data-lucide="gift" class="w-4 h-4"></i> Send tip
+    </button>
+  </div>
+</div>
+
+<!-- ========================================================== SHARE MODAL -->
+<div id="shareModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 space-y-4 fade-up">
+    <div class="flex justify-between items-center">
+      <h3 class="font-bold text-sm text-white">Share this post</h3>
+      <button onclick="closeShareModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div id="shareModalBody"></div>
+  </div>
+</div>
+
+<!-- ========================================================= FOLLOW MODAL -->
+<div id="followModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl overflow-hidden fade-up">
+    <div class="flex justify-between items-center px-5 py-4 border-b border-slate-800">
+      <h3 id="followModalTitle" class="font-bold text-sm text-white"></h3>
+      <button onclick="closeFollowModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div id="followModalBody" class="thin-scroll max-h-[60vh] overflow-y-auto p-2"></div>
+  </div>
+</div>
+
+<!-- ================================================================ TOASTS -->
+<div id="toastHost" class="fixed bottom-5 right-5 z-[60] space-y-2"></div>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

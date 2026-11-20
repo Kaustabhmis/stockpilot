@@ -1,0 +1,65 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# ---------------------------------------------------------------- routing
+# A single API function with an internal router: one cold start warms every
+# endpoint, rather than forty functions each paying their own.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Uploaded media, streamed from blob storage with a real content-type so it
+# hotlinks properly in <img>, <video> and Open Graph cards.
+[[redirects]]
+  from = "/media/*"
+  to = "/.netlify/functions/media/:splat"
+  status = 200
+
+# Public share pages are server-rendered so crawlers see real Open Graph tags.
+# This is the thing Apps Script could not do at all.
+[[redirects]]
+  from = "/p/*"
+  to = "/.netlify/functions/share/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/webhooks/razorpay"
+  to = "/.netlify/functions/webhook"
+  status = 200
+
+# SPA fallback, last so it cannot shadow the routes above.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# --------------------------------------------------------------- security
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    # Razorpay Checkout and the CDNs the page loads must be allowlisted
+    # explicitly; 'unsafe-inline' remains only because the UI still carries
+    # inline handlers inherited from the Apps Script build.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; object-src 'none'; base-uri 'self'"
+
+# NOTE: there is deliberately no blanket Cache-Control rule for /media/*.
+# The media function decides per file: public uploads are immutable and cached
+# for a year, but a subscriber-only file is marked `private` and short-lived so
+# no shared cache can serve one viewer's signed request to anybody else. A rule
+# here would apply to both and quietly undo that.
+
+# --------------------------------------------------------------- schedule
+# Replaces the Apps Script time-based trigger: expiry sweep, subscription
+# reminders and notification pruning.
+[functions."maintenance"]
+  schedule = "0 3 * * *"

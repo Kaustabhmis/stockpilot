@@ -1,0 +1,13 @@
+node_modules/
+.netlify/
+.env
+.env.local
+dist/
+
+# Google service-account key files. Committing one hands over write access to
+# the database, so these are ignored by name rather than left to discipline.
+key.json
+credentials.json
+*-service-account*.json
+*.credentials.json
+*service-account*.json
