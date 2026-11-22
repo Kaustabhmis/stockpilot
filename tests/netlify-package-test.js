@@ -67,6 +67,11 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
     ok('the home page marks up its buyer questions too', graphOf(idx).some((x) => x['@type'] === 'FAQPage' && x.mainEntity.length >= 6));
     ok('every question in the data is one a reader can see on that page, word for word', hidden.length === 0, hidden.join(' | '));
     ok('robots.txt names the AI search crawlers and lets them in', ['Googlebot', 'Google-Extended', 'OAI-SearchBot', 'PerplexityBot', 'ClaudeBot', 'Bingbot'].every((b) => new RegExp('User-agent: ' + b).test(robots)) && !/Disallow: \/\s*$/m.test(robots));
+    /* IndexNow: Bing (and through it ChatGPT search and Copilot) re-crawls a
+       page the moment it is pinged, if the site proves ownership with a key
+       file at its root whose only content is the key itself. */
+    const keys = fs.readdirSync(PKG).filter((f) => /^[0-9a-f]{32}\.txt$/.test(f));
+    ok('the IndexNow key file is in the upload and holds exactly its own key', keys.length === 1 && fs.readFileSync(path.join(PKG, keys[0]), 'utf8') === keys[0].slice(0, 32), keys.join(','));
     ok('llms.txt answers the common questions', /## Common questions/.test(fs.readFileSync(path.join(PKG, 'llms.txt'), 'utf8')));
     const lite = fs.readFileSync(path.join(PKG, '..', 'lite-upload', 'index.html'), 'utf8');
     ok('Lite is untouched: no search data, no buyer questions', !/FAQPage|ld\+json|Questions buyers ask/.test(lite));
