@@ -6,7 +6,7 @@ const env = build();
 const src = fs.readFileSync(process.env.DBX_CODE || '/home/user/stockpilot/dist/code.gs', 'utf8');
 const names = Object.keys(env.G);
 const APP = new Function(...names, src + '\n;return { doPost: doPost, doGet: doGet, setupDomeBox: setupDomeBox, '
-        + 'ensureRegistry: ensureRegistry, createDemoAccount: createDemoAccount, removeDemoAccount: removeDemoAccount, reissueFlaggedInvoices: reissueFlaggedInvoices, __env: 1, '
+        + 'ensureRegistry: ensureRegistry, activatePartners: activatePartners, createDemoAccount: createDemoAccount, removeDemoAccount: removeDemoAccount, reissueFlaggedInvoices: reissueFlaggedInvoices, __env: 1, '
         /* HARNESS ONLY. In Apps Script every request is a fresh execution, so the
            alias lookup is cached for the life of one. Here the whole suite runs in
            a single execution, so a test that changes the aliases needs a way to say
@@ -111,6 +111,19 @@ const server = http.createServer((req, res) => {
     const on = new URL('http://x' + req.url).searchParams.get('on') === '1';
     if (on) env.props.SELLER_GSTIN = '19AABCB1234C1ZQ'; else delete env.props.SELLER_GSTIN;
     res.writeHead(200, {'Content-Type':'application/json'}); res.end(JSON.stringify({ ok: true, on })); return;
+  }
+  /* HARNESS ONLY — adds a partner to the Partners tab and activates them, as
+     the owner does from the Master sheet, and hands back the dashboard key
+     from the email they would receive. */
+  if (req.url.startsWith('/__partner')) {
+    const q = new URL('http://x' + req.url).searchParams;
+    APP.activatePartners();
+    env.FILES.MASTER.getSheetByName('Partners').appendRow([q.get('name'), q.get('email'), '', q.get('firm') || '', '', '', '', '', '', '']);
+    APP.activatePartners();
+    const m = env.mails.slice().reverse().find((x) => x.to === String(q.get('email')).toLowerCase()) || { html: '' };
+    const key = (m.html.match(/\?partner=([a-f0-9]{40})/) || [])[1] || '';
+    const code = (m.html.match(/\?ref=(P[A-Z0-9]{5})/) || [])[1] || '';
+    res.writeHead(200, {'Content-Type':'application/json'}); res.end(JSON.stringify({ key, code })); return;
   }
   if (req.url.startsWith('/__setplan')) {
     const q = new URL('http://x' + req.url).searchParams;

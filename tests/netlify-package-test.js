@@ -43,7 +43,7 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
   {
     const graphOf = (t) => [].concat(...[...t.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])['@graph'] || []));
     const txt = (t) => t.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ');
-    const guides = ['pricing', 'features', 'delegation-score', 'kra-kpi-format', 'employee-performance-management', 'task-management-for-manufacturing', 'alternatives', 'guides'];
+    const guides = ['pricing', 'features', 'delegation-score', 'kra-kpi-format', 'employee-performance-management', 'task-management-for-manufacturing', 'alternatives', 'guides', 'partners'];
     const noAns = [], noFaq = [], noAuthor = [], hidden = [];
     guides.forEach((g) => {
       const t = fs.readFileSync(path.join(PKG, g + '.html'), 'utf8');

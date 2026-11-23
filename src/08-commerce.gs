@@ -146,6 +146,8 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     /* The term comes from the plan, not from its name. Keying it off the word
        "Yearly" worked only while there was exactly one annual plan. */
     base.setDate(base.getDate() + planTermDays(planName));
+    /* Free days this company earned by inviting others while it was on Free. */
+    if (!isLite_()) { var banked = takeBankedReferralDays_(sheetId); if (banked) base.setDate(base.getDate() + banked); }
     var until = ymd(base);
     dir.getRange(i + 1, 4).setValue(planName);
     dir.getRange(i + 1, 5).setValue(until);
@@ -158,6 +160,8 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
        webhook both reach here for the same rupee, and only one document is
        ever issued for it. */
     issueInvoice_locked_(sheetId, planName, paid, company || d[i][0], until);
+    /* The company that invited them, or the partner who brought them in. */
+    if (!isLite_() && paid && paid.id) referralOnPayment_(sheetId, paid);
     return until;
   }
   throw new Error('That workspace is not in the registry.');

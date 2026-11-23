@@ -17,6 +17,7 @@
 /employee-performance-management /employee-performance-management.html 200
 /task-management-for-manufacturing /task-management-for-manufacturing.html 200
 /alternatives                    /alternatives.html                    200
+/partners                        /partners.html                        200
 
 # Variants people and old links actually use, pointed at the canonical page
 # rather than left to 404. A 301 passes the link equity on; a 404 throws it away.

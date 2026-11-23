@@ -19,6 +19,7 @@ Key facts:
 - [Features](https://www.domebox.in/features): the task board, projects, recurring jobs, approvals, KRA/KPI, appraisals, the delegation score and the org chart
 - [Pricing](https://www.domebox.in/pricing): plans and prices in INR, and the free trial
 - [How the delegation score works](https://www.domebox.in/delegation-score): the scoring method in full
+- [Partner programme](https://www.domebox.in/partners): 20% of every payment, for CA firms, ISO/IATF consultants and advisors who bring in clients
 - [Compared with Monday, Trello and Asana](https://www.domebox.in/alternatives): an honest comparison, including where another tool is the better buy
 
 ## Guides

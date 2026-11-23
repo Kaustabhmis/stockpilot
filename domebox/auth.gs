@@ -217,6 +217,7 @@ var PUBLIC_LIMITS = {
   registerGlobal: { max: 30, windowMin: 60 },   // every sign-up copies a spreadsheet: a bot must not fill the Drive
   contactSales:   { max: 5,  windowMin: 60 },
   demo:           { max: 600, windowMin: 60 },
+  partner:        { max: 300, windowMin: 60 },   // partner dashboards, all together: a guessed key is 40 hex, this caps the tries
   contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood   // the public demo, all visitors together
 };
 

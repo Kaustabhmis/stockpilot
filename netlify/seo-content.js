@@ -518,6 +518,49 @@ the working shown for every number.</li>
 ${cta('Fourteen days of the full product is enough to compare it properly.')}`,
   },
 
+  /* -------------------------------------------------------------- partners */
+  {
+    slug: 'partners',
+    title: 'Partner programme',
+    h1: 'Partner programme for consultants and CA firms',
+    description: 'Earn 20% of every payment from each company you bring to Domebox, for as long as it stays a customer. For CA firms, ISO and IATF consultants and business advisors in India.',
+    answer: 'The Domebox partner programme pays CA firms, ISO and IATF consultants and business advisors 20% of every payment, before GST, from each company that signs up through their link, for as long as that company keeps paying. Partners get a private dashboard showing every company, what it has earned them, and what has been paid. Joining is free.',
+    changefreq: 'monthly', priority: '0.6',
+    faq: [
+      ['How much does a partner earn?', '20% of every payment a company you brought in makes, before GST, for as long as it stays a customer. A 50-person company on Growth at Rs 5,999 a month earns you about Rs 1,200 every month.'],
+      ['How are partners paid?', 'By bank transfer or UPI, from the commission shown as due on your dashboard. Every payment and every payout is listed there, so there is nothing to reconcile by hand.'],
+      ['Who can become a partner?', 'Anyone who advises small Indian businesses: chartered accountants, ISO, IATF and quality consultants, HR and management advisors, software resellers. There is no fee and no target.'],
+      ['Does my client pay more because I referred them?', 'No. They pay the same published price, get the same 14-day free trial, and you can help them set up if you like.'],
+    ],
+    body: `
+<p class="lede">You already advise the businesses Domebox is built for. When one of
+them starts running its work on Domebox because you suggested it, you share in
+what it pays — every month, not once.</p>
+
+<h2>How it works</h2>
+<ol>
+<li><strong>Write to us</strong> at <a href="mailto:${C.supportEmail}?subject=Partner%20programme">${C.supportEmail}</a>
+with your name, firm and phone number, and we send you your links.</li>
+<li><strong>You get your own link</strong> to share, and a private dashboard.</li>
+<li><strong>Your client signs up through the link</strong> and gets the full 14-day free trial, as anyone does.</li>
+<li><strong>Every time they pay, 20% of it is yours</strong> (before GST), shown on your dashboard, paid to your bank or UPI.</li>
+</ol>
+
+<h2>Who it is for</h2>
+<ul>
+<li><strong>CA and accounting firms</strong> whose clients ask how to get their teams to deliver on time.</li>
+<li><strong>ISO, IATF and quality consultants</strong>: Domebox keeps the record an auditor asks for — who did what, when, and who verified it.</li>
+<li><strong>HR and management advisors</strong> setting up KRAs, KPIs and appraisals that are backed by real work.</li>
+</ul>
+
+<h2>What your clients get</h2>
+<p>Task, team and performance management built for Indian MSMEs: one owner and a
+due date for every job, closed only when it is verified, recurring jobs that do
+not get forgotten, and a monthly score each person can check task by task.
+<a href="/features">See the features</a> or <a href="/pricing">the prices</a>.</p>
+${cta('Try it yourself first: the full product for 14 days, free.')}`,
+  },
+
   /* ------------------------------------------------------------- guide index */
   {
     slug: 'guides',

@@ -237,7 +237,8 @@ function openBilling() {
       '<input id="promo" class="in" placeholder="Optional"></div></div>' +
     '<div class="mt-5 flex flex-wrap gap-2">' +
       '<button class="btn btn-g" onclick="openInvoices()">Invoices</button>' +
-      '<button class="btn btn-g" onclick="openBillingDetails()">Invoice details</button></div>' +
+      '<button class="btn btn-g" onclick="openBillingDetails()">Invoice details</button>' +
+      '<button class="btn btn-g flex items-center gap-1" id="btnInvite" onclick="closeModal();openInvite()"><span class="material-icons text-base">card_giftcard</span> Invite a business — get 30 days free</button></div>' +
     '<p class="text-xs text-gray-400 font-semibold mt-4">' + gstSentence() + ' ' +
     'An invoice is emailed the moment a payment goes through. ' +
       'Need a few more seats than a band allows? Extra seats are ' + inr(EXTRA_SEAT_PRICE) +

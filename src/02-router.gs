@@ -92,7 +92,7 @@ function json_(o) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo','getPublicInfo'];
+var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo','getPublicInfo','getPartnerDashboard'];
 
 /* The only routes a view-only (demo) session may call. An allow-list, not a
    block-list: a write route added later is closed to demo visitors by default. */
@@ -103,7 +103,7 @@ var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getP
 
 /* In Domebox Lite there is nothing to buy and nothing to demo. */
 var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
-                    'saveBilling','getInvoices'];
+                    'saveBilling','getInvoices','getReferrals','getPartnerDashboard'];
 
 function route_(p) {
   var action = String(p.action || '');
@@ -140,6 +140,9 @@ function route_(p) {
         throttle_('cs', (p.form && (p.form.phone || p.form.email)) || '', PUBLIC_LIMITS.contactSales);
         throttle_('csall', 'global', PUBLIC_LIMITS.contactSalesGlobal);
         return contactSales_(p.form);
+      case 'getPartnerDashboard':
+        throttle_('partner', 'global', PUBLIC_LIMITS.partner);
+        return getPartnerDashboard_(p.key);
       case 'openDemo':
         throttle_('demo', 'global', PUBLIC_LIMITS.demo);
         return openDemo_(p.as);
@@ -204,6 +207,7 @@ function route_(p) {
     case 'addUser':             return addUser_(ctx, p.form);
     case 'importUsers':         return importUsers_(ctx, p.rows, p.password);
     case 'emailOwnerReport':    return emailOwnerReport_(ctx);
+    case 'getReferrals':        return getReferrals_(ctx);
     case 'updateUser':          return updateUser_(ctx, p.form);
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);

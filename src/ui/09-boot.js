@@ -11,7 +11,7 @@ $('formSignup').addEventListener('submit', function (e) {
   e.preventDefault();
   busy($('btnSignup'), true, 'Creating…');
   api('register', { form: { companyName:$('suCompany').value, name:$('suName').value,
-    email:$('suEmail').value, phone:$('suPhone').value, password:$('suPass').value } })
+    email:$('suEmail').value, phone:$('suPhone').value, password:$('suPass').value, ref: LITE ? '' : savedRef() } })
     .then(function (r) { saveSession(r); toast('Workspace created. Add your team next.', 'ok'); enterApp(); })
     .catch(function (err) { busy($('btnSignup'), false); toast(err.message, 'err'); });
 });
@@ -187,6 +187,8 @@ setInterval(function () {
   /* ?demo=owner|manager|staff — an ad, a guide page or a sales email can
      land somebody straight inside the live demo. */
   if (params.get('demo')) { openDemo(params.get('demo')); return; }
+  /* ?partner=KEY — a partner's private dashboard; nobody signs in for it. */
+  if (!LITE && params.get('partner')) { openPartnerDashboard(params.get('partner')); return; }
   if (restoreSession()) {
     enterApp();
     return;
