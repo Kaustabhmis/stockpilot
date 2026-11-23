@@ -18,7 +18,7 @@ const tpl = env.newFile('TEMPLATE', 'Template');
 tpl.getSheetByName('Settings').appendRow(['General']);
 
 /* ---- a fake Razorpay: payments by id, and the list endpoint ------------ */
-const RZP = {};
+const RZP = {}, ORDERS = {};
 let calls = 0;
 env.G.UrlFetchApp = { fetch(url, opts) {
   calls++;
@@ -26,6 +26,8 @@ env.G.UrlFetchApp = { fetch(url, opts) {
   const good = auth === 'Basic ' + Buffer.from('rzp_test_KEY:sekret').toString('base64');
   const res = (code, body) => ({ getResponseCode: () => code, getContentText: () => JSON.stringify(body) });
   if (!good) return res(401, { error: 'bad key' });
+  let o = url.match(/\/v1\/orders\/([^?]+)$/);
+  if (o) return ORDERS[decodeURIComponent(o[1])] ? res(200, ORDERS[decodeURIComponent(o[1])]) : res(404, { error: 'not found' });
   let m = url.match(/\/v1\/payments\/([^?]+)$/);
   if (m) return RZP[decodeURIComponent(m[1])] ? res(200, RZP[decodeURIComponent(m[1])]) : res(404, { error: 'not found' });
   if (/\/v1\/payments\?/.test(url)) {
@@ -48,8 +50,15 @@ const receipts = (email) => env.mails.filter((m) => m.to === email && /payment r
 const reg = call({ action: 'register', form: { companyName: 'Acme Forgings', name: 'Rohan', email: 'rohan@acme.in', password: 'strongpass123' } });
 const SHEET = row('rohan@acme.in')[5];
 const trialEnd = row('rohan@acme.in')[4];
-const pay = (id, extra) => (RZP[id] = Object.assign({ id, status: 'captured', amount: 5999000, currency: 'INR',
-  notes: { sheetId: SHEET, plan: 'Growth Yearly', company: 'Acme Forgings' } }, extra || {}));
+/* Every payment is made against an order, and only the server (with the
+   secret key) makes orders, so the order is created alongside it here with
+   the same amount and notes unless a test says otherwise. */
+const pay = (id, extra, order) => {
+  const p = Object.assign({ id, order_id: 'order_' + id.replace(/^pay_/, ''), status: 'captured', amount: 5999000, currency: 'INR',
+    notes: { sheetId: SHEET, plan: 'Growth Yearly', company: 'Acme Forgings' } }, extra || {});
+  if (order !== null) ORDERS[p.order_id] = Object.assign({ id: p.order_id, amount: p.amount, currency: 'INR', notes: p.notes }, order || {});
+  return (RZP[id] = p);
+};
 
 console.log('\n=== the customer pays and closes the tab ===');
 pay('pay_A1');
@@ -95,6 +104,32 @@ log = P.reconcilePayments();
 ok('payments for another site, or a company not in this registry, are left alone', JSON.stringify(row('rohan@acme.in')) === before && /granted 0/.test(log), log);
 ok('a hand-written webhook body is never trusted for the plan or amount',
    !env.mails.some((m) => /Scale/.test(m.html || '') && /receipt/.test(m.subject)));
+
+console.log('\n=== what was bought comes from the order the server made, not the payment ===');
+/* Razorpay Checkout lets the buyer's browser add notes to a payment. So a
+   buyer can start a Team checkout and write "Scale" in the payment's notes. */
+const reg2 = call({ action: 'register', form: { companyName: 'Sly Tools', name: 'Sam', email: 'sam@sly.in', password: 'strongpass123' } });
+const SLY = row('sam@sly.in')[5];
+const slyBefore = JSON.stringify(row('sam@sly.in'));
+pay('pay_TAMPER', { amount: 99900, notes: { sheetId: SLY, plan: 'Scale Yearly', company: 'Sly Tools' } },
+    { amount: 99900, notes: { sheetId: SLY, plan: 'Team', company: 'Sly Tools' } });
+const sigT = crypto.createHmac('sha256', 'sekret').update('order_TAMPER|pay_TAMPER').digest('hex');
+const tamper = call({ action: 'paymentSuccess', token: reg2.token, razorpay_order_id: 'order_TAMPER', razorpay_payment_id: 'pay_TAMPER', razorpay_signature: sigT });
+ok('a Team order paid with notes saying "Scale" buys Team, not Scale', tamper.status === 'success' && row('sam@sly.in')[3] === 'Team', JSON.stringify(tamper) + ' ' + row('sam@sly.in')[3]);
+P.reconcilePayments();
+ok('and the 15-minute check reads the order too', row('sam@sly.in')[3] === 'Team', row('sam@sly.in')[3]);
+const slyAfter = JSON.stringify(row('sam@sly.in'));
+pay('pay_SHORT', { amount: 100, notes: { sheetId: SLY, plan: 'Scale', company: 'Sly Tools' } },
+    { amount: 1299900, notes: { sheetId: SLY, plan: 'Scale', company: 'Sly Tools' } });
+const sigS = crypto.createHmac('sha256', 'sekret').update('order_SHORT|pay_SHORT').digest('hex');
+const short = call({ action: 'paymentSuccess', token: reg2.token, razorpay_order_id: 'order_SHORT', razorpay_payment_id: 'pay_SHORT', razorpay_signature: sigS });
+P.reconcilePayments(); hook('payment.captured', { id: 'pay_SHORT' });
+ok('a payment for less than its order grants nothing, by the page, the check or a webhook', short.status === 'error' && JSON.stringify(row('sam@sly.in')) === slyAfter, JSON.stringify(short));
+pay('pay_NOORDER', { amount: 1299900, notes: { sheetId: SLY, plan: 'Scale', company: 'Sly Tools' } }, null);
+P.reconcilePayments(); hook('payment.captured', { id: 'pay_NOORDER' });
+ok('a payment with no order this server made grants nothing', JSON.stringify(row('sam@sly.in')) === slyAfter);
+ok('and each one is in the payment log', env.FILES.MASTER.getSheetByName('PaymentLog')
+   .getDataRange().getValues().filter((r) => r[1] === 'ORDER_MISMATCH').length >= 2);
 
 console.log('\n=== switched on with the other schedules, and checked by setup ===');
 P.switchOnSchedules();

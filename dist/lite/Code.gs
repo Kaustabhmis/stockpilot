@@ -3519,6 +3519,14 @@ function handleVerifiedPayment_(ctx, p) {
     logPayment_('NOT_CAPTURED', ctx.sheetId, p.razorpay_payment_id + ' = ' + (paid && paid.status));
     throw new Error('That payment has not completed yet.');
   }
+  /* What was bought is read from the ORDER, never from the payment. */
+  var order = trustedOrderFor_(paid);
+  if (!order || String(order.id) !== String(p.razorpay_order_id)) {
+    logPayment_('ORDER_MISMATCH', ctx.sheetId, p.razorpay_payment_id + ' does not match an order this server made for that amount — nothing granted');
+    throw new Error('That payment could not be verified. If money has left your account, ' +
+      'email ' + c.mailFrom + ' and we will sort it out.');
+  }
+  paid.notes = order.notes;
   /* The order was created for one company; it buys that company's plan, not
      the plan of whoever submits it. */
   if (paid.notes && paid.notes.sheetId && String(paid.notes.sheetId) !== String(ctx.sheetId)) {
@@ -3527,8 +3535,8 @@ function handleVerifiedPayment_(ctx, p) {
       'email ' + c.mailFrom + ' and we will sort it out.');
   }
 
-  var planName = (paid.notes && paid.notes.plan) || planForPaise_(paid.amount);
-  if (!planName) {
+  var planName = paid.notes.plan;
+  if (!planName || !PLANS[normalizePlan(planName)]) {
     logPayment_('UNKNOWN_AMOUNT', ctx.sheetId, paid.amount + ' paise');
     throw new Error('We could not match that amount to a plan. Please contact support.');
   }
@@ -3537,17 +3545,6 @@ function handleVerifiedPayment_(ctx, p) {
   logPayment_('GRANTED', ctx.sheetId, planName + ' until ' + until + ' via ' + paid.id);
   return { status: 'success', plan: planName, validUntil: until,
     message: 'Upgraded to ' + (PLANS[planName] ? PLANS[planName].name : planName) + '.' };
-}
-
-/* Only ever a fallback — notes.plan is what the order was placed with. Legacy
-   plans are skipped: Starter and the old Standard are both 2,499, and a new
-   payment must never land on a plan that is no longer sold. */
-function planForPaise_(paise) {
-  for (var k in PLANS) {
-    if (PLANS[k].legacy || !PLANS[k].offered) continue;
-    if (PLANS[k].price && PLANS[k].price * 100 === Number(paise)) return k;
-  }
-  return null;
 }
 
 /** Extends from the current expiry when it is still ahead, so renewing early
@@ -4044,6 +4041,34 @@ function checkPayments() {
   return say_(out);
 }
 
+/**
+ * The order a payment was made against, if this server made it and the
+ * payment is for its full amount, in rupees. Otherwise null.
+ *
+ * What a payment buys is read from here and never from the payment's own
+ * notes: Razorpay Checkout lets the buyer's browser add notes to a payment,
+ * so those say whatever the buyer typed — a Team order paid with notes
+ * saying "Scale" would otherwise have bought Scale for the price of Team.
+ * An order can only be created with the secret key, so only this server
+ * writes an order's notes, and it writes them from the plan table.
+ */
+function trustedOrderFor_(paid) {
+  if (!paid || !paid.order_id) return null;
+  var c = CFG();
+  if (!c.razorKey || !c.razorSecret) return null;
+  try {
+    var r = UrlFetchApp.fetch('https://api.razorpay.com/v1/orders/' + encodeURIComponent(paid.order_id), {
+      headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.razorKey + ':' + c.razorSecret) },
+      muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) return null;
+    var o = JSON.parse(r.getContentText());
+    if (!o || !o.notes || !o.notes.sheetId || !o.notes.plan) return null;
+    if (Number(o.amount) !== Number(paid.amount)) return null;
+    if (String(o.currency || 'INR') !== 'INR' || String(paid.currency || 'INR') !== 'INR') return null;
+    return o;
+  } catch (e) { logError_('razorpay:order', e.message); return null; }
+}
+
 function fetchRazorpayPayment_(paymentId) {
   var c = CFG();
   if (!c.razorKey || !c.razorSecret) return null;
@@ -4062,10 +4087,16 @@ function fetchRazorpayPayment_(paymentId) {
  */
 function grantFromPayment_(paid, via) {
   if (!paid || paid.status !== 'captured') return '';
-  var notes = paid.notes || {};
-  if (!notes.sheetId) return '';                       // not a Domebox order (another site on this account)
+  if (!paid.notes || !paid.notes.sheetId) return '';   // not a Domebox order (another site on this account)
+  var order = trustedOrderFor_(paid);
+  if (!order) {
+    logPayment_('ORDER_MISMATCH', paid.notes.sheetId, paid.id + ' does not match an order this server made for that amount — nothing granted');
+    return '';
+  }
+  paid.notes = order.notes;
+  var notes = paid.notes;
   if (!registryRow_(notes.sheetId)) return '';         // a company that is not in this registry
-  var plan = notes.plan || planForPaise_(paid.amount);
+  var plan = notes.plan;
   if (!plan || !PLANS[normalizePlan(plan)]) {
     logPayment_('UNKNOWN_AMOUNT', notes.sheetId, paid.id + ' ' + paid.amount + ' paise');
     return '';
