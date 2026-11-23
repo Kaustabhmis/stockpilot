@@ -133,6 +133,16 @@ Pending  →  In Progress  →  For Review  →  Verified
 **You cannot verify your own work.** If you raised it and you are doing it, an
 Admin signs it off.
 
+### Photo proof
+
+When you press **Submit for review** you can add a photo — the finished job, a
+signed challan, a gauge reading. **Add a photo** opens the camera on a phone.
+It is optional: hand in without one exactly as before.
+
+The photo is made small before it is sent, so it is quick on mobile data. The
+person checking the work sees **View photo** in the task's history. Only people
+who can see that task can open it.
+
 ### Opening a task
 
 Click any card. The drawer shows who it is on, the deadline, the checklist, the
@@ -550,6 +560,21 @@ How many open tasks a person is expected to carry. **Default 5.** It is also
 what their workload credit is measured against, so set it honestly — a limit of
 20 on someone who should carry 5 will drag their score down.
 
+### Importing a whole team from Excel
+
+**Team → Import from Excel.** Choose an Excel (.xlsx) or CSV file with one
+person per row and the column names in the first row: **Name** and **Email**
+are needed; Phone, Role (Admin, HOD or Doer), Department, Job profile and
+**Reports to** (their manager's name or email) are optional. **Download
+template** gives you the layout.
+
+Nothing is added until you have seen the preview: every row is listed, and
+anything wrong — a missing email, the same person twice, someone already in the
+team — is marked and left out. Choose a starting password for everyone and press
+**Add**. Each person gets a welcome email; they can use **Forgot password** to
+set their own. The people limit of your plan applies, as it does to adding one
+person at a time.
+
 ### Leave
 
 **Team → Leave.** Record approved leave, and overdue days stop accruing for
@@ -627,6 +652,14 @@ performance score — **a new joiner is not a poor performer**.
 **Executive insight** (Pro and up) answers questions about last month's
 delivery. Only summary figures are sent to the model — never staff records.
 
+### The monthly email
+
+On the **1st of every month**, around 9 am, every Admin gets last month in one
+email: the on-time rate (and whether it went up or down), jobs closed, delivered
+late, sent back, the three people who carried the month, anyone in the lowest
+band, and what is overdue or stuck right now. The numbers are the same as on
+this screen. **Reports → Email me last month** sends it to you at any time.
+
 ---
 
 ## Billing
@@ -677,6 +710,14 @@ through. **Plans → Invoices** lists them all.
 
 A paid plan keeps working for a week past expiry, then drops to read-only.
 Nobody loses access to their own history.
+
+### Invite a business — 30 days free
+
+**Plans → Invite a business** shows your own link, with buttons to share it on
+WhatsApp, email or LinkedIn. When a company that signed up through your link
+becomes a paying customer, **30 days are added to your plan**, free. On the
+Free plan the days are saved and added the next time you choose a plan. The
+same window lists everyone who has signed up with your link.
 
 ---
 
