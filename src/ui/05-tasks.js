@@ -667,11 +667,9 @@ function renderBoard(rows) {
     /* The column carries the colour of the state it holds, so the eye learns
        the flow left to right. The heading still says the word — the colour is
        never the only thing saying which column this is. */
-    return '<div><div class="colTop flex items-center justify-between">' +
-      '<span class="colhead"><span class="coldot" style="background:' + tone + '"></span>' +
-      '<span class="text-[10px] font-black uppercase tracking-widest text-gray-600">' +
-        esc(c.title) + '</span></span>' +
-      '<span class="text-[10px] font-black text-gray-400">' + all.length + '</span></div>' +
+    return '<div class="boardCol" style="--col-tone:' + tone + '"><div class="colTop">' +
+      '<span class="colhead"><span class="coldot"></span><span class="colTitle">' + esc(c.title) + '</span></span>' +
+      '<span class="colCount" title="' + all.length + ' task' + (all.length === 1 ? '' : 's') + '">' + all.length + '</span></div>' +
       '<div class="col" data-col="' + c.key + '" style="--col-tone:' + tone + '">' +
       (items.map(taskCard).join('') ||
         '<div class="text-[11px] text-gray-400 font-semibold px-1 py-3">Nothing here</div>') +

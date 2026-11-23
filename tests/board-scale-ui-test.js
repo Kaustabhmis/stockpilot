@@ -54,7 +54,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   const shown = await todo.locator('.card').count();
   ok('it shows twenty cards, not all of them', shown === 20, shown);
   ok('the header still counts every card in it',
-     Number((await p.locator('.col[data-col="todo"]').locator('xpath=..').locator('span.text-gray-400').first().textContent()).trim()) === made);
+     Number((await p.locator('.col[data-col="todo"]').locator('xpath=..').locator('.colCount').first().textContent()).trim()) === made);
   ok('with a button for the rest', /Show all \d+/.test(await todo.locator('.colMore').textContent()));
   const order = await p.evaluate(() => {
     const ids = [...document.querySelectorAll('.col[data-col="todo"] .card')].map((c) => c.dataset.id);

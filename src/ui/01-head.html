@@ -193,11 +193,24 @@
      the flow instead of re-reading five identical beige trays. The stripe is
      at the top of the tray, never the only signal: the heading still says the
      word. */
-  .col{position:relative;padding-top:1rem}
-  .col::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;
-               border-radius:1rem 1rem 0 0;background:var(--col-tone,#c3cddc)}
-  .colhead{display:inline-flex;align-items:center;gap:6px}
-  .coldot{width:9px;height:9px;border-radius:999px;background:var(--col-tone,#c3cddc);flex-shrink:0}
+  /* The column's heading is a bar joined to its tray: the state's colour as a
+     stripe along the top, the name in plain dark type, the count in a badge of
+     the same colour. It stays pinned while the cards scroll under it. */
+  .boardCol{display:flex;flex-direction:column;min-width:0}
+  .col{position:relative;border-top:0;border-radius:0 0 1.15rem 1.15rem}
+  .colTop{display:flex;align-items:center;justify-content:space-between;gap:8px;
+          background:#fff;border:1px solid var(--line);border-top:4px solid var(--col-tone,#c3cddc);
+          border-radius:14px 14px 0 0;padding:10px 12px 10px 14px}
+  .colhead{display:inline-flex;align-items:center;gap:8px;min-width:0}
+  .coldot{width:10px;height:10px;border-radius:999px;background:var(--col-tone,#c3cddc);flex-shrink:0}
+  .colTitle{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.005em;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .colCount{min-width:26px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:800;
+            display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+            background:#eef1f6;color:var(--ink2)}
+  @supports (background:color-mix(in srgb,red 10%,white)){
+    .colCount{background:color-mix(in srgb,var(--col-tone,#c3cddc) 14%,white);color:color-mix(in srgb,var(--col-tone,#475467) 85%,black)}
+  }
 
   /* ---------- stat tiles --------------------------------------------------- */
   .tile{background:#fff;border:1.5px solid var(--line);border-radius:1.15rem;padding:1rem;
@@ -467,6 +480,7 @@
   html.lite .btn-p:hover{background:#eef3fc;color:var(--brand-dark);border-color:var(--brand-dark);box-shadow:none}
   html.lite .btn-g{border-color:#c9d6f2}
   html.lite .col{background:#fff;border:1.5px solid #c9d6f2}
+  html.lite .col{border-top:0}
   html.lite .tile{border:1.5px solid #c9d6f2}
   html.lite .tile:hover{border-color:var(--brand)}
   html.lite .card{box-shadow:none;border-top:1.5px solid #dbe4f3;border-right:1.5px solid #dbe4f3;border-bottom:1.5px solid #dbe4f3}  /* left edge keeps the priority colour */
@@ -547,8 +561,10 @@
      and the column headings stay pinned while the cards move under them. */
   #board.boardScroll,#list.boardScroll{overflow:auto;max-height:var(--board-h,72vh);overscroll-behavior:contain;
     -webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
-  #board .colTop{position:sticky;top:0;z-index:6;background:var(--paper);padding:4px 4px 8px;margin:0 -4px}
-  html.lite #board .colTop{background:#fff}
+  #board .colTop{position:sticky;top:0;z-index:6;transition:box-shadow .2s ease}
+  /* Once cards are scrolling under the headings, a soft shadow says so. */
+  #tab-tasks.focus #board .colTop{box-shadow:0 8px 14px -10px rgba(15,27,45,.35)}
+  html.lite #board .colTop{border-color:#c9d6f2;border-top-color:var(--col-tone,#c3cddc)}
   #list.boardScroll thead th{position:sticky;top:0;z-index:2;background:#fff}
   #statTiles{transition:max-height .25s ease,opacity .2s ease,margin .25s ease;max-height:640px;overflow:hidden}
   #tab-tasks.focus #statTiles{max-height:0;opacity:0;margin-bottom:0}
