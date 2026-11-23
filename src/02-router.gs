@@ -99,7 +99,7 @@ var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','conta
 var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getProjects','getOrgChart',
   'getCookies','getAnalytics','getAccountability','getPerformanceReport','getAppraisalForm',
   'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
-  'getMeetings','getMeeting','getLeave','getAvatarPhotos'];
+  'getMeetings','getMeeting','getLeave','getAvatarPhotos','getProofPhoto'];
 
 /* In Domebox Lite there is nothing to buy and nothing to demo. */
 var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
@@ -186,7 +186,8 @@ function route_(p) {
     case 'createTask':          return createTask_(ctx, p.form);
     case 'createProject':       return createProject_(ctx, p.form);
     case 'awardCookie':         return awardCookie_(ctx, p.data);
-    case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
+    case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate, p.photo);
+    case 'getProofPhoto':       return getProofPhoto_(ctx, p.taskId, p.fileId);
     case 'editTask':            return editTask_(ctx, p.form);
     case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);
     case 'stopRecurringTask':   return stopRecurring_(ctx, p.taskId);

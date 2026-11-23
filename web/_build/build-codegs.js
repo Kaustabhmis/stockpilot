@@ -21,6 +21,11 @@ const parts = [
   ['src/09-kra.gs',      'KRA / KPI'],
   ['src/10-projects.gs', 'Projects — multi-stage work'],
   ['src/11-recognition.gs', 'Cookie points and the org chart'],
+  /* Every later file in src/, in order, with no banner of its own: each opens
+     with its own heading. Listed by reading the folder, so a new file cannot
+     be left out of the build by forgetting to add it here. */
+  ...fs.readdirSync(path.join(root, 'src')).filter((f) => /^\d\d-.*\.gs$/.test(f) && Number(f.slice(0, 2)) >= 12)
+    .sort().map((f) => ['src/' + f, null]),
   ['domebox/auth.gs',    'AUTHENTICATION'],
   ['domebox/plans.gs',   'PLAN LIMITS'],
   ['domebox/domain.gs',  'RULES ENGINE'],

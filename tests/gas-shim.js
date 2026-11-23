@@ -106,8 +106,17 @@ function build() {
       return FILES[nid];
     },
   };
+  /* Plain files (photos) kept apart from spreadsheets: id -> { name, bytes, folder, trashed }. */
+  const BLOBS = {};
   G.DriveApp = {
+    _blobs: BLOBS,
     getFileById(id) {
+      if (BLOBS[id]) {
+        const b = BLOBS[id];
+        if (b.trashed) throw new Error('No item with the given ID could be found');
+        return { getId: () => id, getName: () => b.name, getBlob: () => ({ getBytes: () => b.bytes.slice(), getContentType: () => b.mime }),
+                 setTrashed(v) { b.trashed = !!v; return this; }, isTrashed: () => b.trashed };
+      }
       if (!FILES[id]) throw new Error('No item with the given ID could be found');
       return {
         getId: () => id,
@@ -144,12 +153,17 @@ function build() {
         setTrashed(v) { if (v) { const k = folder._ids.indexOf(nid); if (k > -1) folder._ids.splice(k, 1); } },
         makeCopy: (n, f) => drive.getFileById(nid).makeCopy(n, f), getDateCreated: () => new Date() });
       const folder = { _ids: [], getId: () => fid, getName: () => name, setName(n) { name = n; return folder; },
+        _trashed: false, setTrashed(v) { folder._trashed = !!v;
+          Object.values(BLOBS).forEach((b) => { if (b.folder === fid) b.trashed = !!v; }); return folder; },
+        createFile(blob) { const bid = 'BLOB_' + (++seq);
+          BLOBS[bid] = { name: blob.__name || 'file', mime: blob.__mime || '', bytes: blob.getBytes(), folder: fid, trashed: false };
+          return drive.getFileById(bid); },
         getFiles: () => it(folder._ids.map(fileObj)),
         getFilesByName: (n) => it(folder._ids.filter((x) => FILES[x].getName() === n).map(fileObj)) };
       drive._folders[fid] = folder;
       return folder;
     },
-    getFolderById(fid) { if (!G.DriveApp._folders[fid]) throw new Error('No folder ' + fid); return G.DriveApp._folders[fid]; },
+    getFolderById(fid) { const f = G.DriveApp._folders[fid]; if (!f || f._trashed) throw new Error('No folder ' + fid); return f; },
     getFoldersByName(name) {
       const list = Object.values(G.DriveApp._folders).filter((f) => f.getName() === name); let i = 0;
       return { hasNext: () => i < list.length, next: () => list[i++] };
@@ -207,9 +221,9 @@ function build() {
     sleep: ms => { const t = Date.now() + Number(ms || 0); while (Date.now() < t) {} },
     base64EncodeWebSafe: s => Buffer.from(String(s), 'utf8').toString('base64url'),
     base64DecodeWebSafe: s => [...Buffer.from(String(s), 'base64url')],
-    newBlob: b => {
+    newBlob: (b, mime, name) => {
       const buf = Array.isArray(b) ? Buffer.from(b.map(x => x < 0 ? x + 256 : x)) : Buffer.from(String(b), 'utf8');
-      return { getDataAsString: () => buf.toString('utf8'), getBytes: () => [...buf].map(x => x > 127 ? x - 256 : x), __buf: buf };
+      return { getDataAsString: () => buf.toString('utf8'), getBytes: () => [...buf].map(x => x > 127 ? x - 256 : x), __buf: buf, __mime: mime, __name: name };
     },
     gzip: (blob) => { const z = require('zlib').gzipSync(blob.__buf);
       return { getBytes: () => [...z].map(x => x > 127 ? x - 256 : x), __buf: z }; },

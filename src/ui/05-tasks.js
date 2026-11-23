@@ -716,12 +716,12 @@ function taskById(id) {
   return null;
 }
 
-function doTransition(id, status, note, newDue) {
-  var call = function (q) { return api('updateTask', { taskId: id, status: status, note: note, newDueDate: newDue }, { quiet: !!q }); };
+function doTransition(id, status, note, newDue, photo) {
+  var call = function (q) { return api('updateTask', { taskId: id, status: status, note: note, newDueDate: newDue, photo: photo || undefined }, { quiet: !!q }); };
   /* Starting work and handing it in show at once. Rework, verifying and
      anything with a note wait for the server, as before. */
   var t = taskById(id);
-  if (t && !note && !newDue && ((status === 'In Progress' && t.status === 'Pending') || (status === 'For Review' && t.status === 'In Progress'))) {
+  if (t && !note && !newDue && !photo && ((status === 'In Progress' && t.status === 'Pending') || (status === 'For Review' && t.status === 'In Progress'))) {
     var p = instant(id, function (x) {
       x.status = status; x.stage = status === 'In Progress' ? (x.stage || stages().work[0] || '') : '';
     }, function () { return call(true); });
@@ -904,9 +904,14 @@ function openTask(id) {
           (h.note ? '<div class="text-gray-600 mt-0.5 bg-yellow-50 border border-yellow-100 rounded p-2">' +
             esc(h.note) + '</div>' : '') +
           (h.setDate ? '<div class="text-[10px] text-red-600 font-black mt-1">New deadline: ' +
-            esc(h.setDate) + '</div>' : '') + '</div></div>';
+            esc(h.setDate) + '</div>' : '') +
+          (h.proof ? '<button type="button" class="proofBtn mt-1 inline-flex items-center gap-1 text-[11px] font-black text-blue-700" data-proof="' +
+            esc(h.proof) + '"><span class="material-icons text-sm">photo</span> View photo</button>' : '') + '</div></div>';
       }).join('') + '</div></div>');
 
+  $('drawer').querySelectorAll('.proofBtn').forEach(function (b) {
+    b.addEventListener('click', function () { openProofPhoto(t.id, b.dataset.proof); });
+  });
   $('drawer').querySelectorAll('.act').forEach(function (b) {
     b.addEventListener('click', function () {
       if (b.disabled) return;
@@ -1013,6 +1018,8 @@ function openStatus(id, status) {
      filter, the submit handler landed on a <select>, and pressing Submit here
      did a native form submit — reloading the page and saving nothing. Every
      Submit for review, Verify and Send back from this dialog was lost. */
+  var handIn = status === 'For Review' && !rework;
+  var photo = '';
   openModal('<form id="fStatusChange" class="p-6 lg:p-7">' +
     '<h2 class="text-xl font-black mb-1">' +
       (rework ? 'Send back for rework' : status === 'Verified' ? 'Verify and close' : 'Submit for review') + '</h2>' +
@@ -1023,17 +1030,89 @@ function openStatus(id, status) {
       '<input id="stDate" type="date" class="in" required value="' + addDaysYmd(3) + '"></div>' : '') +
     '<label class="lb" for="stNote">Note' + (rework ? '' : ' (optional)') + '</label>' +
     '<textarea id="stNote" rows="3" class="in mb-5"' + (rework ? ' required' : '') + '></textarea>' +
+    (handIn ? '<div class="mb-5" id="stPhotoBox"><div class="lb">Photo proof (optional)</div>' +
+      '<div class="flex items-center gap-3"><button type="button" id="stPhotoBtn" class="btn btn-g text-xs py-2 px-3">' +
+        '<span class="material-icons text-sm align-middle">photo_camera</span> Add a photo</button>' +
+      '<img id="stPhotoPrev" alt="Your photo" class="hidden w-16 h-16 object-cover rounded-lg border">' +
+      '<button type="button" id="stPhotoDel" class="hidden text-xs font-black text-red-700">Remove</button></div>' +
+      '<p class="text-[11px] text-gray-400 font-semibold mt-1">The finished job, a signed challan, a reading — whatever proves it is done.</p>' +
+      '<input type="file" id="stPhoto" accept="image/jpeg,image/png,image/webp" capture="environment" class="hidden"></div>' : '') +
     '<div class="flex gap-3"><button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
     '<button type="submit" class="btn btn-p flex-1">' + (rework ? 'Send back' : 'Confirm') + '</button></div></form>');
 
+  if (handIn) {
+    $('stPhotoBtn').addEventListener('click', function () { $('stPhoto').click(); });
+    $('stPhoto').addEventListener('change', function () {
+      var f = this.files && this.files[0]; this.value = '';
+      if (!f) return;
+      $('stPhotoBtn').disabled = true;
+      shrinkProofPhoto(f).then(function (uri) {
+        photo = uri; $('stPhotoPrev').src = uri;
+        $('stPhotoPrev').classList.remove('hidden'); $('stPhotoDel').classList.remove('hidden');
+        $('stPhotoBtn').lastChild.textContent = ' Change photo';
+      }).catch(function (err) { toast(err.message, 'err'); })
+        .then(function () { $('stPhotoBtn').disabled = false; });
+    });
+    $('stPhotoDel').addEventListener('click', function () {
+      photo = ''; $('stPhotoPrev').classList.add('hidden'); this.classList.add('hidden');
+      $('stPhotoBtn').lastChild.textContent = ' Add a photo';
+    });
+  }
   $('fStatusChange').addEventListener('submit', function (e) {
     e.preventDefault();
     var note = $('stNote').value.trim();
     var due = rework ? $('stDate').value : null;
     if (rework && !due) { toast('Set a new deadline.', 'warn'); return; }
     busy(e.target.querySelector('button[type=submit]'), true);
-    doTransition(id, status, note, due).then(closeModal);
+    doTransition(id, status, note, due, photo).then(closeModal);
   });
+}
+
+/* A hand-in photo, made small in the browser before it is sent: longest side
+   1280 px, JPEG, stepped down until it is under about 450 KB. A 5 MB phone
+   picture becomes 100–250 KB, enough to read a gauge or a challan. */
+function shrinkProofPhoto(file) {
+  return new Promise(function (resolve, reject) {
+    if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type || '')) return reject(new Error('Choose a JPEG, PNG or WebP picture.'));
+    if (file.size > 25 * 1024 * 1024) return reject(new Error('That picture is over 25 MB. Choose a smaller one.'));
+    var reader = new FileReader();
+    reader.onerror = function () { reject(new Error('That picture could not be read.')); };
+    reader.onload = function () {
+      var img = new Image();
+      img.onerror = function () { reject(new Error('That picture could not be read. Try a JPEG or PNG.')); };
+      img.onload = function () {
+        var make = function (side, q) {
+          var k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+          var c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+          var g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+          g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height);
+          return c.toDataURL('image/jpeg', q);
+        };
+        var side = 1280, q = 0.78, out = make(side, q);
+        while (out.length > 600000 && q > 0.45) { q -= 0.1; out = make(side, q); }
+        while (out.length > 600000 && side > 640) { side -= 320; out = make(side, 0.6); }
+        resolve(out);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* Hand-in photos are fetched only when someone asks to see one, then kept for the visit. */
+var PROOF_CACHE = {};
+function openProofPhoto(taskId, fileId) {
+  var show = function (uri) {
+    openModal('<div class="p-4 lg:p-5"><div class="flex items-center justify-between mb-3">' +
+      '<h2 class="text-lg font-black">Photo proof</h2>' +
+      '<button type="button" class="btn btn-g text-xs py-2 px-3" onclick="closeModal()">Close</button></div>' +
+      '<img src="' + uri + '" alt="Photo proof" class="w-full max-h-[70vh] object-contain rounded-xl bg-gray-50"></div>');
+  };
+  if (PROOF_CACHE[fileId]) return show(PROOF_CACHE[fileId]);
+  api('getProofPhoto', { taskId: taskId, fileId: fileId })
+    .then(function (r) { PROOF_CACHE[fileId] = r.photo; show(r.photo); })
+    .catch(function (e) { toast(e.message, 'err'); });
 }
 
 function openDelegate(t) {

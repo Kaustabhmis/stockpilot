@@ -148,7 +148,7 @@ function parseChecklist_(raw) {
  * through here so the rework counter, the recurrence spawn and the audit trail
  * cannot be skipped by taking a different path through the UI.
  */
-function updateTask_(ctx, taskId, status, note, newDueDate) {
+function updateTask_(ctx, taskId, status, note, newDueDate, photo) {
   blockIfStopped_(ctx);
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
@@ -208,6 +208,10 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 
   if (isRework && newDueDate) writeTaskField_(hit, 'Due Date', newDueDate);
 
+  /* An optional photo with the hand-in, saved before anything moves so a
+     photo that cannot be read leaves the task where it was. */
+  var proof = photo && status === 'For Review' ? saveProofPhoto_(ctx, t.id, photo) : '';
+
   writeTaskField_(hit, 'Status', status);
   /* Starting, or being sent back, lands at the first working stage. */
   var stageNow = status === 'In Progress' ? (work[0] || '') : '';
@@ -217,7 +221,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   var ownStages = !(work.length === 1 && work[0].toLowerCase() === 'in progress');
   appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : '') ||
       (stageNow && status === 'In Progress' && ownStages ? 'At ' + stageNow : ''),
-    isRework && newDueDate ? { setDate: newDueDate } : null);
+    isRework && newDueDate ? { setDate: newDueDate } : proof ? { proof: proof } : null);
 
   var spawned = null;
   if (status === 'Verified' && t.frequency && t.frequency !== 'One Time') {

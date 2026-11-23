@@ -36,6 +36,7 @@ function eraseCompanyData(ownerEmail, confirm) {
   var sheetId = hit.sheetId, done = [];
   try { DriveApp.getFileById(sheetId).setTrashed(true); done.push('workspace sheet moved to the Drive bin'); }
   catch (e) { done.push('workspace sheet could not be opened (' + e.message + ')'); }
+  try { if (trashProofFolder_(sheetId)) done.push('hand-in photos moved to the Drive bin'); } catch (e) {}
 
   /* Backups are named "... [first 12 of the sheet id]" by backup.gs. */
   var key = '[' + String(sheetId).slice(0, 12) + ']', binned = 0;

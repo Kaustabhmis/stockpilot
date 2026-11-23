@@ -507,7 +507,7 @@ var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','conta
 var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getProjects','getOrgChart',
   'getCookies','getAnalytics','getAccountability','getPerformanceReport','getAppraisalForm',
   'getKraOverview','getKraFor','getCategories','getPriorityList','getLeaderboard','getDirection',
-  'getMeetings','getMeeting','getLeave','getAvatarPhotos'];
+  'getMeetings','getMeeting','getLeave','getAvatarPhotos','getProofPhoto'];
 
 /* In Domebox Lite there is nothing to buy and nothing to demo. */
 var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
@@ -594,7 +594,8 @@ function route_(p) {
     case 'createTask':          return createTask_(ctx, p.form);
     case 'createProject':       return createProject_(ctx, p.form);
     case 'awardCookie':         return awardCookie_(ctx, p.data);
-    case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate);
+    case 'updateTask':          return updateTask_(ctx, p.taskId, p.status, p.note, p.newDueDate, p.photo);
+    case 'getProofPhoto':       return getProofPhoto_(ctx, p.taskId, p.fileId);
     case 'editTask':            return editTask_(ctx, p.form);
     case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);
     case 'stopRecurringTask':   return stopRecurring_(ctx, p.taskId);
@@ -2187,7 +2188,7 @@ function parseChecklist_(raw) {
  * through here so the rework counter, the recurrence spawn and the audit trail
  * cannot be skipped by taking a different path through the UI.
  */
-function updateTask_(ctx, taskId, status, note, newDueDate) {
+function updateTask_(ctx, taskId, status, note, newDueDate, photo) {
   blockIfStopped_(ctx);
   var hit = findTaskRow_(ctx, taskId);
   if (!hit) throw new Error('That task no longer exists.');
@@ -2247,6 +2248,10 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
 
   if (isRework && newDueDate) writeTaskField_(hit, 'Due Date', newDueDate);
 
+  /* An optional photo with the hand-in, saved before anything moves so a
+     photo that cannot be read leaves the task where it was. */
+  var proof = photo && status === 'For Review' ? saveProofPhoto_(ctx, t.id, photo) : '';
+
   writeTaskField_(hit, 'Status', status);
   /* Starting, or being sent back, lands at the first working stage. */
   var stageNow = status === 'In Progress' ? (work[0] || '') : '';
@@ -2256,7 +2261,7 @@ function updateTask_(ctx, taskId, status, note, newDueDate) {
   var ownStages = !(work.length === 1 && work[0].toLowerCase() === 'in progress');
   appendHistory_(hit, status, ctx.actor.name, note || (isRework ? 'Returned for rework' : '') ||
       (stageNow && status === 'In Progress' && ownStages ? 'At ' + stageNow : ''),
-    isRework && newDueDate ? { setDate: newDueDate } : null);
+    isRework && newDueDate ? { setDate: newDueDate } : proof ? { proof: proof } : null);
 
   var spawned = null;
   if (status === 'Verified' && t.frequency && t.frequency !== 'One Time') {
@@ -7545,6 +7550,7 @@ function readAllTasks_(ctx) {
   return cached_(ctx, 'allTasks', function () { return readTasks_(ctx).concat(readColdTasks_(ctx)); });
 }
 
+
 // ===========================================================================
 // FRESH START — build the whole backend from nothing, in one run
 // ===========================================================================
@@ -7721,6 +7727,7 @@ function setCustomerPlan(email, planName, untilYmd) {
   return say_(['No company signed up with ' + key + '. Ask them to sign up first, then run this again.']);
 }
 
+
 // ===========================================================================
 // PRIVACY — erasing a company, or one person, when they ask
 // ===========================================================================
@@ -7759,6 +7766,7 @@ function eraseCompanyData(ownerEmail, confirm) {
   var sheetId = hit.sheetId, done = [];
   try { DriveApp.getFileById(sheetId).setTrashed(true); done.push('workspace sheet moved to the Drive bin'); }
   catch (e) { done.push('workspace sheet could not be opened (' + e.message + ')'); }
+  try { if (trashProofFolder_(sheetId)) done.push('hand-in photos moved to the Drive bin'); } catch (e) {}
 
   /* Backups are named "... [first 12 of the sheet id]" by backup.gs. */
   var key = '[' + String(sheetId).slice(0, 12) + ']', binned = 0;
@@ -7861,6 +7869,7 @@ function privacyDropRows_(ss, tab, match, done) {
 }
 
 function privacyLog_(msg) { Logger.log(msg); return msg; }
+
 
 // ===========================================================================
 // WHATSAPP (LITE) — two messages per task, sent through Maytapi
@@ -8093,6 +8102,75 @@ function waLiteSetupLines_(out) {
     out.push('          Each person needs a mobile number in Team.');
   }
 }
+
+
+// ===========================================================================
+// PHOTO PROOF — an optional photo when work is handed in for review
+// ===========================================================================
+//
+// The doer may attach one photo when they submit a task for review: the
+// cleaned machine, the packed despatch, the signed delivery challan. The
+// checker sees it in the task's history before verifying.
+//
+// Where it lives: a Google Drive folder per company, made the first time a
+// photo is saved. A real photo is far too big for a sheet cell, and keeping it
+// in Drive leaves the Tasks tab exactly as it was. The task's history entry
+// carries only the file's id.
+//
+// Who can see it: only someone who can see the task, in that company — the
+// same rule as the board. A file id from another task or another company is
+// refused, so ids cannot be guessed across workspaces.
+//
+// The browser shrinks the photo before it is sent (longest side 1280 px,
+// JPEG), so a 5 MB phone picture arrives as 100–250 KB.
+
+var PROOF_PHOTO_MAX = 700000;   // characters of data: URI, about 500 KB of JPEG
+var PROOF_PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/]+={0,2}$/;
+
+/** The company's photo folder in Drive, made on first use. */
+function proofFolder_(ctx) {
+  var key = 'PROOF_FOLDER_' + ctx.sheetId;
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty(key);
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  var folder = DriveApp.createFolder('Domebox photos — ' + String(ctx.company || 'company') + ' (' + ctx.sheetId + ')');
+  props.setProperty(key, folder.getId());
+  return folder;
+}
+
+/** Checks and stores a hand-in photo; returns the Drive file id. */
+function saveProofPhoto_(ctx, taskId, photo) {
+  var uri = String(photo || '');
+  if (uri.length > PROOF_PHOTO_MAX) throw new Error('That photo is too large. Try again — it is made smaller automatically.');
+  if (!PROOF_PHOTO_RE.test(uri)) throw new Error('That photo could not be read. Try a JPEG or PNG picture.');
+  var bytes = Utilities.base64Decode(uri.slice(uri.indexOf(',') + 1));
+  var name = 'task-' + String(taskId).replace(/[^\w-]/g, '') + '-' + Date.now() + '.jpg';
+  var file = proofFolder_(ctx).createFile(Utilities.newBlob(bytes, 'image/jpeg', name));
+  return file.getId();
+}
+
+/** A hand-in photo, for someone who can see that task. */
+function getProofPhoto_(ctx, taskId, fileId) {
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit || !visibleTasks_(ctx, [hit.task]).length) throw new Error('That photo is not available.');
+  var ok = (hit.task.history || []).some(function (h) { return h && h.proof && String(h.proof) === String(fileId); });
+  if (!ok) throw new Error('That photo is not available.');
+  var blob;
+  try { blob = DriveApp.getFileById(String(fileId)).getBlob(); }
+  catch (e) { throw new Error('That photo has been removed from Drive.'); }
+  return { status: 'success', photo: 'data:image/jpeg;base64,' + Utilities.base64Encode(blob.getBytes()) };
+}
+
+/** On erasing a company: its photos go to the Drive bin with the rest. */
+function trashProofFolder_(sheetId) {
+  var props = PropertiesService.getScriptProperties(), key = 'PROOF_FOLDER_' + sheetId;
+  var id = props.getProperty(key);
+  if (!id) return false;
+  try { DriveApp.getFolderById(id).setTrashed(true); } catch (e) {}
+  props.deleteProperty(key);
+  return true;
+}
+
 
 // =========================================================================
 // AUTHENTICATION
