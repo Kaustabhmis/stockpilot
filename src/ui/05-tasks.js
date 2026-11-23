@@ -52,12 +52,13 @@ function syncFilters() {
     }).join('');
   filtersReady = true;
   $('fAssignee').innerHTML = '<option value="">Everyone</option>' +
-    staff.map(function (u) { return '<option value="' + esc(u.username) + '">' + esc(u.name) + '</option>'; }).join('');
+    staff.map(function (u) { return '<option value="' + esc(u.username) + '"' +
+      (u.username === FILTER.assignee ? ' selected' : '') + '>' + esc(u.name) + '</option>'; }).join('');
   $('fBy').innerHTML = '<option value="">Any assignor</option>' +
     staff.map(function (u) { return '<option value="' + esc(u.username) + '"' +
       (u.username === FILTER.by ? ' selected' : '') + '>By ' + esc(u.name) + '</option>'; }).join('');
   $('fCategory').innerHTML = '<option value="">Any category</option>' +
-    cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+    cats.map(function (c) { return '<option' + (c === FILTER.category ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
   /* The goal filter appears only once there are goals to filter by, so a
      company that never sets any never sees an empty control. */
   if ($('fGoal')) {
@@ -505,6 +506,7 @@ function filtersChanged(typing) {
 
 function renderTasks() {
   var rows = visibleTasks();
+  countFilters();
   var more = $('archiveMore');
   if (more) {
     var a = STATE.arch;
@@ -532,10 +534,20 @@ function renderTasks() {
   $('board').classList.toggle('hidden', mode !== 'board' || !rows.length);
   $('list').classList.toggle('hidden', mode !== 'list' || !rows.length);
   if (!rows.length && !STATE.archive && !(STATE.data.tasks || []).length) renderFirstRun();
-  if (!rows.length) return;
+  if (!rows.length) { syncFocus(); return; }
   if (mode === 'board') renderBoard(rows); else renderList(rows);
-  countFilters();
   fitBoard();
+  syncFocus();
+}
+
+/* The summary folds away only while the visible board or list is scrolled. After
+   switching view, opening the archive, or a filter that leaves little to scroll,
+   it comes back. */
+function syncFocus() {
+  var tab = $('tab-tasks');
+  if (!tab) return;
+  var el = !$('board').classList.contains('hidden') ? $('board') : !$('list').classList.contains('hidden') ? $('list') : null;
+  tab.classList.toggle('focus', !!el && el.scrollTop > 6);
 }
 
 /* ---------- the board fills the screen under the filters ------------------
@@ -775,11 +787,13 @@ function doTransition(id, status, note, newDue, photo) {
     var p = instant(id, function (x) {
       x.status = status; x.stage = status === 'In Progress' ? (x.stage || stages().work[0] || '') : '';
     }, function () { return call(true); });
-    if (p) { closeDrawer(); return p; }
+    /* Shown at once and saving behind: the dialog can close now (there is no
+       note or photo with an instant move to lose). */
+    if (p) { closeDrawer(); return Promise.resolve(true); }
   }
   return call()
-    .then(function (r) { toast(r.message, 'ok'); closeDrawer(); return refresh(); })
-    .catch(function (e) { toast(e.message, 'err'); });
+    .then(function (r) { toast(r.message, 'ok'); closeDrawer(); refresh(); return true; })
+    .catch(function (e) { toast(e.message, 'err'); return false; });
 }
 
 /* ---------- instant moves ----------------------------------------------------
@@ -807,7 +821,7 @@ function instant(id, change, request, redraw) {
   var t = taskById(id);
   if (!speedOn() || !t || !STATE.data) return null;
   redraw = redraw || function () { if (STATE.tab === 'tasks') renderTasks(); };
-  var before = JSON.stringify(STATE.data.tasks);
+  var before = JSON.stringify(t);
   change(t); redraw(); saving(1);
   return request().then(function (r) {
     saving(-1);
@@ -816,8 +830,12 @@ function instant(id, change, request, redraw) {
     if (!SAVING) return refresh(true);
   }).catch(function (e) {
     saving(-1);
-    STATE.data.tasks = JSON.parse(before); redraw();
+    /* Only this task goes back: another move made meanwhile may have saved. */
+    var list = STATE.data.tasks || [], old = JSON.parse(before);
+    for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) list[i] = old;
+    redraw();
     toast(e.message, 'err');
+    if (!SAVING) refresh(true);
   });
 }
 
@@ -1113,8 +1131,13 @@ function openStatus(id, status) {
     var note = $('stNote').value.trim();
     var due = rework ? $('stDate').value : null;
     if (rework && !due) { toast('Set a new deadline.', 'warn'); return; }
-    busy(e.target.querySelector('button[type=submit]'), true);
-    doTransition(id, status, note, due, photo).then(closeModal);
+    var btn = e.target.querySelector('button[type=submit]');
+    busy(btn, true);
+    var p = doTransition(id, status, note, due, photo);
+    /* An instant move answers at once; anything else closes only if it saved,
+       so a refusal leaves the note, the date and the photo where they were. */
+    if (!p || typeof p.then !== 'function') { closeModal(); return; }
+    p.then(function (ok) { if (ok === false) busy(btn, false); else closeModal(); });
   });
 }
 

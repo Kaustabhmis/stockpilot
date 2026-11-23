@@ -817,6 +817,8 @@ function rmLoadTenants_(log) {
     if (m) sid = m[1];
     if (!sid || seen[sid]) continue;   // one entry per company, not per login
     seen[sid] = true;
+    /* The public demo: its people are made up and its inbox is ours. */
+    if (String(rows[r][emailIdx] || '').trim().toLowerCase() === 'demo@biscsindia.com') continue;
     out.push({
       sheetId: sid,
       company: compIdx !== undefined ? String(rows[r][compIdx] || '') : '',

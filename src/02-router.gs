@@ -141,8 +141,11 @@ function route_(p) {
         throttle_('csall', 'global', PUBLIC_LIMITS.contactSalesGlobal);
         return contactSales_(p.form);
       case 'getPartnerDashboard':
-        throttle_('partner', 'global', PUBLIC_LIMITS.partner);
-        return getPartnerDashboard_(p.key);
+        /* Per key, so one person hammering the page cannot lock every partner
+           out; wrong keys are counted together, to stop guessing. */
+        throttle_('partner', String(p.key || '').slice(0, 40), PUBLIC_LIMITS.partner);
+        try { return getPartnerDashboard_(p.key); }
+        catch (e) { throttle_('partnerbad', 'global', PUBLIC_LIMITS.partnerBad); throw e; }
       case 'openDemo':
         throttle_('demo', 'global', PUBLIC_LIMITS.demo);
         return openDemo_(p.as);

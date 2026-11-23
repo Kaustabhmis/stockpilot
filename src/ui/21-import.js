@@ -173,13 +173,15 @@ function previewImport(people) {
   var byKey = {};
   good.forEach(function (p) { byKey[p.email] = p; byKey[p.name.toLowerCase()] = p; });
   var ordered = [], placed = {};
-  var place = function (p, depth) {
-    if (placed[p.row] || depth > 50) return;
+  var visiting = {};
+  var place = function (p) {
+    if (placed[p.row] || visiting[p.row]) return;   // already in, or a loop (A reports to B, B to A)
+    visiting[p.row] = true;
     var m = p.manager && byKey[p.manager.toLowerCase()];
-    if (m && m !== p) place(m, depth + 1);
+    if (m && m !== p) place(m);
     placed[p.row] = true; ordered.push(p);
   };
-  good.forEach(function (p) { place(p, 0); });
+  good.forEach(function (p) { place(p); });
 
   var bad = people.length - good.length;
   $('impBody').innerHTML =
@@ -219,21 +221,24 @@ function suggestPassword() {
 
 function runImport(people, pw) {
   var size = 20, done = 0, added = 0, failed = 0, i = 0;
+  var prog = function (html) { var el = $('impProg'); if (el) el.innerHTML = html; };
   var mark = function (r) {
-    var tr = $('impBody').querySelector('tr[data-row="' + r.row + '"] .imp-st');
+    var body = $('impBody'), tr = body && body.querySelector('tr[data-row="' + r.row + '"] .imp-st');
     if (!tr) return;
     tr.textContent = r.status === 'added' ? 'Added' : r.message;
     tr.className = 'p-2 font-black imp-st ' + (r.status === 'added' ? 'text-emerald-700' : 'text-red-700');
   };
   var next = function () {
     if (i >= people.length) {
-      $('impProg').innerHTML = '<span class="text-emerald-700">' + added + ' added.</span>' +
-        (failed ? ' <span class="text-red-700">' + failed + ' could not be added — see the reason on each row.</span>' : '');
+      prog('<span class="text-emerald-700">' + added + ' added.</span>' +
+        (failed ? ' <span class="text-red-700">' + failed + ' could not be added — see the reason on each row.</span>' : ''));
+      /* The window may have been closed while it worked: say how it went. */
+      if (!$('impProg')) toast('Import finished: ' + added + ' added' + (failed ? ', ' + failed + ' could not be added.' : '.'), failed ? 'warn' : 'ok');
       if (added && typeof loadTeam === 'function') loadTeam();
       return;
     }
     var batch = people.slice(i, i + size); i += size;
-    $('impProg').textContent = 'Adding… ' + done + ' of ' + people.length;
+    prog('Adding… ' + done + ' of ' + people.length);
     api('importUsers', { rows: batch, password: pw }, { quiet: true }).then(function (r) {
       (r.results || []).forEach(function (x) { mark(x); if (x.status === 'added') added++; else failed++; });
       done += batch.length; next();

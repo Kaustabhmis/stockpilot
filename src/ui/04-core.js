@@ -45,7 +45,16 @@ var CACHEABLE = { getPriorityList: 1, getProjects: 1, getMeetings: 1, getDirecti
 /* Reads that change nothing, so they leave the remembered reads alone. */
 var READ_ONLY = { getDashboard: 1, getAvatarPhotos: 1, getProofPhoto: 1, getArchive: 1, getTasks: 1, getMeeting: 1,
   getAppraisalForm: 1, getBilling: 1, getInvoices: 1, getPublicInfo: 1, ping: 1, getPartnerDashboard: 1 };
-function forgetReads() { READ_CACHE = {}; }
+var CACHE_GEN = 0;
+function forgetReads() { READ_CACHE = {}; CACHE_GEN++; }
+/* Not while somebody is in the middle of something on the screen: a form, a
+   dialog, the task panel, a field being typed in, or a meeting being run. */
+function screenBusy() {
+  var a = document.activeElement;
+  return !!(($('scrim') && $('scrim').classList.contains('on')) || ($('drawer') && $('drawer').classList.contains('on')) ||
+    (typeof DLG !== 'undefined' && DLG.open) || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) ||
+    (typeof MEET !== 'undefined' && MEET && MEET.id));
+}
 
 function api(action, params, opts) {
   if (CACHEABLE[action] && !(opts && opts.fresh)) {
@@ -56,18 +65,19 @@ function api(action, params, opts) {
          changed something meanwhile, the tab redraws with it a moment later. */
       if (Date.now() - hit.at > 3000 && !hit.checking) {
         hit.checking = true;
-        var tab = STATE.tab;
+        var tab = STATE.tab, gen = CACHE_GEN;
         apiCall(action, params, { quiet: true }).then(function (j) {
+          if (gen !== CACHE_GEN) return;   // something changed meanwhile: this answer is already old
           var text = JSON.stringify(j), changed = text !== hit.text;
           READ_CACHE[key] = { at: Date.now(), text: text };
-          var busyForm = $('scrim') && $('scrim').classList.contains('on');
-          if (changed && STATE.tab === tab && !busyForm && typeof renderTab === 'function') renderTab();
+          if (changed && STATE.tab === tab && !screenBusy() && typeof renderTab === 'function') renderTab();
         }, function () { hit.checking = false; });
       }
       return Promise.resolve(JSON.parse(hit.text));
     }
+    var gen0 = CACHE_GEN;
     return apiCall(action, params, opts).then(function (j) {
-      READ_CACHE[key] = { at: Date.now(), text: JSON.stringify(j) };
+      if (gen0 === CACHE_GEN) READ_CACHE[key] = { at: Date.now(), text: JSON.stringify(j) };
       return j;
     });
   }
@@ -87,7 +97,7 @@ function apiCall(action, params, opts) {
     method: 'POST', redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(body)
-  }, function () {
+  }).catch(function () {
     /* fetch itself failed: no signal, or the server could not be reached. */
     throw new Error('No connection. Check your internet and try again.');
   }).then(function (r) {

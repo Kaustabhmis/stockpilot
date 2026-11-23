@@ -131,6 +131,16 @@ ok('a payment with no order this server made grants nothing', JSON.stringify(row
 ok('and each one is in the payment log', env.FILES.MASTER.getSheetByName('PaymentLog')
    .getDataRange().getValues().filter((r) => r[1] === 'ORDER_MISMATCH').length >= 2);
 
+console.log('\n=== a payment whose invoice failed is still never granted twice ===');
+const slyNow = JSON.stringify(row('sam@sly.in'));
+const inv = env.FILES.MASTER.getSheetByName('Invoices');
+const keep = inv._data.slice();
+inv._data.splice(1);   // as if every invoice had failed to be written
+P.reconcilePayments(); P.reconcilePayments();
+ok('the granted-payments ledger stops the 15-minute check re-granting it', JSON.stringify(row('sam@sly.in')) === slyNow &&
+   env.FILES.MASTER.getSheetByName('GrantedPayments').getDataRange().getValues().some((r) => r[0] === 'pay_TAMPER'));
+inv._data.splice(0, inv._data.length, ...keep);
+
 console.log('\n=== switched on with the other schedules, and checked by setup ===');
 P.switchOnSchedules();
 ok('switchOnSchedules runs the payment check every 15 minutes',

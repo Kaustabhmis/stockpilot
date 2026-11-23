@@ -130,8 +130,8 @@ const oneSlot = project({ MASTER_DB_ID: 'MASTER' }, (env) => {
   ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders']
     .forEach((f) => env.triggers.push(f));
 });
-ok('one task-reminder trigger instead of three is a partial install, not a complete one',
-   /PARTIAL missing sendTaskReminders/.test(oneSlot.run()));
+ok('one hourly task-reminder trigger is a complete install (it sends at each company\u2019s own times)',
+   /all scheduled jobs are installed/.test(oneSlot.run()) && !/PARTIAL/.test(oneSlot.run()));
 
 console.log('\n=== the web app, and the URL the site needs ===');
 const undeployed = project({ MASTER_DB_ID: 'MASTER' }, (env) => env.newFile('MASTER', 'R'));

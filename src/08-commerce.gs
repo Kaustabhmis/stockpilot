@@ -136,7 +136,7 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     /* One payment, one term. The browser, the webhook and the reconciler can
        all report the same payment; only the first one extends the plan and
        sends a receipt. The invoice ledger is the record of what was granted. */
-    if (paid && paid.id && invoiceForPayment_(paid.id)) {
+    if (paid && paid.id && paymentGranted_(paid.id)) {
       var had = d[i][4] instanceof Date ? ymd(d[i][4]) : String(d[i][4]);
       logPayment_('ALREADY_GRANTED', sheetId, paid.id);
       return had;
@@ -147,8 +147,11 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
        "Yearly" worked only while there was exactly one annual plan. */
     base.setDate(base.getDate() + planTermDays(planName));
     /* Free days this company earned by inviting others while it was on Free. */
-    if (!isLite_()) { var banked = takeBankedReferralDays_(sheetId); if (banked) base.setDate(base.getDate() + banked); }
+    if (!isLite_()) { var banked = takeBankedReferralDays_(sheetId, planName); if (banked) base.setDate(base.getDate() + banked); }
     var until = ymd(base);
+    /* Recorded as granted before anything else, in a ledger of its own: if the
+       invoice that follows fails, this payment must still never be granted twice. */
+    if (paid && paid.id) markPaymentGranted_(paid.id, sheetId, planName, until);
     dir.getRange(i + 1, 4).setValue(planName);
     dir.getRange(i + 1, 5).setValue(until);
     dir.getRange(i + 1, 7).setValue('Active');
@@ -165,6 +168,22 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     return until;
   }
   throw new Error('That workspace is not in the registry.');
+}
+
+/* The record of every payment that has bought a term, kept apart from the
+   invoices so that a failed invoice can never make a payment look new. */
+function grantedSheet_() {
+  return mkTab_(SpreadsheetApp.openById(CFG().masterId), 'GrantedPayments', ['Payment id', 'SheetID', 'Plan', 'Valid until', 'When']);
+}
+function paymentGranted_(paymentId) {
+  if (!paymentId) return false;
+  if (invoiceForPayment_(paymentId)) return true;
+  var d = grantedSheet_().getDataRange().getValues();
+  for (var i = 1; i < d.length; i++) if (String(d[i][0]).trim() === String(paymentId).trim()) return true;
+  return false;
+}
+function markPaymentGranted_(paymentId, sheetId, planName, until) {
+  grantedSheet_().appendRow([String(paymentId), String(sheetId), planName, until, new Date()]);
 }
 
 function hex_(bytes) {
@@ -316,8 +335,13 @@ function mailOpts_(extra) {
  * the error log, where setupDomeBox() will also have warned about it long
  * before any customer was involved.
  */
+/* Set while the demo is being built: its people and its owner address are not
+   real recipients, and a nightly rebuild must not spend the mail quota every
+   company shares. */
+var MAIL_QUIET = false;
+
 function sendEmail_(to, subject, html) {
-  if (!to) return false;
+  if (!to || MAIL_QUIET) return false;
   var from = CFG().mailFrom;
 
   if (!mailAliasVerified_()) {
@@ -679,7 +703,7 @@ function grantFromPayment_(paid, via) {
     logPayment_('UNKNOWN_AMOUNT', notes.sheetId, paid.id + ' ' + paid.amount + ' paise');
     return '';
   }
-  var already = invoiceForPayment_(paid.id);
+  var already = paymentGranted_(paid.id);
   var until = grantPlan_(notes.sheetId, plan, paid, notes.company);
   if (!already) logPayment_((via || 'GRANTED') + '_GRANTED', notes.sheetId, plan + ' until ' + until + ' via ' + paid.id);
   return already ? '' : plan;

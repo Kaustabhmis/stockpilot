@@ -71,6 +71,10 @@ for (const [label, file] of [['Domebox', '/../dist/code.gs'], ['Domebox Lite', '
   env.mails.length = 0;
   X.sendMonthlyOwnerReports(new Date(firstOfNext.getTime() + 86400000));
   ok('the next day’s run sends nothing more', reports().length === 0, reports().map((x) => x.to).join(','));
+  const marker = (() => { const t = Object.values(env.FILES).find((f) => f.getSheetByName && f.getSheetByName('Settings') &&
+      f.getSheetByName('Settings').getDataRange().getValues().some((r) => r[3] === 'ownerReportSent'));
+    return t ? t.getSheetByName('Settings').getDataRange().getValues().find((r) => r[3] === 'ownerReportSent')[4] : ''; })();
+  ok('the "sent" mark is text Sheets cannot turn into a date', /^sent \d{4}-\d{2}$/.test(String(marker)), marker);
   X.sendMonthlyOwnerReports(new Date(firstOfNext.getTime() + 4 * 86400000));
   ok('nor does a run after the 3rd', reports().length === 0);
   ok('the preview sends nothing either', typeof X.previewOwnerReports() === 'string' && reports().length === 0);

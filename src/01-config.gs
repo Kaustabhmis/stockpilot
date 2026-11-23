@@ -301,9 +301,9 @@ function setupDomeBox() {
   out.push('');
   out.push('--- SCHEDULER ---');
   var WANT = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders'];
-  /* sendTaskReminders runs three times a day — 9 am, 3 pm, 5 pm — so it needs
-     three triggers, and one of three is a partial install, not a complete one. */
-  var NEED = { sendTaskReminders: 3 };
+  /* Each job is one trigger now: sendTaskReminders runs every hour and sends at
+     each company's own times, so one is a complete install. */
+  var NEED = {};
   var schedulerTodo = '';
   try {
     var have = {};
@@ -316,7 +316,7 @@ function setupDomeBox() {
         '. Until then nothing is chased and no recurring task is created.';
     }
     if (!lacking.length) {
-      out.push('  ok      all scheduled jobs are installed (task reminders at 9, 15 and 17)');
+      out.push('  ok      all scheduled jobs are installed (task reminders every hour, sent at each company\'s own times)');
     } else if (lacking.length === WANT.length) {
       out.push('  MISSING no scheduled jobs at all. Nothing will be chased, no recurring');
       out.push('          task will be created, and no renewal notice will go out.');

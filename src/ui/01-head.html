@@ -577,8 +577,8 @@
     #board > div{scroll-snap-align:start}
     /* Filters fold behind one button, so the board keeps the screen. */
     #taskFilters .fx{display:none !important}
-    #taskFilters.open .fx{display:flex !important}
-    #taskFilters.open select.fx{display:block !important}
+    #taskFilters.open .fx:not(.hidden){display:flex !important}
+    #taskFilters.open select.fx:not(.hidden){display:block !important}
     #taskFilters input#fSearch{flex:1;min-width:0;max-width:none}
     #taskFilters select.fx{max-width:none !important;width:100%}
     /* The summary as a compact strip of three, not six screen-high cards. */

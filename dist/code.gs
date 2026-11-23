@@ -303,9 +303,9 @@ function setupDomeBox() {
   out.push('');
   out.push('--- SCHEDULER ---');
   var WANT = ['generateRecurringJobs', 'sendDailyReminders', 'sendRenewalReminders', 'sendTaskReminders'];
-  /* sendTaskReminders runs three times a day — 9 am, 3 pm, 5 pm — so it needs
-     three triggers, and one of three is a partial install, not a complete one. */
-  var NEED = { sendTaskReminders: 3 };
+  /* Each job is one trigger now: sendTaskReminders runs every hour and sends at
+     each company's own times, so one is a complete install. */
+  var NEED = {};
   var schedulerTodo = '';
   try {
     var have = {};
@@ -318,7 +318,7 @@ function setupDomeBox() {
         '. Until then nothing is chased and no recurring task is created.';
     }
     if (!lacking.length) {
-      out.push('  ok      all scheduled jobs are installed (task reminders at 9, 15 and 17)');
+      out.push('  ok      all scheduled jobs are installed (task reminders every hour, sent at each company\'s own times)');
     } else if (lacking.length === WANT.length) {
       out.push('  MISSING no scheduled jobs at all. Nothing will be chased, no recurring');
       out.push('          task will be created, and no renewal notice will go out.');
@@ -549,8 +549,11 @@ function route_(p) {
         throttle_('csall', 'global', PUBLIC_LIMITS.contactSalesGlobal);
         return contactSales_(p.form);
       case 'getPartnerDashboard':
-        throttle_('partner', 'global', PUBLIC_LIMITS.partner);
-        return getPartnerDashboard_(p.key);
+        /* Per key, so one person hammering the page cannot lock every partner
+           out; wrong keys are counted together, to stop guessing. */
+        throttle_('partner', String(p.key || '').slice(0, 40), PUBLIC_LIMITS.partner);
+        try { return getPartnerDashboard_(p.key); }
+        catch (e) { throttle_('partnerbad', 'global', PUBLIC_LIMITS.partnerBad); throw e; }
       case 'openDemo':
         throttle_('demo', 'global', PUBLIC_LIMITS.demo);
         return openDemo_(p.as);
@@ -3575,7 +3578,7 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     /* One payment, one term. The browser, the webhook and the reconciler can
        all report the same payment; only the first one extends the plan and
        sends a receipt. The invoice ledger is the record of what was granted. */
-    if (paid && paid.id && invoiceForPayment_(paid.id)) {
+    if (paid && paid.id && paymentGranted_(paid.id)) {
       var had = d[i][4] instanceof Date ? ymd(d[i][4]) : String(d[i][4]);
       logPayment_('ALREADY_GRANTED', sheetId, paid.id);
       return had;
@@ -3586,8 +3589,11 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
        "Yearly" worked only while there was exactly one annual plan. */
     base.setDate(base.getDate() + planTermDays(planName));
     /* Free days this company earned by inviting others while it was on Free. */
-    if (!isLite_()) { var banked = takeBankedReferralDays_(sheetId); if (banked) base.setDate(base.getDate() + banked); }
+    if (!isLite_()) { var banked = takeBankedReferralDays_(sheetId, planName); if (banked) base.setDate(base.getDate() + banked); }
     var until = ymd(base);
+    /* Recorded as granted before anything else, in a ledger of its own: if the
+       invoice that follows fails, this payment must still never be granted twice. */
+    if (paid && paid.id) markPaymentGranted_(paid.id, sheetId, planName, until);
     dir.getRange(i + 1, 4).setValue(planName);
     dir.getRange(i + 1, 5).setValue(until);
     dir.getRange(i + 1, 7).setValue('Active');
@@ -3604,6 +3610,22 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     return until;
   }
   throw new Error('That workspace is not in the registry.');
+}
+
+/* The record of every payment that has bought a term, kept apart from the
+   invoices so that a failed invoice can never make a payment look new. */
+function grantedSheet_() {
+  return mkTab_(SpreadsheetApp.openById(CFG().masterId), 'GrantedPayments', ['Payment id', 'SheetID', 'Plan', 'Valid until', 'When']);
+}
+function paymentGranted_(paymentId) {
+  if (!paymentId) return false;
+  if (invoiceForPayment_(paymentId)) return true;
+  var d = grantedSheet_().getDataRange().getValues();
+  for (var i = 1; i < d.length; i++) if (String(d[i][0]).trim() === String(paymentId).trim()) return true;
+  return false;
+}
+function markPaymentGranted_(paymentId, sheetId, planName, until) {
+  grantedSheet_().appendRow([String(paymentId), String(sheetId), planName, until, new Date()]);
 }
 
 function hex_(bytes) {
@@ -3755,8 +3777,13 @@ function mailOpts_(extra) {
  * the error log, where setupDomeBox() will also have warned about it long
  * before any customer was involved.
  */
+/* Set while the demo is being built: its people and its owner address are not
+   real recipients, and a nightly rebuild must not spend the mail quota every
+   company shares. */
+var MAIL_QUIET = false;
+
 function sendEmail_(to, subject, html) {
-  if (!to) return false;
+  if (!to || MAIL_QUIET) return false;
   var from = CFG().mailFrom;
 
   if (!mailAliasVerified_()) {
@@ -4118,7 +4145,7 @@ function grantFromPayment_(paid, via) {
     logPayment_('UNKNOWN_AMOUNT', notes.sheetId, paid.id + ' ' + paid.amount + ' paise');
     return '';
   }
-  var already = invoiceForPayment_(paid.id);
+  var already = paymentGranted_(paid.id);
   var until = grantPlan_(notes.sheetId, plan, paid, notes.company);
   if (!already) logPayment_((via || 'GRANTED') + '_GRANTED', notes.sheetId, plan + ' until ' + until + ' via ' + paid.id);
   return already ? '' : plan;
@@ -5556,6 +5583,12 @@ function openDemo_(as) {
  */
 function createDemoAccount(email, password) {
   if (isLite_()) { Logger.log('Domebox Lite has no demo — nothing was created.'); return 'Domebox Lite has no demo — nothing was created.'; }
+  var startedAt = Date.now();
+  MAIL_QUIET = true;
+  try { return createDemoAccountQuiet_(email, password, startedAt); }
+  finally { MAIL_QUIET = false; }
+}
+function createDemoAccountQuiet_(email, password, startedAt) {
   var out = ['', '=== DOMEBOX DEMO ACCOUNT ===', ''];
   email = String(email || DEMO_EMAIL).trim().toLowerCase();
   password = String(password || demoPassword_('owner'));
@@ -5635,7 +5668,7 @@ function createDemoAccount(email, password) {
 
   /* ---- everything else, in steps that survive Apps Script's time limit -- */
   demoBuildClear_();
-  return say(demoBuildRest_(login_(email, password).token, out, Date.now()));
+  return say(demoBuildRest_(login_(email, password).token, out, startedAt));
 }
 
 /* Apps Script stops any run at 6 minutes. A demo is a few hundred sheet
@@ -5660,6 +5693,14 @@ function demoBuildClear_() {
   });
 }
 
+/** One continueDemoBuild trigger, firing after ms. Any earlier one is replaced. */
+function demoArmContinue_(ms) {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('continueDemoBuild').timeBased().after(ms).create();
+}
+
 /** Runs the steps not yet done; pauses and schedules itself near the limit. */
 function demoBuildRest_(token, out, startedAt) {
   var st = demoBuildState_() || { done: [], work: { closed: 0, open: 0, late: 0, reworked: 0 } };
@@ -5671,12 +5712,12 @@ function demoBuildRest_(token, out, startedAt) {
   dropCache_(ctx);
   var deadline = startedAt + demoBudgetMs_();
   var ran = 0;
+  /* A safety net first: if Google stops this run outright, a trigger is
+     already waiting to carry on. It is removed when the build finishes. */
+  demoArmContinue_(6 * 60 * 1000);
   var pause = function () {
     demoBuildSave_(st);
-    ScriptApp.getProjectTriggers().forEach(function (t) {
-      if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
-    });
-    ScriptApp.newTrigger('continueDemoBuild').timeBased().after(60 * 1000).create();
+    demoArmContinue_(60 * 1000);
     out.push('');
     out.push('Built as far as the time limit allows. The rest carries on by itself');
     out.push('in about a minute (continueDemoBuild). Nothing for you to do.');
@@ -5689,8 +5730,9 @@ function demoBuildRest_(token, out, startedAt) {
       out.push('Work: ' + st.work.closed + ' closed, ' + st.work.open + ' in flight, ' +
                st.work.late + ' delivered late, ' + st.work.reworked + ' sent back once.');
     }],
-    ['rest', function () {
-      /* ---- a project mid-flight -------------------------------------------- */
+    ['project', function () {
+      /* ---- a project mid-flight (once: skipped if its first stage exists) --- */
+      if (demoFindTask_(ctx, 'Close last audit NCs')) return;
       try {
         createProject_(ctx, { name: 'ISO 9001 surveillance audit',
           stages: [
@@ -5700,8 +5742,9 @@ function demoBuildRest_(token, out, startedAt) {
           ] });
         out.push('Project: a three-stage audit, stage one already released.');
       } catch (e) { out.push('  project: ' + e.message); }
-
-      /* ---- recognition, leave, KRAs ---------------------------------------- */
+    }],
+    ['cookies', function () {
+      /* ---- recognition ------------------------------------------------------ */
       try {
         awardCookie_(ctx, { employee: 'payel', points: 4,
           reason: 'Stayed back to clear the despatch backlog before the audit' });
@@ -5709,15 +5752,18 @@ function demoBuildRest_(token, out, startedAt) {
           reason: 'Caught the calibration drift nobody else had noticed' });
         out.push('Recognition: two cookie awards on the record.');
       } catch (e) { out.push('  cookies: ' + e.message); }
-
+    }],
+    ['direction', function () {
       /* ---- purpose, values, goals, numbers, one weekly review --------------- */
       try { seedDemoDirection_(ctx, out); } catch (e) { out.push('  goals: ' + e.message); }
-
+    }],
+    ['leave', function () {
       try {
         setLeave_(ctx, 'meera', demoYmd_(-3), demoYmd_(-1), 'Family function');
         out.push('Leave: one entry, so the demo shows deadlines that respect it.');
       } catch (e) { out.push('  leave: ' + e.message); }
-
+    }],
+    ['kras', function () {
       /* Measurable, not aspirational. "Improve quality" cannot be rated by anyone
          in good faith; "repeat NCs in the surveillance audit, target 0" can, and
          an appraisal screen full of the first kind is what makes people distrust
@@ -5750,7 +5796,8 @@ function demoBuildRest_(token, out, startedAt) {
   ];
   for (var i = 0; i < STEPS.length; i++) {
     if (st.done.indexOf(STEPS[i][0]) > -1) continue;
-    if (ran && Date.now() > deadline) return pause();
+    /* Each later step needs a fair slice of the budget left to start. */
+    if (ran && Date.now() > deadline - 60000) return pause();
     if (STEPS[i][1]() === false) return pause();
     st.done.push(STEPS[i][0]); ran++;
     demoBuildSave_(st);
@@ -5791,15 +5838,19 @@ function demoBuildRest_(token, out, startedAt) {
 
 /** The trigger that finishes a demo build the time limit interrupted. */
 function continueDemoBuild() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
+  var startedAt = Date.now();
+  var st = demoBuildState_();
+  if (!st) ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
   });
-  var st = demoBuildState_();
   if (!st || !st.token) return say_(['No demo build waiting to be finished.']);
   try { requireSession(st.token); }
   catch (e) { demoBuildClear_(); logError_('continueDemoBuild', e.message);
               return say_(['The demo build had expired. Run refreshDemoAccount to start again.']); }
-  var lines = demoBuildRest_(st.token, ['', '=== DOMEBOX DEMO (continued) ===', ''], Date.now());
+  MAIL_QUIET = true;
+  var lines;
+  try { lines = demoBuildRest_(st.token, ['', '=== DOMEBOX DEMO (continued) ===', ''], startedAt); }
+  finally { MAIL_QUIET = false; }
   var t = lines.join('\n'); Logger.log(t);
   if (!/=== SIGN IN ===/.test(t) && !/carries on by itself/.test(t)) logError_('continueDemoBuild', t.slice(0, 500));
   return t;
@@ -7799,6 +7850,17 @@ function eraseCompanyData(ownerEmail, confirm) {
   privacyDropRows_(master, TAB.DIRECTORY, function (r) { return String(r[5]).trim() === sheetId; }, done);
   privacyDropRows_(master, 'Billing', function (r) { return String(r[0]).trim() === sheetId; }, done);
   privacyDropRows_(master, TAB.TOKENS, function (r) { return !!emails[String(r[1]).trim().toLowerCase()]; }, done);
+  /* Referral and partner records keep their amounts (a partner may still be
+     owed commission) but lose the company's name. */
+  [['Referrals', 4, 5], ['PartnerEarnings', 3, 2]].forEach(function (t) {
+    var sh = master.getSheetByName(t[0]);
+    if (!sh || sh.getLastRow() < 2) return;
+    var d = sh.getDataRange().getValues(), n = 0;
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][t[1]]).trim() === sheetId) { sh.getRange(i + 1, t[2] + 1).setValue('(erased)'); n++; }
+    }
+    if (n) done.push(t[0] + ': company name removed from ' + n + ' row(s)');
+  });
 
   return privacyLog_('Erased ' + hit.company + ':\n  - ' + done.join('\n  - ') +
     '\nKept: its invoices (GST law, 8 years). Empty the Drive bin to remove the files at once.');
@@ -8147,9 +8209,15 @@ function proofFolder_(ctx) {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty(key);
   if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
-  var folder = DriveApp.createFolder('Domebox photos — ' + String(ctx.company || 'company') + ' (' + ctx.sheetId + ')');
-  props.setProperty(key, folder.getId());
-  return folder;
+  /* Under the lock, and looked up again inside it: two first photos at the same
+     moment must not make two folders. */
+  return withLock_(function () {
+    var again = props.getProperty(key);
+    if (again) { try { return DriveApp.getFolderById(again); } catch (e) {} }
+    var folder = DriveApp.createFolder('Domebox photos — ' + String(ctx.company || 'company') + ' (' + ctx.sheetId + ')');
+    props.setProperty(key, folder.getId());
+    return folder;
+  });
 }
 
 /** Checks and stores a hand-in photo; returns the Drive file id. */
@@ -8295,15 +8363,17 @@ function sendMonthlyOwnerReports(when) {
   var sent = 0;
   ownerReportCompanies_().forEach(function (co) {
     try {
+      /* Checked before the company is opened in full, so the runs on the 2nd
+         and 3rd skip quickly past everyone already sent and reach the rest. */
+      if (ownerReportAlreadySent_(co.sheetId, month)) return;
       var ctx = ownerReportCtx_(co.sheetId);
       if (!ctx) { log.push('  ' + co.company + ': no active Admin — skipped'); return; }
       if (ctx.serviceStopped) { log.push('  ' + co.company + ': stopped — skipped'); return; }
-      if (String(readSetting_(ctx, 'ownerReportSent', '')) === month) return;
       var r = ownerReport_(ctx, now);
       var admins = readUsers_(ctx).filter(function (u) { return u.role === ROLE.ADMIN && u.active !== false && u.email; });
       var n = 0;
       admins.forEach(function (a) { if (sendEmail_(a.email, r.subject, r.html)) n++; });
-      if (n) { writeSetting_(ctx, 'ownerReportSent', month); sent += n; }
+      if (n) { writeSetting_(ctx, 'ownerReportSent', 'sent ' + month); sent += n; }
       log.push('  ' + co.company + ': ' + n + ' sent  [' + r.subject + ']');
     } catch (e) {
       log.push('  ' + co.company + ': FAILED ' + e.message);
@@ -8331,6 +8401,8 @@ function previewOwnerReports() {
 /** An Admin asks for last month's report now: it goes to them only. */
 function emailOwnerReport_(ctx) {
   requireAdmin_(ctx);
+  /* The mail quota is shared by every company: a few a day is plenty. */
+  throttle_('ownerrep', ctx.sheetId, { max: 5, windowMin: 24 * 60 });
   var r = ownerReport_(ctx, new Date());
   if (!sendEmail_(ctx.me.email, r.subject, r.html)) throw new Error('The email could not be sent just now. Please try again later.');
   return { status: 'success', message: 'Sent to ' + ctx.me.email + '.' };
@@ -8447,6 +8519,20 @@ function ownerReportCtx_(sheetId) {
   return tenantContext_({ sheetId: sheetId, username: admin, viewOnly: true });
 }
 
+/* "sent 2026-11", not "2026-11": Sheets reads a bare "2026-11" as a date and
+   it would never match again, so every Admin would get it three times. */
+function ownerReportAlreadySent_(sheetId, month) {
+  try {
+    var sh = SpreadsheetApp.openById(sheetId).getSheetByName(TAB.SETTINGS);
+    if (!sh || !sh.getLastRow()) return false;
+    var d = sh.getRange(1, 4, sh.getLastRow(), 2).getValues();
+    for (var i = 0; i < d.length; i++) {
+      if (String(d[i][0]).trim() === 'ownerReportSent') return String(d[i][1]).trim() === 'sent ' + month;
+    }
+  } catch (e) {}
+  return false;
+}
+
 function ownerReportMonthKey_(now) {
   var r = periodRange('month', 1, now);
   return r.from.getFullYear() + '-' + ('0' + (r.from.getMonth() + 1)).slice(-2);
@@ -8487,7 +8573,7 @@ function ownerReportMonthKey_(now) {
 
 var REF_TABS = {
   CODES: ['RefCodes', ['Code', 'Kind', 'Target', 'Created']],
-  REFERRALS: ['Referrals', ['When', 'Code', 'Kind', 'Referrer', 'New SheetID', 'New company', 'Status', 'Reward days', 'Rewarded']],
+  REFERRALS: ['Referrals', ['When', 'Code', 'Kind', 'Referrer', 'New SheetID', 'New company', 'Status', 'Reward days', 'Rewarded', 'Reward value (Rs)']],
   PARTNERS: ['Partners', ['Name', 'Email', 'Phone', 'Firm', 'Commission %', 'Status', 'Code', 'Key hash', 'Created', 'Payout details']],
   EARNINGS: ['PartnerEarnings', ['When', 'Partner code', 'Company', 'SheetID', 'Payment id', 'Paid (Rs, incl. GST)', 'Net (Rs)', 'Commission %', 'Commission (Rs)', 'Paid out']],
 };
@@ -8557,21 +8643,36 @@ function recordReferral_(rawCode, newSheetId, newCompany) {
       for (var i = 1; i < d.length; i++) if (String(d[i][0]) === code && d[i][1] === 'company') { kind = 'company'; referrer = String(d[i][2]); }
       if (!kind || referrer === String(newSheetId)) return null;
     }
-    refTab_(REF_TABS.REFERRALS).appendRow([new Date(), code, kind, referrer, String(newSheetId), String(newCompany || ''), 'signed up', '', '']);
+    refTab_(REF_TABS.REFERRALS).appendRow([new Date(), code, kind, referrer, String(newSheetId), String(newCompany || ''), 'signed up', '', '', '']);
     return kind;
   } catch (e) { logError_('recordReferral', e.message); return null; }
 }
 
 /* ---- at payment: reward the referrer, pay the partner ------------------- */
 
-/** Days a company has banked from referring others while on Free; taken (marked added) as they are used. */
-function takeBankedReferralDays_(sheetId) {
+/* A reward is worth up to REFERRAL_REWARD_DAYS, but never more than what the
+   invited company paid, counted in days of the inviter's own plan. Without the
+   cap a company on Scale could open Rs 999 workspaces of its own and turn each
+   into a month of Scale. */
+function refDaysWorth_(valueRs, planName) {
+  var lim = planLimits(normalizePlan(planName || 'Team'));
+  var daily = lim && lim.price ? lim.price / (lim.termDays || 30) : 0;
+  var max = refRewardDays_();
+  if (!daily) return max;
+  return Math.max(1, Math.min(max, Math.floor(Number(valueRs || 0) / daily)));
+}
+
+/** Days a company has banked from referring others while on Free, worked out
+ *  against the plan it is now buying; marked used as they are taken. */
+function takeBankedReferralDays_(sheetId, planName) {
   try {
     var sh = refTab_(REF_TABS.REFERRALS), d = sh.getDataRange().getValues(), days = 0;
     for (var i = 1; i < d.length; i++) {
       if (String(d[i][3]) === String(sheetId) && d[i][6] === 'banked') {
-        days += Number(d[i][7]) || 0;
-        sh.getRange(i + 1, 7).setValue('rewarded'); sh.getRange(i + 1, 9).setValue(new Date());
+        var worth = refDaysWorth_(Number(d[i][9]) || 0, planName);
+        days += worth;
+        sh.getRange(i + 1, 7).setValue('rewarded'); sh.getRange(i + 1, 8).setValue(worth);
+        sh.getRange(i + 1, 9).setValue(new Date());
       }
     }
     return days;
@@ -8585,10 +8686,13 @@ function referralOnPayment_(sheetId, paid) {
     for (var i = 1; i < d.length; i++) {
       if (String(d[i][4]) !== String(sheetId)) continue;
       if (d[i][2] === 'company' && d[i][6] === 'signed up') {
-        var days = refRewardDays_(), referrer = String(d[i][3]);
+        var referrer = String(d[i][3]), value = refNetRs_(paid);
+        var reg = registryRow_(referrer) || {};
+        var days = refDaysWorth_(value, reg.plan);
         var added = refAddDays_(referrer, days);
         sh.getRange(i + 1, 7).setValue(added ? 'rewarded' : 'banked');
         sh.getRange(i + 1, 8).setValue(days);
+        sh.getRange(i + 1, 10).setValue(value);
         if (added) sh.getRange(i + 1, 9).setValue(new Date());
         refTellReferrer_(referrer, String(d[i][5]), days, added);
       }
@@ -8627,19 +8731,24 @@ function refTellReferrer_(sheetId, newCompany, days, added) {
     mailShell_('Thank you for the introduction',
       '<p><b>' + esc_(newCompany || 'A company you invited') + '</b> has just become a paying Domebox customer.</p>' +
       (added ? '<p>We have added <b>' + days + ' days</b> to your plan, free.</p>'
-             : '<p>We have saved <b>' + days + ' free days</b> for you. They are added the next time you choose a plan.</p>') +
+             : '<p>We have saved free days for you. They are added the next time you choose a plan.</p>') +
       '<p>Your invite link is under Plans → Invite a business, whenever you want to share it again.</p>' +
       btn_('Open Domebox', CFG().siteUrl + '/?login=1')));
 }
 
+/** What a payment was worth before GST, in rupees. */
+function refNetRs_(paid) {
+  var gross = Number(paid && paid.amount || 0) / 100, rate = gstRate_() || 0;
+  return Math.round(gross / (1 + rate / 100) * 100) / 100;
+}
+
 function partnerEarn_(code, sheetId, company, paid) {
   var p = partnerByCode_(code);
-  if (!p || !paid || !paid.id) return;
+  if (!p || p.status !== 'Active' || !paid || !paid.id) return;   // paused: no new commission
   var sh = refTab_(REF_TABS.EARNINGS), d = sh.getDataRange().getValues();
   for (var i = 1; i < d.length; i++) if (String(d[i][4]) === String(paid.id)) return;   // one payment, one commission
   var gross = Number(paid.amount) / 100;
-  var rate = gstRate_() || 0;
-  var net = Math.round(gross / (1 + rate / 100) * 100) / 100;
+  var net = refNetRs_(paid);
   var pct = p.pct || partnerDefaultPct_();
   sh.appendRow([new Date(), code, company, String(sheetId), String(paid.id), gross, net, pct, Math.round(net * pct) / 100, '']);
 }
@@ -8728,8 +8837,11 @@ function getPartnerDashboard_(key) {
   if (!p) throw new Error('That partner link is not valid, or a newer one has been sent.');
   var refs = refTab_(REF_TABS.REFERRALS).getDataRange().getValues().slice(1).filter(function (r) { return String(r[3]) === p.code; });
   var earn = refTab_(REF_TABS.EARNINGS).getDataRange().getValues().slice(1).filter(function (r) { return String(r[1]) === p.code; });
+  var plans = {};
+  SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.DIRECTORY).getDataRange().getValues().slice(1)
+    .forEach(function (x) { plans[String(x[5]).trim()] = x[3]; });
   var companies = refs.map(function (r) {
-    var reg = registryRow_(String(r[4])) || {};
+    var reg = { plan: plans[String(r[4]).trim()] };
     var paidRs = earn.filter(function (e) { return String(e[3]) === String(r[4]); }).reduce(function (s, e) { return s + (Number(e[8]) || 0); }, 0);
     return { company: String(r[5]), since: r[0] instanceof Date ? ymd(r[0]) : String(r[0]).slice(0, 10),
              plan: normalizePlan(reg.plan || 'Free'), paying: r[6] === 'paying', commission: Math.round(paidRs * 100) / 100 };
@@ -8966,8 +9078,9 @@ var PUBLIC_LIMITS = {
   registerGlobal: { max: 30, windowMin: 60 },   // every sign-up copies a spreadsheet: a bot must not fill the Drive
   contactSales:   { max: 5,  windowMin: 60 },
   demo:           { max: 600, windowMin: 60 },
-  partner:        { max: 300, windowMin: 60 },   // partner dashboards, all together: a guessed key is 40 hex, this caps the tries
-  contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood   // the public demo, all visitors together
+  partner:        { max: 120, windowMin: 60 },   // one partner's own dashboard
+  partnerBad:     { max: 500, windowMin: 60 },   // wrong partner keys, all together (a key is 40 hex: guessing is hopeless anyway)
+  contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood
 };
 
 function throttle_(bucket, key, limit) {

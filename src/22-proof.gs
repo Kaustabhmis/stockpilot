@@ -27,9 +27,15 @@ function proofFolder_(ctx) {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty(key);
   if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
-  var folder = DriveApp.createFolder('Domebox photos — ' + String(ctx.company || 'company') + ' (' + ctx.sheetId + ')');
-  props.setProperty(key, folder.getId());
-  return folder;
+  /* Under the lock, and looked up again inside it: two first photos at the same
+     moment must not make two folders. */
+  return withLock_(function () {
+    var again = props.getProperty(key);
+    if (again) { try { return DriveApp.getFolderById(again); } catch (e) {} }
+    var folder = DriveApp.createFolder('Domebox photos — ' + String(ctx.company || 'company') + ' (' + ctx.sheetId + ')');
+    props.setProperty(key, folder.getId());
+    return folder;
+  });
 }
 
 /** Checks and stores a hand-in photo; returns the Drive file id. */

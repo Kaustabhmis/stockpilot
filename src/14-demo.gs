@@ -102,6 +102,12 @@ function openDemo_(as) {
  */
 function createDemoAccount(email, password) {
   if (isLite_()) { Logger.log('Domebox Lite has no demo — nothing was created.'); return 'Domebox Lite has no demo — nothing was created.'; }
+  var startedAt = Date.now();
+  MAIL_QUIET = true;
+  try { return createDemoAccountQuiet_(email, password, startedAt); }
+  finally { MAIL_QUIET = false; }
+}
+function createDemoAccountQuiet_(email, password, startedAt) {
   var out = ['', '=== DOMEBOX DEMO ACCOUNT ===', ''];
   email = String(email || DEMO_EMAIL).trim().toLowerCase();
   password = String(password || demoPassword_('owner'));
@@ -181,7 +187,7 @@ function createDemoAccount(email, password) {
 
   /* ---- everything else, in steps that survive Apps Script's time limit -- */
   demoBuildClear_();
-  return say(demoBuildRest_(login_(email, password).token, out, Date.now()));
+  return say(demoBuildRest_(login_(email, password).token, out, startedAt));
 }
 
 /* Apps Script stops any run at 6 minutes. A demo is a few hundred sheet
@@ -206,6 +212,14 @@ function demoBuildClear_() {
   });
 }
 
+/** One continueDemoBuild trigger, firing after ms. Any earlier one is replaced. */
+function demoArmContinue_(ms) {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('continueDemoBuild').timeBased().after(ms).create();
+}
+
 /** Runs the steps not yet done; pauses and schedules itself near the limit. */
 function demoBuildRest_(token, out, startedAt) {
   var st = demoBuildState_() || { done: [], work: { closed: 0, open: 0, late: 0, reworked: 0 } };
@@ -217,12 +231,12 @@ function demoBuildRest_(token, out, startedAt) {
   dropCache_(ctx);
   var deadline = startedAt + demoBudgetMs_();
   var ran = 0;
+  /* A safety net first: if Google stops this run outright, a trigger is
+     already waiting to carry on. It is removed when the build finishes. */
+  demoArmContinue_(6 * 60 * 1000);
   var pause = function () {
     demoBuildSave_(st);
-    ScriptApp.getProjectTriggers().forEach(function (t) {
-      if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
-    });
-    ScriptApp.newTrigger('continueDemoBuild').timeBased().after(60 * 1000).create();
+    demoArmContinue_(60 * 1000);
     out.push('');
     out.push('Built as far as the time limit allows. The rest carries on by itself');
     out.push('in about a minute (continueDemoBuild). Nothing for you to do.');
@@ -235,8 +249,9 @@ function demoBuildRest_(token, out, startedAt) {
       out.push('Work: ' + st.work.closed + ' closed, ' + st.work.open + ' in flight, ' +
                st.work.late + ' delivered late, ' + st.work.reworked + ' sent back once.');
     }],
-    ['rest', function () {
-      /* ---- a project mid-flight -------------------------------------------- */
+    ['project', function () {
+      /* ---- a project mid-flight (once: skipped if its first stage exists) --- */
+      if (demoFindTask_(ctx, 'Close last audit NCs')) return;
       try {
         createProject_(ctx, { name: 'ISO 9001 surveillance audit',
           stages: [
@@ -246,8 +261,9 @@ function demoBuildRest_(token, out, startedAt) {
           ] });
         out.push('Project: a three-stage audit, stage one already released.');
       } catch (e) { out.push('  project: ' + e.message); }
-
-      /* ---- recognition, leave, KRAs ---------------------------------------- */
+    }],
+    ['cookies', function () {
+      /* ---- recognition ------------------------------------------------------ */
       try {
         awardCookie_(ctx, { employee: 'payel', points: 4,
           reason: 'Stayed back to clear the despatch backlog before the audit' });
@@ -255,15 +271,18 @@ function demoBuildRest_(token, out, startedAt) {
           reason: 'Caught the calibration drift nobody else had noticed' });
         out.push('Recognition: two cookie awards on the record.');
       } catch (e) { out.push('  cookies: ' + e.message); }
-
+    }],
+    ['direction', function () {
       /* ---- purpose, values, goals, numbers, one weekly review --------------- */
       try { seedDemoDirection_(ctx, out); } catch (e) { out.push('  goals: ' + e.message); }
-
+    }],
+    ['leave', function () {
       try {
         setLeave_(ctx, 'meera', demoYmd_(-3), demoYmd_(-1), 'Family function');
         out.push('Leave: one entry, so the demo shows deadlines that respect it.');
       } catch (e) { out.push('  leave: ' + e.message); }
-
+    }],
+    ['kras', function () {
       /* Measurable, not aspirational. "Improve quality" cannot be rated by anyone
          in good faith; "repeat NCs in the surveillance audit, target 0" can, and
          an appraisal screen full of the first kind is what makes people distrust
@@ -296,7 +315,8 @@ function demoBuildRest_(token, out, startedAt) {
   ];
   for (var i = 0; i < STEPS.length; i++) {
     if (st.done.indexOf(STEPS[i][0]) > -1) continue;
-    if (ran && Date.now() > deadline) return pause();
+    /* Each later step needs a fair slice of the budget left to start. */
+    if (ran && Date.now() > deadline - 60000) return pause();
     if (STEPS[i][1]() === false) return pause();
     st.done.push(STEPS[i][0]); ran++;
     demoBuildSave_(st);
@@ -337,15 +357,19 @@ function demoBuildRest_(token, out, startedAt) {
 
 /** The trigger that finishes a demo build the time limit interrupted. */
 function continueDemoBuild() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
+  var startedAt = Date.now();
+  var st = demoBuildState_();
+  if (!st) ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
   });
-  var st = demoBuildState_();
   if (!st || !st.token) return say_(['No demo build waiting to be finished.']);
   try { requireSession(st.token); }
   catch (e) { demoBuildClear_(); logError_('continueDemoBuild', e.message);
               return say_(['The demo build had expired. Run refreshDemoAccount to start again.']); }
-  var lines = demoBuildRest_(st.token, ['', '=== DOMEBOX DEMO (continued) ===', ''], Date.now());
+  MAIL_QUIET = true;
+  var lines;
+  try { lines = demoBuildRest_(st.token, ['', '=== DOMEBOX DEMO (continued) ===', ''], startedAt); }
+  finally { MAIL_QUIET = false; }
   var t = lines.join('\n'); Logger.log(t);
   if (!/=== SIGN IN ===/.test(t) && !/carries on by itself/.test(t)) logError_('continueDemoBuild', t.slice(0, 500));
   return t;

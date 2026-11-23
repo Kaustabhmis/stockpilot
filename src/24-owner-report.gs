@@ -25,15 +25,17 @@ function sendMonthlyOwnerReports(when) {
   var sent = 0;
   ownerReportCompanies_().forEach(function (co) {
     try {
+      /* Checked before the company is opened in full, so the runs on the 2nd
+         and 3rd skip quickly past everyone already sent and reach the rest. */
+      if (ownerReportAlreadySent_(co.sheetId, month)) return;
       var ctx = ownerReportCtx_(co.sheetId);
       if (!ctx) { log.push('  ' + co.company + ': no active Admin — skipped'); return; }
       if (ctx.serviceStopped) { log.push('  ' + co.company + ': stopped — skipped'); return; }
-      if (String(readSetting_(ctx, 'ownerReportSent', '')) === month) return;
       var r = ownerReport_(ctx, now);
       var admins = readUsers_(ctx).filter(function (u) { return u.role === ROLE.ADMIN && u.active !== false && u.email; });
       var n = 0;
       admins.forEach(function (a) { if (sendEmail_(a.email, r.subject, r.html)) n++; });
-      if (n) { writeSetting_(ctx, 'ownerReportSent', month); sent += n; }
+      if (n) { writeSetting_(ctx, 'ownerReportSent', 'sent ' + month); sent += n; }
       log.push('  ' + co.company + ': ' + n + ' sent  [' + r.subject + ']');
     } catch (e) {
       log.push('  ' + co.company + ': FAILED ' + e.message);
@@ -61,6 +63,8 @@ function previewOwnerReports() {
 /** An Admin asks for last month's report now: it goes to them only. */
 function emailOwnerReport_(ctx) {
   requireAdmin_(ctx);
+  /* The mail quota is shared by every company: a few a day is plenty. */
+  throttle_('ownerrep', ctx.sheetId, { max: 5, windowMin: 24 * 60 });
   var r = ownerReport_(ctx, new Date());
   if (!sendEmail_(ctx.me.email, r.subject, r.html)) throw new Error('The email could not be sent just now. Please try again later.');
   return { status: 'success', message: 'Sent to ' + ctx.me.email + '.' };
@@ -175,6 +179,20 @@ function ownerReportCtx_(sheetId) {
   }
   if (!admin) return null;
   return tenantContext_({ sheetId: sheetId, username: admin, viewOnly: true });
+}
+
+/* "sent 2026-11", not "2026-11": Sheets reads a bare "2026-11" as a date and
+   it would never match again, so every Admin would get it three times. */
+function ownerReportAlreadySent_(sheetId, month) {
+  try {
+    var sh = SpreadsheetApp.openById(sheetId).getSheetByName(TAB.SETTINGS);
+    if (!sh || !sh.getLastRow()) return false;
+    var d = sh.getRange(1, 4, sh.getLastRow(), 2).getValues();
+    for (var i = 0; i < d.length; i++) {
+      if (String(d[i][0]).trim() === 'ownerReportSent') return String(d[i][1]).trim() === 'sent ' + month;
+    }
+  } catch (e) {}
+  return false;
 }
 
 function ownerReportMonthKey_(now) {

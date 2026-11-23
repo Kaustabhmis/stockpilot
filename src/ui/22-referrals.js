@@ -30,7 +30,7 @@ function openInvite() {
       'Try it free for 14 days: ' + r.link;
     $('invBody').innerHTML =
       '<p class="text-sm text-gray-500 font-semibold mb-5">Know a business that would run better on Domebox? Share your link. ' +
-        'When they become a paying customer, you get <b>' + r.rewardDays + ' days free</b> on your plan.</p>' +
+        'When they become a paying customer, you get <b>up to ' + r.rewardDays + ' days free</b> on your plan (up to the value of what they paid).</p>' +
       '<label class="lb" for="invLink">Your link</label>' +
       '<div class="flex gap-2 mb-3"><input id="invLink" class="in" readonly value="' + esc(r.link) + '">' +
         '<button type="button" id="invCopy" class="btn btn-p whitespace-nowrap">Copy</button></div>' +

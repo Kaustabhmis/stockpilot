@@ -715,7 +715,8 @@ Nobody loses access to their own history.
 
 **Plans → Invite a business** shows your own link, with buttons to share it on
 WhatsApp, email or LinkedIn. When a company that signed up through your link
-becomes a paying customer, **30 days are added to your plan**, free. On the
+becomes a paying customer, **up to 30 days are added to your plan**, free —
+never more than the value of what they paid, in days of your own plan. On the
 Free plan the days are saved and added the next time you choose a plan. The
 same window lists everyone who has signed up with your link.
 

@@ -48,6 +48,7 @@ const pay = (token, email, plan, paise) => {
   const sig = crypto.createHmac('sha256', 'sekret').update(order + '|' + id).digest('hex');
   return call({ action: 'paymentSuccess', token, razorpay_order_id: order, razorpay_payment_id: id, razorpay_signature: sig });
 };
+const today0 = () => new Date().toISOString().slice(0, 10);
 const plusDays = (ymd, d) => { const x = new Date(ymd); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10); };
 const reg = (company, email, ref) => call({ action: 'register', form: { companyName: company, name: company + ' Owner', email, password: 'ownerpass123', ref } });
 
@@ -62,8 +63,9 @@ ok('and shows in the inviter’s list', (call({ action: 'getReferrals', token: A
 const aUntil = dir('a@acme.in')[4];
 env.mails.length = 0;
 ok('the invited company pays', pay(B, 'b@bharat.in', 'Starter', 249900).status === 'success');
-ok('and the inviter gets 30 days added to its plan', dir('a@acme.in')[4] === plusDays(aUntil, 30), aUntil + ' -> ' + dir('a@acme.in')[4]);
-ok('with an email to say so', env.mails.some((m) => m.to === 'a@acme.in' && /30 free days/.test(m.subject)));
+/* Acme is on the Growth trial (Rs 5,999 a month); Bharat paid Rs 2,499: worth 12 days of Growth, not 30. */
+ok('and the inviter gets days worth what was paid, in its own plan (Rs 2,499 of Growth = 12 days)', dir('a@acme.in')[4] === plusDays(aUntil, 12), aUntil + ' -> ' + dir('a@acme.in')[4]);
+ok('with an email to say so', env.mails.some((m) => m.to === 'a@acme.in' && /12 free days/.test(m.subject)));
 ok('the referral is marked rewarded', tab('Referrals').find((r) => r[1] === mine.code)[6] === 'rewarded');
 const aAfter = dir('a@acme.in')[4];
 pay(B, 'b@bharat.in', 'Starter', 249900);
@@ -82,6 +84,15 @@ const today = new Date().toISOString().slice(0, 10);
 pay(F, 'f@free.in', 'Team', 99900);
 ok('and added when it next pays: a month plus the 30 days', dir('f@free.in')[4] === plusDays(today, 30 + 30), dir('f@free.in')[4]);
 ok('only once', tab('Referrals').find((r) => r[1] === fcode)[6] === 'rewarded' && call({ action: 'getReferrals', token: F }).bankedDays === 0);
+
+console.log('\n=== a cheap sign-up cannot buy a month of an expensive plan ===');
+const S = reg('Scale Corp', 's@scale.in').token;
+const sr = master().getSheetByName('Directory'), si = sr.getDataRange().getValues().findIndex((r) => r[1] === 's@scale.in');
+sr.getRange(si + 1, 4).setValue('Scale'); sr.getRange(si + 1, 5).setValue(plusDays(today0(), 100));
+const sUntil = dir('s@scale.in')[4];
+const sock = reg('Sock Puppet', 'x@sock.in', call({ action: 'getReferrals', token: S }).code).token;
+pay(sock, 'x@sock.in', 'Team', 99900);
+ok('a Rs 999 Team payment earns a Scale company 2 days, not 30', dir('s@scale.in')[4] === plusDays(sUntil, 2), sUntil + ' -> ' + dir('s@scale.in')[4]);
 
 console.log('\n=== what is not counted ===');
 const before = tab('Referrals').length;
@@ -130,6 +141,18 @@ master().getSheetByName('Partners').getRange(pr + 2, 6).setValue('Paused');
 const nRef = tab('Referrals').length;
 reg('Late Client', 'l@late.in', prow[6]);
 ok('a paused partner’s link records nobody new', tab('Referrals').length === nRef);
+const nEarn = tab('PartnerEarnings').length;
+pay(C, 'c@client.in', 'Growth', 599900);
+ok('and a paused partner earns nothing on renewals meanwhile', tab('PartnerEarnings').length === nEarn);
+master().getSheetByName('Partners').getRange(pr + 2, 6).setValue('Active');
+pay(C, 'c@client.in', 'Growth', 599900);
+ok('set back to Active, they earn again', tab('PartnerEarnings').length === nEarn + 1);
+
+console.log('\n=== erasing a company takes its name out of the referral records ===');
+const X2 = new Function(...names, fs.readFileSync(__dirname + '/../dist/code.gs', 'utf8') + '\n;return { eraseCompanyData };')(...names.map((n) => env.G[n]));
+X2.eraseCompanyData('c@client.in', 'ERASE c@client.in');
+ok('the partner records keep the amounts but not the name', tab('Referrals').some((r) => r[1] === prow[6] && r[5] === '(erased)') &&
+   tab('PartnerEarnings').filter((r) => r[1] === prow[6]).every((r) => r[2] === '(erased)' && r[8] > 0));
 
 console.log('\n=== Domebox Lite has none of it ===');
 const envL = build();

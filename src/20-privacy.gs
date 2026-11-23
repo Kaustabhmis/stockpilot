@@ -55,6 +55,17 @@ function eraseCompanyData(ownerEmail, confirm) {
   privacyDropRows_(master, TAB.DIRECTORY, function (r) { return String(r[5]).trim() === sheetId; }, done);
   privacyDropRows_(master, 'Billing', function (r) { return String(r[0]).trim() === sheetId; }, done);
   privacyDropRows_(master, TAB.TOKENS, function (r) { return !!emails[String(r[1]).trim().toLowerCase()]; }, done);
+  /* Referral and partner records keep their amounts (a partner may still be
+     owed commission) but lose the company's name. */
+  [['Referrals', 4, 5], ['PartnerEarnings', 3, 2]].forEach(function (t) {
+    var sh = master.getSheetByName(t[0]);
+    if (!sh || sh.getLastRow() < 2) return;
+    var d = sh.getDataRange().getValues(), n = 0;
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][t[1]]).trim() === sheetId) { sh.getRange(i + 1, t[2] + 1).setValue('(erased)'); n++; }
+    }
+    if (n) done.push(t[0] + ': company name removed from ' + n + ' row(s)');
+  });
 
   return privacyLog_('Erased ' + hit.company + ':\n  - ' + done.join('\n  - ') +
     '\nKept: its invoices (GST law, 8 years). Empty the Drive bin to remove the files at once.');

@@ -32,7 +32,7 @@
 
 var REF_TABS = {
   CODES: ['RefCodes', ['Code', 'Kind', 'Target', 'Created']],
-  REFERRALS: ['Referrals', ['When', 'Code', 'Kind', 'Referrer', 'New SheetID', 'New company', 'Status', 'Reward days', 'Rewarded']],
+  REFERRALS: ['Referrals', ['When', 'Code', 'Kind', 'Referrer', 'New SheetID', 'New company', 'Status', 'Reward days', 'Rewarded', 'Reward value (Rs)']],
   PARTNERS: ['Partners', ['Name', 'Email', 'Phone', 'Firm', 'Commission %', 'Status', 'Code', 'Key hash', 'Created', 'Payout details']],
   EARNINGS: ['PartnerEarnings', ['When', 'Partner code', 'Company', 'SheetID', 'Payment id', 'Paid (Rs, incl. GST)', 'Net (Rs)', 'Commission %', 'Commission (Rs)', 'Paid out']],
 };
@@ -102,21 +102,36 @@ function recordReferral_(rawCode, newSheetId, newCompany) {
       for (var i = 1; i < d.length; i++) if (String(d[i][0]) === code && d[i][1] === 'company') { kind = 'company'; referrer = String(d[i][2]); }
       if (!kind || referrer === String(newSheetId)) return null;
     }
-    refTab_(REF_TABS.REFERRALS).appendRow([new Date(), code, kind, referrer, String(newSheetId), String(newCompany || ''), 'signed up', '', '']);
+    refTab_(REF_TABS.REFERRALS).appendRow([new Date(), code, kind, referrer, String(newSheetId), String(newCompany || ''), 'signed up', '', '', '']);
     return kind;
   } catch (e) { logError_('recordReferral', e.message); return null; }
 }
 
 /* ---- at payment: reward the referrer, pay the partner ------------------- */
 
-/** Days a company has banked from referring others while on Free; taken (marked added) as they are used. */
-function takeBankedReferralDays_(sheetId) {
+/* A reward is worth up to REFERRAL_REWARD_DAYS, but never more than what the
+   invited company paid, counted in days of the inviter's own plan. Without the
+   cap a company on Scale could open Rs 999 workspaces of its own and turn each
+   into a month of Scale. */
+function refDaysWorth_(valueRs, planName) {
+  var lim = planLimits(normalizePlan(planName || 'Team'));
+  var daily = lim && lim.price ? lim.price / (lim.termDays || 30) : 0;
+  var max = refRewardDays_();
+  if (!daily) return max;
+  return Math.max(1, Math.min(max, Math.floor(Number(valueRs || 0) / daily)));
+}
+
+/** Days a company has banked from referring others while on Free, worked out
+ *  against the plan it is now buying; marked used as they are taken. */
+function takeBankedReferralDays_(sheetId, planName) {
   try {
     var sh = refTab_(REF_TABS.REFERRALS), d = sh.getDataRange().getValues(), days = 0;
     for (var i = 1; i < d.length; i++) {
       if (String(d[i][3]) === String(sheetId) && d[i][6] === 'banked') {
-        days += Number(d[i][7]) || 0;
-        sh.getRange(i + 1, 7).setValue('rewarded'); sh.getRange(i + 1, 9).setValue(new Date());
+        var worth = refDaysWorth_(Number(d[i][9]) || 0, planName);
+        days += worth;
+        sh.getRange(i + 1, 7).setValue('rewarded'); sh.getRange(i + 1, 8).setValue(worth);
+        sh.getRange(i + 1, 9).setValue(new Date());
       }
     }
     return days;
@@ -130,10 +145,13 @@ function referralOnPayment_(sheetId, paid) {
     for (var i = 1; i < d.length; i++) {
       if (String(d[i][4]) !== String(sheetId)) continue;
       if (d[i][2] === 'company' && d[i][6] === 'signed up') {
-        var days = refRewardDays_(), referrer = String(d[i][3]);
+        var referrer = String(d[i][3]), value = refNetRs_(paid);
+        var reg = registryRow_(referrer) || {};
+        var days = refDaysWorth_(value, reg.plan);
         var added = refAddDays_(referrer, days);
         sh.getRange(i + 1, 7).setValue(added ? 'rewarded' : 'banked');
         sh.getRange(i + 1, 8).setValue(days);
+        sh.getRange(i + 1, 10).setValue(value);
         if (added) sh.getRange(i + 1, 9).setValue(new Date());
         refTellReferrer_(referrer, String(d[i][5]), days, added);
       }
@@ -172,19 +190,24 @@ function refTellReferrer_(sheetId, newCompany, days, added) {
     mailShell_('Thank you for the introduction',
       '<p><b>' + esc_(newCompany || 'A company you invited') + '</b> has just become a paying Domebox customer.</p>' +
       (added ? '<p>We have added <b>' + days + ' days</b> to your plan, free.</p>'
-             : '<p>We have saved <b>' + days + ' free days</b> for you. They are added the next time you choose a plan.</p>') +
+             : '<p>We have saved free days for you. They are added the next time you choose a plan.</p>') +
       '<p>Your invite link is under Plans → Invite a business, whenever you want to share it again.</p>' +
       btn_('Open Domebox', CFG().siteUrl + '/?login=1')));
 }
 
+/** What a payment was worth before GST, in rupees. */
+function refNetRs_(paid) {
+  var gross = Number(paid && paid.amount || 0) / 100, rate = gstRate_() || 0;
+  return Math.round(gross / (1 + rate / 100) * 100) / 100;
+}
+
 function partnerEarn_(code, sheetId, company, paid) {
   var p = partnerByCode_(code);
-  if (!p || !paid || !paid.id) return;
+  if (!p || p.status !== 'Active' || !paid || !paid.id) return;   // paused: no new commission
   var sh = refTab_(REF_TABS.EARNINGS), d = sh.getDataRange().getValues();
   for (var i = 1; i < d.length; i++) if (String(d[i][4]) === String(paid.id)) return;   // one payment, one commission
   var gross = Number(paid.amount) / 100;
-  var rate = gstRate_() || 0;
-  var net = Math.round(gross / (1 + rate / 100) * 100) / 100;
+  var net = refNetRs_(paid);
   var pct = p.pct || partnerDefaultPct_();
   sh.appendRow([new Date(), code, company, String(sheetId), String(paid.id), gross, net, pct, Math.round(net * pct) / 100, '']);
 }
@@ -273,8 +296,11 @@ function getPartnerDashboard_(key) {
   if (!p) throw new Error('That partner link is not valid, or a newer one has been sent.');
   var refs = refTab_(REF_TABS.REFERRALS).getDataRange().getValues().slice(1).filter(function (r) { return String(r[3]) === p.code; });
   var earn = refTab_(REF_TABS.EARNINGS).getDataRange().getValues().slice(1).filter(function (r) { return String(r[1]) === p.code; });
+  var plans = {};
+  SpreadsheetApp.openById(CFG().masterId).getSheetByName(TAB.DIRECTORY).getDataRange().getValues().slice(1)
+    .forEach(function (x) { plans[String(x[5]).trim()] = x[3]; });
   var companies = refs.map(function (r) {
-    var reg = registryRow_(String(r[4])) || {};
+    var reg = { plan: plans[String(r[4]).trim()] };
     var paidRs = earn.filter(function (e) { return String(e[3]) === String(r[4]); }).reduce(function (s, e) { return s + (Number(e[8]) || 0); }, 0);
     return { company: String(r[5]), since: r[0] instanceof Date ? ymd(r[0]) : String(r[0]).slice(0, 10),
              plan: normalizePlan(reg.plan || 'Free'), paying: r[6] === 'paying', commission: Math.round(paidRs * 100) / 100 };

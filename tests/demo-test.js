@@ -34,7 +34,9 @@ const call = (body) => JSON.parse(APP.doPost({ postData: { contents: JSON.string
   parameter: {} }).getContent());
 
 console.log('\n=== it builds ===');
+const mailsBefore = env.mails.length;
 const report = APP.createDemoAccount();
+ok('building the demo sends no email at all (it used to send 113, every night)', env.mails.length === mailsBefore, env.mails.length - mailsBefore);
 ok('createDemoAccount returns its report', typeof report === 'string', typeof report);
 ok('it prints a login', /=== SIGN IN ===/.test(report));
 ok('with the email, and where the password is — but never the password itself',

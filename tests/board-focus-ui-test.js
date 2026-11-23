@@ -94,6 +94,29 @@ const hit = (p) => new Promise((res) => http.get('http://localhost:' + PORT + p,
   ok('the payment script is not loaded until someone goes to pay', await a.evaluate(() => typeof Razorpay === 'undefined' && ![...document.scripts].some((x) => /razorpay/.test(x.src))));
   await a.close();
 
+  console.log('\n=== found in the bug audit ===');
+  const f = await signIn(email, 'strongpass123');
+  await f.selectOption('#fAssignee', 'payel' + R); await f.waitForTimeout(400);
+  await f.evaluate(() => refresh(true)); await f.waitForTimeout(1500);
+  ok('a person picked in the filter stays shown after the board refreshes', (await f.inputValue('#fAssignee')) === 'payel' + R);
+  await f.selectOption('#fAssignee', ''); await f.waitForTimeout(400);
+  await f.evaluate(() => { document.getElementById('board').scrollTop = 500; }); await f.waitForTimeout(700);
+  await f.click('#viewMode [data-mode="list"]'); await f.waitForTimeout(600);
+  ok('switching view brings the summary back (it never stays folded with nothing to scroll)',
+     await f.evaluate(() => !document.getElementById('tab-tasks').classList.contains('focus')));
+  await f.click('#viewMode [data-mode="board"]'); await f.waitForTimeout(400);
+  const t1 = await f.evaluate(() => STATE.data.tasks.find((t) => t.status === 'Pending').id);
+  await f.evaluate((id) => openStatus(id, 'For Review'), t1); await f.waitForTimeout(300);
+  await f.fill('#stNote', 'Keep this note'); await f.click('#fStatusChange button[type=submit]'); await f.waitForTimeout(1500);
+  ok('a hand-in the server refuses keeps the dialog and the note typed in it', await f.isVisible('#fStatusChange') && (await f.inputValue('#stNote')) === 'Keep this note');
+  await f.evaluate(() => { closeDialog(true); closeModal(); }); await f.waitForTimeout(300);
+  await f.context().setOffline(true);
+  await f.evaluate(() => api('getUsers', {}, { fresh: true }).catch((e) => toast(e.message, 'err'))); await f.waitForTimeout(800);
+  ok('with no internet the message is "Connection problem", not a browser error', (await f.textContent('#dlgTitle')).trim() === 'Connection problem' &&
+     /No connection/.test(await f.textContent('#dlgMsg')), await f.textContent('#dlgMsg'));
+  await f.context().setOffline(false);
+  await f.close();
+
   console.log('\n=== phones and tablets ===');
   const m = await signIn(email, 'strongpass123', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const ph = await m.evaluate(() => ({ fb: document.getElementById('taskFilters').getBoundingClientRect().height, tiles: document.getElementById('statTiles').getBoundingClientRect().height,

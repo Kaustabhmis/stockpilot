@@ -85,6 +85,20 @@ wb.save(sys.argv[2])`, dom, xlsx]);
   await p.click('#impGo'); await p.waitForTimeout(3000);
   ok('and is added', ((await post({ action: 'getUsers', token: A })).users || []).some((u) => u.email === 'payel@' + dom));
 
+  console.log('\n=== two people who report to each other ===');
+  await p.evaluate(() => closeModal()); await p.waitForTimeout(200);
+  const sent = await p.evaluate(() => {
+    openImport();
+    const rows = [];
+    const real = window.api;
+    window.api = (a, prm) => { if (a === 'importUsers') { rows.push(...prm.rows); return Promise.resolve({ results: prm.rows.map((x) => ({ row: x.row, status: 'added' })) }); } return real(a, prm); };
+    previewImport(rowsToPeople([['Name', 'Email', 'Reports to'], ['Asha Loop', 'asha@loop.test', 'Bina Loop'], ['Bina Loop', 'bina@loop.test', 'Asha Loop']]));
+    document.getElementById('impGo').click();
+    return new Promise((res) => setTimeout(() => { window.api = real; res(rows.map((r) => r.email)); }, 800));
+  });
+  ok('a reporting loop adds each person once, not twenty-five times', sent.length === 2 && new Set(sent).size === 2, sent.join(','));
+  await p.evaluate(() => closeModal());
+
   console.log('\n=== on a phone, and for staff ===');
   const m = await b.newPage({ viewport: { width: 390, height: 844 } });
   m.on('pageerror', (e) => errs.push(e.message));
