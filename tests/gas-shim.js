@@ -158,6 +158,7 @@ function build() {
   G.PropertiesService = { getScriptProperties: () => ({
     getProperty: k => (k in props ? props[k] : null),
     setProperty: (k, v) => { props[k] = v; },
+    deleteProperty: (k) => { delete props[k]; },
     getProperties: () => Object.assign({}, props),
   })};
   /* One script-wide lock, as Apps Script has. Single-threaded here, so the
@@ -272,6 +273,7 @@ function build() {
       onMonthDay: (d) => ({ atHour: (h) => ({ create() { triggers.push(fn); triggerHours.push([fn, h, d]); } }) }),
       everyMinutes: (m) => ({ create() { triggers.push(fn); triggerHours.push([fn, 'every', m]); } }),
       everyHours: (h) => ({ create() { triggers.push(fn); triggerHours.push([fn, 'hourly', h]); } }),
+      after: (ms) => ({ create() { triggers.push(fn); triggerHours.push([fn, 'after', ms]); } }),
     }) }),
     deleteTrigger(t) {
       const i = triggers.indexOf(t.getHandlerFunction());

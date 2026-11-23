@@ -27,7 +27,7 @@ tpl.getSheetByName('Settings').appendRow(['General']);
 
 const names = Object.keys(env.G);
 const APP = new Function(...names, SRC + '\n;return { doPost, ensureRegistry, ' +
-  'createDemoAccount, deleteDemoAccount, removeDemoAccount, refreshDemoAccount, switchOnSchedules };')(...names.map((n) => env.G[n]));
+  'createDemoAccount, deleteDemoAccount, removeDemoAccount, refreshDemoAccount, switchOnSchedules, continueDemoBuild };')(...names.map((n) => env.G[n]));
 APP.ensureRegistry();
 
 const call = (body) => JSON.parse(APP.doPost({ postData: { contents: JSON.stringify(body) },
@@ -242,6 +242,32 @@ ok('leaving one demo, not two', env.FILES.MASTER.getSheetByName('Directory').get
 APP.switchOnSchedules(); APP.switchOnSchedules();
 ok('switchOnSchedules sets the refresh, once, at 3 am',
    env.G.ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'refreshDemoAccount').length === 1);
+console.log('\n=== cut short by the time limit, it finishes by itself ===');
+/* On Google's servers a run stops at 6 minutes, and the nightly rebuild was
+   being cut off part-way: the live demo had closed jobs and nothing open. A
+   budget of 1 ms makes every run stop after one job, the worst case. */
+const fullDash = call({ action: 'getDashboard', token: call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).token });
+const fullCount = (fullDash.tasks || []).length;
+env.props.DEMO_BUILD_BUDGET_MS = '1';
+const cut = APP.refreshDemoAccount();
+ok('a build that runs out of time says it will carry on, and does not log an error', /carries on by itself/.test(cut) && !/=== SIGN IN ===/.test(cut), cut.slice(-200));
+const pending = () => env.G.ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'continueDemoBuild').length;
+ok('it leaves exactly one trigger to continue', pending() === 1, pending());
+const early = call({ action: 'getDashboard', token: call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).token });
+ok('even part-built, the board has open work on it first', (early.tasks || []).some((t) => t.status === 'Pending' || t.status === 'In Progress'),
+   (early.tasks || []).map((t) => t.status).join(','));
+let rounds = 0, last = '';
+while (pending() && rounds < 200) { last = APP.continueDemoBuild(); rounds++; }
+ok('it finishes in steps (' + rounds + ' runs) and then removes its trigger', /=== SIGN IN ===/.test(last) && pending() === 0, last.slice(-200));
+const after = call({ action: 'getDashboard', token: call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).token });
+const tl = after.tasks || [];
+ok('with the same work as a build done in one go, nothing twice', tl.length === fullCount && new Set(tl.map((t) => t.title)).size === tl.length, tl.length + ' vs ' + fullCount);
+ok('in every state a board shows', ['Pending', 'In Progress', 'Verified'].every((s) => tl.some((t) => t.status === s)));
+ok('and the steps after the work ran too (project, KRAs)', tl.some((t) => t.title === 'Close last audit NCs') &&
+   (call({ action: 'getKraFor', token: call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).token, username: 'payel' }).kras || []).length > 0);
+ok('nothing is left saved once it is done', !env.props.DEMO_BUILD);
+ok('with nothing waiting, continuing does nothing', /No demo build waiting/.test(APP.continueDemoBuild()));
+delete env.props.DEMO_BUILD_BUDGET_MS;
 APP.removeDemoAccount();
 ok('with no demo, the refresh makes none', /No demo to refresh/.test(APP.refreshDemoAccount()) &&
    call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).status === 'error');

@@ -179,67 +179,131 @@ function createDemoAccount(email, password) {
   dropCache_(ctx);
   out.push('Team: ' + (readUsers_(ctx).length) + ' people, in a real reporting line.');
 
-  /* ---- a month of work ------------------------------------------------- */
-  var made = seedDemoWork_(ctx);
-  out.push('Work: ' + made.closed + ' closed, ' + made.open + ' in flight, ' +
-           made.late + ' delivered late, ' + made.reworked + ' sent back once.');
+  /* ---- everything else, in steps that survive Apps Script's time limit -- */
+  demoBuildClear_();
+  return say(demoBuildRest_(login_(email, password).token, out, Date.now()));
+}
 
-  /* ---- a project mid-flight -------------------------------------------- */
-  try {
-    createProject_(ctx, { name: 'ISO 9001 surveillance audit',
-      stages: [
-        { title: 'Close last audit NCs', assignTo: 'nita',  dueDate: demoYmd_(-6), priority: 'High' },
-        { title: 'Internal audit round', assignTo: 'imran', dueDate: demoYmd_(4),  priority: 'Critical' },
-        { title: 'Management review',    assignTo: 'sruti', dueDate: demoYmd_(14), priority: 'High' },
-      ] });
-    out.push('Project: a three-stage audit, stage one already released.');
-  } catch (e) { out.push('  project: ' + e.message); }
-
-  /* ---- recognition, leave, KRAs ---------------------------------------- */
-  try {
-    awardCookie_(ctx, { employee: 'payel', points: 4,
-      reason: 'Stayed back to clear the despatch backlog before the audit' });
-    awardCookie_(ctx, { employee: 'rafiq', points: 2,
-      reason: 'Caught the calibration drift nobody else had noticed' });
-    out.push('Recognition: two cookie awards on the record.');
-  } catch (e) { out.push('  cookies: ' + e.message); }
-
-  /* ---- purpose, values, goals, numbers, one weekly review --------------- */
-  try { seedDemoDirection_(ctx, out); } catch (e) { out.push('  goals: ' + e.message); }
-
-  try {
-    setLeave_(ctx, 'meera', demoYmd_(-3), demoYmd_(-1), 'Family function');
-    out.push('Leave: one entry, so the demo shows deadlines that respect it.');
-  } catch (e) { out.push('  leave: ' + e.message); }
-
-  /* Measurable, not aspirational. "Improve quality" cannot be rated by anyone
-     in good faith; "repeat NCs in the surveillance audit, target 0" can, and
-     an appraisal screen full of the first kind is what makes people distrust
-     the whole exercise. */
-  var KRA_SETS = {
-    exec: [
-      { item: 'On-time despatch', desc: 'Orders leave on the promised date', weight: 40,
-        measured: 'Despatches on or before the committed date', target: '95', unit: '%' },
-      { item: 'First-pass quality', desc: 'Work accepted without being sent back', weight: 35,
-        measured: 'Jobs verified without a rework loop', target: '90', unit: '%' },
-      { item: 'Housekeeping', desc: '5S in the allotted bay', weight: 25,
-        measured: 'Weekly 5S audit score out of 5', target: '4' },
-    ],
-    quality: [
-      { item: 'Audit readiness', desc: 'No repeat non-conformities', weight: 50,
-        measured: 'Repeat NCs raised in the surveillance audit', target: '0',
-        direction: 'lower is better' },
-      { item: 'Review turnaround', desc: 'Work does not sit waiting on quality', weight: 50,
-        measured: 'Items cleared within the review SLA', target: '90', unit: '%' },
-    ],
-  };
-  [['payel', 'exec'], ['vikram', 'exec'], ['meera', 'exec'], ['rafiq', 'exec'],
-   ['nita', 'quality'], ['imran', 'quality'], ['sruti', 'quality']].forEach(function (pair) {
-    try { saveKra_(ctx, { employee: pair[0], kras: KRA_SETS[pair[1]] }); }
-    catch (e) { out.push('  KRAs: ' + pair[0] + ' — ' + e.message); }
+/* Apps Script stops any run at 6 minutes. A demo is a few hundred sheet
+   writes, and on Google's servers it was being cut off part-way through the
+   work, every night: the live demo had the closed jobs and nothing open, or
+   one stray task. So the build stops itself well inside the limit, saves
+   where it got to, and carries on a minute later from a trigger. */
+var DEMO_BUILD_KEY = 'DEMO_BUILD';
+function demoBudgetMs_() {
+  var v = Number(PropertiesService.getScriptProperties().getProperty('DEMO_BUILD_BUDGET_MS'));
+  return v > 0 ? v : 270000;
+}
+function demoBuildState_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(DEMO_BUILD_KEY) || 'null'); }
+  catch (e) { return null; }
+}
+function demoBuildSave_(st) { PropertiesService.getScriptProperties().setProperty(DEMO_BUILD_KEY, JSON.stringify(st)); }
+function demoBuildClear_() {
+  PropertiesService.getScriptProperties().deleteProperty(DEMO_BUILD_KEY);
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
   });
-  out.push('KRAs: measurable ones on every person, so the appraisal has numbers.');
+}
 
+/** Runs the steps not yet done; pauses and schedules itself near the limit. */
+function demoBuildRest_(token, out, startedAt) {
+  var st = demoBuildState_() || { done: [], work: { closed: 0, open: 0, late: 0, reworked: 0 } };
+  st.token = token;
+  var ctx = tenantContext_(requireSession(token));
+  /* Read the sheet itself, not the 30-second cache: the build writes outside
+     the request path that bumps the cache's version, so a cached copy would
+     not show the jobs the last run made, and they would be made twice. */
+  dropCache_(ctx);
+  var deadline = startedAt + demoBudgetMs_();
+  var ran = 0;
+  var pause = function () {
+    demoBuildSave_(st);
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+      if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
+    });
+    ScriptApp.newTrigger('continueDemoBuild').timeBased().after(60 * 1000).create();
+    out.push('');
+    out.push('Built as far as the time limit allows. The rest carries on by itself');
+    out.push('in about a minute (continueDemoBuild). Nothing for you to do.');
+    return out;
+  };
+  var STEPS = [
+    ['work', function () {
+      var r = seedDemoWork_(ctx, deadline, st.work);
+      if (!r.finished) return false;
+      out.push('Work: ' + st.work.closed + ' closed, ' + st.work.open + ' in flight, ' +
+               st.work.late + ' delivered late, ' + st.work.reworked + ' sent back once.');
+    }],
+    ['rest', function () {
+      /* ---- a project mid-flight -------------------------------------------- */
+      try {
+        createProject_(ctx, { name: 'ISO 9001 surveillance audit',
+          stages: [
+            { title: 'Close last audit NCs', assignTo: 'nita',  dueDate: demoYmd_(-6), priority: 'High' },
+            { title: 'Internal audit round', assignTo: 'imran', dueDate: demoYmd_(4),  priority: 'Critical' },
+            { title: 'Management review',    assignTo: 'sruti', dueDate: demoYmd_(14), priority: 'High' },
+          ] });
+        out.push('Project: a three-stage audit, stage one already released.');
+      } catch (e) { out.push('  project: ' + e.message); }
+
+      /* ---- recognition, leave, KRAs ---------------------------------------- */
+      try {
+        awardCookie_(ctx, { employee: 'payel', points: 4,
+          reason: 'Stayed back to clear the despatch backlog before the audit' });
+        awardCookie_(ctx, { employee: 'rafiq', points: 2,
+          reason: 'Caught the calibration drift nobody else had noticed' });
+        out.push('Recognition: two cookie awards on the record.');
+      } catch (e) { out.push('  cookies: ' + e.message); }
+
+      /* ---- purpose, values, goals, numbers, one weekly review --------------- */
+      try { seedDemoDirection_(ctx, out); } catch (e) { out.push('  goals: ' + e.message); }
+
+      try {
+        setLeave_(ctx, 'meera', demoYmd_(-3), demoYmd_(-1), 'Family function');
+        out.push('Leave: one entry, so the demo shows deadlines that respect it.');
+      } catch (e) { out.push('  leave: ' + e.message); }
+
+      /* Measurable, not aspirational. "Improve quality" cannot be rated by anyone
+         in good faith; "repeat NCs in the surveillance audit, target 0" can, and
+         an appraisal screen full of the first kind is what makes people distrust
+         the whole exercise. */
+      var KRA_SETS = {
+        exec: [
+          { item: 'On-time despatch', desc: 'Orders leave on the promised date', weight: 40,
+            measured: 'Despatches on or before the committed date', target: '95', unit: '%' },
+          { item: 'First-pass quality', desc: 'Work accepted without being sent back', weight: 35,
+            measured: 'Jobs verified without a rework loop', target: '90', unit: '%' },
+          { item: 'Housekeeping', desc: '5S in the allotted bay', weight: 25,
+            measured: 'Weekly 5S audit score out of 5', target: '4' },
+        ],
+        quality: [
+          { item: 'Audit readiness', desc: 'No repeat non-conformities', weight: 50,
+            measured: 'Repeat NCs raised in the surveillance audit', target: '0',
+            direction: 'lower is better' },
+          { item: 'Review turnaround', desc: 'Work does not sit waiting on quality', weight: 50,
+            measured: 'Items cleared within the review SLA', target: '90', unit: '%' },
+        ],
+      };
+      [['payel', 'exec'], ['vikram', 'exec'], ['meera', 'exec'], ['rafiq', 'exec'],
+       ['nita', 'quality'], ['imran', 'quality'], ['sruti', 'quality']].forEach(function (pair) {
+        try { saveKra_(ctx, { employee: pair[0], kras: KRA_SETS[pair[1]] }); }
+        catch (e) { out.push('  KRAs: ' + pair[0] + ' — ' + e.message); }
+      });
+      out.push('KRAs: measurable ones on every person, so the appraisal has numbers.');
+
+    }],
+  ];
+  for (var i = 0; i < STEPS.length; i++) {
+    if (st.done.indexOf(STEPS[i][0]) > -1) continue;
+    if (ran && Date.now() > deadline) return pause();
+    if (STEPS[i][1]() === false) return pause();
+    st.done.push(STEPS[i][0]); ran++;
+    demoBuildSave_(st);
+  }
+  demoBuildClear_();
+  try { bumpVersion_(ctx.sheetId); } catch (e) {}
+  var email = ctx.me.email || DEMO_EMAIL;
   /* ---- what to do with it ---------------------------------------------- */
   var url = '';
   try { url = ScriptApp.getService().getUrl() ? CFG().siteUrl : ''; } catch (e) {}
@@ -268,7 +332,23 @@ function createDemoAccount(email, password) {
   out.push('which does not exist, so nothing can reach a real inbox by accident.');
   out.push('');
   out.push('To remove it:  run removeDemoAccount');
-  return say(out);
+  return out;
+}
+
+/** The trigger that finishes a demo build the time limit interrupted. */
+function continueDemoBuild() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'continueDemoBuild') ScriptApp.deleteTrigger(t);
+  });
+  var st = demoBuildState_();
+  if (!st || !st.token) return say_(['No demo build waiting to be finished.']);
+  try { requireSession(st.token); }
+  catch (e) { demoBuildClear_(); logError_('continueDemoBuild', e.message);
+              return say_(['The demo build had expired. Run refreshDemoAccount to start again.']); }
+  var lines = demoBuildRest_(st.token, ['', '=== DOMEBOX DEMO (continued) ===', ''], Date.now());
+  var t = lines.join('\n'); Logger.log(t);
+  if (!/=== SIGN IN ===/.test(t) && !/carries on by itself/.test(t)) logError_('continueDemoBuild', t.slice(0, 500));
+  return t;
 }
 
 /** Calendar days from a due date (dueOffset days from today) to N working days after it. */
@@ -421,7 +501,15 @@ function seedDemoDirection_(ctx, out) {
   out.push('Meetings: last week’s review — a win, a values story, three actions (one delegated from an update) — and one roadblock waiting.');
 }
 
-function seedDemoWork_(ctx) {
+/**
+ * Resumable: jobs already on the sheet are skipped, so a build the time limit
+ * stopped carries on where it was. The open work goes in first, so a demo
+ * that is only part-built still has a board and a priority list to show.
+ * @param deadline  ms timestamp to stop by (after at least one job)
+ * @param stats     running totals, carried between runs
+ * @return {{finished: boolean}} and the totals in stats
+ */
+function seedDemoWork_(ctx, deadline, stats) {
   var JOBS = [
     // [title, who, dueOffset, priority, category, outcome]
     ['Despatch 240 flanges to Tata Motors',      'payel',  -24, 'Critical', 'Despatch',   'ontime'],
@@ -482,7 +570,13 @@ function seedDemoWork_(ctx) {
     ['__me__|Renew the factory licence',                 -1, 'Critical', 'Compliance', 'overdue'],
   ];
 
-  var stats = { closed: 0, open: 0, late: 0, reworked: 0 };
+  stats = stats || { closed: 0, open: 0, late: 0, reworked: 0 };
+  var have = {};
+  readTasks_(ctx).forEach(function (t) { have[t.title] = true; });
+  var OPEN_FIRST = { open: 0, progress: 0, overdue: 0 };
+  JOBS = JOBS.filter(function (j) { return OPEN_FIRST.hasOwnProperty(j[j.length - 1]); })
+    .concat(JOBS.filter(function (j) { return !OPEN_FIRST.hasOwnProperty(j[j.length - 1]); }));
+  var made = 0, outOfTime = false;
 
   /* The offsets above are written as "up to 24 days ago", but the reports and
      the leaderboard default to the CALENDAR month, and a task counts in the
@@ -516,6 +610,7 @@ function seedDemoWork_(ctx) {
   };
 
   JOBS.forEach(function (j) {
+    if (outOfTime) return;
     /* The owner's rows are written one field shorter and marked, because his
        username comes from the email he signed up with and is not known until
        the workspace exists. */
@@ -532,6 +627,9 @@ function seedDemoWork_(ctx) {
     if (j[5] === 'overdue') offset = -demoWorkdaysBack_(Math.max(2, Math.round(Math.abs(j[2]) * 1.5)));
     var title = j[0], who = j[1], due = demoYmd_(offset), priority = j[3],
         cat = j[4], outcome = j[5];
+    if (have[title]) return;
+    if (made && deadline && Date.now() > deadline) { outOfTime = true; return; }
+    made++;
     try {
       createTask_(ctx, { title: title, assignTo: who, dueDate: due, priority: priority,
         jobCategory: cat, kra: cat, desc: '' });
@@ -562,9 +660,11 @@ function seedDemoWork_(ctx) {
     }
   });
 
+  if (outOfTime) { dropCache_(ctx); try { bumpVersion_(ctx.sheetId); } catch (e) {} return { finished: false, closed: stats.closed, open: stats.open }; }
+
   /* One recurring job with a stop rule, so the cadence and the countdown are
      both visible without anyone having to set one up on the call. */
-  try {
+  if (!have['Monthly preventive maintenance round']) try {
     createTask_(ctx, { title: 'Monthly preventive maintenance round', assignTo: 'rafiq',
       dueDate: demoYmd_(7), priority: 'High', jobCategory: 'Maintenance',
       frequency: 'Monthly', repeatCount: 12 });
@@ -572,7 +672,7 @@ function seedDemoWork_(ctx) {
   } catch (e) {}
 
   dropCache_(ctx);
-  return stats;
+  return { finished: true, closed: stats.closed, open: stats.open };
 }
 
 /**
@@ -668,9 +768,10 @@ function refreshDemoAccount() {
     for (var i = 1; i < d.length; i++) if (String(d[i][1]).trim().toLowerCase() === DEMO_EMAIL) found = true;
   } catch (e) {}
   if (!found) return say_(['No demo to refresh. Run createDemoAccount once to make one.']);
+  demoBuildClear_();
   deleteDemoAccount(true);
   var made = createDemoAccount();
-  if (!/=== SIGN IN ===/.test(made)) logError_('refreshDemoAccount', String(made).slice(0, 500));
+  if (!/=== SIGN IN ===/.test(made) && !/carries on by itself/.test(made)) logError_('refreshDemoAccount', String(made).slice(0, 500));
   return made;
 }
 
