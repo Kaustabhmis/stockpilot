@@ -16,8 +16,11 @@ function statusLabel(t) {
  *  whose stage was removed, so nothing ever drops off the board. */
 function boardColumns(rows) {
   var s = stages(), work = s.work;
-  var cols = [{ key: 'inbox', title: s.names.approval, tone: 'Needs Approval', statuses: ['Awaiting Approval','Delegation Proposed'] },
-              { key: 'todo', title: s.names.todo, tone: 'To Do', statuses: ['Pending'] }];
+  /* "Needs approval" only while something is waiting for one: on most days
+     the board starts at To do, and the space goes to the work. */
+  var waiting = (rows || []).some(function (t) { return t.status === 'Awaiting Approval' || t.status === 'Delegation Proposed'; });
+  var cols = (waiting ? [{ key: 'inbox', title: s.names.approval, tone: 'Needs Approval', statuses: ['Awaiting Approval','Delegation Proposed'] }] : [])
+    .concat([{ key: 'todo', title: s.names.todo, tone: 'To Do', statuses: ['Pending'] }]);
   work.forEach(function (w, i) { cols.push({ key: 'w' + i, title: w, tone: 'In Progress', statuses: ['In Progress'], stage: w }); });
   var stray = (rows || []).some(function (t) { return t.status === 'In Progress' && work.indexOf(t.stage) < 0; });
   if (!work.length && stray) cols.push({ key: 'w0', title: 'In progress', tone: 'In Progress', statuses: ['In Progress'], stage: '' });
@@ -531,6 +534,52 @@ function renderTasks() {
   if (!rows.length && !STATE.archive && !(STATE.data.tasks || []).length) renderFirstRun();
   if (!rows.length) return;
   if (mode === 'board') renderBoard(rows); else renderList(rows);
+  countFilters();
+  fitBoard();
+}
+
+/* ---------- the board fills the screen under the filters ------------------
+   Its height is worked out from what is really above it (the top bar is
+   taller on a phone, the filters wrap), and scrolling it folds the summary
+   cards away so the work gets the room. */
+function fitBoard() {
+  var tab = $('tab-tasks');
+  if (!tab || tab.classList.contains('hidden')) return;
+  var bar = document.querySelector('#view-app .appbar'), fb = $('taskFilters');
+  var barH = bar ? bar.getBoundingClientRect().height : 64;
+  if (fb) fb.style.top = Math.round(barH) + 'px';
+  var fbH = fb ? fb.getBoundingClientRect().height : 60;
+  var more = $('archiveMore'), moreH = more && !more.classList.contains('hidden') ? more.getBoundingClientRect().height + 16 : 0;
+  var h = Math.max(240, Math.floor(window.innerHeight - barH - fbH - moreH - 22));
+  tab.style.setProperty('--board-h', h + 'px');
+}
+function boardScrolled(e) {
+  var tab = $('tab-tasks'), on = e.target.scrollTop > 6;
+  if (!tab || tab.classList.contains('focus') === on) return;
+  tab.classList.toggle('focus', on);
+  /* Bring the filters to the top as the cards fold, so the board is not left
+     half-way down the page. */
+  if (on) { var fb = $('taskFilters'); if (fb && fb.getBoundingClientRect().top > parseFloat(fb.style.top || 64) + 2) window.scrollTo({ top: window.scrollY + fb.getBoundingClientRect().top - parseFloat(fb.style.top || 64), behavior: 'smooth' }); }
+  setTimeout(fitBoard, 280);
+}
+(function wireBoardScroll() {
+  ['board', 'list'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('scroll', boardScrolled, { passive: true }); });
+  var t = null;
+  window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(fitBoard, 120); });
+  var btn = $('btnFilters');
+  if (btn) btn.addEventListener('click', function () {
+    var fb = $('taskFilters'), open = !fb.classList.contains('open');
+    fb.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    fitBoard();
+  });
+})();
+/** How many filters are set, shown on the phone's Filters button. */
+function countFilters() {
+  var n = 0;
+  ['fAssignee', 'fBy', 'fStatus', 'fCategory', 'fGoal'].forEach(function (id) { var el = $(id); if (el && el.value) n++; });
+  if ($('fOverdue') && $('fOverdue').checked) n++;
+  if (typeof FILTER !== 'undefined' && (FILTER.from || FILTER.to)) n++;
+  var c = $('fCount'); if (c) { c.textContent = n; c.classList.toggle('hidden', !n); }
 }
 
 /* A new workspace's empty board is where a trial is won or lost, so instead
@@ -609,6 +658,7 @@ function renderBoard(rows) {
   var work = stages().work;
   /* More stages, narrower columns, so the whole flow fits on a laptop screen. */
   $('board').style.gridTemplateColumns = 'repeat(' + COLUMNS.length + ',minmax(' + (COLUMNS.length > 5 ? 180 : 230) + 'px,1fr))';
+  $('board').style.setProperty('--ncol', COLUMNS.length);
   $('board').innerHTML = COLUMNS.map(function (c) {
     var all = columnOrder(c.key, rows.filter(function (t) { return inColumn(c, t, work); }));
     var open = STATE.colOpen[c.key] || all.length <= COL_LIMIT + 5;
@@ -617,7 +667,7 @@ function renderBoard(rows) {
     /* The column carries the colour of the state it holds, so the eye learns
        the flow left to right. The heading still says the word — the colour is
        never the only thing saying which column this is. */
-    return '<div><div class="flex items-center justify-between px-1 mb-2">' +
+    return '<div><div class="colTop flex items-center justify-between">' +
       '<span class="colhead"><span class="coldot" style="background:' + tone + '"></span>' +
       '<span class="text-[10px] font-black uppercase tracking-widest text-gray-600">' +
         esc(c.title) + '</span></span>' +

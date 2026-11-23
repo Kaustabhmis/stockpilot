@@ -29,9 +29,9 @@ const SHOTS = process.argv[2];
   console.log('\n=== a failure ===');
   await p.evaluate(() => goAuth('login'));
   await p.fill('#liUser', 'nobody@example.com'); await p.fill('#liPass', 'wrongpass123');
-  await p.click('#btnLogin'); await p.waitForSelector('#dlg.dlg-error', { timeout: 8000 });
-  ok('a wrong password opens a red error dialog', await p.locator('#dlgScrim.on').isVisible() &&
-     /Something went wrong/.test(await p.locator('#dlgTitle').textContent()));
+  await p.click('#btnLogin'); await p.waitForSelector('#dlg.dlg-notice', { timeout: 8000 });
+  ok('a wrong password opens a calm notice, not "something went wrong"', await p.locator('#dlgScrim.on').isVisible() &&
+     /^Notice$/.test((await p.locator('#dlgTitle').textContent()).trim()) && !/went wrong/i.test(await p.locator('#dlg').textContent()));
   ok('with the server’s own words in it', (await p.locator('#dlgMsg').textContent()).trim().length > 5, await p.locator('#dlgMsg').textContent());
   ok('the OK button has the focus, so Enter closes it', await p.evaluate(() => document.activeElement && document.activeElement.dataset.a === 'yes'));
   ok('it is announced to screen readers as an alert', await p.locator('#dlg[role="alertdialog"]').count() === 1);
@@ -59,6 +59,7 @@ const SHOTS = process.argv[2];
   ok('and closes by itself after a moment', !(await p.locator('#dlgScrim').isVisible()));
   await p.evaluate(() => { toast('Saved.', 'ok'); toast('The server is not reachable right now.', 'err'); }); await W(250);
   ok('an error that follows a success replaces it at once', await p.locator('#dlg.dlg-error').isVisible());
+  ok('a lost connection says exactly that', /Connection problem/.test(await p.locator('#dlgTitle').textContent()));
   await p.evaluate(() => closeDialog(true));
 
   console.log('\n=== one at a time ===');

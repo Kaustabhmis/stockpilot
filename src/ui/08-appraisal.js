@@ -222,6 +222,7 @@ function cycleToggle(id) {
 
 function openBilling() {
   if (LITE) { toast('Plans and billing are not part of Domebox Lite.', 'warn'); return; }
+  loadRazorpay().catch(function () {});   // warm it while they choose a plan
   if (!isAdmin()) { toast('Plans and billing are managed by your company’s Admin.', 'warn'); return; }
   var u = STATE.usage;
   openModal('<div class="p-6 lg:p-7">' +
@@ -287,8 +288,25 @@ function renderBillingPlans() {
  * be written from are collected first. Asked once: if a state or a GSTIN is
  * already on file we go straight to the card.
  */
+/** Razorpay's checkout, fetched the first time it is needed rather than on every visit. */
+var RZP_LOADING = null;
+function loadRazorpay() {
+  if (typeof Razorpay !== 'undefined') return Promise.resolve();
+  if (RZP_LOADING) return RZP_LOADING;
+  RZP_LOADING = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js'; s.async = true;
+    s.onload = function () { resolve(); };
+    s.onerror = function () { RZP_LOADING = null; reject(new Error('No connection to the payment page. Check your internet and try again.')); };
+    document.head.appendChild(s);
+  });
+  return RZP_LOADING;
+}
+
 function startCheckout(planName, promo) {
-  if (typeof Razorpay === 'undefined') { toast('The payment library has not loaded. Refresh and try again.', 'err'); return; }
+  loadRazorpay().then(function () { startCheckoutNow(planName, promo); }, function (e) { toast(e.message, 'err'); });
+}
+function startCheckoutNow(planName, promo) {
   api('getBilling', {})
     .then(function (r) {
       if (r.billing && (r.billing.gstin || r.billing.state)) return payNow(planName, promo);

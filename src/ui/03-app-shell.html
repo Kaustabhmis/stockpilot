@@ -70,28 +70,30 @@
 
   <!-- ---------------------------- TASKS ---------------------------- -->
   <section id="tab-tasks">
-    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 pt-6">
+    <div class="tilesWrap max-w-[1500px] mx-auto px-4 lg:px-6 pt-6">
       <div id="statTiles" class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5"></div>
     </div>
 
-    <div class="bg-white border-y border-gray-100 sticky top-16 z-30">
+    <div id="taskFilters" class="bg-white border-y border-gray-100 sticky top-16 z-30">
       <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center gap-2">
         <input id="fSearch" class="in max-w-[200px]" placeholder="Search tasks…">
-        <select id="fAssignee" class="in max-w-[160px]" aria-label="Assigned to"></select>
-        <select id="fBy" class="in max-w-[170px]" aria-label="Assigned by"></select>
-        <select id="fStatus" class="in max-w-[150px]"></select>
-        <select id="fCategory" class="in max-w-[150px]"></select>
-        <select id="fGoal" class="in max-w-[190px] hidden" aria-label="Filter by goal"></select>
-        <button id="fDatesBtn" type="button" class="btn btn-g text-xs py-2 px-3 flex items-center gap-1" title="Filter by date">
+        <button id="btnFilters" type="button" class="md-down btn btn-g text-xs py-2 px-3 flex items-center gap-1" aria-expanded="false" aria-controls="taskFilters">
+          <span class="material-icons text-sm">tune</span> Filters <span id="fCount" class="hidden bg-blue-600 text-white rounded-full px-1.5 text-[10px] font-black"></span></button>
+        <select id="fAssignee" class="fx in max-w-[160px]" aria-label="Assigned to"></select>
+        <select id="fBy" class="fx in max-w-[170px]" aria-label="Assigned by"></select>
+        <select id="fStatus" class="fx in max-w-[150px]"></select>
+        <select id="fCategory" class="fx in max-w-[150px]"></select>
+        <select id="fGoal" class="fx in max-w-[190px] hidden" aria-label="Filter by goal"></select>
+        <button id="fDatesBtn" type="button" class="fx btn btn-g text-xs py-2 px-3 flex items-center gap-1" title="Filter by date">
           <span class="material-icons text-sm">date_range</span> <span id="fDatesLabel">Any date</span></button>
-        <label class="flex items-center gap-2 text-xs font-bold text-gray-600 px-1 whitespace-nowrap">
+        <label class="fx flex items-center gap-2 text-xs font-bold text-gray-600 px-1 whitespace-nowrap">
           <input type="checkbox" id="fOverdue" class="w-4 h-4 accent-red-600"> Overdue
         </label>
-        <button id="btnHistory" class="btn btn-g text-xs py-2 px-3">
+        <button id="btnHistory" class="fx btn btn-g text-xs py-2 px-3">
           <span class="material-icons text-sm">history</span> <span class="sm-up">Archive</span>
         </button>
-        <span class="flex-1"></span>
-        <div class="seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="viewMode">
+        <span class="flex-1 sm-up"></span>
+        <div class="fx seg flex gap-1 bg-gray-100 p-1 rounded-xl" id="viewMode">
           <button data-mode="board" class="on text-xs">Board</button>
           <button data-mode="list" class="text-xs">List</button>
         </div>
@@ -101,9 +103,9 @@
       </div>
     </div>
 
-    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 py-6">
-      <div id="board" class="grid gap-4" style="grid-template-columns:repeat(5,minmax(230px,1fr));overflow-x:auto"></div>
-      <div id="list" class="hidden bg-white rounded-3xl border border-gray-100 overflow-x-auto"></div>
+    <div class="max-w-[1500px] mx-auto px-4 lg:px-6 pt-3 pb-4">
+      <div id="board" class="boardScroll grid gap-4" style="grid-template-columns:repeat(4,minmax(230px,1fr))"></div>
+      <div id="list" class="boardScroll hidden bg-white rounded-3xl border border-gray-100"></div>
       <div id="archiveMore" class="hidden flex items-center justify-between gap-3 mt-4 px-1"></div>
       <div id="tasksEmpty" class="hidden text-center py-24 text-gray-400 font-bold"></div>
     </div>

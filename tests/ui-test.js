@@ -160,9 +160,11 @@ const { chromium } = require('playwright');
   console.log('--- colour that carries meaning ---');
   await p.click('#navTabs button[data-tab="tasks"]'); await p.waitForTimeout(900);
   ok('each board column carries the colour of the state it holds',
-     (await p.locator('#board .coldot').count()) === 5);
+     (await p.locator('#board .coldot').count()) === (await p.locator('#board .colhead').count()) && (await p.locator('#board .coldot').count()) >= 4);
   ok('and the heading still says the word, so colour is never the only signal',
-     /NEEDS APPROVAL|Needs Approval/i.test(await p.locator('#board').textContent()));
+     /TO DO|To do/i.test(await p.locator('#board').textContent()));
+  ok('"Needs approval" shows only when something is waiting for approval',
+     /Needs approval/i.test(await p.locator('#board').textContent()) === await p.evaluate(() => (STATE.data.tasks || []).some((t) => t.status === 'Awaiting Approval' || t.status === 'Delegation Proposed')));
   /* A tint is hashed from the name, so it has to be the same on every screen.
      A colour that moves between renders is worse than none: people learn it,
      then it lies to them. */

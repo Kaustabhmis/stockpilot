@@ -32,7 +32,38 @@ var FILTER = { q:'', assignee:'', by:'', dateOn:'due', from:'', to:'', sort:'', 
    JSON; only the declared type differs. */
 /* Every call the person is waiting on shows the loading bar; background
    polls pass { quiet: true } so the bar never flickers on its own. */
+/* ---------- remembered reads ----------------------------------------------
+   Every tab used to ask the server again each time it was opened: one to three
+   seconds on Apps Script, for the same answer it gave a minute ago. Reads in
+   this list are kept for 90 seconds per signed-in person. Any change made from
+   this screen, or noticed by the 30-second check, forgets them all, so what is
+   shown after a change is always fresh. */
+var READ_CACHE = {}, READ_TTL = 90000;
+var CACHEABLE = { getPriorityList: 1, getProjects: 1, getMeetings: 1, getDirection: 1, getLeaderboard: 1,
+  getAnalytics: 1, getUsers: 1, getOrgChart: 1, getKraOverview: 1, getKraFor: 1, getCookies: 1, getLeave: 1,
+  getAccountability: 1, getPerformanceReport: 1, getCategories: 1, getReferrals: 1 };
+/* Reads that change nothing, so they leave the remembered reads alone. */
+var READ_ONLY = { getDashboard: 1, getAvatarPhotos: 1, getProofPhoto: 1, getArchive: 1, getTasks: 1, getMeeting: 1,
+  getAppraisalForm: 1, getBilling: 1, getInvoices: 1, getPublicInfo: 1, ping: 1, getPartnerDashboard: 1 };
+function forgetReads() { READ_CACHE = {}; }
+
 function api(action, params, opts) {
+  if (CACHEABLE[action] && !(opts && opts.fresh)) {
+    var key = action + '|' + (STATE.token || '').slice(-16) + '|' + JSON.stringify(params || {});
+    var hit = READ_CACHE[key];
+    if (hit && Date.now() - hit.at < READ_TTL) return Promise.resolve(JSON.parse(hit.text));
+    return apiCall(action, params, opts).then(function (j) {
+      READ_CACHE[key] = { at: Date.now(), text: JSON.stringify(j) };
+      return j;
+    });
+  }
+  return apiCall(action, params, opts).then(function (j) {
+    if (!CACHEABLE[action] && !READ_ONLY[action]) forgetReads();   // something was changed
+    return j;
+  });
+}
+
+function apiCall(action, params, opts) {
   var body = Object.assign({ action: action }, params || {});
   if (STATE.token) body.token = STATE.token;
   var quiet = opts && opts.quiet;
@@ -42,18 +73,21 @@ function api(action, params, opts) {
     method: 'POST', redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(body)
+  }, function () {
+    /* fetch itself failed: no signal, or the server could not be reached. */
+    throw new Error('No connection. Check your internet and try again.');
   }).then(function (r) {
-    if (!r.ok) throw new Error('The server is not reachable right now.');
+    if (!r.ok) throw new Error('The server is not reachable right now. Please try again in a moment.');
     return r.text();
   }).then(function (text) {
     var j;
     try { j = JSON.parse(text); }
-    catch (e) { throw new Error('The server sent something unexpected. Try again.'); }
+    catch (e) { throw new Error('The server is busy right now. Please try again in a moment.'); }
     if (j.status === 'error') {
       /* An expired or forged token must drop the session, or the user sits on a
          dead screen pressing buttons that will never work. */
       if (/signed in|session|expired/i.test(j.message || '')) signOut(true);
-      throw new Error(j.message || 'Something went wrong.');
+      throw new Error(j.message || 'That did not work. Please try again.');
     }
     return j;
   }).then(function (j) { if (!quiet) loadingEnd(); return j; },
@@ -92,7 +126,17 @@ function spin(label) {
 function toast(msg, kind) {
   /* Returns nothing, as it always has: code that carries on after a message
      must not wait for somebody to close it. */
-  if (kind === 'err') { showDialog({ kind: 'error', message: msg }); return; }
+  /* Most refusals are the system working as it should ("Finish the
+     checklist first"): those are a calm notice. Only a lost connection or a
+     server fault is shown as a problem, and it says which. */
+  if (kind === 'err') {
+    var m = String(msg || '');
+    if (/No connection|not reachable|server is busy|on our side|could not be saved just now/i.test(m)) {
+      var net = /No connection|not reachable/i.test(m);
+      showDialog({ kind: 'error', title: net ? 'Connection problem' : 'Please try again', icon: net ? 'wifi_off' : 'refresh', message: m });
+    } else showDialog({ kind: 'notice', message: m });
+    return;
+  }
   if (kind === 'warn') { showDialog({ kind: 'warning', message: msg }); return; }
   if (kind === 'ok' || kind === 'win') { showDialog({ kind: 'success', message: msg, autoClose: 2600 }); return; }
   var el = document.createElement('div');
@@ -108,7 +152,8 @@ function toast(msg, kind) {
    their turn, and the same message twice in a row shows once. */
 var DLG = { open: null, queue: [], timer: null };
 var DLG_KINDS = {
-  error:   { icon: 'error',        title: 'Something went wrong' },
+  notice:  { icon: 'info',         title: 'Notice' },
+  error:   { icon: 'error_outline', title: 'Please try again' },
   warning: { icon: 'warning',      title: 'Please check' },
   success: { icon: 'check_circle', title: 'Done' },
   confirm: { icon: 'help',         title: 'Are you sure?' }
@@ -131,7 +176,7 @@ function paintDialog(o) {
   box.className = 'dlg dlg-' + o.kind;
   box.setAttribute('role', o.kind === 'success' ? 'status' : 'alertdialog');
   box.innerHTML =
-    '<div class="dlg-icon"><span class="material-icons">' + k.icon + '</span></div>' +
+    '<div class="dlg-icon"><span class="material-icons">' + esc(o.icon || k.icon) + '</span></div>' +
     '<h2 id="dlgTitle" class="dlg-title">' + esc(o.title || k.title) + '</h2>' +
     '<p id="dlgMsg" class="dlg-msg">' + esc(o.message || '') + '</p>' +
     '<div class="dlg-actions">' +
@@ -355,6 +400,7 @@ function restoreSession() {
 }
 function signOut(expired) {
   var wasDemo = !!STATE.demo;
+  forgetReads();
   /* Tell the server, so a copied token stops working too. Sent straight, not
      through api(): its answer must never sign out a session started since. */
   if (!expired && STATE.token && !wasDemo) {

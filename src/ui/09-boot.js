@@ -156,6 +156,7 @@ setInterval(function () {
     lastFullCheck = Date.now();
     if (d.serviceStopped) { STATE.data = d; renderStopped(d); return; }
     var changed = JSON.stringify(d.tasks) !== JSON.stringify(STATE.data.tasks);
+    forgetReads();   // the company changed: the other tabs ask again next time
     if (d.staff) d.staff = byName(d.staff);
     STATE.data = d; STATE.usage = d.usage;
     renderBanner(); renderTiles(); renderBell();

@@ -54,7 +54,7 @@ function doPost(e) {
       var ref = Utilities.getUuid().replace(/-/g, '').slice(0, 8).toUpperCase();
       logError_('route:' + String(body.action || '').slice(0, 40), '[' + ref + '] ' + msg +
         (err && err.stack ? ' | ' + String(err.stack).slice(0, 300) : ''));
-      msg = 'Something went wrong on our side. Please try again. (Reference ' + ref + ')';
+      msg = 'That could not be saved just now. Please try again in a moment. If it keeps happening, tell us the reference ' + ref + '.';
     }
     return json_({ status: 'error', message: msg });
   }

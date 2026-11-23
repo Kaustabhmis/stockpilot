@@ -45,7 +45,7 @@
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
-<script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+<!-- Razorpay's checkout script is loaded only when somebody goes to pay (loadRazorpay in 08-appraisal.js), not on every visit. -->
 <style>
   :root{
     /* Chart series. Validated for the categorical job against this surface:
@@ -284,6 +284,7 @@
     overflow:hidden;box-shadow:0 30px 70px -20px rgba(15,27,45,.55);
     animation:dlgPop .2s cubic-bezier(.2,.9,.3,1.2)}
   .dlg::before{content:'';position:absolute;top:0;left:0;right:0;height:6px;background:var(--dlg-c,#1e4fbf)}
+  .dlg-notice{--dlg-c:#1e4fbf;--dlg-bg:#eef4ff}
   .dlg-error{--dlg-c:#b42318;--dlg-bg:#fef3f2}
   .dlg-warning{--dlg-c:#b54708;--dlg-bg:#fffaeb}
   .dlg-success{--dlg-c:#067647;--dlg-bg:#ecfdf3}
@@ -540,9 +541,44 @@
      changes under it — but that same !important also beats `md:flex`, which
      would have left half the nav permanently invisible. These hide without
      .hidden, so the element's natural display survives. */
+  /* ---- the task board: its own scroll area, headings frozen at the top ----
+     The board scrolls inside a box that fills the screen under the filters.
+     Once it is scrolled, the summary cards above fold away (#tab-tasks.focus)
+     and the column headings stay pinned while the cards move under them. */
+  #board.boardScroll,#list.boardScroll{overflow:auto;max-height:var(--board-h,72vh);overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
+  #board .colTop{position:sticky;top:0;z-index:6;background:var(--paper);padding:4px 4px 8px;margin:0 -4px}
+  html.lite #board .colTop{background:#fff}
+  #list.boardScroll thead th{position:sticky;top:0;z-index:2;background:#fff}
+  #statTiles{transition:max-height .25s ease,opacity .2s ease,margin .25s ease;max-height:640px;overflow:hidden}
+  #tab-tasks.focus #statTiles{max-height:0;opacity:0;margin-bottom:0}
+  #tab-tasks.focus .tilesWrap{padding-top:10px}
+  @media(max-width:767px){
+    /* A phone shows one column at a time; swipe sideways for the next. */
+    #board{grid-template-columns:repeat(var(--ncol,4),86vw) !important;scroll-snap-type:x mandatory;gap:12px !important}
+    #board > div{scroll-snap-align:start}
+    /* Filters fold behind one button, so the board keeps the screen. */
+    #taskFilters .fx{display:none !important}
+    #taskFilters.open .fx{display:flex !important}
+    #taskFilters.open select.fx{display:block !important}
+    #taskFilters input#fSearch{flex:1;min-width:0;max-width:none}
+    #taskFilters select.fx{max-width:none !important;width:100%}
+    /* The summary as a compact strip of three, not six screen-high cards. */
+    #statTiles{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:8px !important;margin-bottom:12px !important}
+    #statTiles .tile{padding:.6rem .65rem;border-radius:.9rem}
+    #statTiles .tile .tv{font-size:1.35rem}
+    #statTiles .tile .tk{font-size:9px;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px}
+    #statTiles .tile .ts{display:none}
+    #statTiles .tile .ti{font-size:16px;right:.45rem;top:.5rem}
+    .tilesWrap{padding-top:12px !important}
+  }
   @media(max-width:639px){ .sm-up{display:none !important} }
   @media(max-width:767px){ .md-up{display:none !important} }
   @media(min-width:768px){ .md-down{display:none !important} }
+  /* Eight tabs plus the bar's buttons need about 1100px. Below that (a tablet,
+     a small laptop) the tabs move to the scrolling row under the bar, instead
+     of pushing the page sideways. */
+  @media(max-width:1099px){ #navTabs{display:none !important} #navTabsMobile{display:flex !important} }
 </style>
 </head>
 <body class="antialiased">

@@ -37,8 +37,8 @@ const SHOTS = process.env.SHOTS || '';
 
   console.log('\n=== the Admin designs the stages ===');
   const a = await signIn(email, 'strongpass123');
-  ok('out of the box: Needs approval, To do, In progress, For review, Verified',
-    JSON.stringify(await cols(a)) === JSON.stringify(['Needs approval', 'To do', 'In progress', 'For review', 'Verified']), await cols(a));
+  ok('out of the box: To do, In progress, For review, Verified (no approval column while nothing waits)',
+    JSON.stringify(await cols(a)) === JSON.stringify(['To do', 'In progress', 'For review', 'Verified']), await cols(a));
   await a.click('#btnAccount'); await a.waitForTimeout(400);
   await a.click('button:has-text("Task stages")'); await a.waitForTimeout(400);
   ok('the dialog shows the four fixed stages and the working stages', (await a.$$('#fStages .stName')).length === 4 && (await a.$$('#fStages .stWorkName')).length === 1);
@@ -54,7 +54,7 @@ const SHOTS = process.env.SHOTS || '';
   if (SHOTS) await a.screenshot({ path: SHOTS + '/1-task-stages-dialog.png' });
   await a.click('#fStages button[type=submit]'); await a.waitForTimeout(1600);
   ok('the board now has a column per stage', JSON.stringify(await cols(a)) ===
-    JSON.stringify(['Needs approval', 'To do', 'Material ordered', 'Fabrication', 'Quality check', 'QC review', 'Verified']), await cols(a));
+    JSON.stringify(['To do', 'Material ordered', 'Fabrication', 'Quality check', 'QC review', 'Verified']), await cols(a));
 
   console.log('\n=== a head of department does not get the setting ===');
   const h = await signIn('sruti' + R + '@acme.in', 'staffpass123');

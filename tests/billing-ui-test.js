@@ -60,7 +60,7 @@ const post = (body) => new Promise((res, rej) => {
   await p.fill('#bGstin', 'NOTAGSTIN');
   await p.click('#bSave'); await p.waitForTimeout(800);
   ok('the form says so rather than saving it',
-     /does not look right/.test(await p.locator('#dlg').textContent()) && await p.locator('#dlg.dlg-error, #dlg.dlg-warning').isVisible());
+     /does not look right/.test(await p.locator('#dlg').textContent()) && await p.locator('#dlg.dlg-error, #dlg.dlg-warning, #dlg.dlg-notice').isVisible());
   await p.evaluate(() => closeDialog(true));
   ok('and the form is still open to correct', await p.locator('#bGstin').count() === 1);
 
