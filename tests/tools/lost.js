@@ -5,7 +5,12 @@ const fs = require('fs'), path = require('path'), { execFileSync } = require('ch
 const ROOT = path.join(__dirname, '..', '..'), BASE = process.argv[2] || 'HEAD~1';
 const at = (f) => execFileSync('git', ['show', BASE + ':' + f], { cwd: ROOT, maxBuffer: 64 << 20 }).toString();
 const now = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
-const diff = (label, a, b) => { const lost = [...a].filter((x) => !b.has(x)), added = [...b].filter((x) => !a.has(x));
+/* Removed on purpose, each with the reason, so a deliberate removal is not
+   reported as lost — and nothing else can quietly join it. */
+const RETIRED = {
+  planForPaise_: 'guessed the plan from the amount paid; a payment now buys what its server-made order says',
+};
+const diff = (label, a, b) => { const lost = [...a].filter((x) => !b.has(x) && !RETIRED[x]), added = [...b].filter((x) => !a.has(x));
   console.log((lost.length ? 'LOST ' : 'ok   ') + label + ': ' + a.size + ' before, ' + b.size + ' now' +
     (lost.length ? '  — missing: ' + lost.join(', ') : '') + (added.length ? '  (+ ' + added.join(', ') + ')' : '')); return lost.length; };
 const fns = (s) => new Set([...s.matchAll(/^function\s+([A-Za-z0-9_$]+)\s*\(/gm)].map((m) => m[1]));

@@ -26,8 +26,11 @@ env.props.SELLER_PAN = 'AABCB1234C';
    fake Razorpay has the payment on record as captured. */
 env.props.RAZORPAY_KEY_ID = 'rzp_test_HARNESS';
 env.props.RAZORPAY_KEY_SECRET = 'harness-secret';
-const RZP = {};
+const RZP = {}, ORDERS = {};
 env.G.UrlFetchApp.fetch = (url) => {
+  const o = String(url).match(/\/v1\/orders\/([^?]+)$/);
+  if (o) { const x = ORDERS[decodeURIComponent(o[1])];
+    return { getResponseCode: () => (x ? 200 : 404), getContentText: () => JSON.stringify(x || {}) }; }
   const m = String(url).match(/\/v1\/payments\/([^?]+)$/);
   const p = m && RZP[decodeURIComponent(m[1])];
   return { getResponseCode: () => (p ? 200 : 404), getContentText: () => JSON.stringify(p || {}) };
@@ -36,6 +39,8 @@ function pay(sheetId, plan, company, paise, id) {
   const entity = { id: id, order_id: 'order_' + id, amount: paise, currency: 'INR', status: 'captured',
     notes: { sheetId, plan, company } };
   RZP[id] = entity;
+  /* The order the server would have made: a payment buys what its order says. */
+  ORDERS[entity.order_id] = { id: entity.order_id, amount: paise, currency: 'INR', notes: { sheetId, plan, company } };
   const raw = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity } } });
   const res = APP.doPost({ postData: { contents: raw }, parameter: {} });
   return JSON.parse(res.getContent());
