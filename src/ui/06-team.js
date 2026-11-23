@@ -12,6 +12,7 @@ function renderTeam() {
      a Doer is not shown buttons the server would refuse. */
   var doer = !!(STATE.user && STATE.user.role === 'Doer');
   $('btnNewUser').classList.toggle('hidden', doer);
+  $('btnImport').classList.toggle('hidden', doer);
   $('btnCategories').classList.toggle('hidden', doer);
   $('btnKra').classList.toggle('hidden', doer);       // the company-wide KRA sheet is a manager's screen
   var active = TEAM.filter(function (u) { return u.active !== false; });

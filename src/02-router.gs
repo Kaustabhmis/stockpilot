@@ -202,6 +202,7 @@ function route_(p) {
 
     /* --- team ------------------------------------------------------------ */
     case 'addUser':             return addUser_(ctx, p.form);
+    case 'importUsers':         return importUsers_(ctx, p.rows, p.password);
     case 'updateUser':          return updateUser_(ctx, p.form);
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);

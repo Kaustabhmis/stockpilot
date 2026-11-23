@@ -78,6 +78,7 @@ $('btnHistory').addEventListener('click', function () {
 });
 $('btnNewTask').addEventListener('click', openAssign);
 $('btnNewUser').addEventListener('click', function () { openUser(null); });
+$('btnImport').addEventListener('click', openImport);
 $('btnLeave').addEventListener('click', openLeave);
 $('btnCategories').addEventListener('click', openCategories);
 $('btnTabs').addEventListener('click', openTabLayout);
