@@ -198,18 +198,21 @@
      the same colour. It stays pinned while the cards scroll under it. */
   .boardCol{display:flex;flex-direction:column;min-width:0}
   .col{position:relative;border-top:0;border-radius:0 0 1.15rem 1.15rem}
-  .colTop{display:flex;align-items:center;justify-content:space-between;gap:8px;
-          background:#fff;border:1px solid var(--line);border-top:4px solid var(--col-tone,#c3cddc);
-          border-radius:14px 14px 0 0;padding:10px 12px 10px 14px}
-  .colhead{display:inline-flex;align-items:center;gap:8px;min-width:0}
-  .coldot{width:10px;height:10px;border-radius:999px;background:var(--col-tone,#c3cddc);flex-shrink:0}
-  .colTitle{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.005em;
+  .colTop{display:flex;align-items:center;justify-content:space-between;gap:10px;
+          background:var(--col-head,var(--col-tone,#475467));color:#fff;border:0;
+          border-radius:14px 14px 0 0;padding:13px 14px 13px 16px;
+          box-shadow:inset 0 -1px 0 rgba(0,0,0,.08)}
+  .colhead{display:inline-flex;align-items:center;gap:9px;min-width:0}
+  .coldot{width:9px;height:9px;border-radius:999px;background:#fff;opacity:.85;flex-shrink:0}
+  .colTitle{font-size:15.5px;font-weight:800;color:#fff;letter-spacing:-.005em;
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .colCount{min-width:26px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:800;
+  .colCount{min-width:30px;height:26px;padding:0 9px;border-radius:999px;font-size:13.5px;font-weight:900;
             display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
-            background:#eef1f6;color:var(--ink2)}
+            background:rgba(255,255,255,.22);color:#fff}
+  /* The tray under each heading carries a wash of the same colour. */
   @supports (background:color-mix(in srgb,red 10%,white)){
-    .colCount{background:color-mix(in srgb,var(--col-tone,#c3cddc) 14%,white);color:color-mix(in srgb,var(--col-tone,#475467) 85%,black)}
+    .col{background:color-mix(in srgb,var(--col-tone,#c3cddc) 7%,#f4f6fa);
+         border-color:color-mix(in srgb,var(--col-tone,#c3cddc) 22%,#e2e7ef)}
   }
 
   /* ---------- stat tiles --------------------------------------------------- */
@@ -564,7 +567,6 @@
   #board .colTop{position:sticky;top:0;z-index:6;transition:box-shadow .2s ease}
   /* Once cards are scrolling under the headings, a soft shadow says so. */
   #tab-tasks.focus #board .colTop{box-shadow:0 8px 14px -10px rgba(15,27,45,.35)}
-  html.lite #board .colTop{border-color:#c9d6f2;border-top-color:var(--col-tone,#c3cddc)}
   #list.boardScroll thead th{position:sticky;top:0;z-index:2;background:#fff}
   #statTiles{transition:max-height .25s ease,opacity .2s ease,margin .25s ease;max-height:640px;overflow:hidden}
   #tab-tasks.focus #statTiles{max-height:0;opacity:0;margin-bottom:0}

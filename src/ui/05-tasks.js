@@ -667,7 +667,9 @@ function renderBoard(rows) {
     /* The column carries the colour of the state it holds, so the eye learns
        the flow left to right. The heading still says the word — the colour is
        never the only thing saying which column this is. */
-    return '<div class="boardCol" style="--col-tone:' + tone + '"><div class="colTop">' +
+    /* A deeper shade for the heading bar where white text needs it to be readable. */
+    var head = ({ 'Needs Approval': '#b45309', 'To Do': '#475467' })[c.tone] || tone;
+    return '<div class="boardCol" style="--col-tone:' + tone + ';--col-head:' + head + '"><div class="colTop">' +
       '<span class="colhead"><span class="coldot"></span><span class="colTitle">' + esc(c.title) + '</span></span>' +
       '<span class="colCount" title="' + all.length + ' task' + (all.length === 1 ? '' : 's') + '">' + all.length + '</span></div>' +
       '<div class="col" data-col="' + c.key + '" style="--col-tone:' + tone + '">' +
