@@ -110,6 +110,8 @@ function switchOnSchedules() {
   }
   installTaskArchiveSchedule();
   out.push('  ok      year-old work moves to the archive on the 1st of each month');
+  installOwnerReportSchedule();
+  out.push('  ok      the monthly report goes to each company\'s Admins on the 1st, around 9 am');
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'reconcilePayments') ScriptApp.deleteTrigger(t);
   });

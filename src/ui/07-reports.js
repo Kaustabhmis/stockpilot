@@ -148,6 +148,7 @@ function heatmap(host, rowLabels, colLabels, values) {
 
 /* ---------- reports ------------------------------------------------------ */
 function loadReports() {
+  $('btnOwnerReport').classList.toggle('hidden', !isAdmin());
   if (!STATE.usage.allowReports) {
     $('reportsBody').classList.add('hidden');
     $('reportsLocked').classList.remove('hidden');

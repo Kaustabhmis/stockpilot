@@ -79,6 +79,11 @@ $('btnHistory').addEventListener('click', function () {
 $('btnNewTask').addEventListener('click', openAssign);
 $('btnNewUser').addEventListener('click', function () { openUser(null); });
 $('btnImport').addEventListener('click', openImport);
+$('btnOwnerReport').addEventListener('click', function () {
+  var b = this; busy(b, true);
+  api('emailOwnerReport').then(function (r) { toast(r.message, 'ok'); })
+    .catch(function (e) { toast(e.message, 'err'); }).then(function () { busy(b, false); });
+});
 $('btnLeave').addEventListener('click', openLeave);
 $('btnCategories').addEventListener('click', openCategories);
 $('btnTabs').addEventListener('click', openTabLayout);
