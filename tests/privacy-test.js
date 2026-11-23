@@ -110,12 +110,12 @@ const realTab = tenant.getSheetByName;
 tenant.getSheetByName = (n) => { if (n === 'Tasks') throw new TypeError("Cannot read properties of undefined (reading 'getLastRow')"); return realTab(n); };
 const internal = msg({ action: 'getDashboard', token: A });
 tenant.getSheetByName = realTab;
-ok('an internal fault reaches the user as a plain message with a reference', /Reference [0-9A-F]{8}/.test(internal) && !/Cannot read/.test(internal), internal);
-const ref = (internal.match(/Reference ([0-9A-F]{8})/) || [])[1];
+ok('an internal fault reaches the user as a plain message with a reference', /reference [0-9A-F]{8}/i.test(internal) && !/Cannot read/.test(internal), internal);
+const ref = (internal.match(/reference ([0-9A-F]{8})/i) || [])[1];
 ok('and the detail is in the ErrorLog under that reference', !!ref && S(env.FILES.MASTER.getSheetByName('ErrorLog')._data).includes(ref));
 
 ok('a normal message that quotes typed text is not mistaken for a fault',
-  !/Reference/.test(msg({ action: 'createTask', token: A, form: { title: 'Spreadsheet null check', assignTo: 'nobody-here', dueDate: due, priority: 'Low' } })));
+  !/reference [0-9A-F]{8}/i.test(msg({ action: 'createTask', token: A, form: { title: 'Spreadsheet null check', assignTo: 'nobody-here', dueDate: due, priority: 'Low' } })));
 
 console.log('\n=== guessing passwords ===');
 let lock = '';

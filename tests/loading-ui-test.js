@@ -48,11 +48,14 @@ const SHOTS = process.argv[2];
   ok('and the bar and pill go away once everything is in', cleared);
 
   console.log('\n=== moving between tabs ===');
-  await p.click('#navTabs button:has-text("Goals")'); await W(400);
-  ok('a tab that is loading shows a spinner where its content will be', await p.locator('#goalsBody .spinner').isVisible());
+  await p.click('#navTabs button:has-text("Meetings")'); await W(400);
+  ok('a tab that is loading shows a spinner where its content will be', await p.locator('#meetBody .spinner').isVisible());
   if (SHOTS) await p.screenshot({ path: SHOTS + '/loading-02-tab.png' });
-  await p.waitForFunction(() => !document.querySelector('#goalsBody .spinner'), null, { timeout: 8000 });
-  ok('and it is replaced by the tab itself', (await p.locator('#goalsBody').textContent()).trim().length > 20);
+  await p.waitForFunction(() => !document.querySelector('#meetBody .spinner'), null, { timeout: 8000 });
+  ok('and it is replaced by the tab itself', (await p.locator('#meetBody').textContent()).trim().length > 20);
+  await p.click('#navTabs button:has-text("Goals")'); await W(150);
+  ok('Goals, already fetched at sign-in, shows at once with no spinner', !(await p.locator('#goalsBody .spinner').count()) &&
+     (await p.locator('#goalsBody').textContent()).trim().length > 20);
   await p.click('#navTabs button:has-text("Projects")'); await W(400);
   ok('Projects too', await p.locator('#projectList .spinner').isVisible());
   await p.waitForFunction(() => !document.querySelector('#projectList .spinner'), null, { timeout: 8000 });

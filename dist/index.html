@@ -1376,7 +1376,21 @@ function api(action, params, opts) {
   if (CACHEABLE[action] && !(opts && opts.fresh)) {
     var key = action + '|' + (STATE.token || '').slice(-16) + '|' + JSON.stringify(params || {});
     var hit = READ_CACHE[key];
-    if (hit && Date.now() - hit.at < READ_TTL) return Promise.resolve(JSON.parse(hit.text));
+    if (hit && Date.now() - hit.at < READ_TTL) {
+      /* Shown at once, and checked with the server behind it: if somebody else
+         changed something meanwhile, the tab redraws with it a moment later. */
+      if (Date.now() - hit.at > 3000 && !hit.checking) {
+        hit.checking = true;
+        var tab = STATE.tab;
+        apiCall(action, params, { quiet: true }).then(function (j) {
+          var text = JSON.stringify(j), changed = text !== hit.text;
+          READ_CACHE[key] = { at: Date.now(), text: text };
+          var busyForm = $('scrim') && $('scrim').classList.contains('on');
+          if (changed && STATE.tab === tab && !busyForm && typeof renderTab === 'function') renderTab();
+        }, function () { hit.checking = false; });
+      }
+      return Promise.resolve(JSON.parse(hit.text));
+    }
     return apiCall(action, params, opts).then(function (j) {
       READ_CACHE[key] = { at: Date.now(), text: JSON.stringify(j) };
       return j;

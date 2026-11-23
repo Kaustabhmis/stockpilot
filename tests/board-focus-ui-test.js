@@ -85,6 +85,12 @@ const hit = (p) => new Promise((res) => http.get('http://localhost:' + PORT + p,
   await a.click('#navTabs [data-tab="tasks"]'); await a.waitForTimeout(300);
   await a.click('#navTabs [data-tab="team"]'); await a.waitForTimeout(1200);
   ok('after a change it asks again, so the new person shows', calls.includes('getUsers') && /New Person/.test(await a.textContent('#teamTable')), calls.join(','));
+  /* Someone else adds a person, from another screen: this one has the team remembered. */
+  await post({ action: 'addUser', token: A, form: { name: 'Elsewhere Added', username: 'ea' + R, email: 'ea' + R + '@acme.in', role: 'Doer', jobProfile: 'Exec', password: 'staffpass123' } });
+  await a.waitForTimeout(3200);
+  await a.click('#navTabs [data-tab="tasks"]'); await a.waitForTimeout(200);
+  await a.click('#navTabs [data-tab="team"]'); await a.waitForTimeout(2500);
+  ok('a change made by someone else appears on a remembered tab a moment later', /Elsewhere Added/.test(await a.textContent('#teamTable')));
   ok('the payment script is not loaded until someone goes to pay', await a.evaluate(() => typeof Razorpay === 'undefined' && ![...document.scripts].some((x) => /razorpay/.test(x.src))));
   await a.close();
 

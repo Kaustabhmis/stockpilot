@@ -91,7 +91,7 @@ const { chromium } = require('playwright');
   await p.fill('#asChk','Book the agency\nCollect certificates');
   await p.click('#fAssign button[type=submit]'); await p.waitForTimeout(1200);
   ok('board renders the task', (await p.locator('.card').count())===1);
-  ok('five columns', (await p.locator('.col').count())===5);
+  ok('four columns: To do, In progress, For review, Verified (no approval column while nothing waits)', (await p.locator('.col').count())===4);
   ok('recurring chip shown', /Quarterly/.test(await p.locator('.card').first().textContent()));
 
   console.log('--- detail drawer ---');
