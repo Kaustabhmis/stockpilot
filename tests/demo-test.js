@@ -247,7 +247,9 @@ console.log('\n=== cut short by the time limit, it finishes by itself ===');
    being cut off part-way: the live demo had closed jobs and nothing open. A
    budget of 1 ms makes every run stop after one job, the worst case. */
 const fullDash = call({ action: 'getDashboard', token: call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).token });
-const fullCount = (fullDash.tasks || []).length;
+/* The board hides work verified more than a few days ago (archivedCount), and
+   that cut-off moves with the clock, so the two builds are compared on both. */
+const fullCount = (fullDash.tasks || []).length + (fullDash.archivedCount || 0); const fullTitles = (fullDash.tasks || []).map((t) => t.title);
 env.props.DEMO_BUILD_BUDGET_MS = '1';
 const cut = APP.refreshDemoAccount();
 ok('a build that runs out of time says it will carry on, and does not log an error', /carries on by itself/.test(cut) && !/=== SIGN IN ===/.test(cut), cut.slice(-200));
@@ -261,7 +263,7 @@ while (pending() && rounds < 200) { last = APP.continueDemoBuild(); rounds++; }
 ok('it finishes in steps (' + rounds + ' runs) and then removes its trigger', /=== SIGN IN ===/.test(last) && pending() === 0, last.slice(-200));
 const after = call({ action: 'getDashboard', token: call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).token });
 const tl = after.tasks || [];
-ok('with the same work as a build done in one go, nothing twice', tl.length === fullCount && new Set(tl.map((t) => t.title)).size === tl.length, tl.length + ' vs ' + fullCount);
+ok('with the same work as a build done in one go, nothing twice', tl.length + (after.archivedCount || 0) === fullCount && new Set(tl.map((t) => t.title)).size === tl.length, (tl.length + (after.archivedCount || 0)) + ' vs ' + fullCount + ' missing: ' + fullTitles.filter((x) => !tl.some((t) => t.title === x)).join('; ') + ' extra: ' + tl.filter((t) => !fullTitles.includes(t.title)).map((t) => t.title).join('; '));
 ok('in every state a board shows', ['Pending', 'In Progress', 'Verified'].every((s) => tl.some((t) => t.status === s)));
 ok('and the steps after the work ran too (project, KRAs)', tl.some((t) => t.title === 'Close last audit NCs') &&
    (call({ action: 'getKraFor', token: call({ action: 'login', username: 'demo@biscsindia.com', password: 'demo-pass-for-tests' }).token, username: 'payel' }).kras || []).length > 0);
