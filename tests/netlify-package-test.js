@@ -36,7 +36,15 @@ const EXEC = 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec';
   const robots = fs.readFileSync(path.join(PKG, 'robots.txt'), 'utf8');
   ok('robots.txt lets Google fetch the icons', !/^\s*Disallow:\s*\/(\s|$|favicon|apple)/mi.test(robots) && /Allow: \//.test(robots));
   const hdr = fs.existsSync(path.join(PKG, '_headers')) ? fs.readFileSync(path.join(PKG, '_headers'), 'utf8') : '';
-  ok('no header tells Google not to index the site or its images', !/^[^#]*X-Robots-Tag/mi.test(hdr));
+  /* noindex is allowed only on the files meant for crawlers and the app (so the
+     sitemap is not listed as a search result) — never on a page or an image. */
+  const NOINDEX_OK = /^\/(sitemap\.xml|robots\.txt|llms\.txt|[0-9a-f]{32}\.txt|domebox-config\.js)$/;
+  let block = '', bad = [];
+  hdr.split('\n').forEach((l) => { if (/^\S/.test(l) && !/^#/.test(l)) block = l.trim();
+    else if (/^\s+X-Robots-Tag/i.test(l) && !NOINDEX_OK.test(block)) bad.push(block); });
+  ok('no header tells Google not to index the site or its images', bad.length === 0, bad.join(', '));
+  ok('the sitemap and other crawler files are kept out of search results',
+     ['/sitemap.xml', '/robots.txt', '/llms.txt'].every((f) => new RegExp('^' + f.replace(/\./g, '\\.') + '\\s*\\n\\s+X-Robots-Tag: noindex', 'm').test(hdr)));
   /* AI Overviews (and ChatGPT, Perplexity, Copilot) quote pages that answer
      first, name who wrote them and when, and mark up only questions a reader
      can see. */

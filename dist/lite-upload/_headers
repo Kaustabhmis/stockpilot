@@ -13,3 +13,14 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+/sitemap.xml
+  X-Robots-Tag: noindex
+/robots.txt
+  X-Robots-Tag: noindex
+/llms.txt
+  X-Robots-Tag: noindex
+/44b6de3c3bc60cac3b32853918157023.txt
+  X-Robots-Tag: noindex
+/domebox-config.js
+  X-Robots-Tag: noindex
