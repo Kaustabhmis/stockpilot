@@ -639,7 +639,7 @@ function taskCard(t) {
       priorityChip(t.priority) +
       (t.projectId ? '<span class="chip t-violet" title="' + esc(t.projectName) + '">' +
         esc(t.projectName) + ' \u00b7 ' + t.stageNo + '/' + t.stageCount + '</span>' : '') +
-      ((t.blockedBy || []).length ? '<span class="chip t-amber">Blocked</span>' : '') +
+      (openBlockerCount(t) ? '<span class="chip t-amber">Blocked</span>' : '') +
       (sub.length ? '<span class="chip t-slate">' + done + '/' + sub.length + '</span>' : '') +
       (t.reworkCount ? '<span class="chip t-rust">Rework ' + t.reworkCount + '</span>' : '') +
       (t.frequency && t.frequency !== 'One Time' ? '<span class="chip t-plum">' + esc(repeatLabel(t)) + '</span>' : '') +
@@ -884,10 +884,9 @@ function openTask(id) {
   }
 
   var blockReason = '';
-  if (t.status === 'Pending' && (t.blockedBy || []).length) {
-    var names = (t.blockedBy || []).map(function (bid) {
-      var b = taskById(bid); return b && b.status !== 'Verified' ? b.title : null;
-    }).filter(Boolean);
+  var blk = blockerItems(t);
+  if (t.status === 'Pending') {
+    var names = blk.filter(function (b) { return b.open; }).map(function (b) { return b.title; });
     if (names.length) blockReason = 'Blocked by ' + names.join(', ');
   }
   if (subs.length && doneN < subs.length && (t.status === 'In Progress' || (!work.length && t.status === 'Pending'))) {
@@ -943,7 +942,7 @@ function openTask(id) {
       }).join('') +
       (['Verified','Rejected','Cancelled'].indexOf(t.status) < 0 && (isMine || isAdmin)
         ? '<button class="btn btn-g act" data-act="delegate">Hand over…</button>' : '') +
-      (['Verified','Rejected','Cancelled'].indexOf(t.status) < 0 && (isRaiser || isAdmin)
+      (['Verified','Rejected','Cancelled'].indexOf(t.status) < 0 && (isRaiser || isAdmin || isMine)
         ? '<button class="btn btn-g act" data-act="block">Add blocker…</button>' : '') +
       (t.frequency !== 'One Time' && (isRaiser || isAdmin)
         ? '<button class="btn btn-g act" data-act="stop">Stop repeating</button>' : '') +
@@ -951,6 +950,17 @@ function openTask(id) {
       (!acts.length ? '<span class="text-xs font-bold text-gray-400 py-2">No actions available to you here.</span>' : '') +
     '</div>' +
     (blockReason ? '<div class="text-[11px] font-bold text-amber-700 mb-4">' + esc(blockReason) + '</div>' : '<div class="mb-4"></div>') +
+    (blk.length ? '<div class="mb-5"><div class="lb">Blockers</div><div class="space-y-2 mt-1">' + blk.map(function (b) {
+      var canClear = ['Verified','Rejected','Cancelled'].indexOf(t.status) < 0 && (isRaiser || isAdmin || isMine);
+      return '<div class="flex items-start gap-3 rounded-xl border px-3 py-2 ' + (b.open ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-gray-50') + '">' +
+        '<span class="material-icons text-base mt-0.5 ' + (b.open ? 'text-amber-700' : 'text-emerald-700') + '">' + (b.custom ? 'report' : b.open ? 'link' : 'check_circle') + '</span>' +
+        '<div class="flex-1 min-w-0 text-sm"><div class="font-bold text-gray-800 break-words">' + esc(b.title) + '</div>' +
+        '<div class="text-[11px] font-semibold text-gray-500">' + (b.custom
+          ? 'Custom blocker' + (b.by ? ' · added by ' + esc(b.by) : '') + (b.at ? ' · ' + esc(new Date(b.at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })) : '')
+          : 'Task' + (b.by ? ' · ' + esc(b.by) : '') + (b.open ? '' : ' · done, no longer blocking')) + '</div></div>' +
+        (canClear ? '<button type="button" class="blkDel text-xs font-black ' + (b.custom ? 'text-emerald-700' : 'text-gray-500') + ' whitespace-nowrap" data-i="' + b.i + '">' +
+          (b.custom ? 'Resolved' : 'Remove') + '</button>' : '') + '</div>';
+    }).join('') + '</div></div>' : '') +
     /* Archive and delete are the Admin's alone. */
     (isAdmin && !t.coldStore ? '<div class="flex flex-wrap items-center gap-2 mb-5 pt-4 border-t border-gray-100">' +
       '<span class="lb mb-0 mr-1">Admin</span>' +
@@ -977,6 +987,9 @@ function openTask(id) {
             esc(h.proof) + '"><span class="material-icons text-sm">photo</span> View photo</button>' : '') + '</div></div>';
       }).join('') + '</div></div>');
 
+  $('drawer').querySelectorAll('.blkDel').forEach(function (b) {
+    b.addEventListener('click', function () { b.disabled = true; removeBlocker(t, Number(b.dataset.i)); });
+  });
   $('drawer').querySelectorAll('.proofBtn').forEach(function (b) {
     b.addEventListener('click', function () { openProofPhoto(t.id, b.dataset.proof); });
   });
@@ -1208,25 +1221,68 @@ function openDelegate(t) {
   });
 }
 
+/* ---------- blockers ----------------------------------------------------
+   One box: start typing and the open tasks that match are offered; pick one to
+   link it. If nothing matches, what was typed is added as a custom blocker
+   ("Waiting for material from the vendor"), which stays until marked resolved. */
+function blockerItems(t) {
+  return (t.blockedBy || []).map(function (b, i) {
+    if (b && typeof b === 'object') return { i: i, custom: true, title: b.note, by: b.by || '', at: b.at || '', open: true };
+    var x = taskById(b);
+    return { i: i, custom: false, id: b, title: x ? x.title : 'Task ' + b, by: x ? x.toName : '',
+             open: !x || ['Verified', 'Rejected', 'Cancelled'].indexOf(x.status) < 0 };
+  });
+}
+function openBlockerCount(t) { return blockerItems(t).filter(function (b) { return b.open; }).length; }
+
 function openBlocker(t) {
   var cands = (STATE.data.tasks || []).filter(function (x) {
     return x.id !== t.id && ['Verified','Rejected','Cancelled'].indexOf(x.status) < 0 &&
            (t.blockedBy || []).indexOf(x.id) < 0; });
-  if (!cands.length) { toast('No other open task could block this.', 'warn'); return; }
+  var label = function (x) { return x.title + ' · ' + (x.toName || '') + ' (' + x.id + ')'; };
   openModal('<form id="fBlk" class="p-6 lg:p-7">' +
-    '<h2 class="text-xl font-black mb-5">What is blocking "' + esc(t.title) + '"?</h2>' +
-    '<select id="blkId" class="in mb-5">' + cands.map(function (x) {
-      return '<option value="' + esc(x.id) + '">' + esc(x.title) + ' · ' + esc(x.toName) + '</option>'; }).join('') +
-    '</select><div class="flex gap-3">' +
+    '<h2 class="text-xl font-black mb-1">What is blocking "' + esc(t.title) + '"?</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-4">' + (cands.length
+      ? 'Type to find the task it is waiting on, or describe what is in the way if it is not a task.'
+      : 'Describe what is in the way — there is no other open task it could be waiting on.') + '</p>' +
+    '<input id="blkText" class="in" list="blkList" maxlength="140" autocomplete="off" required ' +
+      'placeholder="e.g. Waiting for material from the vendor">' +
+    '<datalist id="blkList">' + cands.map(function (x) { return '<option value="' + esc(label(x)) + '"></option>'; }).join('') + '</datalist>' +
+    '<p id="blkHint" class="text-xs font-bold text-gray-400 mt-2 mb-5">&nbsp;</p>' +
+    '<div class="flex gap-3">' +
     '<button type="button" class="btn btn-g flex-1" onclick="closeModal()">Cancel</button>' +
     '<button type="submit" class="btn btn-p flex-1">Add blocker</button></div></form>');
+  var match = function () {
+    var v = $('blkText').value.trim().toLowerCase();
+    if (!v) return null;
+    for (var i = 0; i < cands.length; i++) if (label(cands[i]).toLowerCase() === v || cands[i].title.trim().toLowerCase() === v) return cands[i];
+    return null;
+  };
+  var hint = function () {
+    var m = match(), v = $('blkText').value.trim();
+    $('blkHint').innerHTML = !v ? '&nbsp;' : m
+      ? '<span class="text-blue-700">Links the task “' + esc(m.title) + '” — this clears itself when that task is verified.</span>'
+      : '<span class="text-amber-700">Added as a custom blocker — it stays until someone marks it resolved.</span>';
+  };
+  $('blkText').addEventListener('input', hint);
+  $('blkText').focus();
   $('fBlk').addEventListener('submit', function (e) {
     e.preventDefault();
-    api('addBlocker', { taskId: t.id, blockerId: $('blkId').value })
+    var m = match(), v = $('blkText').value.trim();
+    if (!m && v.length < 3) { toast('Say a little more about what is blocking it.', 'warn'); return; }
+    var btn = e.target.querySelector('button[type=submit]'); busy(btn, true);
+    api('addBlocker', m ? { taskId: t.id, blockerId: m.id } : { taskId: t.id, note: v })
       .then(function (r) { toast(r.message, 'ok'); closeModal(); return refresh(); })
       .then(function () { openTask(t.id); })
-      .catch(function (err) { toast(err.message, 'err'); });
+      .catch(function (err) { busy(btn, false); toast(err.message, 'err'); });
   });
+}
+
+function removeBlocker(t, index) {
+  api('removeBlocker', { taskId: t.id, index: index })
+    .then(function (r) { toast(r.message, 'ok'); return refresh(); })
+    .then(function () { openTask(t.id); })
+    .catch(function (err) { toast(err.message, 'err'); });
 }
 
 function openEdit(t) {

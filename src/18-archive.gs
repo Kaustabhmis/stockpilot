@@ -96,7 +96,7 @@ function pickForColdStore_(rows, now, afterDays) {
   rows.forEach(function (r) {
     var parent = String(r[T['Spawned By']] || '');
     if (parent) hasChild[parent] = true;
-    if (!closed(r)) safeJson_(r[T['Blocked By']], []).forEach(function (b) { blocking[String(b)] = true; });
+    if (!closed(r)) safeJson_(r[T['Blocked By']], []).forEach(function (b) { if (b && typeof b !== 'object') blocking[String(b)] = true; });
   });
 
   var ok = rows.map(function (r) {

@@ -156,8 +156,12 @@ quietly stop trusting.
 
 - **Checklist** — tick items off as you go. The drawer shows `3/5`. You can
   still submit with items unticked; it is a prompt, not a gate.
-- **Add blocker** — point this task at another. While that one is open, this
-  one says *Blocked by…* and will not start. Circular blocks are refused.
+- **Add blocker** — start typing: matching open tasks are suggested. Pick one
+  and, while that task is open, this one says *Blocked by…* and will not start
+  (circular blocks are refused). If nothing matches — *Waiting for material
+  from the vendor*, *Machine under repair* — what you typed becomes a **custom
+  blocker**: it holds the task the same way until someone presses **Resolved**.
+  The person doing the task can add one too, and both steps go on its history.
 - **Hand over** — propose passing it to someone else. Your manager decides. It
   does not simply vanish from your list.
 

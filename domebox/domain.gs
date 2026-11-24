@@ -1662,6 +1662,9 @@ function openBlockers(task, allTasks) {
   (allTasks || []).forEach(function (t) { byId[t.id] = t; });
   var out = [];
   ids.forEach(function (id) {
+    /* A custom blocker ("Waiting for material from the vendor") is not a task:
+       it blocks until somebody marks it resolved. */
+    if (id && typeof id === 'object') { if (id.note) out.push({ id: '', title: id.note, custom: true }); return; }
     var b = byId[id];
     if (b && !isClosed(b.status)) out.push(b);
   });

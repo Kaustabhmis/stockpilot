@@ -383,14 +383,47 @@ function delegateTask_(ctx, taskId, toUsername) {
   return { status: 'success', message: r.note };
 }
 
-function addBlocker_(ctx, taskId, blockerId) {
+/* A blocker is either another task (it clears itself when that task closes) or,
+   when nothing on the board matches, a short note of what is in the way. A note
+   clears when somebody marks it resolved. Either kind stops the task being
+   started, and adding or resolving a note goes on the task's history. */
+var BLOCKER_NOTE_MAX = 140;
+
+function addBlocker_(ctx, taskId, blockerId, note) {
   blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit || !visibleTasks_(ctx, [hit.task]).length) throw new Error('That task is not one you can see.');
+  if (note != null && String(note).trim()) {
+    var text = String(note).replace(/\s+/g, ' ').trim();
+    if (text.length < 3) throw new Error('Say a little more about what is blocking it.');
+    if (text.length > BLOCKER_NOTE_MAX) throw new Error('Keep it under ' + BLOCKER_NOTE_MAX + ' characters.');
+    var list = (hit.task.blockedBy || []).slice();
+    if (list.some(function (b) { return b && typeof b === 'object' && String(b.note).toLowerCase() === text.toLowerCase(); })) {
+      throw new Error('That blocker is already on this task.');
+    }
+    list.push({ note: text, by: ctx.actor.name, at: new Date().toISOString() });
+    writeTaskField_(hit, 'Blocked By', JSON.stringify(list));
+    appendHistory_(hit, hit.task.status, ctx.actor.name, 'Blocked: ' + text);
+    return { status: 'success', message: 'Blocker added.' };
+  }
   var all = readTasks_(ctx);
   var r = addDependency(taskId, blockerId, all);
   if (!r.ok) throw new Error(r.error);          // refuses circular chains
-  var hit = findTaskRow_(ctx, taskId);
   writeTaskField_(hit, 'Blocked By', JSON.stringify(r.blockedBy));
   return { status: 'success', message: 'Blocker added.' };
+}
+
+/** Takes one blocker off a task: a note is resolved, a task link removed. */
+function removeBlocker_(ctx, taskId, index) {
+  blockIfStopped_(ctx);
+  var hit = findTaskRow_(ctx, taskId);
+  if (!hit || !visibleTasks_(ctx, [hit.task]).length) throw new Error('That task is not one you can see.');
+  var list = (hit.task.blockedBy || []).slice(), i = Number(index);
+  if (!(i >= 0 && i < list.length)) throw new Error('That blocker is no longer on this task.');
+  var gone = list.splice(i, 1)[0];
+  writeTaskField_(hit, 'Blocked By', JSON.stringify(list));
+  if (gone && typeof gone === 'object') appendHistory_(hit, hit.task.status, ctx.actor.name, 'Blocker resolved: ' + gone.note);
+  return { status: 'success', message: gone && typeof gone === 'object' ? 'Marked resolved.' : 'Blocker removed.' };
 }
 
 function toggleSubtask_(ctx, taskId, index, done) {

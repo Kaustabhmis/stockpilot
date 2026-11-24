@@ -198,7 +198,8 @@ function route_(p) {
     case 'processTaskApproval': return processApproval_(ctx, p.taskId, p.isApproved, p.remarks);
     case 'stopRecurringTask':   return stopRecurring_(ctx, p.taskId);
     case 'delegateTask':        return delegateTask_(ctx, p.taskId, p.toUsername);
-    case 'addBlocker':          return addBlocker_(ctx, p.taskId, p.blockerId);
+    case 'addBlocker':          return addBlocker_(ctx, p.taskId, p.blockerId, p.note);
+    case 'removeBlocker':       return removeBlocker_(ctx, p.taskId, p.index);
     case 'toggleSubtask':       return toggleSubtask_(ctx, p.taskId, p.index, p.done);
     case 'archiveTask':         return archiveTask_(ctx, p.taskId);
     case 'restoreTask':         return restoreTask_(ctx, p.taskId);
