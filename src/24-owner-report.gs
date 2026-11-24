@@ -129,12 +129,14 @@ function ownerReport_(ctx, now) {
   /* Goals: how many are on track, and which need attention, by department. */
   var goalsHtml = '', goalNums = null;
   try {
-    var allGoals = readGoals_(ctx), sm = fyStartMonth_(ctx), fq = fyPeriod_(now, sm);
+    /* The quarter the report is about: last month's, not the one just begun. */
+    var asOf = new Date(now.getTime() - 86400000);
+    var allGoals = readGoals_(ctx), sm = fyStartMonth_(ctx), fq = fyPeriod_(asOf, sm);
     var liveGoals = allGoals.filter(function (g) { return g.status !== 'Dropped' &&
       (g.level === 'year' ? g.period === fq.year : g.period === fq.quarter); });
     if (liveGoals.length) {
       var rows = liveGoals.map(function (g) { return { id: g.id, title: g.title, dept: g.scope === 'dept' ? g.dept : '' }; });
-      rollUpOutlooks_(rows, allGoals, tasks, sm);
+      rollUpOutlooks_(rows, allGoals, tasks, sm, now);
       goalNums = { onTrack: 0, atRisk: 0, offTrack: 0, noData: 0, achieved: 0 };
       rows.forEach(function (r) { var v = r.outlook.verdict;
         if (v === 'On track') goalNums.onTrack++; else if (v === 'At risk') goalNums.atRisk++;

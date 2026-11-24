@@ -27,7 +27,7 @@ function createProject_locked_(ctx, form) {
 
   var gate = String(form.gate || 'sequential').toLowerCase() === 'parallel' ? 'parallel' : 'sequential';
   var goalId = String(form.goal || '').trim();
-  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
+  if (goalId && (!goalById_(ctx, goalId) || !goalVisible_(ctx, goalById_(ctx, goalId)))) throw new Error('That goal no longer exists. Pick another, or none.');
   var stages = (form.stages || []).map(function (s, i) {
     return {
       no: i + 1,

@@ -6467,7 +6467,9 @@ function renderGoals(d) {
   var years = d.goals.filter(function (g) { return g.level === 'year' && inScope(g); });
   var quarters = d.goals.filter(function (g) {
     return g.level === 'quarter' && g.period === q && inScope(g) && (!GOALS.owner || g.owner === GOALS.owner); });
-  var reviewList = d.goals.filter(function (g) { return inScope(g) && (g.level === 'year' || g.period === q); });
+  /* This quarter's goals and this financial year's — not last year's unfinished ones. */
+  var fyOf = String(q || '').replace(/ Q[1-4]$/, '');
+  var reviewList = d.goals.filter(function (g) { return inScope(g) && (g.level === 'year' ? g.period === fyOf || g.period === d.now.year : g.period === q); });
   var parentOf = function (g) { var p = d.goals.filter(function (x) { return x.id === g.parent; })[0]; return p ? p.title : ''; };
 
   var valuesBlock =
@@ -6721,7 +6723,8 @@ function openGoalEditor(id) {
   var paintOwners = function () {
     var w = curWhere(), keep = $('glOwner').value || (g ? g.owner : STATE.user.username);
     var staff = ((STATE.data && STATE.data.staff) || []).filter(function (u) { return u.active !== false; });
-    var pool = w === 'Company' ? staff : staff.filter(function (u) { return u.dept === w || u.username === STATE.user.username && !d.canCompanyGoals; });
+    var pool = w === 'Company' ? staff : staff.filter(function (u) {
+      return String(u.dept || '').trim() === w || (g && u.username === g.owner); });   // never drop the goal's current owner
     if (!pool.length) { $('glOwner').innerHTML = staffOptionsHtml(keep); return; }
     if (!pool.some(function (u) { return u.username === keep; })) keep = pool.some(function (u) { return u.username === STATE.user.username; }) ? STATE.user.username : pool[0].username;
     $('glOwner').innerHTML = pool.map(function (u) {
@@ -6729,13 +6732,16 @@ function openGoalEditor(id) {
   };
   var paintParents = function () {
     var w = curWhere(), keep = $('glParent').value || (g ? g.parent : '');
-    var live = d.goals.filter(function (x) { return x.status !== 'Dropped' && (!g || x.id !== g.id); });
+    /* Keep the goal's current link even if that goal has since been dropped, so saving never quietly unlinks it. */
+    var live = d.goals.filter(function (x) { return (x.status !== 'Dropped' || (g && x.id === g.parent)) && (!g || x.id !== g.id); });
     var opts = [];
+    var current = g && g.parent ? live.filter(function (x) { return x.id === g.parent; })[0] : null;
     if (w === 'Company') {
       if (level === 'quarter') opts = live.filter(function (x) { return x.level === 'year' && x.scope !== 'dept'; });
     } else {
       opts = live.filter(function (x) { return x.scope !== 'dept' || (level === 'quarter' && x.level === 'year' && x.dept === w); });
     }
+    if (current && opts.indexOf(current) < 0) opts.unshift(current);
     $('glParentWrap').classList.toggle('hidden', !opts.length && w === 'Company' && level === 'year');
     $('glParent').innerHTML = '<option value="">' + (w === 'Company' ? 'None' : 'No company goal') + '</option>' + opts.map(function (x) {
       return '<option value="' + esc(x.id) + '"' + (x.id === keep ? ' selected' : '') + '>' +

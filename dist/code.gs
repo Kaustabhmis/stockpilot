@@ -2094,7 +2094,7 @@ function createTask_locked_(ctx, form) {
      task tagged to a goal that does not exist would count toward nothing and
      still look as if it did. */
   var goalId = String(form.goal || '').trim();
-  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
+  if (goalId && (!goalById_(ctx, goalId) || !goalVisible_(ctx, goalById_(ctx, goalId)))) throw new Error('That goal no longer exists. Pick another, or none.');
   var raisedIn = String(form.raisedIn || '').trim();
 
   var sheet = ctx.ss.getSheetByName(TAB.TASKS);
@@ -2691,7 +2691,7 @@ function editTask_(ctx, form) {
   }
 
   if (form.goal !== undefined && String(form.goal) !== String(t.goal || '')) {
-    if (form.goal && !goalById_(ctx, form.goal)) throw new Error('That goal no longer exists.');
+    if (form.goal && (!goalById_(ctx, form.goal) || !goalVisible_(ctx, goalById_(ctx, form.goal)))) throw new Error('That goal no longer exists.');
     writeTaskField_(hit, 'Goal', String(form.goal || ''));
     changes.push('Goal');
   }
@@ -4494,7 +4494,7 @@ function createProject_locked_(ctx, form) {
 
   var gate = String(form.gate || 'sequential').toLowerCase() === 'parallel' ? 'parallel' : 'sequential';
   var goalId = String(form.goal || '').trim();
-  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
+  if (goalId && (!goalById_(ctx, goalId) || !goalVisible_(ctx, goalById_(ctx, goalId)))) throw new Error('That goal no longer exists. Pick another, or none.');
   var stages = (form.stages || []).map(function (s, i) {
     return {
       no: i + 1,
@@ -6063,6 +6063,10 @@ function seedDemoDirection_(ctx, out) {
   var ago = new Date(); ago.setDate(ago.getDate() - 3); ago.setHours(10, 0, 0, 0);
   var end = new Date(ago.getTime() + 55 * 60000);
   writeMeeting_(ctx, meetingById_(ctx, m), { 'Date': ymd(ago), 'Started': ago, 'Ended': end });
+  /* The roadblock raised before it was raised the day before, like a real one. */
+  dropCache_(ctx);
+  var before = new Date(ago.getTime() - 86400000), ish = tab_(ctx, TAB.MEETING_ITEMS, MEETING_ITEM_COLS);
+  readItems_(ctx).forEach(function (it) { if (!it.meeting && it.kind === 'roadblock') ish.getRange(it.row, 11).setValue(before); });
   dropCache_(ctx);
   out.push('Meetings: last week’s review — a win, a values story, three actions (one delegated from an update) — and one roadblock waiting.');
 }
@@ -6694,8 +6698,11 @@ function getDirection_(ctx) {
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
   var sm = fyStartMonth_(ctx), now = fyPeriod_(new Date(), sm);
 
-  var withProgress = goals.filter(function (g) { return goalVisible_(ctx, g); }).map(function (g) {
-    var p = goalProgress_(g, goals, tasks);
+  /* Everything here is worked out from the goals this person may see, so a
+     hidden department goal never shows through a company goal's numbers. */
+  var visible = goals.filter(function (g) { return goalVisible_(ctx, g); });
+  var withProgress = visible.map(function (g) {
+    var p = goalProgress_(g, visible, tasks);
     return { id: g.id, level: g.level, period: g.period, title: g.title, detail: g.detail,
              owner: g.owner, ownerName: names[g.owner] || g.owner, parent: g.parent,
              status: g.status, note: g.note, updated: g.updated, progress: p,
@@ -6703,7 +6710,7 @@ function getDirection_(ctx) {
              outlook: goalOutlook_(g, p, sm, new Date()),
              canManage: canManageGoal_(ctx, g), canCheckIn: canCheckInGoal_(ctx, g) };
   });
-  rollUpOutlooks_(withProgress, goals, tasks, sm);
+  rollUpOutlooks_(withProgress, visible, tasks, sm);
 
   return { status: 'success', purpose: dir.purpose, values: dir.values.map(function (v) {
       return { code: v.code, title: v.title, detail: v.detail }; }),
@@ -7059,25 +7066,40 @@ function goalOutlook_(g, progress, sm, now) {
   };
 
   if (g.metric) {
-    var m = g.metric, need = m.target - m.start, list = (g.checkins || []).slice().sort(function (a, b2) { return String(a.d) < String(b2.d) ? -1 : 1; });
+    var m = g.metric, need = m.target - m.start;
+    if (!need || !isFinite(need)) return { verdict: 'Needs data', tone: 'warn', reason: 'Its target is the same as where it starts. Edit the goal and set a different target.', percent: null, expected: gone === null ? null : pct(gone) };
+    /* Only figures from inside the period count: an older one was the starting point, not progress. */
+    var fromYmd = b ? ymd(b.from) : '';
+    var list = (g.checkins || []).filter(function (c) { return c && c.d && (!fromYmd || String(c.d) >= fromYmd) && isFinite(Number(c.v)); })
+      .sort(function (a, b2) { return String(a.d) < String(b2.d) ? -1 : 1; });
     var last = list[list.length - 1];
     if (!last) {
       if (gone !== null && gone < 0.15) return { verdict: 'Not started', tone: 'none', reason: 'No figure entered yet — the first check-in starts the trend.', percent: 0, expected: pct(gone) };
       return { verdict: 'Needs data', tone: 'warn', reason: 'No figure entered yet' + (gone !== null ? ', with ' + pct(gone) + '% of the period gone.' : '.'), percent: 0, expected: gone === null ? null : pct(gone) };
     }
     var done = (Number(last.v) - m.start) / need;
-    var at = b ? Math.max(0.02, Math.min(1, (parseYmd(last.d) - b.from) / span)) : 1;
-    var pace = done / at;                        // where it ends, as a share of the target, if it carries on as it has
-    var ends = m.start + need * Math.max(0, pace);
     var age = Math.floor((now - parseYmd(last.d)) / 86400000);
     var stale = gone !== null && gone < 1 && age > GOAL_STALE_DAYS;
-    var j = judge(done, pace, false);
-    var why = 'At ' + fmt(Number(last.v)) + ' against a target of ' + fmt(m.target) + ': ' + pct(done) + '% of the way' +
+    /* Pace is measured to the date of the figure — or to today, once that
+       figure is old, so a number nobody has updated cannot stay on track. */
+    var at = b ? Math.min(1, (parseYmd(last.d) - b.from) / span) : 1;
+    if (stale || (gone !== null && gone >= 1)) at = Math.max(at, gone);
+    var early = b && at < 0.1;                    // too soon to project from one early figure
+    var pace = early ? null : done / Math.max(at, 0.01);
+    var share = pace === null ? null : Math.max(-0.5, Math.min(1.5, pace));
+    var ends = share === null ? null : m.start + need * share;
+    if (ends !== null && m.start >= 0 && m.target >= 0) ends = Math.max(0, ends);
+    var j = pace === null
+      ? (done >= 1 ? { verdict: 'Achieved', tone: 'good' } : done >= (gone || 0) - 0.05 ? { verdict: 'On track', tone: 'good' } : { verdict: 'At risk', tone: 'warn' })
+      : judge(done, pace, false);
+    if (stale && j.tone === 'good' && j.verdict !== 'Achieved') j = { verdict: 'At risk', tone: 'warn' };
+    var why = 'At ' + fmt(Number(last.v)) + ' against a target of ' + fmt(m.target) + ': ' +
+      (done < 0 ? 'moving the wrong way' : pct(done) + '% of the way') +
       (gone !== null && gone < 1 ? ', with ' + pct(gone) + '% of the period gone.' : '.') +
-      (j.verdict !== 'Achieved' && gone !== null && gone < 1 ? ' At this pace it ends near ' + fmt(ends) + '.' : '') +
-      (stale ? ' The last figure is ' + age + ' days old.' : '');
+      (j.verdict !== 'Achieved' && ends !== null && gone !== null && gone < 1 ? ' At this pace it ends near ' + fmt(ends) + '.' : '') +
+      (stale ? ' The last figure is ' + age + ' days old — enter this week\'s.' : '');
     return { verdict: j.verdict, tone: j.tone, reason: why, percent: pct(done), expected: gone === null ? null : pct(gone),
-             last: Number(last.v), lastOn: last.d, projected: Math.round(ends * 100) / 100, stale: stale };
+             last: Number(last.v), lastOn: last.d, projected: ends === null ? null : Math.round(ends * 100) / 100, stale: stale };
   }
 
   /* No figure: judged on the work linked to it. */
@@ -7102,10 +7124,15 @@ function recordGoalCheckin_(ctx, id, value, note) {
   var v = Number(value);
   if (value === '' || value === null || !isFinite(v)) throw new Error('Enter the figure as a number.');
   var today = ymd(new Date());
-  var list = (g.checkins || []).filter(function (c) { return c.d !== today; });
-  list.push({ d: today, v: v, by: ctx.actor.name, note: String(note || '').trim().slice(0, 200) });
-  list = list.slice(-400);
   return withLock_(function () {
+    /* Read it again under the lock: another figure, or a deleted goal above
+       this one, may have changed the sheet since. */
+    dropCache_(ctx);
+    g = goalById_(ctx, id);
+    if (!g || !g.metric) throw new Error('That goal no longer exists.');
+    var list = (g.checkins || []).filter(function (c) { return c.d !== today; });
+    list.push({ d: today, v: v, by: ctx.actor.name, note: String(note || '').trim().slice(0, 200) });
+    list = list.slice(-150);                     // well inside a cell's 50,000 characters
     var sh = tab_(ctx, TAB.GOALS, GOAL_COLS);
     widen_(sh, GOAL_COLS);
     sh.getRange(g.row, 18).setValue(JSON.stringify(list));
@@ -7121,8 +7148,8 @@ function recordGoalCheckin_(ctx, id, value, note) {
  * A goal with no figure and no work of its own is judged on the goals that
  * serve it: a company goal is on track when its department goals are.
  */
-function rollUpOutlooks_(shown, goals, tasks, sm) {
-  var now = new Date(), memo = {};
+function rollUpOutlooks_(shown, goals, tasks, sm, when) {
+  var now = when || new Date(), memo = {};
   var outlookOf = function (g, depth) {
     if (memo[g.id]) return memo[g.id];
     var own = goalOutlook_(g, goalProgress_(g, goals, tasks), sm, now);
@@ -8806,12 +8833,14 @@ function ownerReport_(ctx, now) {
   /* Goals: how many are on track, and which need attention, by department. */
   var goalsHtml = '', goalNums = null;
   try {
-    var allGoals = readGoals_(ctx), sm = fyStartMonth_(ctx), fq = fyPeriod_(now, sm);
+    /* The quarter the report is about: last month's, not the one just begun. */
+    var asOf = new Date(now.getTime() - 86400000);
+    var allGoals = readGoals_(ctx), sm = fyStartMonth_(ctx), fq = fyPeriod_(asOf, sm);
     var liveGoals = allGoals.filter(function (g) { return g.status !== 'Dropped' &&
       (g.level === 'year' ? g.period === fq.year : g.period === fq.quarter); });
     if (liveGoals.length) {
       var rows = liveGoals.map(function (g) { return { id: g.id, title: g.title, dept: g.scope === 'dept' ? g.dept : '' }; });
-      rollUpOutlooks_(rows, allGoals, tasks, sm);
+      rollUpOutlooks_(rows, allGoals, tasks, sm, now);
       goalNums = { onTrack: 0, atRisk: 0, offTrack: 0, noData: 0, achieved: 0 };
       rows.forEach(function (r) { var v = r.outlook.verdict;
         if (v === 'On track') goalNums.onTrack++; else if (v === 'At risk') goalNums.atRisk++;

@@ -545,6 +545,10 @@ function seedDemoDirection_(ctx, out) {
   var ago = new Date(); ago.setDate(ago.getDate() - 3); ago.setHours(10, 0, 0, 0);
   var end = new Date(ago.getTime() + 55 * 60000);
   writeMeeting_(ctx, meetingById_(ctx, m), { 'Date': ymd(ago), 'Started': ago, 'Ended': end });
+  /* The roadblock raised before it was raised the day before, like a real one. */
+  dropCache_(ctx);
+  var before = new Date(ago.getTime() - 86400000), ish = tab_(ctx, TAB.MEETING_ITEMS, MEETING_ITEM_COLS);
+  readItems_(ctx).forEach(function (it) { if (!it.meeting && it.kind === 'roadblock') ish.getRange(it.row, 11).setValue(before); });
   dropCache_(ctx);
   out.push('Meetings: last week’s review — a win, a values story, three actions (one delegated from an update) — and one roadblock waiting.');
 }

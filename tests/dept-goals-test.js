@@ -104,6 +104,23 @@ for (const [label, file] of [['Domebox', '/../dist/code.gs'], ['Domebox Lite', '
   const tasks = X.goalOutlook_({ status: 'On course', period: 'FY26-27 Q3', metric: null }, { total: 10, done: 2, overdue: 3 }, 4, mid);
   ok('a goal with no figure is judged on its linked work', tasks.verdict === 'Off track' && /2 of 10 linked jobs done/.test(tasks.reason) && /3 overdue/.test(tasks.reason), JSON.stringify(tasks));
   ok('Done and Dropped speak for themselves', X.goalOutlook_({ status: 'Done' }, null, 4, mid).verdict === 'Achieved' && X.goalOutlook_({ status: 'Dropped' }, null, 4, mid).verdict === 'Dropped');
+  const late = X.goalOutlook_(Object.assign({}, base, { checkins: [{ d: '2026-11-01', v: 3.0 }] }), null, 4, new Date(2026, 11, 31, 22));
+  ok('a figure nobody updated cannot stay on track to the end of the period', late.verdict === 'Off track', JSON.stringify(late));
+  const quick = X.goalOutlook_(Object.assign({}, base, { checkins: [{ d: '2026-10-02', v: 3.8 }] }), null, 4, new Date(2026, 9, 3));
+  ok('one figure in the first days is not projected to a silly end', !/ends near -/.test(quick.reason) && quick.projected === null, JSON.stringify(quick));
+  const before = X.goalOutlook_({ status: 'On course', period: 'FY26-27 Q4', metric: { unit: 'pcs', start: 0, target: 100 }, checkins: [{ d: '2026-11-20', v: 10 }] }, null, 4, new Date(2026, 10, 24));
+  ok('a figure entered before the period starts is not counted as progress', before.verdict === 'Not started' || before.verdict === 'Needs data', JSON.stringify(before));
+  const worse = X.goalOutlook_(Object.assign({}, base, { checkins: [{ d: '2026-11-14', v: 5 }] }), null, 4, mid);
+  ok('a figure moving the wrong way says so', worse.verdict === 'Off track' && /wrong way/.test(worse.reason), worse.reason);
+  const flat = X.goalOutlook_({ status: 'On course', period: 'FY26-27 Q3', metric: { unit: '', start: 5, target: 5 }, checkins: [{ d: '2026-11-14', v: 5 }] }, null, 4, mid);
+  ok('a target equal to its start is reported, not divided by', flat.verdict === 'Needs data' && !/NaN|Infinity/.test(flat.reason), flat.reason);
+
+  console.log('\n=== nothing shows through from a hidden department ===');
+  const pv = goal(P, 'Zero repeat NCs in the surveillance audit');
+  ok('another department sees the company goal without the Quality goal\'s verdict inside it', pv && !pv.outlook.rolledUp && !/goal that serves/.test(pv.outlook.reason), JSON.stringify(pv && pv.outlook));
+  const qid = goal(A, 'Cut rejection rate').id;
+  const linkTry = call({ action: 'createTask', token: S, form: { title: 'Link to hidden', assignTo: 'payel', dueDate: '2030-01-01', goal: qid } });
+  ok('work cannot be linked to a goal you cannot see', linkTry.status === 'error' && /goal/i.test(linkTry.message), JSON.stringify(linkTry));
 
   console.log('\n=== an existing workspace ===');
   const tenant = Object.values(env.FILES).find((f) => f !== tpl && f.getSheetByName && f.getSheetByName('Goals') && f.getSheetByName('Users'));

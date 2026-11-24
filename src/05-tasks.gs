@@ -39,7 +39,7 @@ function createTask_locked_(ctx, form) {
      task tagged to a goal that does not exist would count toward nothing and
      still look as if it did. */
   var goalId = String(form.goal || '').trim();
-  if (goalId && !goalById_(ctx, goalId)) throw new Error('That goal no longer exists. Pick another, or none.');
+  if (goalId && (!goalById_(ctx, goalId) || !goalVisible_(ctx, goalById_(ctx, goalId)))) throw new Error('That goal no longer exists. Pick another, or none.');
   var raisedIn = String(form.raisedIn || '').trim();
 
   var sheet = ctx.ss.getSheetByName(TAB.TASKS);
@@ -636,7 +636,7 @@ function editTask_(ctx, form) {
   }
 
   if (form.goal !== undefined && String(form.goal) !== String(t.goal || '')) {
-    if (form.goal && !goalById_(ctx, form.goal)) throw new Error('That goal no longer exists.');
+    if (form.goal && (!goalById_(ctx, form.goal) || !goalVisible_(ctx, goalById_(ctx, form.goal)))) throw new Error('That goal no longer exists.');
     writeTaskField_(hit, 'Goal', String(form.goal || ''));
     changes.push('Goal');
   }
