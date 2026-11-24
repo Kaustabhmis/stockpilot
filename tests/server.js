@@ -125,6 +125,14 @@ const server = http.createServer((req, res) => {
     const code = (m.html.match(/\?ref=(P[A-Z0-9]{5})/) || [])[1] || '';
     res.writeHead(200, {'Content-Type':'application/json'}); res.end(JSON.stringify({ key, code })); return;
   }
+  /* HARNESS ONLY — one test server serves every browser suite in an audit,
+     and together they sign up more than the real 30-an-hour limit allows.
+     A suite that needs a fresh sign-up clears the sign-up counters first. */
+  if (req.url.startsWith('/__resetlimits')) {
+    const c = env.G.CacheService.getScriptCache();
+    c.__keys().filter((k) => /^th_(reg|regall)_/.test(k)).forEach((k) => c.remove(k));
+    res.writeHead(200, {'Content-Type':'application/json'}); res.end('{"ok":true}'); return;
+  }
   if (req.url.startsWith('/__setplan')) {
     const q = new URL('http://x' + req.url).searchParams;
     const dir = env.FILES.MASTER.getSheetByName('Directory');

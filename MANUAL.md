@@ -569,8 +569,8 @@ what their workload credit is measured against, so set it honestly — a limit o
 **Team → Import from Excel.** Choose an Excel (.xlsx) or CSV file with one
 person per row and the column names in the first row: **Name** and **Email**
 are needed; Phone, Role (Admin, HOD or Doer), Department, Job profile and
-**Reports to** (their manager's name or email) are optional. **Download
-template** gives you the layout.
+**Reports to** (their manager's name or email) are optional. **Download an
+example** gives you the layout.
 
 Nothing is added until you have seen the preview: every row is listed, and
 anything wrong — a missing email, the same person twice, someone already in the

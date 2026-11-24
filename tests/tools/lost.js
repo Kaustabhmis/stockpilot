@@ -9,6 +9,7 @@ const now = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
    reported as lost — and nothing else can quietly join it. */
 const RETIRED = {
   planForPaise_: 'guessed the plan from the amount paid; a payment now buys what its server-made order says',
+  blkId: 'the blocker drop-down; Add blocker is now one box (blkText) that matches a task or adds a custom blocker',
 };
 const diff = (label, a, b) => { const lost = [...a].filter((x) => !b.has(x) && !RETIRED[x]), added = [...b].filter((x) => !a.has(x));
   console.log((lost.length ? 'LOST ' : 'ok   ') + label + ': ' + a.size + ' before, ' + b.size + ' now' +

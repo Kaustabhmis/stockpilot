@@ -80,6 +80,7 @@
   .toc b { display:inline-flex; width:24px; height:24px; border-radius:6px; background: var(--navy); color:#fff; align-items:center; justify-content:center; font-size:12px; margin-right:8px; }
   .cover .contact { color: #b9c8e2; }
   .foot { border-top: 3px solid var(--navy); }
+  @media print { .chapter:last-of-type p { margin: 3px 0 7px; } .chapter:last-of-type .foot { margin-top: 10px; } }
   @media print { body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page { max-width: none; padding: 0; } }
 </style>
 </head>
@@ -155,8 +156,12 @@
 <figure><img src="pics/14-help.jpg" alt="Help panel with the User manual (PDF) button"><figcaption>Help. The download button is under the list of topics on the left.</figcaption></figure>
 
 <h3>On your phone</h3>
-<p>Domebox works in the phone's browser — no app to install. The tabs move into a bar at the bottom. Help is in your account panel.</p>
+<p>Domebox works in the phone's browser — no app to install. The tabs sit in a row under the top bar; swipe it sideways to reach the rest. The board shows <b>one column at a time</b>: swipe left for the next. The filters fold behind one <b class="k">Filters</b> button, and the <b class="k">+</b> button assigns a task.</p>
 <figure class="phone"><img src="pics/15-phone.jpg" alt="Domebox on a phone"><figcaption>The same board on a phone.</figcaption></figure>
+
+<h3>Your picture</h3>
+<p>Press your name (top right), then <b class="k">Choose avatar</b>. Pick one of the twelve avatars, upload a photo of yourself (it is made small and square for you), or keep your initials. Everyone in the company sees it on your cards.</p>
+<figure class="mid"><img src="pics/29-avatar.jpg" alt="Choosing an avatar"><figcaption>Initials, your own photo, or one of the avatars.</figcaption></figure>
 </section>
 
 <!-- ================= 2 ================= -->
@@ -164,15 +169,16 @@
 <h2><span class="n">2</span>Your task board</h2>
 <p>The <b>Tasks</b> tab is where you spend most of your day. It has two parts.</p>
 <ul>
-  <li><b>The boxes on top</b> count your work: Pending, In progress, For review, Overdue — plus your <b>Delegation</b> score and <b>Final score</b>.</li>
-  <li><b>The columns below</b> hold one card for each task.</li>
+  <li><b>The boxes on top</b> count your work: To do, In progress, For review, Overdue — plus your <b>Delegation</b> score and <b>Final score</b>.</li>
+  <li><b>The columns below</b> hold one card for each task. Each has a coloured heading with its count.</li>
 </ul>
+<p>When you scroll down through your tasks, the boxes on top fold away to give the cards the room, and the column headings stay at the top so you always know which column you are in. Scroll back up and the boxes return.</p>
 <figure><img src="pics/02-board.jpg" alt="The task board"><figcaption>A doer's board. Each card shows the task, due date, priority and category.</figcaption></figure>
 
 <h3>The columns</h3>
 <table>
   <tr><th>Column</th><th>Means</th></tr>
-  <tr><td><b>Needs approval</b></td><td>Someone asked for this work. A manager must say yes first.</td></tr>
+  <tr><td><b>Needs approval</b></td><td>Someone asked for this work and a manager must say yes first. This column only appears while something is waiting for approval.</td></tr>
   <tr><td><b>To do</b></td><td>Accepted. Not started yet.</td></tr>
   <tr><td><b>In progress</b></td><td>Being worked on.</td></tr>
   <tr><td><b>For review</b></td><td>Handed in. Waiting for someone to check it.</td></tr>
@@ -212,10 +218,22 @@
 <table>
   <tr><th>Button</th><th>When to press it</th></tr>
   <tr><td><b class="k">Start work</b></td><td>When you begin. The card moves to In progress.</td></tr>
-  <tr><td><b class="k">Submit for review</b></td><td>When it is done. Add a short note: what you did, where the proof is. Your on-time score is counted from <b>this moment</b>, not from when somebody gets round to checking it.</td></tr>
+  <tr><td><b class="k">Submit for review</b></td><td>When it is done. Add a short note — and, if it helps, a photo of the finished job. Your on-time score is counted from <b>this moment</b>, not from when somebody gets round to checking it.</td></tr>
   <tr><td><b class="k">Hand over</b></td><td>When someone else should do it. Pick the person and give a reason. Your manager decides — the task does not just vanish from your list.</td></tr>
-  <tr><td><b class="k">Add blocker</b></td><td>When you cannot start until another task is done. This task then says <i>Blocked by…</i> until that one closes.</td></tr>
+  <tr><td><b class="k">Add blocker</b></td><td>When something is stopping you. It can be another task, or anything else — see <i>Blockers</i> below.</td></tr>
 </table>
+
+<h3>Photo proof</h3>
+<p>When you press <b class="k">Submit for review</b> you can add a photo: the cleaned machine, the packed pallet, a signed challan, a gauge reading. On a phone, <b class="k">Add a photo</b> opens the camera. It is made small before it is sent, so it is quick even on mobile data. It is optional — hand in without one whenever there is nothing to show.</p>
+<figure class="mid"><img src="pics/26-photo-proof.jpg" alt="Submit for review with a photo"><figcaption>A short note and a photo of the finished job.</figcaption></figure>
+<p>The person checking your work sees <b>View photo</b> in the task's history.</p>
+
+<h3>Blockers</h3>
+<p>Press <b class="k">Add blocker…</b> and start typing. If what is stopping you is another task, pick it from the list: this task says <i>Blocked by…</i> and clears itself when that task is verified.</p>
+<p>If it is not a task — <i>Waiting for material from the vendor</i>, <i>Machine under repair</i> — just type it and press <b class="k">Add blocker</b>. It becomes a <b>custom blocker</b>.</p>
+<figure class="mid"><img src="pics/27-blocker-add.jpg" alt="Adding a custom blocker"><figcaption>Nothing on the board matches, so it is added as a custom blocker.</figcaption></figure>
+<p>While a blocker is open, the card says <b>BLOCKED</b> and the task cannot be started. When the problem is sorted, open the task and press <b class="k">Resolved</b> next to it. Adding and resolving are both written in the task's history.</p>
+<figure class="mid"><img src="pics/28-blocker-panel.jpg" alt="A blocker on an open task"><figcaption>The blocker, who added it and when, and the Resolved button.</figcaption></figure>
 
 <h3>Checklist</h3>
 <p>Some tasks come with a checklist. Tick each line as you finish it. The card shows how many are done, like <b>3/5</b>. You can still hand in with lines unticked — it is a reminder, not a lock.</p>
@@ -466,7 +484,7 @@
 <section class="chapter">
 <h2><span class="n">13</span>For team leads</h2>
 <span class="who">HODs and managers</span>
-<p>As a team lead, your board also shows your team's work. Work waiting on <b>you</b> sits in <b>Needs approval</b> and <b>For review</b>.</p>
+<p>As a team lead, your board also shows your team's work. Work waiting on <b>you</b> sits in <b>For review</b>, and in <b>Needs approval</b> whenever someone asks for your person's time (that column appears only then).</p>
 <figure><img src="pics/16-lead-board.jpg" alt="A team lead's board"><figcaption>A team lead's board. Payel's packed bearings are waiting in For review.</figcaption></figure>
 
 <h3>Approve or refuse new work</h3>
@@ -504,11 +522,17 @@
   <li>Open <b>See why</b> together before any performance talk.</li>
 </ul>
 <div class="note">Leave must be recorded in Domebox (<b>Team → Leave</b>) so late days stop counting for that person. Adding people, setting up categories and changing company settings are done by your Admin.</div>
+
+<h3>Add your team from Excel</h3>
+<p>Setting up a department? On the <b>Team</b> tab press <b class="k">Import from Excel</b> and choose a sheet with one person per row: <b>Name</b> and <b>Email</b>, and if you have them Phone, Role, Department, Job profile and <b>Reports to</b>. <b class="k">Download an example</b> gives you the layout.</p>
+<figure><img src="pics/30-import.jpg" alt="Importing a team from Excel"><figcaption>Every row is checked before anything is added; problems are marked and left out.</figcaption></figure>
+<p>Choose a starting password for everyone and press <b class="k">Add</b>. Each person gets a welcome email, and can use <i>Forgot password</i> to set their own.</p>
 </section>
 
 <!-- ================= 14 ================= -->
 <section class="chapter">
-<h2><span class="n">14</span>Common questions</h2>
+<h2
+><span class="n">14</span>Common questions</h2>
 <div class="qa">
 <b>I cannot give a task to my colleague.</b>
 <p>That is on purpose. Ask your manager to assign it, or raise it to them. If a task you hold should go to a colleague, use <b>Hand over</b>.</p>
@@ -523,7 +547,9 @@
 <b>I am not on the leaderboard.</b>
 <p>You closed no work in that period, so you are listed under <b>Not ranked</b>. That is not last place.</p>
 <b>A task says “Blocked”. What do I do?</b>
-<p>Open it to see which task it is waiting on. You can start when that one is verified. If it is stuck, raise it with your manager or as a roadblock in the weekly meeting.</p>
+<p>Open it to see what it is waiting on. If it is another task, you can start when that one is verified. If it is a custom blocker (“Waiting for material…”), press <b>Resolved</b> once it is sorted. If it is stuck, raise it with your manager or as a roadblock in the weekly meeting.</p>
+<b>A blue box says “Notice”. Is something broken?</b>
+<p>No. A <b>Notice</b> explains why something cannot be done yet — for example “Finish the checklist first”. Do what it says and try again. If a box says <b>Connection problem</b>, your internet dropped for a moment: check it and try again.</p>
 <b>I am not getting any emails.</b>
 <p>Look in Spam for mail from <b>info@biscsindia.com</b>. Still nothing? Tell your Admin.</p>
 <b>I forgot my password.</b>

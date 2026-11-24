@@ -15,6 +15,7 @@ const hit = (p) => new Promise((res) => http.get('http://localhost:' + PORT + p,
 (async () => {
   const probs = [], R = Date.now().toString(36);
   const email = 'crawl' + R + '@acme.in';
+  await hit('/__resetlimits');
   const reg = await post({ action: 'register', form: { companyName: 'Crawl Works', name: 'Owner Crawl', email, password: 'strongpass123' } });
   if (reg.status !== 'success') { console.log('register failed: ' + reg.message); process.exit(1); }
   const A = reg.token;

@@ -23,7 +23,7 @@ function openImport() {
       'the first row is the column names. Nothing is added until you check the preview.</p>' +
     '<div class="flex flex-wrap gap-3 mb-4">' +
       '<button type="button" id="impPick" class="btn btn-p flex items-center gap-1"><span class="material-icons text-base">upload_file</span> Choose file</button>' +
-      '<button type="button" id="impTpl" class="btn btn-g flex items-center gap-1"><span class="material-icons text-base">download</span> Download template</button>' +
+      '<button type="button" id="impTpl" class="btn btn-g flex items-center gap-1"><span class="material-icons text-base">download</span> Download an example</button>' +
       '<input type="file" id="impFile" class="hidden" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">' +
     '</div>' +
     '<p class="text-xs text-gray-500 font-semibold mb-4">Columns: <b>Name</b>, <b>Email</b> (needed), and any of Phone, Role (Admin, HOD or Doer), ' +
@@ -145,7 +145,7 @@ function rowsToPeople(rows) {
   var head = rows[0].map(function (h) { return String(h || '').trim().toLowerCase().replace(/[_*]/g, ' ').replace(/\s+/g, ' '); });
   var at = {};
   IMPORT_COLS.forEach(function (c) { var i = head.findIndex(function (h) { return c[1].test(h); }); if (i > -1) at[c[0]] = i; });
-  if (at.name == null || at.email == null) throw new Error('The first row needs a "Name" and an "Email" column. Download the template to see the layout.');
+  if (at.name == null || at.email == null) throw new Error('The first row needs a "Name" and an "Email" column. Press Download an example to see the layout.');
   return rows.slice(1).map(function (r, i) {
     var p = { row: i + 2 };
     IMPORT_COLS.forEach(function (c) { if (at[c[0]] != null) p[c[0]] = String(r[at[c[0]]] == null ? '' : r[at[c[0]]]).trim(); });
