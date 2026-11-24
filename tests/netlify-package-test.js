@@ -164,6 +164,7 @@ const serve = (dir, port) => new Promise((r) => {
   ok('it took the address from domebox-config.js', await p.evaluate(() => API_URL) === EXEC);
   await p.locator('#demo button:has-text("as the owner")').click(); await p.waitForTimeout(3500);
   ok('the live demo opens through the backend', await p.locator('#view-app').isVisible() && /Live demo/.test(await p.locator('#banner').textContent()));
+  await hit('/__resetlimits');   // the whole audit signs up hundreds of companies in one hour; the hourly cap is tested elsewhere
   await p.evaluate(() => leaveDemoForTrial()); await p.waitForTimeout(600);
   await p.fill('#suCompany', 'Mehta Castings'); await p.fill('#suName', 'Rohan');
   await p.fill('#suEmail', 'pkg' + Date.now() + '@mehta.in'); await p.fill('#suPass', 'strongpass123');
