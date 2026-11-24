@@ -109,6 +109,36 @@ function canSeeMeeting_(ctx, m) {
   var me = ctx.actor.username;
   return ctx.actor.role === ROLE.ADMIN || m.chair === me || m.attendees.some(function (a) { return a.u === me; });
 }
+/**
+ * The roadblocks a meeting works on: ones raised in its own series up to and
+ * including it, and ones raised outside any meeting by somebody in its room —
+ * for a meeting that has ended, only those raised before it ended. Nothing
+ * from a later meeting, or another department's, ever shows in it.
+ */
+function meetingRoadblocks_(m, items, all) {
+  var byId = {}; all.forEach(function (x) { byId[x.id] = x; });
+  var inRoom = {}; inRoom[m.chair] = true; m.attendees.forEach(function (a) { inRoom[a.u] = true; });
+  var upTo = m.started || '9';
+  return items.filter(function (i) {
+    if (i.kind !== 'roadblock' || !(i.status === 'open' || i.clearedIn === m.id)) return false;
+    if (i.meeting) {
+      if (i.meeting === m.id) return true;
+      var home = byId[i.meeting];
+      return sameSeries_(home, m) && !!home.started && home.started <= upTo;
+    }
+    if (!inRoom[i.by]) return false;
+    return m.status === 'live' || !m.ended || !i.at || i.at <= m.ended;
+  });
+}
+/** A roadblock raised outside any meeting: its author, an Admin, or someone who meets with its author. */
+function canTouchLooseRoadblock_(ctx, it) {
+  var me = ctx.actor.username;
+  if (ctx.actor.role === ROLE.ADMIN || it.by === me) return true;
+  return readMeetings_(ctx).some(function (m) {
+    if (!canSeeMeeting_(ctx, m)) return false;
+    return m.chair === it.by || m.attendees.some(function (a) { return a.u === it.by; });
+  });
+}
 function canChair_(ctx, m) { return ctx.actor.role === ROLE.ADMIN || m.chair === ctx.actor.username; }
 
 /* ---------- the list ---------------------------------------------------- */
@@ -280,7 +310,7 @@ function addMeetingItem_(ctx, id, form) {
   return out;
 }
 
-function updateMeetingItem_(ctx, itemId, form) {
+function updateMeetingItem_(ctx, itemId, form, meetingId) {
   blockIfStopped_(ctx);
   form = form || {};
   requireMeetings_(ctx);
@@ -294,10 +324,18 @@ function updateMeetingItem_(ctx, itemId, form) {
     if (!home || !canSeeMeeting_(ctx, home)) throw new Error('That item is not from a meeting you are in.');
     if (home.status !== 'live' && it.kind !== 'roadblock') throw new Error('That meeting has ended; its record stays as it was.');
   }
-  /* The running meeting this happens in: one this person is in, of the same
-     series as the item's own meeting when there is a choice. */
-  var lives = liveMeetingsFor_(ctx), homeM = it.meeting ? meetingById_(ctx, it.meeting) : null;
-  var live = lives.filter(function (x) { return homeM && sameSeries_(x, homeM); })[0] || lives[0] || null;
+  else if (it.kind === 'roadblock' && !canTouchLooseRoadblock_(ctx, it)) {
+    throw new Error('That roadblock is not from a meeting you are in.');
+  }
+  /* The meeting this happens in is the one the screen is showing, and the
+     point must be part of it. Between meetings there is none. */
+  var live = null;
+  if (meetingId) {
+    live = liveFor_(ctx, meetingId);
+    var part = it.meeting === live.id || (it.kind === 'roadblock' &&
+      meetingRoadblocks_(live, readItems_(ctx), readMeetings_(ctx)).some(function (x) { return x.id === it.id; }));
+    if (!part) throw new Error('That point is not part of this meeting.');
+  }
   var mine = it.by === ctx.actor.username;
   if (!mine && ctx.actor.role === ROLE.DOER) throw new Error('Only whoever raised it, or a manager, can change it.');
   return withLock_(function () {
@@ -318,7 +356,7 @@ function updateMeetingItem_(ctx, itemId, form) {
       }
     }
     dropCache_(ctx);
-    return live && canSeeMeeting_(ctx, live) ? getMeeting_(ctx, live.id) : { status: 'success' };
+    return live ? getMeeting_(ctx, live.id) : { status: 'success' };
   });
 }
 
@@ -336,7 +374,8 @@ function addMeetingAction_(ctx, id, form) {
   var item = null;
   if (form.fromItem) {
     item = readItems_(ctx).filter(function (x) { return x.id === String(form.fromItem); })[0];
-    if (!item || (item.meeting !== m.id && !(item.kind === 'roadblock' && (item.status === 'open' || item.clearedIn === m.id)))) {
+    if (!item || (item.meeting !== m.id && !(item.kind === 'roadblock' &&
+        meetingRoadblocks_(m, readItems_(ctx), readMeetings_(ctx)).some(function (x) { return x.id === item.id; })))) {
       throw new Error('That point is not part of this meeting.');
     }
   }
@@ -359,7 +398,7 @@ function addMeetingAction_(ctx, id, form) {
       dropCache_(ctx);
     });
     if (item.kind === 'roadblock' && form.clearItem) {
-      try { updateMeetingItem_(ctx, item.id, { clear: true }); } catch (e) {}
+      try { updateMeetingItem_(ctx, item.id, { clear: true }, m.id); } catch (e) {}
     }
   }
   var out = getMeeting_(ctx, m.id);
@@ -407,22 +446,16 @@ function getMeeting_(ctx, id) {
   var here = items.filter(function (i) { return i.meeting === m.id; });
   var all = readMeetings_(ctx), byId = {};
   all.forEach(function (x) { byId[x.id] = x; });
-  var inRoom = {}; inRoom[m.chair] = true; m.attendees.forEach(function (a) { inRoom[a.u] = true; });
-  /* This meeting's roadblocks: ones raised in its own series, and ones raised
-     outside any meeting by somebody in this room. Another department's
-     roadblocks are theirs. */
-  var road = items.filter(function (i) {
-    if (i.kind !== 'roadblock' || !(i.status === 'open' || i.clearedIn === m.id)) return false;
-    if (i.meeting) return i.meeting === m.id || sameSeries_(byId[i.meeting], m);
-    return !!inRoom[i.by];
-  });
+  var road = meetingRoadblocks_(m, items, all);
 
   /* Actions: everything raised in a meeting that is still open, plus whatever
      closed since the previous meeting — last week's, done or not. */
   var prev = all.filter(function (x) {
     return x.status === 'ended' && x.id !== m.id && sameSeries_(x, m) && x.started && x.started < (m.started || '9'); }).pop();
   var since = prev ? prev.started : '';
-  var meetingIds = {}; all.forEach(function (x) { if (x.id === m.id || sameSeries_(x, m)) meetingIds[x.id] = x; });
+  /* This meeting and the earlier ones in its series — never a later meeting's actions. */
+  var meetingIds = {}; all.forEach(function (x) {
+    if (x.id === m.id || (sameSeries_(x, m) && x.started && x.started <= (m.started || '9'))) meetingIds[x.id] = x; });
   var actions = tasks.filter(function (t) {
     if (!t.raisedIn || !meetingIds[t.raisedIn]) return false;
     if (t.raisedIn === m.id) return true;

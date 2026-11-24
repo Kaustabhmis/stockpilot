@@ -259,7 +259,7 @@ function route_(p) {
     case 'setAttendance':       return setAttendance_(ctx, p.id, p.username, p.present);
     case 'saveMinutes':         return saveMinutes_(ctx, p.id, p.text);
     case 'addMeetingItem':      return addMeetingItem_(ctx, p.id, p.form);
-    case 'updateMeetingItem':   return updateMeetingItem_(ctx, p.itemId, p.form);
+    case 'updateMeetingItem':   return updateMeetingItem_(ctx, p.itemId, p.form, p.id);
     case 'addMeetingAction':    return addMeetingAction_(ctx, p.id, p.form);
     case 'rateMeeting':         return rateMeeting_(ctx, p.id, p.score);
     case 'endMeeting':          return endMeeting_(ctx, p.id, false);
