@@ -495,7 +495,9 @@ says so in plain words:
 
 For example: *"At 3 % against a target of 1.5 %: 40 % of the way, with 59 % of
 the period gone. At this pace it ends near 2.3 %."* A figure older than three
-weeks is flagged, so a stale number does not pass for good news.
+weeks is flagged and the goal shows at best **At risk**, so a stale number does
+not pass for good news. Figures entered before the period began are not
+counted as progress, and one figure in the first days is not projected.
 
 A goal with no target figure is judged on the work linked to it. A company
 goal with neither is judged on the department goals that serve it.

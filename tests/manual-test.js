@@ -103,7 +103,11 @@ ck('the eight segments, in the order the manual gives',
    segTitles.join('|') === 'Wins|Values in action|Goal check|Key numbers|Updates|Roadblocks|Actions|Close', segTitles.join('|'));
 ck('every segment is in the manual table', segTitles.every((t) => M.indexOf('| **' + t + '** |') > -1));
 ck('meetings are a paid-plan feature', C.indexOf('Meetings are included in every paid plan.') > -1);
-ck('only one meeting runs at a time', C.indexOf('A meeting is already running.') > -1);
+ck('a person chairs one running meeting at a time; others run alongside', C.indexOf('You are already chairing a meeting that is running.') > -1 &&
+   /can run at the same time/.test(M) && /chair only one at a time/.test(M));
+ck('only invitees and Admins see a meeting', C.indexOf('canSeeMeeting_') > -1 && /Only the people invited to it, and Admins/.test(M));
+ck('department goals are set by their head; company goals by an Admin', C.indexOf('Company goals are set by an Admin') > -1 && /\*\*Department goal\*\* \| That department's head, or an Admin/.test(M));
+ck('an old figure is three weeks', C.indexOf('GOAL_STALE_DAYS = 21') > -1 && /older than three\s+weeks/.test(M));
 ck('segments can be dropped, never reordered, Close kept', C.indexOf("return keep[s.key] || s.key === 'close';") > -1);
 ck('a story must name a value', C.indexOf('a story without one is just a nice story') > -1);
 ck('actions are due in seven days by default', C.indexOf('d.setDate(d.getDate() + 7); due = ymd(d);') > -1);

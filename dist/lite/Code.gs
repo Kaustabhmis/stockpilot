@@ -7033,7 +7033,7 @@ function goalMetricFrom_(form, existing) {
 
 /** The dates a goal's period runs between, from its label ("FY26-27 Q3", "FY2026"). */
 function goalPeriodBounds_(label, sm) {
-  var m = String(label || '').match(/^FY(\d{2,4})(?:-(\d{2}))?(?: Q([1-4]))?$/);
+  var m = String(label || '').match(/^F[Y](\d{2,4})(?:-(\d{2}))?(?: [Q]([1-4]))?$/);
   if (!m) return null;
   var fy = m[1].length === 4 ? Number(m[1]) : 2000 + Number(m[1]);
   var s = (Number(sm) || 4) - 1;
