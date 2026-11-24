@@ -248,6 +248,7 @@ function route_(p) {
     case 'saveDirection':       return saveDirection_(ctx, p.form);
     case 'saveGoal':            return saveGoal_(ctx, p.form);
     case 'setGoalStatus':       return setGoalStatus_(ctx, p.id, p.goalStatus, p.note);
+    case 'goalCheckin':         return recordGoalCheckin_(ctx, p.id, p.value, p.note);
     case 'deleteGoal':          return deleteGoal_(ctx, p.id);
     case 'saveNumber':          return saveNumber_(ctx, p.form);
     case 'recordNumber':        return recordNumber_(ctx, p.id, p.value, p.week);

@@ -88,7 +88,8 @@ var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
 var COOKIE_COLS = ['Date','To','By','Points','Reason','Value'];
 
 var DIRECTION_COLS = ['Kind','Code','Title','Detail','Order'];
-var GOAL_COLS = ['ID','Level','Period','Title','Detail','Owner','Parent','Status','Note','Created','Updated'];
+var GOAL_COLS = ['ID','Level','Period','Title','Detail','Owner','Parent','Status','Note','Created','Updated',
+  'Scope','Dept','Unit','Start','Target','Direction','Checkins JSON'];
 var NUMBER_COLS = ['ID','Name','Owner','Unit','Target','Direction','Goal','Active','Created'];
 var NUMBER_LOG_COLS = ['Number','Week','Value','By','At'];
 var MEETING_COLS = ['ID','Title','Date','Status','Chair','Started','Ended','Attendees JSON',

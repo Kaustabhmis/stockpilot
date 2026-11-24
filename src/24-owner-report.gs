@@ -126,6 +126,34 @@ function ownerReport_(ctx, now) {
       '<td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold">' + esc_(right) + '</td></tr>';
   };
 
+  /* Goals: how many are on track, and which need attention, by department. */
+  var goalsHtml = '', goalNums = null;
+  try {
+    var allGoals = readGoals_(ctx), sm = fyStartMonth_(ctx), fq = fyPeriod_(now, sm);
+    var liveGoals = allGoals.filter(function (g) { return g.status !== 'Dropped' &&
+      (g.level === 'year' ? g.period === fq.year : g.period === fq.quarter); });
+    if (liveGoals.length) {
+      var rows = liveGoals.map(function (g) { return { id: g.id, title: g.title, dept: g.scope === 'dept' ? g.dept : '' }; });
+      rollUpOutlooks_(rows, allGoals, tasks, sm);
+      goalNums = { onTrack: 0, atRisk: 0, offTrack: 0, noData: 0, achieved: 0 };
+      rows.forEach(function (r) { var v = r.outlook.verdict;
+        if (v === 'On track') goalNums.onTrack++; else if (v === 'At risk') goalNums.atRisk++;
+        else if (v === 'Off track' || v === 'Missed') goalNums.offTrack++; else if (v === 'Achieved') goalNums.achieved++; else goalNums.noData++; });
+      var attention = rows.filter(function (r) { return r.outlook.tone === 'bad' || r.outlook.tone === 'warn'; }).slice(0, 6);
+      goalsHtml = '<h3 style="font-size:15px;margin:22px 0 6px">Goals — are we on track?</h3>' +
+        '<table style="width:100%;border-collapse:separate;border-spacing:6px;margin:0 0 4px"><tr>' +
+          big(goalNums.onTrack + goalNums.achieved, 'On track', '#047857') + big(goalNums.atRisk, 'At risk', goalNums.atRisk ? '#b45309' : '#111827') +
+          big(goalNums.offTrack, 'Off track', goalNums.offTrack ? '#b91c1c' : '#111827') + big(goalNums.noData, 'No figures yet') +
+        '</tr></table>' +
+        (attention.length ? '<table style="width:100%;border-collapse:collapse">' + attention.map(function (r) {
+          return '<tr><td style="padding:8px 0;border-bottom:1px solid #eee"><b>' + esc_(r.title) + '</b>' +
+            (r.dept ? ' <span style="color:#9ca3af">· ' + esc_(r.dept) + '</span>' : '') +
+            '<div style="color:#6b7280;font-size:12px">' + esc_(r.outlook.reason || '') + '</div></td>' +
+            '<td style="padding:8px 0 8px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:bold;white-space:nowrap;color:' +
+            (r.outlook.tone === 'bad' ? '#b91c1c' : '#b45309') + '">' + esc_(r.outlook.verdict) + '</td></tr>'; }).join('') + '</table>' : '');
+    }
+  } catch (e) { goalsHtml = ''; }
+
   var inner =
     '<p>Here is how ' + esc_(company) + ' did in <b>' + esc_(label) + '</b>.</p>' +
     '<table style="width:100%;border-collapse:separate;border-spacing:6px;margin:8px 0 4px"><tr>' +
@@ -142,6 +170,7 @@ function ownerReport_(ctx, now) {
       '<table style="width:100%;border-collapse:collapse">' +
       watch.map(function (r) { return person(r, 'score ' + r.score); }).join('') + '</table>' +
       '<p style="color:#6b7280;font-size:12px">"See why" on the Reports tab shows exactly what pulled each score down.</p>' : '') +
+    goalsHtml +
     '<h3 style="font-size:15px;margin:22px 0 6px">Right now</h3>' +
     infoTable_([['Overdue', String(last.overdueNow)], ['Waiting over 2 days for approval or review', String(stuck)],
                 ['People scored last month', String(board.rows.length) + ' of ' + users.length]]) +
@@ -151,7 +180,7 @@ function ownerReport_(ctx, now) {
   return { subject: subject, html: mailShell_(label + ' at ' + company, inner),
            numbers: { onTime: rate, delivered: last.delivered, late: late, reworks: last.reworkLoops,
                       overdue: last.overdueNow, stuck: stuck, top: top.map(function (r) { return r.name; }),
-                      watch: watch.map(function (r) { return r.name; }), label: label } };
+                      watch: watch.map(function (r) { return r.name; }), label: label, goals: goalNums } };
 }
 
 /* ---- which companies, and a context to read each one ----------------------- */

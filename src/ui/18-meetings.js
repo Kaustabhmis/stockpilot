@@ -36,21 +36,30 @@ function loadMeetings() {
   });
 }
 
+/* A head of department's meeting is named for their department by default. */
+function meetingTitleFor() {
+  if (isAdmin()) return 'Weekly review';
+  var me = ((STATE.data && STATE.data.staff) || []).filter(function (u) { return u.username === STATE.user.username; })[0] || {};
+  return me.dept ? me.dept + ' weekly review' : 'Team weekly review';
+}
+
 function renderMeetingList(r) {
   MEET.list = r;
-  var live = r.live
-    ? '<div class="rounded-2xl p-5 mb-6 text-white flex flex-wrap items-center gap-4" style="background:linear-gradient(135deg,#13294b,#1e4fbf)">' +
+  /* Every running meeting you are in: a department's meetings run side by side. */
+  var lives = r.lives || (r.live ? [r.live] : []);
+  var live = lives.map(function (x) {
+    return '<div class="rounded-2xl p-5 mb-3 text-white flex flex-wrap items-center gap-4" style="background:linear-gradient(135deg,#13294b,#1e4fbf)">' +
         '<span class="w-3 h-3 rounded-full bg-white animate-pulse"></span>' +
-        '<div class="flex-1 min-w-[200px]"><div class="font-black text-lg">' + esc(r.live.title) + ' is running</div>' +
-        '<div class="text-xs font-bold opacity-80">Now on: ' + esc(r.live.segment) + '</div></div>' +
-        '<button class="btn bg-white text-gray-900 font-black" onclick="openMeeting(\'' + esc(r.live.id) + '\')">Join</button></div>'
-    : '';
+        '<div class="flex-1 min-w-[200px]"><div class="font-black text-lg">' + esc(x.title) + ' is running</div>' +
+        '<div class="text-xs font-bold opacity-80">' + (x.chairName ? 'Chaired by ' + esc(x.chairName) + ' \u00b7 ' : '') + 'Now on: ' + esc(x.segment) + '</div></div>' +
+        '<button class="btn bg-white text-gray-900 font-black" onclick="openMeeting(\'' + esc(x.id) + '\')">' + (x.mine ? 'Open' : 'Join') + '</button></div>';
+  }).join('') + (lives.length ? '<div class="mb-3"></div>' : '');
   $('meetBody').innerHTML = '<div class="max-w-[1000px] mx-auto px-4 lg:px-6 py-6">' +
     '<div class="flex flex-wrap items-center gap-2 mb-5"><h2 class="text-2xl font-black mr-auto">Meetings</h2>' +
-      (r.canStart && !r.live ? '<button class="btn btn-p" onclick="openStartMeeting()">Start a weekly review</button>' : '') +
+      (r.canStart && !(r.lives ? r.iChairOne : r.live) ? '<button class="btn btn-p" onclick="openStartMeeting()">Start a meeting</button>' : '') +
       '<button class="btn btn-g" onclick="openRaiseRoadblock()">Raise a roadblock</button></div>' +
     live +
-    (!r.past.length && !r.live
+    (!r.past.length && !lives.length
       ? '<div class="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">' +
           '<div class="font-black mb-1">No meetings yet</div>' +
           '<p class="text-sm font-semibold text-gray-400 max-w-md mx-auto">A weekly review runs in eight short segments, from ' +
@@ -75,13 +84,17 @@ function openStartMeeting() {
   var r = MEET.list, staff = ((STATE.data && STATE.data.staff) || []).filter(function (u) { return u.active !== false; });
   var on = {}; (r.agenda || []).forEach(function (a) { on[a.key] = a; });
   openModal('<form id="fStart" class="p-6 lg:p-7">' +
-    '<h2 class="text-2xl font-black mb-4">Start a weekly review</h2>' +
-    '<label class="lb" for="mtTitle">Title</label><input id="mtTitle" class="in mb-5" value="Weekly review" maxlength="80">' +
+    '<h2 class="text-2xl font-black mb-1">Start a meeting</h2>' +
+    '<p class="text-sm text-gray-400 font-semibold mb-4">Only the people you invite, and Admins, can see it, its roadblocks and its actions.</p>' +
+    '<label class="lb" for="mtTitle">Title</label><input id="mtTitle" class="in mb-5" value="' + esc(meetingTitleFor()) + '" maxlength="80">' +
     '<div class="lb">Who is attending</div>' +
     '<div class="grid sm:grid-cols-2 gap-1.5 mb-5 max-h-48 overflow-y-auto">' + staff.map(function (u) {
       var me = u.username === STATE.user.username;
+      /* An Admin's review starts with the managers; a head of department's with their own team. */
+      var meU = STATE.user.username, myDept = (staff.filter(function (x) { return x.username === meU; })[0] || {}).dept || '';
+      var pick = isAdmin() ? u.role !== 'Doer' : (u.manager === meU || (myDept && u.dept === myDept));
       return '<label class="flex items-center gap-2 text-sm font-semibold py-1"><input type="checkbox" class="w-4 h-4 mtWho" value="' +
-        esc(u.username) + '"' + (me || u.role !== 'Doer' ? ' checked' : '') + (me ? ' disabled' : '') + '> ' + esc(u.name) +
+        esc(u.username) + '"' + (me || pick ? ' checked' : '') + (me ? ' disabled' : '') + '> ' + esc(u.name) +
         ' <span class="text-[11px] text-gray-400">' + esc(u.role) + '</span></label>'; }).join('') + '</div>' +
     '<div class="lb">Agenda <span class="normal-case tracking-normal font-semibold">— drop a segment or change its minutes; the order is fixed</span></div>' +
     '<div class="space-y-1.5 mb-4">' + r.segments.map(function (s) {
@@ -343,10 +356,11 @@ function segmentLive(key, v) {
     return '<div class="lb">' + esc(v.quarter) + '</div><div class="bg-white rounded-2xl border border-gray-100 px-5">' + v.goals.map(function (g) {
       var can = isManager() || g.owner === STATE.user.username;
       return '<div class="flex flex-wrap items-center gap-3 py-3 border-t border-gray-100 first:border-t-0">' +
-        '<div class="flex-1 min-w-[200px]"><div class="font-black text-sm">' + esc(g.title) + '</div>' +
+        '<div class="flex-1 min-w-[200px]"><div class="font-black text-sm">' + (g.scope === 'dept' ? '<span class="chip t-violet mr-1.5">' + esc(g.dept) + '</span>' : '') + esc(g.title) + '</div>' +
         '<div class="text-[11px] font-semibold text-gray-400">' + esc(g.ownerName) +
-          (g.status === 'At risk' && g.note ? ' · <span class="text-amber-700">' + esc(g.note) + '</span>' : '') + '</div></div>' +
-        progressBar(g.progress) +
+          (g.status === 'At risk' && g.note ? ' · <span class="text-amber-700">' + esc(g.note) + '</span>' : '') + '</div>' +
+          (g.outlook && g.outlook.reason ? '<div class="text-[11px] font-semibold text-gray-500 mt-0.5">' + esc(g.outlook.reason) + '</div>' : '') + '</div>' +
+        metricBar(g) + outlookBadge(g) +
         (can ? '<select class="in max-w-[130px] text-xs py-1.5 mGoal" data-id="' + esc(g.id) + '">' +
             ['On course', 'At risk', 'Done', 'Dropped'].map(function (s) { return '<option' + (s === g.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>'
              : '<span class="chip ' + GOAL_TONE[g.status] + '">' + esc(g.status) + '</span>') + delegateBtn('mDelGoal', g.id) + '</div>'; }).join('') + '</div>';

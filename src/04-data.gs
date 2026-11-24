@@ -27,6 +27,7 @@ function ensureTenantTabs_(ss) {
   widen_(ss.getSheetByName(TAB.USERS), USER_COLS);
   widen_(ss.getSheetByName(TAB.COOKIES), COOKIE_COLS);
   widen_(ss.getSheetByName(TAB.MEETING_ITEMS), MEETING_ITEM_COLS);
+  widen_(ss.getSheetByName(TAB.GOALS), GOAL_COLS);
   return ss;
 }
 
@@ -52,7 +53,7 @@ function ensureTenantTabs_(ss) {
 --------------------------------------------------------------------------- */
 /* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
    upgraded under the previous version is checked and widened again. */
-var SCHEMA_VERSION = '2026-11c';
+var SCHEMA_VERSION = '2026-11d';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -97,7 +98,7 @@ function schemaCheck_(sheet, cols) {
  */
 function upgradeTenantSchema_(ss, dryRun) {
   var problems = [], added = [];
-  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS]];
+  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS], [TAB.GOALS, GOAL_COLS]];
   checks.forEach(function (c) {
     var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
     if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Domebox needs "' + r.expected + '"');

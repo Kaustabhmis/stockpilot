@@ -90,9 +90,18 @@ function meetingById_(ctx, id) {
   return readMeetings_(ctx).filter(function (m) { return m.id === String(id || ''); })[0] || null;
 }
 
-function liveMeeting_(ctx) {
-  return readMeetings_(ctx).filter(function (m) { return m.status === 'live'; })[0] || null;
+/* Several meetings can run at once — the Quality head's and the Production
+   head's on the same morning — but one person chairs one at a time. */
+function liveMeeting_(ctx, chair) {
+  return readMeetings_(ctx).filter(function (m) { return m.status === 'live' && (!chair || m.chair === chair); })[0] || null;
 }
+/** The running meetings this person is in (or, for an Admin, all of them). */
+function liveMeetingsFor_(ctx) {
+  return readMeetings_(ctx).filter(function (m) { return m.status === 'live' && canSeeMeeting_(ctx, m); });
+}
+/* A meeting's own series: the meetings the same person chairs. A department's
+   roadblocks, actions and "since last week" stay inside its own meetings. */
+function sameSeries_(a, b) { return !!a && !!b && a.chair === b.chair; }
 
 /* Who may see a meeting: its attendees, its chair, and any Admin. A Doer who
    was not in the room does not read the room's roadblocks. */
@@ -107,10 +116,14 @@ function canChair_(ctx, m) { return ctx.actor.role === ROLE.ADMIN || m.chair ===
 function getMeetings_(ctx) {
   requireMeetings_(ctx);
   var mine = readMeetings_(ctx).filter(function (m) { return canSeeMeeting_(ctx, m) && m.status !== 'cancelled'; });
-  var live = mine.filter(function (m) { return m.status === 'live'; })[0] || null;
+  var names = {}; readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+  var lives = mine.filter(function (m) { return m.status === 'live'; }).map(function (x) {
+    return { id: x.id, title: x.title, chair: x.chair, chairName: names[x.chair] || x.chair, started: x.started,
+             segment: x.agenda[x.segment] ? x.agenda[x.segment].title : '', mine: x.chair === ctx.actor.username }; });
   return { status: 'success',
-    live: live ? { id: live.id, title: live.title, chair: live.chair, started: live.started,
-                   segment: live.agenda[live.segment] ? live.agenda[live.segment].title : '' } : null,
+    /* Every running meeting this person is in; "live" stays the first, for older pages. */
+    lives: lives, live: lives[0] || null,
+    iChairOne: lives.some(function (x) { return x.mine; }),
     past: mine.filter(function (m) { return m.status === 'ended'; }).reverse().slice(0, 40).map(function (m) {
       return { id: m.id, title: m.title, date: m.date, attendees: m.attendees.length,
                present: m.attendees.filter(function (a) { return a.p; }).length,
@@ -132,7 +145,7 @@ function defaultAgenda_(ctx) {
 function startMeeting_(ctx, form) {
   requireMeetings_(ctx); requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
-  if (liveMeeting_(ctx)) throw new Error('A meeting is already running. Join it, or end it first.');
+  if (liveMeeting_(ctx, ctx.actor.username)) throw new Error('You are already chairing a meeting that is running. End it first.');
 
   var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
   var byName = {}; users.forEach(function (u) { byName[u.username] = u; });
@@ -153,7 +166,7 @@ function startMeeting_(ctx, form) {
   if (form.saveAgenda) writeSetting_(ctx, 'meetingAgenda', JSON.stringify(agenda));
 
   return withLock_(function () {
-    if (liveMeeting_(ctx)) throw new Error('A meeting is already running.');
+    if (liveMeeting_(ctx, ctx.actor.username)) throw new Error('You are already chairing a meeting that is running.');
     var id = 'M-' + Utilities.getUuid().slice(0, 8), now = new Date();
     var title = String(form.title || 'Weekly review').trim().slice(0, 80);
     tab_(ctx, TAB.MEETINGS, MEETING_COLS).appendRow([id, title, ymd(now), 'live', ctx.actor.username, now, '',
@@ -281,7 +294,10 @@ function updateMeetingItem_(ctx, itemId, form) {
     if (!home || !canSeeMeeting_(ctx, home)) throw new Error('That item is not from a meeting you are in.');
     if (home.status !== 'live' && it.kind !== 'roadblock') throw new Error('That meeting has ended; its record stays as it was.');
   }
-  var live = liveMeeting_(ctx);
+  /* The running meeting this happens in: one this person is in, of the same
+     series as the item's own meeting when there is a choice. */
+  var lives = liveMeetingsFor_(ctx), homeM = it.meeting ? meetingById_(ctx, it.meeting) : null;
+  var live = lives.filter(function (x) { return homeM && sameSeries_(x, homeM); })[0] || lives[0] || null;
   var mine = it.by === ctx.actor.username;
   if (!mine && ctx.actor.role === ROLE.DOER) throw new Error('Only whoever raised it, or a manager, can change it.');
   return withLock_(function () {
@@ -386,18 +402,27 @@ function getMeeting_(ctx, id) {
   var dir = readDirection_(ctx);
   var goals = readGoals_(ctx);
   var sm = fyStartMonth_(ctx), q = fyPeriod_(m.date ? parseYmd(m.date) : new Date(), sm);
+  var chairDept = ''; users.forEach(function (u) { if (u.username === m.chair) chairDept = String(u.dept || '').trim(); });
 
   var here = items.filter(function (i) { return i.meeting === m.id; });
+  var all = readMeetings_(ctx), byId = {};
+  all.forEach(function (x) { byId[x.id] = x; });
+  var inRoom = {}; inRoom[m.chair] = true; m.attendees.forEach(function (a) { inRoom[a.u] = true; });
+  /* This meeting's roadblocks: ones raised in its own series, and ones raised
+     outside any meeting by somebody in this room. Another department's
+     roadblocks are theirs. */
   var road = items.filter(function (i) {
-    return i.kind === 'roadblock' && (i.status === 'open' || i.clearedIn === m.id);
+    if (i.kind !== 'roadblock' || !(i.status === 'open' || i.clearedIn === m.id)) return false;
+    if (i.meeting) return i.meeting === m.id || sameSeries_(byId[i.meeting], m);
+    return !!inRoom[i.by];
   });
 
   /* Actions: everything raised in a meeting that is still open, plus whatever
      closed since the previous meeting — last week's, done or not. */
-  var prev = readMeetings_(ctx).filter(function (x) {
-    return x.status === 'ended' && x.id !== m.id && x.started && x.started < (m.started || '9'); }).pop();
+  var prev = all.filter(function (x) {
+    return x.status === 'ended' && x.id !== m.id && sameSeries_(x, m) && x.started && x.started < (m.started || '9'); }).pop();
   var since = prev ? prev.started : '';
-  var meetingIds = {}; readMeetings_(ctx).forEach(function (x) { meetingIds[x.id] = x; });
+  var meetingIds = {}; all.forEach(function (x) { if (x.id === m.id || sameSeries_(x, m)) meetingIds[x.id] = x; });
   var actions = tasks.filter(function (t) {
     if (!t.raisedIn || !meetingIds[t.raisedIn]) return false;
     if (t.raisedIn === m.id) return true;
@@ -432,9 +457,13 @@ function getMeeting_(ctx, id) {
     updates: here.filter(function (i) { return i.kind === 'update'; }).map(label),
     roadblocks: road.map(label),
     actions: actions,
-    goals: goals.filter(function (g) { return g.level === 'quarter' && g.period === q.quarter && g.status !== 'Dropped'; })
+    /* The company's quarter goals, and the chair's own department's. */
+    goals: goals.filter(function (g) { return g.level === 'quarter' && g.period === q.quarter && g.status !== 'Dropped' &&
+        (g.scope !== 'dept' || g.dept === chairDept) && goalVisible_(ctx, g); })
       .map(function (g) { return { id: g.id, title: g.title, owner: g.owner, ownerName: names[g.owner] || g.owner,
-        status: g.status, note: g.note, progress: goalProgress_(g, goals, tasks) }; }),
+        status: g.status, note: g.note, progress: goalProgress_(g, goals, tasks),
+        scope: g.scope, dept: g.dept, metric: g.metric,
+        outlook: goalOutlook_(g, goalProgress_(g, goals, tasks), fyStartMonth_(ctx), new Date()) }; }),
     quarter: q.quarter,
     numbers: readNumbersWithLog_(ctx, names),
     values: dir.values.map(function (v) { return { code: v.code, title: v.title }; }), purpose: dir.purpose,

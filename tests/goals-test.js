@@ -19,7 +19,7 @@ dir.getDataRange().getValues().forEach((r, i) => {
 });
 [['Sruti Charulata', 'sruti', 'HOD', ''], ['Payel S', 'payel', 'Doer', 'sruti'], ['Vikram R', 'vikram', 'Doer', 'sruti']]
   .forEach(([n, u, role, mgr]) => call({ action: 'addUser', token: A, form: { name: n, username: U(u),
-    email: U(u) + '@acme.in', role, manager: mgr ? U(mgr) : '', jobProfile: 'Executive', password: 'staffpass123' } }));
+    email: U(u) + '@acme.in', role, manager: mgr ? U(mgr) : '', dept: 'Operations', jobProfile: 'Executive', password: 'staffpass123' } }));
 const tok = (u) => call({ action: 'login', username: U(u) + '@acme.in', password: 'staffpass123' }).token;
 const H = tok('sruti'), P = tok('payel'), V = tok('vikram');
 const ymd = (plus) => { const d = new Date(); d.setDate(d.getDate() + plus); return d.toISOString().slice(0, 10); };
@@ -61,9 +61,9 @@ d = call({ action: 'getDirection', token: A });
 const qp = d.now.quarter;
 const qg = call({ action: 'saveGoal', token: H, form: { level: 'quarter', period: qp, title: 'Launch the 16-inch fan',
   owner: U('sruti'), parent: yg.id } });
-ok('an HOD creates a quarter goal under it', qg.status === 'success', qg.message);
+ok('an HOD creates a quarter goal for their department under it', qg.status === 'success', qg.message);
 ok('a Doer cannot create goals', call({ action: 'saveGoal', token: P, form: { title: 'Mine' } }).status === 'error');
-ok('a quarter goal cannot sit under another quarter goal', call({ action: 'saveGoal', token: A,
+ok('a company quarter goal cannot sit under a department\u2019s quarter goal', call({ action: 'saveGoal', token: A,
    form: { level: 'quarter', title: 'x', parent: qg.id } }).status === 'error');
 ok('a quarter goal needs a quarter', call({ action: 'saveGoal', token: A,
    form: { level: 'quarter', period: 'FY26-27', title: 'x' } }).status === 'error');

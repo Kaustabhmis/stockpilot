@@ -461,6 +461,30 @@ function seedDemoDirection_(ctx, out) {
     title: 'Cut inventory variance below 1%' });
   setGoalStatus_(ctx, qAudit, 'At risk', 'CC-19 needed a second pass; internal audit round is due this week.');
 
+  /* Two department goals with a target figure and weekly figures entered, so
+     the "Are we on track?" review has something real to judge: Quality is on
+     course, Operations is slipping. */
+  try {
+    var sm = fyStartMonth_(ctx), qb = goalPeriodBounds_(fy.quarter, sm), today = new Date();
+    var weekly = function (id, start, target, lag) {
+      var g = goalById_(ctx, id); if (!g || !qb) return;
+      var span = qb.to - qb.from, list = [];
+      for (var d = new Date(qb.from.getTime() + 7 * 86400000); d < today; d = new Date(d.getTime() + 7 * 86400000)) {
+        var share = Math.min(1, (d - qb.from) / span) * lag;
+        list.push({ d: ymd(d), v: Math.round((start + (target - start) * share) * 10) / 10, by: 'Demo', note: '' });
+      }
+      tab_(ctx, TAB.GOALS, GOAL_COLS).getRange(g.row, 18).setValue(JSON.stringify(list));
+    };
+    var qRej = saveGoal_(ctx, { scope: 'dept', dept: 'Quality', level: 'quarter', period: fy.quarter, parent: year, owner: 'imran',
+      title: 'Customer rejections down to 1.5%', start: 4, target: 1.5, unit: '%' }).id;
+    var qOee = saveGoal_(ctx, { scope: 'dept', dept: 'Operations', level: 'quarter', period: fy.quarter, parent: qDespatch, owner: 'sruti',
+      title: 'Press line OEE up to 80%', start: 62, target: 80, unit: '%' }).id;
+    weekly(qRej, 4, 1.5, 1.05);
+    weekly(qOee, 62, 80, 0.7);
+    dropCache_(ctx);
+    out.push('Department goals: Quality and Operations, with weekly figures.');
+  } catch (e) { out.push('  department goals: ' + e.message); }
+
   var linked = 0;
   readTasks_(ctx).forEach(function (t) {
     var g = /^Despatch /.test(t.title) ? qDespatch

@@ -90,7 +90,8 @@ var TAB = { USERS:'Users', TASKS:'Tasks', KRA:'KRA_Master', REVIEWS:'Reviews',
 var COOKIE_COLS = ['Date','To','By','Points','Reason','Value'];
 
 var DIRECTION_COLS = ['Kind','Code','Title','Detail','Order'];
-var GOAL_COLS = ['ID','Level','Period','Title','Detail','Owner','Parent','Status','Note','Created','Updated'];
+var GOAL_COLS = ['ID','Level','Period','Title','Detail','Owner','Parent','Status','Note','Created','Updated',
+  'Scope','Dept','Unit','Start','Target','Direction','Checkins JSON'];
 var NUMBER_COLS = ['ID','Name','Owner','Unit','Target','Direction','Goal','Active','Created'];
 var NUMBER_LOG_COLS = ['Number','Week','Value','By','At'];
 var MEETING_COLS = ['ID','Title','Date','Status','Chair','Started','Ended','Attendees JSON',
@@ -656,6 +657,7 @@ function route_(p) {
     case 'saveDirection':       return saveDirection_(ctx, p.form);
     case 'saveGoal':            return saveGoal_(ctx, p.form);
     case 'setGoalStatus':       return setGoalStatus_(ctx, p.id, p.goalStatus, p.note);
+    case 'goalCheckin':         return recordGoalCheckin_(ctx, p.id, p.value, p.note);
     case 'deleteGoal':          return deleteGoal_(ctx, p.id);
     case 'saveNumber':          return saveNumber_(ctx, p.form);
     case 'recordNumber':        return recordNumber_(ctx, p.id, p.value, p.week);
@@ -1188,6 +1190,7 @@ function ensureTenantTabs_(ss) {
   widen_(ss.getSheetByName(TAB.USERS), USER_COLS);
   widen_(ss.getSheetByName(TAB.COOKIES), COOKIE_COLS);
   widen_(ss.getSheetByName(TAB.MEETING_ITEMS), MEETING_ITEM_COLS);
+  widen_(ss.getSheetByName(TAB.GOALS), GOAL_COLS);
   return ss;
 }
 
@@ -1213,7 +1216,7 @@ function ensureTenantTabs_(ss) {
 --------------------------------------------------------------------------- */
 /* Bumped whenever TASK_COLS, USER_COLS or the tab list grows, so a sheet
    upgraded under the previous version is checked and widened again. */
-var SCHEMA_VERSION = '2026-11c';
+var SCHEMA_VERSION = '2026-11d';
 
 /** A1-style column letter: 1 -> A, 27 -> AA. Used in what the operator reads. */
 function colLetter_(n) {
@@ -1258,7 +1261,7 @@ function schemaCheck_(sheet, cols) {
  */
 function upgradeTenantSchema_(ss, dryRun) {
   var problems = [], added = [];
-  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS]];
+  var checks = [[TAB.TASKS, TASK_COLS], [TAB.USERS, USER_COLS], [TAB.COOKIES, COOKIE_COLS], [TAB.GOALS, GOAL_COLS]];
   checks.forEach(function (c) {
     var r = schemaCheck_(ss.getSheetByName(c[0]), c[1]);
     if (!r.ok) problems.push(c[0] + ' column ' + r.at + ' is "' + r.found + '" where Domebox needs "' + r.expected + '"');
@@ -5976,6 +5979,30 @@ function seedDemoDirection_(ctx, out) {
     title: 'Cut inventory variance below 1%' });
   setGoalStatus_(ctx, qAudit, 'At risk', 'CC-19 needed a second pass; internal audit round is due this week.');
 
+  /* Two department goals with a target figure and weekly figures entered, so
+     the "Are we on track?" review has something real to judge: Quality is on
+     course, Operations is slipping. */
+  try {
+    var sm = fyStartMonth_(ctx), qb = goalPeriodBounds_(fy.quarter, sm), today = new Date();
+    var weekly = function (id, start, target, lag) {
+      var g = goalById_(ctx, id); if (!g || !qb) return;
+      var span = qb.to - qb.from, list = [];
+      for (var d = new Date(qb.from.getTime() + 7 * 86400000); d < today; d = new Date(d.getTime() + 7 * 86400000)) {
+        var share = Math.min(1, (d - qb.from) / span) * lag;
+        list.push({ d: ymd(d), v: Math.round((start + (target - start) * share) * 10) / 10, by: 'Demo', note: '' });
+      }
+      tab_(ctx, TAB.GOALS, GOAL_COLS).getRange(g.row, 18).setValue(JSON.stringify(list));
+    };
+    var qRej = saveGoal_(ctx, { scope: 'dept', dept: 'Quality', level: 'quarter', period: fy.quarter, parent: year, owner: 'imran',
+      title: 'Customer rejections down to 1.5%', start: 4, target: 1.5, unit: '%' }).id;
+    var qOee = saveGoal_(ctx, { scope: 'dept', dept: 'Operations', level: 'quarter', period: fy.quarter, parent: qDespatch, owner: 'sruti',
+      title: 'Press line OEE up to 80%', start: 62, target: 80, unit: '%' }).id;
+    weekly(qRej, 4, 1.5, 1.05);
+    weekly(qOee, 62, 80, 0.7);
+    dropCache_(ctx);
+    out.push('Department goals: Quality and Operations, with weekly figures.');
+  } catch (e) { out.push('  department goals: ' + e.message); }
+
   var linked = 0;
   readTasks_(ctx).forEach(function (t) {
     var g = /^Despatch /.test(t.title) ? qDespatch
@@ -6617,11 +6644,17 @@ function readGoals_(ctx) {
     return sh.getDataRange().getValues().slice(1).map(function (r, i) { r.row_ = i + 2; return r; })
       .filter(function (r) { return r[0]; })
       .map(function (r) {
+        var target = r[15] === '' || r[15] == null ? null : Number(r[15]);
         return { id: String(r[0]), level: String(r[1] || 'quarter'), period: String(r[2] || ''),
                  title: String(r[3] || ''), detail: String(r[4] || ''),
                  owner: String(r[5] || '').trim(), parent: String(r[6] || '').trim(),
                  status: GOAL_STATUSES.indexOf(String(r[7])) > -1 ? String(r[7]) : 'On course',
-                 note: String(r[8] || ''), created: toIso_(r[9]), updated: toIso_(r[10]), row: r.row_ };
+                 note: String(r[8] || ''), created: toIso_(r[9]), updated: toIso_(r[10]), row: r.row_,
+                 /* Added later; a goal from before them is a company goal with no target. */
+                 scope: String(r[11] || '') === 'dept' ? 'dept' : 'company', dept: String(r[12] || '').trim(),
+                 metric: target === null || isNaN(target) ? null : { unit: String(r[13] || ''),
+                   start: Number(r[14]) || 0, target: target, lower: String(r[16]) === 'lower' },
+                 checkins: safeJson_(r[17], []) };
       });
   });
 }
@@ -6661,12 +6694,16 @@ function getDirection_(ctx) {
   readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
   var sm = fyStartMonth_(ctx), now = fyPeriod_(new Date(), sm);
 
-  var withProgress = goals.map(function (g) {
+  var withProgress = goals.filter(function (g) { return goalVisible_(ctx, g); }).map(function (g) {
     var p = goalProgress_(g, goals, tasks);
     return { id: g.id, level: g.level, period: g.period, title: g.title, detail: g.detail,
              owner: g.owner, ownerName: names[g.owner] || g.owner, parent: g.parent,
-             status: g.status, note: g.note, updated: g.updated, progress: p };
+             status: g.status, note: g.note, updated: g.updated, progress: p,
+             scope: g.scope, dept: g.dept, metric: g.metric, checkins: g.checkins.slice(-26),
+             outlook: goalOutlook_(g, p, sm, new Date()),
+             canManage: canManageGoal_(ctx, g), canCheckIn: canCheckInGoal_(ctx, g) };
   });
+  rollUpOutlooks_(withProgress, goals, tasks, sm);
 
   return { status: 'success', purpose: dir.purpose, values: dir.values.map(function (v) {
       return { code: v.code, title: v.title, detail: v.detail }; }),
@@ -6674,7 +6711,9 @@ function getDirection_(ctx) {
     now: { year: now.year, quarter: now.quarter, from: now.from, to: now.to },
     quarters: quarterChoices_(ctx), fyStartMonth: sm,
     numbers: readNumbersWithLog_(ctx, names),
-    canEdit: ctx.actor.role !== ROLE.DOER, canEditValues: ctx.actor.role === ROLE.ADMIN };
+    canEdit: ctx.actor.role !== ROLE.DOER, canEditValues: ctx.actor.role === ROLE.ADMIN,
+    canCompanyGoals: ctx.actor.role === ROLE.ADMIN, myDept: String(ctx.me.dept || ''),
+    depts: ctx.actor.role === ROLE.ADMIN ? goalDepts_(ctx) : (ctx.me.dept ? [String(ctx.me.dept)] : []) };
 }
 
 /* ---------- purpose and values (Admin) ----------------------------------- */
@@ -6724,6 +6763,20 @@ function valueByTag_(ctx, tag) {
 function saveGoal_(ctx, form) {
   requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
+  var isAdmin = ctx.actor.role === ROLE.ADMIN;
+  var existing = form.id ? goalById_(ctx, form.id) : null;
+  if (form.id && !existing) throw new Error('That goal no longer exists.');
+  if (existing && !canManageGoal_(ctx, existing)) throw new Error('Only an Admin, or the head of its department, can change this goal.');
+  /* Company goals are the Admin's. A head of department sets goals for their
+     own department, each one pointing at the company goal it serves. */
+  var scope = existing ? existing.scope : (form.scope === 'dept' || (!isAdmin && form.scope !== 'company') ? 'dept' : 'company');
+  var dept = '';
+  if (scope === 'company' && !isAdmin) throw new Error('Company goals are set by an Admin. Add a goal for your department instead.');
+  if (scope === 'dept') {
+    dept = existing ? existing.dept : String(isAdmin ? (form.dept || ctx.me.dept || '') : (ctx.me.dept || '')).trim();
+    if (!dept) throw new Error(isAdmin ? 'Pick the department this goal is for.' : 'Your department is not set. Ask an Admin to add it to your Team profile, then add the goal.');
+  }
+  var metric = goalMetricFrom_(form, existing);
   var title = String(form.title || '').trim();
   if (!title) throw new Error('Give the goal a title.');
   if (title.length > 140) throw new Error('Keep the title under 140 characters — the detail goes below it.');
@@ -6735,30 +6788,43 @@ function saveGoal_(ctx, form) {
   if (level === 'year' && / Q[1-4]$/.test(period)) period = period.replace(/ Q[1-4]$/, '');
 
   var owner = String(form.owner || ctx.actor.username).trim();
-  if (!findUser_(ctx.ss, owner)) throw new Error('The owner is not in this workspace.');
+  var ou = findUser_(ctx.ss, owner);
+  if (!ou) throw new Error('The owner is not in this workspace.');
+  if (scope === 'dept' && !isAdmin && owner !== ctx.actor.username && String(ou.dept || '') !== dept) {
+    throw new Error('Give a department goal to someone in ' + dept + '.');
+  }
   var parent = String(form.parent || '').trim();
   if (parent) {
     var pg = goalById_(ctx, parent);
-    if (!pg || pg.level !== 'year') throw new Error('A quarter goal can only sit under a year goal.');
-    if (level === 'year') parent = '';
+    if (!pg || pg.id === (existing && existing.id)) throw new Error('That goal it serves no longer exists.');
+    if (scope === 'company' || pg.scope === 'dept') {
+      /* Within one level of the plan: a quarter goal sits under a year goal. */
+      if (pg.level !== 'year' || level !== 'quarter') throw new Error('A quarter goal can only sit under a year goal.');
+      if (pg.scope === 'dept' && (scope !== 'dept' || pg.dept !== dept)) throw new Error('A department goal can only sit under its own department\u2019s goals, or a company goal.');
+    }
+    /* A department goal may serve any company goal, year or quarter. */
   }
   var status = GOAL_STATUSES.indexOf(form.status) > -1 ? form.status : 'On course';
 
   return withLock_(function () {
     var sh = tab_(ctx, TAB.GOALS, GOAL_COLS);
     var now2 = new Date();
+    widen_(sh, GOAL_COLS);
+    var mcols = metric ? [metric.unit, metric.start, metric.target, metric.lower ? 'lower' : 'higher'] : ['', '', '', ''];
     if (form.id) {
       var g = goalById_(ctx, form.id);
       if (!g) throw new Error('That goal no longer exists.');
-      sh.getRange(g.row, 2, 1, 10).setValues([[level, period, title, String(form.detail || ''),
-        owner, parent, status, String(form.note || g.note || ''), g.created ? new Date(g.created) : now2, now2]]);
+      sh.getRange(g.row, 2, 1, 16).setValues([[level, period, title, String(form.detail || ''),
+        owner, parent, status, String(form.note || g.note || ''), g.created ? new Date(g.created) : now2, now2,
+        scope, dept].concat(mcols)]);
       dropCache_(ctx);
       return { status: 'success', id: g.id, message: 'Goal updated.' };
     }
     var id = 'G-' + Utilities.getUuid().slice(0, 8);
-    sh.appendRow([id, level, period, title, String(form.detail || ''), owner, parent, status, '', now2, now2]);
+    sh.appendRow([id, level, period, title, String(form.detail || ''), owner, parent, status, '', now2, now2,
+      scope, dept].concat(mcols).concat(['[]']));
     dropCache_(ctx);
-    return { status: 'success', id: id, message: (level === 'year' ? 'Year' : 'Quarter') + ' goal added.' };
+    return { status: 'success', id: id, message: (scope === 'dept' ? dept + ': ' : '') + (level === 'year' ? 'Year' : 'Quarter') + ' goal added.' };
   });
 }
 
@@ -6771,8 +6837,8 @@ function setGoalStatus_(ctx, id, status, note) {
   blockIfStopped_(ctx);
   var g = goalById_(ctx, id);
   if (!g) throw new Error('That goal no longer exists.');
-  if (ctx.actor.role === ROLE.DOER && g.owner !== ctx.actor.username) {
-    throw new Error('Only the goal\'s owner or a manager can change its status.');
+  if (g.owner !== ctx.actor.username && !canManageGoal_(ctx, g)) {
+    throw new Error('Only the goal\'s owner, the head of its department or an Admin can change its status.');
   }
   if (GOAL_STATUSES.indexOf(status) < 0) throw new Error('Status must be one of: ' + GOAL_STATUSES.join(', ') + '.');
   if (status === 'At risk' && !String(note || '').trim()) {
@@ -6790,6 +6856,7 @@ function deleteGoal_(ctx, id) {
   requireManager_(ctx); blockIfStopped_(ctx);
   var g = goalById_(ctx, id);
   if (!g) throw new Error('That goal no longer exists.');
+  if (!canManageGoal_(ctx, g)) throw new Error('Only an Admin, or the head of its department, can remove this goal.');
   /* A goal with work pointing at it is dropped, not deleted: deleting it would
      leave tasks tagged to nothing and quietly rewrite what they were for. */
   var linked = readAllTasks_(ctx).some(function (t) { return t.goal === g.id; }) ||
@@ -6910,6 +6977,182 @@ function recordNumber_(ctx, id, value, week) {
   });
 }
 
+/* ---------- department goals, targets and the on-track analysis ------------
+   A company goal is set by an Admin and seen by everyone. A department goal is
+   set by that department's head (or an Admin), points at the company goal it
+   serves, and is seen by the Admin, its owner and the people in that
+   department — another department's plans are not everybody's business.
+
+   A goal can carry a target figure: "rejection rate from 4% down to 1.5%".
+   Its owner or department head enters the figure as it moves (a check-in),
+   and the system says whether it is on track: how far along it is against how
+   far through its period, and where it ends at the pace so far. A goal with no
+   figure is judged on the work linked to it instead. */
+
+var GOAL_STALE_DAYS = 21;
+
+function goalVisible_(ctx, g) {
+  if (g.scope !== 'dept' || ctx.actor.role === ROLE.ADMIN || g.owner === ctx.actor.username) return true;
+  return !!g.dept && String(ctx.me.dept || '').trim() === g.dept;
+}
+/** Edit, drop or remove: an Admin for anything; a head of department for their own department's goals. */
+function canManageGoal_(ctx, g) {
+  if (ctx.actor.role === ROLE.ADMIN) return true;
+  if (g.scope !== 'dept' || ctx.actor.role === ROLE.DOER) return false;
+  return !!g.dept && String(ctx.me.dept || '').trim() === g.dept;
+}
+/** Enter the figure: the goal's owner too — they are closest to it. */
+function canCheckInGoal_(ctx, g) {
+  return !!g.metric && (g.owner === ctx.actor.username || canManageGoal_(ctx, g));
+}
+function goalDepts_(ctx) {
+  var seen = {};
+  readUsers_(ctx).forEach(function (u) { var d = String(u.dept || '').trim(); if (d && u.active !== false) seen[d] = true; });
+  readGoals_(ctx).forEach(function (g) { if (g.dept) seen[g.dept] = true; });
+  return Object.keys(seen).sort();
+}
+
+/** The target from the form: none, or a start, a target and a unit. Lower-is-better follows from them. */
+function goalMetricFrom_(form, existing) {
+  var t = form.target;
+  if (t === undefined && existing) return existing.metric;
+  if (t === '' || t === null || t === undefined) return null;
+  var target = Number(t), start = Number(form.start === '' || form.start == null ? 0 : form.start);
+  if (!isFinite(target) || !isFinite(start)) throw new Error('The start and target must be numbers.');
+  if (target === start) throw new Error('The target must differ from where it starts.');
+  var unit = String(form.unit || '').trim().slice(0, 20);
+  return { unit: unit, start: start, target: target, lower: target < start };
+}
+
+/** The dates a goal's period runs between, from its label ("FY26-27 Q3", "FY2026"). */
+function goalPeriodBounds_(label, sm) {
+  var m = String(label || '').match(/^FY(\d{2,4})(?:-(\d{2}))?(?: Q([1-4]))?$/);
+  if (!m) return null;
+  var fy = m[1].length === 4 ? Number(m[1]) : 2000 + Number(m[1]);
+  var s = (Number(sm) || 4) - 1;
+  if (m[3]) { var q = Number(m[3]); return { from: new Date(fy, s + (q - 1) * 3, 1), to: new Date(fy, s + q * 3, 0, 23, 59) }; }
+  return { from: new Date(fy, s, 1), to: new Date(fy + 1, s, 0, 23, 59) };
+}
+
+/**
+ * Is it on track? Compares how far along the goal is with how far through its
+ * period we are, and projects the end at the pace so far.
+ * @return {verdict, tone, reason, percent, expected}
+ */
+function goalOutlook_(g, progress, sm, now) {
+  now = now || new Date();
+  if (g.status === 'Done') return { verdict: 'Achieved', tone: 'good', reason: 'Marked done.', percent: 100, expected: null };
+  if (g.status === 'Dropped') return { verdict: 'Dropped', tone: 'none', reason: 'No longer pursued.', percent: null, expected: null };
+  var b = goalPeriodBounds_(g.period, sm);
+  var span = b ? Math.max(1, b.to - b.from) : 1;
+  var gone = b ? Math.max(0, Math.min(1, (now - b.from) / span)) : null;
+  var pct = function (x) { return Math.round(Math.max(0, Math.min(1.5, x)) * 100); };
+  var unit = g.metric && g.metric.unit ? (/^%$/.test(g.metric.unit) ? '%' : ' ' + g.metric.unit) : '';
+  var fmt = function (v) { return (Math.round(v * 100) / 100) + unit; };
+  var judge = function (done, pace, extra) {
+    if (gone === null) return { verdict: done >= 1 ? 'Achieved' : 'In progress', tone: done >= 1 ? 'good' : 'none' };
+    if (done >= 1) return { verdict: 'Achieved', tone: 'good' };
+    if (gone >= 1) return { verdict: 'Missed', tone: 'bad' };
+    if (pace >= 1 || done >= gone - 0.05) return extra ? { verdict: 'At risk', tone: 'warn' } : { verdict: 'On track', tone: 'good' };
+    if (pace >= 0.8) return { verdict: 'At risk', tone: 'warn' };
+    return { verdict: 'Off track', tone: 'bad' };
+  };
+
+  if (g.metric) {
+    var m = g.metric, need = m.target - m.start, list = (g.checkins || []).slice().sort(function (a, b2) { return String(a.d) < String(b2.d) ? -1 : 1; });
+    var last = list[list.length - 1];
+    if (!last) {
+      if (gone !== null && gone < 0.15) return { verdict: 'Not started', tone: 'none', reason: 'No figure entered yet — the first check-in starts the trend.', percent: 0, expected: pct(gone) };
+      return { verdict: 'Needs data', tone: 'warn', reason: 'No figure entered yet' + (gone !== null ? ', with ' + pct(gone) + '% of the period gone.' : '.'), percent: 0, expected: gone === null ? null : pct(gone) };
+    }
+    var done = (Number(last.v) - m.start) / need;
+    var at = b ? Math.max(0.02, Math.min(1, (parseYmd(last.d) - b.from) / span)) : 1;
+    var pace = done / at;                        // where it ends, as a share of the target, if it carries on as it has
+    var ends = m.start + need * Math.max(0, pace);
+    var age = Math.floor((now - parseYmd(last.d)) / 86400000);
+    var stale = gone !== null && gone < 1 && age > GOAL_STALE_DAYS;
+    var j = judge(done, pace, false);
+    var why = 'At ' + fmt(Number(last.v)) + ' against a target of ' + fmt(m.target) + ': ' + pct(done) + '% of the way' +
+      (gone !== null && gone < 1 ? ', with ' + pct(gone) + '% of the period gone.' : '.') +
+      (j.verdict !== 'Achieved' && gone !== null && gone < 1 ? ' At this pace it ends near ' + fmt(ends) + '.' : '') +
+      (stale ? ' The last figure is ' + age + ' days old.' : '');
+    return { verdict: j.verdict, tone: j.tone, reason: why, percent: pct(done), expected: gone === null ? null : pct(gone),
+             last: Number(last.v), lastOn: last.d, projected: Math.round(ends * 100) / 100, stale: stale };
+  }
+
+  /* No figure: judged on the work linked to it. */
+  var p = progress || { total: 0, done: 0, overdue: 0 };
+  if (!p.total) {
+    if (gone !== null && gone < 0.15) return { verdict: 'Not started', tone: 'none', reason: 'No work linked yet.', percent: null, expected: pct(gone) };
+    return { verdict: 'Needs data', tone: 'warn', reason: 'No work is linked to it and it has no target figure, so there is nothing to measure.', percent: null, expected: gone === null ? null : pct(gone) };
+  }
+  var d2 = p.done / p.total, j2 = judge(d2, gone ? d2 / Math.max(0.02, gone) : 1, p.overdue > 0);
+  return { verdict: j2.verdict, tone: j2.tone, percent: pct(d2), expected: gone === null ? null : pct(gone),
+    reason: p.done + ' of ' + p.total + ' linked jobs done (' + pct(d2) + '%)' + (gone !== null && gone < 1 ? ', with ' + pct(gone) + '% of the period gone' : '') +
+      (p.overdue ? '; ' + p.overdue + ' overdue.' : '.') };
+}
+
+/** Enter the goal's figure as it stands today. One per day; a second the same day replaces it. */
+function recordGoalCheckin_(ctx, id, value, note) {
+  blockIfStopped_(ctx);
+  var g = goalById_(ctx, id);
+  if (!g || !goalVisible_(ctx, g)) throw new Error('That goal no longer exists.');
+  if (!g.metric) throw new Error('This goal has no target figure. Edit it and add one first.');
+  if (!canCheckInGoal_(ctx, g)) throw new Error('Only the goal\'s owner, the head of its department or an Admin can enter its figure.');
+  var v = Number(value);
+  if (value === '' || value === null || !isFinite(v)) throw new Error('Enter the figure as a number.');
+  var today = ymd(new Date());
+  var list = (g.checkins || []).filter(function (c) { return c.d !== today; });
+  list.push({ d: today, v: v, by: ctx.actor.name, note: String(note || '').trim().slice(0, 200) });
+  list = list.slice(-400);
+  return withLock_(function () {
+    var sh = tab_(ctx, TAB.GOALS, GOAL_COLS);
+    widen_(sh, GOAL_COLS);
+    sh.getRange(g.row, 18).setValue(JSON.stringify(list));
+    sh.getRange(g.row, 11).setValue(new Date());
+    dropCache_(ctx);
+    g.checkins = list;
+    var o = goalOutlook_(g, goalProgress_(g, readGoals_(ctx), readAllTasks_(ctx)), fyStartMonth_(ctx), new Date());
+    return { status: 'success', outlook: o, message: 'Figure saved. ' + o.verdict + '.' };
+  });
+}
+
+/**
+ * A goal with no figure and no work of its own is judged on the goals that
+ * serve it: a company goal is on track when its department goals are.
+ */
+function rollUpOutlooks_(shown, goals, tasks, sm) {
+  var now = new Date(), memo = {};
+  var outlookOf = function (g, depth) {
+    if (memo[g.id]) return memo[g.id];
+    var own = goalOutlook_(g, goalProgress_(g, goals, tasks), sm, now);
+    var kids = goals.filter(function (k) { return k.parent === g.id && k.status !== 'Dropped'; });
+    if (depth > 3 || g.metric || g.status === 'Done' || g.status === 'Dropped' || !kids.length ||
+        (own.verdict !== 'Needs data' && own.verdict !== 'Not started')) return (memo[g.id] = own);
+    var c = { good: 0, warn: 0, bad: 0, none: 0 }, done = 0;
+    kids.forEach(function (k) { var o = outlookOf(k, depth + 1); if (o.verdict === 'Achieved') done++;
+      if (o.verdict === 'Needs data' || o.verdict === 'Not started') c.none++; else c[o.tone] = (c[o.tone] || 0) + 1; });
+    var n = kids.length, judged = n - c.none, v;
+    if (done === n) v = { verdict: 'Achieved', tone: 'good' };
+    else if (!judged) return (memo[g.id] = own);
+    else if (c.bad * 2 > judged) v = { verdict: 'Off track', tone: 'bad' };
+    else if (c.bad || c.warn) v = { verdict: 'At risk', tone: 'warn' };
+    else v = { verdict: 'On track', tone: 'good' };
+    var parts = [];
+    if (c.good) parts.push(c.good + ' on track or achieved');
+    if (c.warn) parts.push(c.warn + ' at risk');
+    if (c.bad) parts.push(c.bad + ' off track');
+    if (c.none) parts.push(c.none + ' with no figures yet');
+    v.reason = 'Judged on the ' + n + (n === 1 ? ' goal that serves' : ' goals that serve') + ' it: ' + parts.join(', ') + '.';
+    v.percent = null; v.expected = own.expected; v.rolledUp = true;
+    return (memo[g.id] = v);
+  };
+  shown.forEach(function (row) {
+    var g = goals.filter(function (x) { return x.id === row.id; })[0];
+    if (g) row.outlook = outlookOf(g, 0);
+  });
+}
+
 
 // ===========================================================================
 // MEETINGS
@@ -7003,9 +7246,18 @@ function meetingById_(ctx, id) {
   return readMeetings_(ctx).filter(function (m) { return m.id === String(id || ''); })[0] || null;
 }
 
-function liveMeeting_(ctx) {
-  return readMeetings_(ctx).filter(function (m) { return m.status === 'live'; })[0] || null;
+/* Several meetings can run at once — the Quality head's and the Production
+   head's on the same morning — but one person chairs one at a time. */
+function liveMeeting_(ctx, chair) {
+  return readMeetings_(ctx).filter(function (m) { return m.status === 'live' && (!chair || m.chair === chair); })[0] || null;
 }
+/** The running meetings this person is in (or, for an Admin, all of them). */
+function liveMeetingsFor_(ctx) {
+  return readMeetings_(ctx).filter(function (m) { return m.status === 'live' && canSeeMeeting_(ctx, m); });
+}
+/* A meeting's own series: the meetings the same person chairs. A department's
+   roadblocks, actions and "since last week" stay inside its own meetings. */
+function sameSeries_(a, b) { return !!a && !!b && a.chair === b.chair; }
 
 /* Who may see a meeting: its attendees, its chair, and any Admin. A Doer who
    was not in the room does not read the room's roadblocks. */
@@ -7020,10 +7272,14 @@ function canChair_(ctx, m) { return ctx.actor.role === ROLE.ADMIN || m.chair ===
 function getMeetings_(ctx) {
   requireMeetings_(ctx);
   var mine = readMeetings_(ctx).filter(function (m) { return canSeeMeeting_(ctx, m) && m.status !== 'cancelled'; });
-  var live = mine.filter(function (m) { return m.status === 'live'; })[0] || null;
+  var names = {}; readUsers_(ctx).forEach(function (u) { names[u.username] = u.name; });
+  var lives = mine.filter(function (m) { return m.status === 'live'; }).map(function (x) {
+    return { id: x.id, title: x.title, chair: x.chair, chairName: names[x.chair] || x.chair, started: x.started,
+             segment: x.agenda[x.segment] ? x.agenda[x.segment].title : '', mine: x.chair === ctx.actor.username }; });
   return { status: 'success',
-    live: live ? { id: live.id, title: live.title, chair: live.chair, started: live.started,
-                   segment: live.agenda[live.segment] ? live.agenda[live.segment].title : '' } : null,
+    /* Every running meeting this person is in; "live" stays the first, for older pages. */
+    lives: lives, live: lives[0] || null,
+    iChairOne: lives.some(function (x) { return x.mine; }),
     past: mine.filter(function (m) { return m.status === 'ended'; }).reverse().slice(0, 40).map(function (m) {
       return { id: m.id, title: m.title, date: m.date, attendees: m.attendees.length,
                present: m.attendees.filter(function (a) { return a.p; }).length,
@@ -7045,7 +7301,7 @@ function defaultAgenda_(ctx) {
 function startMeeting_(ctx, form) {
   requireMeetings_(ctx); requireManager_(ctx); blockIfStopped_(ctx);
   form = form || {};
-  if (liveMeeting_(ctx)) throw new Error('A meeting is already running. Join it, or end it first.');
+  if (liveMeeting_(ctx, ctx.actor.username)) throw new Error('You are already chairing a meeting that is running. End it first.');
 
   var users = readUsers_(ctx).filter(function (u) { return u.active !== false; });
   var byName = {}; users.forEach(function (u) { byName[u.username] = u; });
@@ -7066,7 +7322,7 @@ function startMeeting_(ctx, form) {
   if (form.saveAgenda) writeSetting_(ctx, 'meetingAgenda', JSON.stringify(agenda));
 
   return withLock_(function () {
-    if (liveMeeting_(ctx)) throw new Error('A meeting is already running.');
+    if (liveMeeting_(ctx, ctx.actor.username)) throw new Error('You are already chairing a meeting that is running.');
     var id = 'M-' + Utilities.getUuid().slice(0, 8), now = new Date();
     var title = String(form.title || 'Weekly review').trim().slice(0, 80);
     tab_(ctx, TAB.MEETINGS, MEETING_COLS).appendRow([id, title, ymd(now), 'live', ctx.actor.username, now, '',
@@ -7194,7 +7450,10 @@ function updateMeetingItem_(ctx, itemId, form) {
     if (!home || !canSeeMeeting_(ctx, home)) throw new Error('That item is not from a meeting you are in.');
     if (home.status !== 'live' && it.kind !== 'roadblock') throw new Error('That meeting has ended; its record stays as it was.');
   }
-  var live = liveMeeting_(ctx);
+  /* The running meeting this happens in: one this person is in, of the same
+     series as the item's own meeting when there is a choice. */
+  var lives = liveMeetingsFor_(ctx), homeM = it.meeting ? meetingById_(ctx, it.meeting) : null;
+  var live = lives.filter(function (x) { return homeM && sameSeries_(x, homeM); })[0] || lives[0] || null;
   var mine = it.by === ctx.actor.username;
   if (!mine && ctx.actor.role === ROLE.DOER) throw new Error('Only whoever raised it, or a manager, can change it.');
   return withLock_(function () {
@@ -7299,18 +7558,27 @@ function getMeeting_(ctx, id) {
   var dir = readDirection_(ctx);
   var goals = readGoals_(ctx);
   var sm = fyStartMonth_(ctx), q = fyPeriod_(m.date ? parseYmd(m.date) : new Date(), sm);
+  var chairDept = ''; users.forEach(function (u) { if (u.username === m.chair) chairDept = String(u.dept || '').trim(); });
 
   var here = items.filter(function (i) { return i.meeting === m.id; });
+  var all = readMeetings_(ctx), byId = {};
+  all.forEach(function (x) { byId[x.id] = x; });
+  var inRoom = {}; inRoom[m.chair] = true; m.attendees.forEach(function (a) { inRoom[a.u] = true; });
+  /* This meeting's roadblocks: ones raised in its own series, and ones raised
+     outside any meeting by somebody in this room. Another department's
+     roadblocks are theirs. */
   var road = items.filter(function (i) {
-    return i.kind === 'roadblock' && (i.status === 'open' || i.clearedIn === m.id);
+    if (i.kind !== 'roadblock' || !(i.status === 'open' || i.clearedIn === m.id)) return false;
+    if (i.meeting) return i.meeting === m.id || sameSeries_(byId[i.meeting], m);
+    return !!inRoom[i.by];
   });
 
   /* Actions: everything raised in a meeting that is still open, plus whatever
      closed since the previous meeting — last week's, done or not. */
-  var prev = readMeetings_(ctx).filter(function (x) {
-    return x.status === 'ended' && x.id !== m.id && x.started && x.started < (m.started || '9'); }).pop();
+  var prev = all.filter(function (x) {
+    return x.status === 'ended' && x.id !== m.id && sameSeries_(x, m) && x.started && x.started < (m.started || '9'); }).pop();
   var since = prev ? prev.started : '';
-  var meetingIds = {}; readMeetings_(ctx).forEach(function (x) { meetingIds[x.id] = x; });
+  var meetingIds = {}; all.forEach(function (x) { if (x.id === m.id || sameSeries_(x, m)) meetingIds[x.id] = x; });
   var actions = tasks.filter(function (t) {
     if (!t.raisedIn || !meetingIds[t.raisedIn]) return false;
     if (t.raisedIn === m.id) return true;
@@ -7345,9 +7613,13 @@ function getMeeting_(ctx, id) {
     updates: here.filter(function (i) { return i.kind === 'update'; }).map(label),
     roadblocks: road.map(label),
     actions: actions,
-    goals: goals.filter(function (g) { return g.level === 'quarter' && g.period === q.quarter && g.status !== 'Dropped'; })
+    /* The company's quarter goals, and the chair's own department's. */
+    goals: goals.filter(function (g) { return g.level === 'quarter' && g.period === q.quarter && g.status !== 'Dropped' &&
+        (g.scope !== 'dept' || g.dept === chairDept) && goalVisible_(ctx, g); })
       .map(function (g) { return { id: g.id, title: g.title, owner: g.owner, ownerName: names[g.owner] || g.owner,
-        status: g.status, note: g.note, progress: goalProgress_(g, goals, tasks) }; }),
+        status: g.status, note: g.note, progress: goalProgress_(g, goals, tasks),
+        scope: g.scope, dept: g.dept, metric: g.metric,
+        outlook: goalOutlook_(g, goalProgress_(g, goals, tasks), fyStartMonth_(ctx), new Date()) }; }),
     quarter: q.quarter,
     numbers: readNumbersWithLog_(ctx, names),
     values: dir.values.map(function (v) { return { code: v.code, title: v.title }; }), purpose: dir.purpose,
@@ -8498,6 +8770,34 @@ function ownerReport_(ctx, now) {
       '<td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold">' + esc_(right) + '</td></tr>';
   };
 
+  /* Goals: how many are on track, and which need attention, by department. */
+  var goalsHtml = '', goalNums = null;
+  try {
+    var allGoals = readGoals_(ctx), sm = fyStartMonth_(ctx), fq = fyPeriod_(now, sm);
+    var liveGoals = allGoals.filter(function (g) { return g.status !== 'Dropped' &&
+      (g.level === 'year' ? g.period === fq.year : g.period === fq.quarter); });
+    if (liveGoals.length) {
+      var rows = liveGoals.map(function (g) { return { id: g.id, title: g.title, dept: g.scope === 'dept' ? g.dept : '' }; });
+      rollUpOutlooks_(rows, allGoals, tasks, sm);
+      goalNums = { onTrack: 0, atRisk: 0, offTrack: 0, noData: 0, achieved: 0 };
+      rows.forEach(function (r) { var v = r.outlook.verdict;
+        if (v === 'On track') goalNums.onTrack++; else if (v === 'At risk') goalNums.atRisk++;
+        else if (v === 'Off track' || v === 'Missed') goalNums.offTrack++; else if (v === 'Achieved') goalNums.achieved++; else goalNums.noData++; });
+      var attention = rows.filter(function (r) { return r.outlook.tone === 'bad' || r.outlook.tone === 'warn'; }).slice(0, 6);
+      goalsHtml = '<h3 style="font-size:15px;margin:22px 0 6px">Goals — are we on track?</h3>' +
+        '<table style="width:100%;border-collapse:separate;border-spacing:6px;margin:0 0 4px"><tr>' +
+          big(goalNums.onTrack + goalNums.achieved, 'On track', '#047857') + big(goalNums.atRisk, 'At risk', goalNums.atRisk ? '#b45309' : '#111827') +
+          big(goalNums.offTrack, 'Off track', goalNums.offTrack ? '#b91c1c' : '#111827') + big(goalNums.noData, 'No figures yet') +
+        '</tr></table>' +
+        (attention.length ? '<table style="width:100%;border-collapse:collapse">' + attention.map(function (r) {
+          return '<tr><td style="padding:8px 0;border-bottom:1px solid #eee"><b>' + esc_(r.title) + '</b>' +
+            (r.dept ? ' <span style="color:#9ca3af">· ' + esc_(r.dept) + '</span>' : '') +
+            '<div style="color:#6b7280;font-size:12px">' + esc_(r.outlook.reason || '') + '</div></td>' +
+            '<td style="padding:8px 0 8px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:bold;white-space:nowrap;color:' +
+            (r.outlook.tone === 'bad' ? '#b91c1c' : '#b45309') + '">' + esc_(r.outlook.verdict) + '</td></tr>'; }).join('') + '</table>' : '');
+    }
+  } catch (e) { goalsHtml = ''; }
+
   var inner =
     '<p>Here is how ' + esc_(company) + ' did in <b>' + esc_(label) + '</b>.</p>' +
     '<table style="width:100%;border-collapse:separate;border-spacing:6px;margin:8px 0 4px"><tr>' +
@@ -8514,6 +8814,7 @@ function ownerReport_(ctx, now) {
       '<table style="width:100%;border-collapse:collapse">' +
       watch.map(function (r) { return person(r, 'score ' + r.score); }).join('') + '</table>' +
       '<p style="color:#6b7280;font-size:12px">"See why" on the Reports tab shows exactly what pulled each score down.</p>' : '') +
+    goalsHtml +
     '<h3 style="font-size:15px;margin:22px 0 6px">Right now</h3>' +
     infoTable_([['Overdue', String(last.overdueNow)], ['Waiting over 2 days for approval or review', String(stuck)],
                 ['People scored last month', String(board.rows.length) + ' of ' + users.length]]) +
@@ -8523,7 +8824,7 @@ function ownerReport_(ctx, now) {
   return { subject: subject, html: mailShell_(label + ' at ' + company, inner),
            numbers: { onTime: rate, delivered: last.delivered, late: late, reworks: last.reworkLoops,
                       overdue: last.overdueNow, stuck: stuck, top: top.map(function (r) { return r.name; }),
-                      watch: watch.map(function (r) { return r.name; }), label: label } };
+                      watch: watch.map(function (r) { return r.name; }), label: label, goals: goalNums } };
 }
 
 /* ---- which companies, and a context to read each one ----------------------- */

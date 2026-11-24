@@ -85,7 +85,7 @@ const hit = (p) => new Promise((res, rej) => http.get('http://localhost:8095' + 
   console.log('\n--- starting a weekly review ---');
   await p.click('#navTabs button[data-tab="meetings"]'); await p.waitForTimeout(1200);
   ok('an empty history explains what the meeting is for', /becomes a task/.test(await p.locator('#meetBody').textContent()));
-  await p.click('button:has-text("Start a weekly review")'); await p.waitForTimeout(400);
+  await p.click('button:has-text("Start a meeting")'); await p.waitForTimeout(400);
   ok('managers are invited by default', await p.locator('.mtWho[value="' + U('sruti') + '"]').isChecked());
   await p.check('.mtWho[value="' + U('payel') + '"]');
   await p.click('#fStart button[type=submit]'); await p.waitForTimeout(1800);

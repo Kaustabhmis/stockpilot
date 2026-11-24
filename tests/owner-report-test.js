@@ -65,6 +65,9 @@ for (const [label, file] of [['Domebox', '/../dist/code.gs'], ['Domebox Lite', '
   ok('"who carried the month" is the Leaderboard’s top three', top.length && top.every((n) => m.html.indexOf(n) > -1), top.join(', '));
   ok('with the numbers that matter', /On time/.test(m.html) && /Jobs closed/.test(m.html) && /Delivered late/.test(m.html) && /Overdue/.test(m.html));
   ok('and a link to the full report', /Open the full report/.test(m.html));
+  // The demo's goals belong to this financial year; on 1 April a new one starts and the old goals rightly drop out.
+  if (label === 'Domebox' && now.getMonth() !== 2) ok('the goals: how many are on track, and which need attention, by department',
+    /Goals — are we on track\?/.test(m.html) && /Off track|At risk/.test(m.html) && /Operations/.test(m.html), (m.html.match(/Goals — [\s\S]{0,600}/) || [''])[0]);
   if (label === 'Domebox') ok('the people in the lowest band are named as worth a conversation', /Worth a conversation/.test(m.html) === (dash.rows || []).some((r) => r.band === 'C'));
 
   console.log('\n=== once a month ===');

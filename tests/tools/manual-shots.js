@@ -170,7 +170,7 @@ const done = [];
   /* ---- the weekly meeting ------------------------------------------------ */
   const q = await page(PAYEL);
   await tab(o, 'meetings');
-  await o.click('button:has-text("Start a weekly review")'); await W(o, 500);
+  await o.click('button:has-text("Start a meeting")'); await W(o, 500);
   /* Everybody in, not only the managers ticked by default. */
   await o.evaluate(() => document.querySelectorAll('#fStart .mtWho:not(:disabled)').forEach((c) => { c.checked = true; }));
   await o.click('#fStart button[type=submit]'); await W(o, 2500);

@@ -48,7 +48,13 @@ ok('one person is not a meeting', call({ action: 'startMeeting', token: A, form:
 const st = call({ action: 'startMeeting', token: A, form: { title: 'Weekly review',
   attendees: [U('sruti'), U('payel'), U('vikram')] } });
 ok('the Admin starts it with three others', st.status === 'success', st.message);
-ok('only one can run at a time', call({ action: 'startMeeting', token: H, form: { attendees: [U('payel')] } }).status === 'error');
+/* A head of department runs their own meeting at the same time: meetings run in parallel, one per chair. */
+const par = call({ action: 'startMeeting', token: H, form: { title: 'Operations huddle', attendees: [U('payel')] } });
+ok('a head of department can run their own meeting at the same time', par.status === 'success', par.message);
+ok('but one person chairs one meeting at a time', /already chairing/.test(call({ action: 'startMeeting', token: H, form: { attendees: [U('vikram')] } }).message));
+ok('somebody not in it does not see it running', !(call({ action: 'getMeetings', token: V }).lives || []).some((x) => x.id === par.id));
+ok('the Admin sees both running', (call({ action: 'getMeetings', token: A }).lives || []).length === 2);
+call({ action: 'cancelMeeting', token: H, id: par.id });
 const id = st.id;
 let mt = call({ action: 'getMeeting', token: P, id });
 ok('an attendee can open it', mt.status === 'success', mt.message);
@@ -196,16 +202,21 @@ ok('nothing can be added after it ends', call({ action: 'addMeetingItem', token:
 console.log('\n=== next week ===');
 const past = call({ action: 'getMeetings', token: H });
 ok('it is in the history, with its rating', past.past.length === 1 && past.past[0].rating === 7.5, JSON.stringify(past.past));
-const st2 = call({ action: 'startMeeting', token: H, form: { attendees: [ME, U('payel')] } });
-ok('an HOD can chair the next one', st2.status === 'success', st2.message);
+const st2 = call({ action: 'startMeeting', token: A, form: { attendees: [U('sruti'), U('payel')] } });
+ok('the same chair holds next week\u2019s', st2.status === 'success', st2.message);
 const wk2 = call({ action: 'getMeeting', token: H, id: st2.id });
 ok('last week’s open roadblock is still on the list', wk2.roadblocks.some((r) => /Second shift/.test(r.text) && r.status === 'open'));
 ok('the one cleared last week is not', !wk2.roadblocks.some((r) => r.id === rbId));
 ok('last week’s action comes back to be checked, not marked new',
    wk2.actions.some((a) => a.id === t.id && !a.newHere));
 ok('the Admin can see any meeting', call({ action: 'getMeeting', token: A, id: st2.id }).status === 'success');
+const hq = call({ action: 'startMeeting', token: H, form: { title: 'Operations huddle', attendees: [U('vikram')] } });
+const hm = call({ action: 'getMeeting', token: H, id: hq.id });
+ok('another chair\u2019s meeting does not get this series\u2019 roadblocks or actions', hq.status === 'success' &&
+   !hm.roadblocks.some((r) => /Second shift/.test(r.text)) && !hm.actions.some((a) => a.id === t.id), JSON.stringify(hm.roadblocks).slice(0, 200));
+call({ action: 'cancelMeeting', token: H, id: hq.id });
 ok('cancelling sends nothing', (() => { const b = env.mails.length;
-   const c = call({ action: 'cancelMeeting', token: H, id: st2.id }); return c.status === 'success' && env.mails.length === b; })());
+   const c = call({ action: 'cancelMeeting', token: A, id: st2.id }); return c.status === 'success' && env.mails.length === b; })());
 ok('and a cancelled meeting is not in the history', call({ action: 'getMeetings', token: H }).past.length === 1);
 
 console.log('\n=== a roadblock can be raised between meetings ===');

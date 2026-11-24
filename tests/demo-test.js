@@ -49,7 +49,7 @@ ok('and says how to remove it, by a name the Run button can actually call', /run
    whole demo. But it also means a silently half-built workspace looks like a
    success, so the report is checked for any of them. This caught the project
    step failing on a renamed field while everything else passed. */
-const hiccups = (report.match(/^ {2}(could not|project|cookies|leave|KRAs|goals): .+$/gm) || []);
+const hiccups = (report.match(/^ {2}(could not|project|cookies|leave|KRAs|goals|department goals): .+$/gm) || []);
 ok('no step failed quietly', hiccups.length === 0, hiccups.join(' | '));
 
 console.log('\n=== the account signs in ===');
@@ -151,7 +151,15 @@ ok('a purpose is written down', dir.status === 'success' && dir.purpose.length >
 ok('four values, each with a short code to tag by',
    (dir.values || []).length === 4 && dir.values.every((v) => v.code), JSON.stringify(dir.values));
 const years = (dir.goals || []).filter((g) => g.level === 'year');
-const quarters = (dir.goals || []).filter((g) => g.level === 'quarter');
+const quarters = (dir.goals || []).filter((g) => g.level === 'quarter' && g.scope !== 'dept');
+const deptGoals = (dir.goals || []).filter((g) => g.scope === 'dept');
+ok('two department goals with targets, Quality and Operations',
+   deptGoals.length === 2 && deptGoals.every((g) => g.metric) && deptGoals.map((g) => g.dept).sort().join() === 'Operations,Quality',
+   JSON.stringify(deptGoals.map((g) => [g.dept, g.metric])));
+ok('each judged on its figures: Quality on course, Operations behind (or no figures yet early in a quarter)',
+   deptGoals.every((g) => g.checkins.length === 0 ? /Not started|Needs data/.test(g.outlook.verdict)
+     : g.dept === 'Quality' ? /On track|Achieved/.test(g.outlook.verdict) : /Off track|At risk/.test(g.outlook.verdict)),
+   JSON.stringify(deptGoals.map((g) => [g.dept, g.checkins.length, g.outlook.verdict, g.outlook.reason])));
 ok('one goal for the year', years.length === 1, years.length);
 ok('three for the quarter, two of them under the year goal',
    quarters.length === 3 && quarters.filter((g) => g.parent === years[0].id).length === 2,
