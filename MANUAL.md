@@ -454,6 +454,61 @@ January to March. Each goal has an owner and a status:
 The owner can change the status as well as managers — the person closest to a
 goal is the one who knows it is at risk first.
 
+### Company goals and department goals
+
+| | Set by | Seen by |
+|---|---|---|
+| **Company goal** | An Admin | Everyone |
+| **Department goal** | That department's head, or an Admin | The department, its head and Admins |
+
+A head of department sets goals for their own team: **Goals → + Goal**. Under
+**Serves**, pick the company goal it moves — that is how a team's work lines up
+with the company's. The owner must be someone in that department. A head can
+change or remove only their own department's goals; another department's goals
+are not shown to them at all.
+
+A head whose department is not set on their profile is asked to have an Admin
+set it first.
+
+### Target figures, and whether it is on track
+
+Any goal can carry a **target figure**: where it starts, the target and the
+unit — for example rejections from **4** to **1.5 %**, or OEE from **62** to
+**80 %**. A target lower than the start means the figure should come down.
+
+Each week the owner, or the head of the department, presses **Enter figure**
+and types where it stands. One figure a day; a second the same day replaces
+the first.
+
+Domebox then compares how far along the goal is with how far through its
+quarter or year you are, projects where it will end at the pace so far, and
+says so in plain words:
+
+| Verdict | Means |
+|---|---|
+| **On track** | Far enough along for the time gone, or on pace to reach the target |
+| **At risk** | Close, but at this pace it falls a little short (or linked work is overdue) |
+| **Off track** | At this pace it ends well short |
+| **Achieved** | The target is reached, or the goal is marked Done |
+| **Missed** | The period ended short of the target |
+| **Needs data** | No figure entered, or nothing to measure it by |
+
+For example: *"At 3 % against a target of 1.5 %: 40 % of the way, with 59 % of
+the period gone. At this pace it ends near 2.3 %."* A figure older than three
+weeks is flagged, so a stale number does not pass for good news.
+
+A goal with no target figure is judged on the work linked to it. A company
+goal with neither is judged on the department goals that serve it.
+
+### Are we on track? — the review
+
+Admins and heads of department see a review at the top of the goals: how many
+goals are on track, at risk, off track or without figures; the same broken
+down by department, each marked **On course**, **Watch** or **Needs help**; and
+the goals that need attention, with the reason. Pick a department in the
+filter to look at it alone. The monthly report emailed to Admins carries the
+same summary.
+
 ### How progress is worked out
 
 Not somebody's guess. A goal's progress is **the share of the work linked to
@@ -477,8 +532,21 @@ week's again replaces it. A miss shows in red, and belongs in Roadblocks.
 
 ## Meetings
 
-**Meetings → Start a weekly review.** Included in every paid plan. Any manager
-can start one; only one can run at a time.
+**Meetings → Start a meeting.** Included in every paid plan. Any manager can
+start one — the Admin's company review, and each head of department's own team
+meeting, can run at the same time. A person can chair only one at a time.
+
+### Who can see a meeting
+
+Only the people invited to it, and Admins. That covers its wins, stories,
+updates, roadblocks, actions and minutes. A head's meeting starts with their
+own team ticked and is named after the department (*Quality weekly review*);
+an Admin's starts with the managers ticked. The goal check shows the company's
+goals and the chair's own department's.
+
+Each meeting keeps its own roadblocks and actions from one week to the next:
+the Quality team's carried-over roadblocks do not appear in the Production
+meeting.
 
 ### The eight segments
 
@@ -486,7 +554,7 @@ can start one; only one can run at a time.
 |---|---|
 | **Wins** | Who is here, and one good thing each |
 | **Values in action** | A story of someone living one of the values — it must name the value |
-| **Goal check** | Each quarter goal: on course, at risk or done. No discussion here |
+| **Goal check** | Each quarter goal, with its figure and verdict: on course, at risk or done. No discussion here |
 | **Key numbers** | This week's figures against their targets |
 | **Updates** | Anything everyone needs to know, one line each |
 | **Roadblocks** | Problems and opportunities, worked one at a time |

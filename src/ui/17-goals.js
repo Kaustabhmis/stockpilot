@@ -198,10 +198,10 @@ function renderGoals(d) {
       metricBar(g) + outlookBadge(g) +
       (g.canCheckIn ? '<button class="btn btn-g text-xs py-1.5 goalFigure" onclick="openGoalCheckin(\'' + esc(g.id) + '\')">Enter figure</button>' : '') +
       (canStatus
-        ? '<select class="in max-w-[130px] text-xs py-1.5 goalStatus" data-id="' + esc(g.id) + '">' +
+        ? '<select class="in max-w-[130px] text-xs py-1.5 goalStatus" title="Your status for this goal" aria-label="Status" data-id="' + esc(g.id) + '">' +
             d.statuses.map(function (s) { return '<option' + (s === g.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
           '</select>'
-        : '<span class="chip ' + GOAL_TONE[g.status] + '">' + esc(g.status) + '</span>') +
+        : (g.status !== 'On course' ? '<span class="chip ' + GOAL_TONE[g.status] + '" title="Set by the owner">Marked ' + esc(g.status.toLowerCase()) + '</span>' : '')) +
       (g.canManage ? '<button class="text-gray-400 hover:text-gray-800" title="Edit" onclick="openGoalEditor(\'' + esc(g.id) + '\')">' +
         '<span class="material-icons text-[18px]">edit</span></button>' : '') +
     '</div>' +
@@ -209,6 +209,12 @@ function renderGoals(d) {
     '</div>';
   };
 
+  var placed = {};
+  var withServing = function (g) {
+    placed[g.id] = 1;
+    var under = quarters.filter(function (x) { return x.parent === g.id && !placed[x.id]; });
+    return goalRow(g) + (under.length ? '<div class="pl-4 ml-1 border-l-2 border-violet-100">' + under.map(withServing).join('') + '</div>' : '');
+  };
   var groups = years.map(function (y) {
     var kids = quarters.filter(function (g) { return g.parent === y.id; });
     return '<div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4">' +
@@ -218,14 +224,15 @@ function renderGoals(d) {
         (y.canCheckIn ? '<button class="btn btn-g text-xs py-1.5 goalFigure" onclick="openGoalCheckin(\'' + esc(y.id) + '\')">Enter figure</button>' : '') +
         (y.canManage ? '<button class="text-gray-400 hover:text-gray-800" onclick="openGoalEditor(\'' + esc(y.id) + '\')">' +
           '<span class="material-icons text-[18px]">edit</span></button>' : '') + '</div>' +
-      (kids.length ? kids.map(goalRow).join('')
+      (kids.length ? kids.map(withServing).join('')
                    : '<div class="text-xs font-semibold text-gray-400 py-2">No ' + esc(q.replace(/^FY\S+ /, '')) + ' goals under this yet.</div>') +
     '</div>';
   }).join('');
-  var loose = quarters.filter(function (g) { return !g.parent || !years.some(function (y) { return y.id === g.parent; }); });
-  if (loose.length) groups += '<div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4">' +
-    (years.length ? '<div class="lb">Not under a year goal</div>' : '') + loose.map(goalRow).join('') + '</div>';
-  if (!years.length && !loose.length) groups = '<div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center ' +
+  var loose = quarters.filter(function (g) { return !placed[g.id] && !(g.parent && quarters.some(function (x) { return x.id === g.parent; })); });
+  var looseHtml = loose.map(withServing).join('') + quarters.filter(function (g) { return !placed[g.id]; }).map(goalRow).join('');
+  if (looseHtml) groups += '<div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4">' +
+    (years.length ? '<div class="lb">Not under a year goal</div>' : '') + looseHtml + '</div>';
+  if (!years.length && !quarters.length) groups = '<div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center ' +
     'text-sm font-bold text-gray-400 mb-4">No goals for ' + esc(q) + ' yet.' +
     (d.canEdit ? ' Start with one year goal, then the three to seven things this quarter that move it.' : '') + '</div>';
 

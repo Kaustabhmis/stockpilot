@@ -109,6 +109,14 @@ const done = [];
   if (handIn) await post({ action: 'updateTask', token: P, taskId: handIn.id, status: 'For Review', note: 'Packed 240 bearings, labels checked' });
   await t.evaluate(() => refresh(true)); await W(t, 2200);
   await shot(t, '16-lead-board.jpg');
+  /* A department goal with its figure and verdict, as its head sees it. */
+  await tab(t, 'goals');
+  const gr = t.locator('.goalRow:has-text("Press line OEE")');
+  if (await gr.count()) {
+    await gr.scrollIntoViewIfNeeded(); await W(t, 300);
+    const bx = await gr.boundingBox();
+    await shot(t, '31-goal-figure.jpg', { clip: { x: Math.max(0, bx.x - 16), y: bx.y - 12, width: Math.min(1440, bx.width + 32), height: bx.height + 24 } });
+  } else console.log('  no department goal row for 31-goal-figure.jpg');
   await t.close();
 
   /* ---- the owner -------------------------------------------------------- */

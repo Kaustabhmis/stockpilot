@@ -7048,7 +7048,7 @@ function goalOutlook_(g, progress, sm, now) {
   var gone = b ? Math.max(0, Math.min(1, (now - b.from) / span)) : null;
   var pct = function (x) { return Math.round(Math.max(0, Math.min(1.5, x)) * 100); };
   var unit = g.metric && g.metric.unit ? (/^%$/.test(g.metric.unit) ? '%' : ' ' + g.metric.unit) : '';
-  var fmt = function (v) { return (Math.round(v * 100) / 100) + unit; };
+  var fmt = function (v) { var k = Math.abs(v) >= 10 ? 10 : 100; return (Math.round(v * k) / k) + unit; };
   var judge = function (done, pace, extra) {
     if (gone === null) return { verdict: done >= 1 ? 'Achieved' : 'In progress', tone: done >= 1 ? 'good' : 'none' };
     if (done >= 1) return { verdict: 'Achieved', tone: 'good' };
