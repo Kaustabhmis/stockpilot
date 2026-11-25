@@ -521,18 +521,31 @@ ${cta('Fourteen days of the full product is enough to compare it properly.')}`,
   /* -------------------------------------------------------------- partners */
   {
     slug: 'partners',
-    title: 'Partner programme',
-    h1: 'Partner programme for consultants and CA firms',
-    description: 'Earn 20% of every payment from each company you bring to Domebox, for as long as it stays a customer. For CA firms, ISO and IATF consultants and business advisors in India.',
-    answer: 'The Domebox partner programme pays CA firms, ISO and IATF consultants and business advisors 20% of every payment, before GST, from each company that signs up through their link, for as long as that company keeps paying. Partners get a private dashboard showing every company, what it has earned them, and what has been paid. Joining is free.',
+    title: 'Partner programme and Refer & earn',
+    h1: 'Refer a company to Domebox and earn',
+    description: 'Anyone can earn 10% of what a company they refer pays for Domebox, for as long as it stays a customer. CA firms and consultants earn 20% as partners.',
+    answer: 'Anyone can get their own Domebox referral link, free, without being a customer: when a company signs up through it and pays, you earn 10% of the package it pays for, before GST, every time it pays, for as long as it stays a paying customer. CA firms, ISO and IATF consultants and business advisors can join the partner programme instead, which pays 20%. Both come with a private dashboard showing every company, what it has earned you, and what has been paid.',
     changefreq: 'monthly', priority: '0.6',
     faq: [
+      ['How do I get a referral link?', 'Open www.domebox.in/?refer=1, enter your name and email, and your link and private dashboard are emailed to you at once. If you already use Domebox, it is under your name, Refer a company.'],
+      ['How much does a referrer earn?', '10% of the package the company pays for, before GST, on every payment, for as long as it stays a paying customer. A company on Team at Rs 999 a month earns you about Rs 100 every month; one on Growth at Rs 5,999, about Rs 600.'],
       ['How much does a partner earn?', '20% of every payment a company you brought in makes, before GST, for as long as it stays a customer. A 50-person company on Growth at Rs 5,999 a month earns you about Rs 1,200 every month.'],
-      ['How are partners paid?', 'By bank transfer or UPI, from the commission shown as due on your dashboard. Every payment and every payout is listed there, so there is nothing to reconcile by hand.'],
+      ['How are partners paid?', 'By bank transfer or UPI, once your unpaid commission reaches Rs 2,500; below that it carries over to the next payout. It is shown as due on your dashboard. Every payment and every payout is listed there, so there is nothing to reconcile by hand.'],
       ['Who can become a partner?', 'Anyone who advises small Indian businesses: chartered accountants, ISO, IATF and quality consultants, HR and management advisors, software resellers. There is no fee and no target.'],
       ['Does my client pay more because I referred them?', 'No. They pay the same published price, get the same 14-day free trial, and you can help them set up if you like.'],
     ],
     body: `
+<h2>Refer & earn: anyone, 10%</h2>
+<p>You do not need to be a customer or a consultant. Get your own link, share it
+with any business that would run better on Domebox, and earn <strong>10% of the
+package it pays for</strong> (before GST), every time it pays, <strong>for as long
+as it stays a paying customer</strong>. Paid to your UPI or bank once your
+balance reaches ₹2,500 (until then it carries over).</p>
+<div class="cta"><p><strong>Get your referral link — free, takes a minute.</strong></p>
+     <a class="btn" href="https://www.domebox.in/?refer=1">Get my referral link</a>
+     <p class="fine">Already using Domebox? Click your name, then Refer a company.</p></div>
+
+<h2>Partner programme: CA firms and consultants, 20%</h2>
 <p class="lede">You already advise the businesses Domebox is built for. When one of
 them starts running its work on Domebox because you suggested it, you share in
 what it pays — every month, not once.</p>

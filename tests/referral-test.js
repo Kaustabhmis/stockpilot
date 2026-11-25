@@ -129,7 +129,8 @@ const E = master().getSheetByName('PartnerEarnings'), ei = E.getDataRange().getV
 E.getRange(ei + 1, 10).setValue('2026-12-05 UPI 12345');
 dash = call({ action: 'getPartnerDashboard', key });
 ok('writing "Paid out" in the sheet moves it from due to paid', dash.paidOut === 1199.8 && dash.due === 1199.8, dash.paidOut + ' ' + dash.due);
-ok('the payout report adds it up for you', /due now Rs 1199\.80/.test(X.partnerPayoutReport()));
+ok('below the Rs 2,500 minimum, the payout report says to carry it over, not pay', /unpaid Rs 1199\.80 \(below the Rs 2500 minimum/.test(X.partnerPayoutReport()), X.partnerPayoutReport());
+ok('and the dashboard says how much more is needed', dash.payoutMinimum === 2500);
 ok('a wrong key is refused', /not valid/.test(call({ action: 'getPartnerDashboard', key: 'f'.repeat(40) }).message) &&
    /not valid/.test(call({ action: 'getPartnerDashboard', key: '<script>' }).message));
 const pr = tab('Partners').findIndex((r) => r[0] === 'Rakesh Gupta');
@@ -147,6 +148,71 @@ ok('and a paused partner earns nothing on renewals meanwhile', tab('PartnerEarni
 master().getSheetByName('Partners').getRange(pr + 2, 6).setValue('Active');
 pay(C, 'c@client.in', 'Growth', 599900);
 ok('set back to Active, they earn again', tab('PartnerEarnings').length === nEarn + 1);
+
+console.log('\n=== anyone can refer: a staff member, in the app ===');
+call({ action: 'addUser', token: A, form: { name: 'Payel Sen', username: 'payel', email: 'payel@acme.in', role: 'Doer', jobProfile: 'Ops', password: 'staffpass123' } });
+const PT = call({ action: 'login', username: 'payel@acme.in', password: 'staffpass123' }).token;
+const my = call({ action: 'getMyReferral', token: PT });
+ok('any user, not only the Admin, gets their own link', my.status === 'success' && /^R[A-Z0-9]{5}$/.test(my.partner.code) && my.link === 'https://www.domebox.in/?ref=' + my.partner.code, JSON.stringify(my).slice(0, 300));
+ok('the same link every time', call({ action: 'getMyReferral', token: PT }).partner.code === my.partner.code &&
+   tab('Partners').filter((r) => r[1] === 'payel@acme.in').length === 1);
+ok('10%, for as long as the company pays', my.partner.pct === 10 && !my.partner.months && my.partner.kind === 'referrer', JSON.stringify(my.partner));
+const sv = call({ action: 'saveReferralPayout', token: PT, payout: 'payel@okicici' });
+ok('they add a UPI ID for payouts, shown back masked', sv.status === 'success' && tab('Partners').find((r) => r[1] === 'payel@acme.in')[9] === 'payel@okicici' && sv.payout !== 'payel@okicici');
+const R1 = reg('Referred Works', 'rw@referred.in', my.partner.code).token;
+ok('a company signing up with it is recorded as hers', tab('Referrals').some((r) => r[1] === my.partner.code && r[2] === 'referrer'));
+pay(R1, 'rw@referred.in', 'Growth', 599900);
+pay(R1, 'rw@referred.in', 'Growth', 599900);
+let re = tab('PartnerEarnings').filter((r) => r[1] === my.partner.code);
+ok('each payment earns 10% of the package it paid for, once per payment', re.length === 2 && re.every((r) => r[8] === 599.9 && r[7] === 10), JSON.stringify(re));
+ok('her company gets no free days for it', !tab('Referrals').some((r) => r[1] === my.partner.code && r[6] === 'rewarded'));
+const EE = master().getSheetByName('PartnerEarnings'), back = new Date(); back.setMonth(back.getMonth() - 30);
+EE.getDataRange().getValues().forEach((r, i) => { if (r[1] === my.partner.code) EE.getRange(i + 1, 1).setValue(back); });
+pay(R1, 'rw@referred.in', 'Growth', 599900);
+ok('two and a half years on, it still pays her while the company stays a customer', tab('PartnerEarnings').filter((r) => r[1] === my.partner.code).length === 3);
+env.props.REFERRER_MONTHS = '12';
+pay(R1, 'rw@referred.in', 'Growth', 599900);
+ok('with REFERRER_MONTHS set, commission stops after that many months', tab('PartnerEarnings').filter((r) => r[1] === my.partner.code).length === 3);
+delete env.props.REFERRER_MONTHS;
+const mine2 = call({ action: 'getMyReferral', token: PT });
+ok('her window shows the company, what she earned and what is due', mine2.companies.length === 1 && mine2.companies[0].paying && mine2.earned === 1799.7 && mine2.due === 1799.7, JSON.stringify(mine2).slice(0, 300));
+const nr = tab('Referrals').length;
+reg('Payel Own Co', 'payel@acme.in', my.partner.code);
+ok('nobody earns on their own company', tab('Referrals').length === nr);
+
+console.log('\n=== anyone can refer: a stranger, from the website ===');
+env.mails.length = 0;
+const j1 = call({ action: 'joinReferral', form: { name: 'Sourav Das', email: 'Sourav@Gmail.com', phone: '98300 00000', payout: 'sourav@okaxis' } });
+const srow = tab('Partners').find((r) => r[1] === 'sourav@gmail.com');
+ok('a person who is not a customer gets a link at once', j1.status === 'success' && srow && /^R/.test(srow[6]) && srow[5] === 'Active' && srow[10] === 'referrer' && srow[9] === 'sourav@okaxis', JSON.stringify(srow) + j1.message);
+const sm = env.mails.find((m) => m.to === 'sourav@gmail.com') || { html: '' };
+const skey = (sm.html.match(/\?partner=([a-f0-9]{40})/) || [])[1];
+ok('the link and a private dashboard go only to that email', !!skey && sm.html.indexOf('/?ref=' + srow[6]) > -1 && /for as long as it stays a paying customer/.test(sm.html) &&
+   JSON.stringify(j1).indexOf(srow[6]) < 0, JSON.stringify(j1));
+const sd = call({ action: 'getPartnerDashboard', key: skey });
+ok('the dashboard opens and says 10%', sd.status === 'success' && sd.partner.pct === 10 && sd.partner.kind === 'referrer');
+env.mails.length = 0;
+const j2 = call({ action: 'joinReferral', form: { name: 'Someone Else', email: 'sourav@gmail.com' } });
+ok('asking again with the same email makes no second link, and says the same as for a new one',
+   tab('Partners').filter((r) => r[1] === 'sourav@gmail.com').length === 1 && j2.message.replace(/to .*$/, '') === j1.message.replace(/to .*$/, ''));
+const skey2 = ((env.mails.find((m) => m.to === 'sourav@gmail.com') || { html: '' }).html.match(/\?partner=([a-f0-9]{40})/) || [])[1];
+ok('it emails a fresh dashboard link, and the old one stops working', !!skey2 && /not valid/.test(call({ action: 'getPartnerDashboard', key: skey }).message));
+ok('the UPI ID can be changed from the dashboard link', call({ action: 'saveReferralPayoutByKey', key: skey2, payout: 'sourav@ybl' }).status === 'success' &&
+   tab('Partners').find((r) => r[1] === 'sourav@gmail.com')[9] === 'sourav@ybl');
+ok('but not with a wrong key', call({ action: 'saveReferralPayoutByKey', key: 'e'.repeat(40), payout: 'x@ybl' }).status === 'error');
+const nP = tab('Partners').length;
+ok('a bot filling the hidden field gets nothing', call({ action: 'joinReferral', form: { name: 'Bot', email: 'bot@spam.io', website: 'http://x' } }).status === 'success' && tab('Partners').length === nP);
+ok('a bad email is refused', /valid email/.test(call({ action: 'joinReferral', form: { name: 'X Y', email: 'not-an-email' } }).message));
+ok('one email cannot ask again and again', (() => { for (let i = 0; i < 4; i++) call({ action: 'joinReferral', form: { name: 'Flood', email: 'flood@spam.io' } });
+   return /Too many attempts/.test(call({ action: 'joinReferral', form: { name: 'Flood', email: 'flood@spam.io' } }).message); })());
+ok('under Rs 2,500 a referrer is not paid yet', /\(referrer\)[^\n]*unpaid Rs 1799\.70 \(below the Rs 2500 minimum/.test(X.partnerPayoutReport()), X.partnerPayoutReport());
+pay(R1, 'rw@referred.in', 'Growth', 599900); pay(R1, 'rw@referred.in', 'Growth', 599900);
+ok('once the balance reaches it, the report says pay now, and where', /\(referrer\)[^\n]*due now Rs 2999\.50[^\n]*pay to: payel@okicici/.test(X.partnerPayoutReport()), X.partnerPayoutReport());
+env.props.PAYOUT_MINIMUM_RS = '0';
+ok('the minimum is one setting (PAYOUT_MINIMUM_RS)', /\(referrer\)[^\n]*due now Rs 2999\.50/.test(X.partnerPayoutReport()) && /Rakesh Gupta  earned[^\n]*due now/.test(X.partnerPayoutReport()));
+delete env.props.PAYOUT_MINIMUM_RS;
+ok('the email to a new referrer states the minimum', /Rs 2,500/.test(sm.html));
+ok('a CA partner keeps their own 20%', tab('Partners').find((r) => r[0] === 'Rakesh Gupta')[4] === 20);
 
 console.log('\n=== erasing a company takes its name out of the referral records ===');
 const X2 = new Function(...names, fs.readFileSync(__dirname + '/../dist/code.gs', 'utf8') + '\n;return { eraseCompanyData };')(...names.map((n) => env.G[n]));
@@ -169,6 +235,7 @@ const lcall = (b) => JSON.parse(L.doPost({ postData: { contents: JSON.stringify(
 const LT = lcall({ action: 'register', form: { companyName: 'Dynamic Engineers', name: 'Owner', email: 'o@de.in', password: 'ownerpass123', ref: 'CABCDE' } }).token;
 ok('no invite page in Lite', /not part of Domebox Lite/.test(lcall({ action: 'getReferrals', token: LT }).message));
 ok('no partner dashboard in Lite', /not part of Domebox Lite/.test(lcall({ action: 'getPartnerDashboard', key: 'a'.repeat(40) }).message));
+ok('and no referral links in Lite', /not part of Domebox Lite/.test(lcall({ action: 'joinReferral', form: { name: 'A B', email: 'a@b.in' } }).message));
 ok('and a ref code at sign-up is ignored', !envL.FILES.MASTER.getSheetByName('Referrals'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

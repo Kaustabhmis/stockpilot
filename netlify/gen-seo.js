@@ -61,7 +61,7 @@ const foot = `
      by ${esc(C.legalEntity)}.</p>
   <p class="links">
     <a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/guides">Guides</a>
-    <a href="/delegation-score">How scoring works</a><a href="/alternatives">Comparison</a><a href="/partners">Partners</a>
+    <a href="/delegation-score">How scoring works</a><a href="/alternatives">Comparison</a><a href="/partners">Refer &amp; earn</a>
   </p>
   <p class="links">
     <a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refund">Refunds</a>

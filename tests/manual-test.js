@@ -108,6 +108,9 @@ ck('a person chairs one running meeting at a time; others run alongside', C.inde
 ck('only invitees and Admins see a meeting', C.indexOf('canSeeMeeting_') > -1 && /Only the people invited to it, and Admins/.test(M));
 ck('department goals are set by their head; company goals by an Admin', C.indexOf('Company goals are set by an Admin') > -1 && /\*\*Department goal\*\* \| That department's head, or an Admin/.test(M));
 ck('an old figure is three weeks', C.indexOf('GOAL_STALE_DAYS = 21') > -1 && /older than three\s+weeks/.test(M));
+ck('referrers: 10%, while the company pays, paid from Rs 2,500', /: 10;\s*\n\}/.test((C.match(/function referrerPct_[\s\S]*?\n\}/) || [''])[0]) &&
+   /: 2500;/.test((C.match(/function payoutMinimum_[\s\S]*?\n\}/) || [''])[0]) &&
+   /10% of\s+the package it pays for, before GST, on every payment, for as long as it stays\s+a paying customer/.test(M) && /reaches \*\*₹2,500\*\*/.test(M));
 ck('segments can be dropped, never reordered, Close kept', C.indexOf("return keep[s.key] || s.key === 'close';") > -1);
 ck('a story must name a value', C.indexOf('a story without one is just a nice story') > -1);
 ck('actions are due in seven days by default', C.indexOf('d.setDate(d.getDate() + 7); due = ymd(d);') > -1);

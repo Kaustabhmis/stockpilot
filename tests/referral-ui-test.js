@@ -73,6 +73,37 @@ const SHOTS = process.env.SHOTS || '';
   ok('the dashboard fits a phone', await m.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   await m.close();
 
+  console.log('\n=== Refer & earn: any user, in the app ===');
+  await post({ action: 'addUser', token: A, form: { name: 'Payel Sen', username: 'payel' + R, email: 'payel+' + R + '@acme.in', role: 'Doer', jobProfile: 'Ops', password: 'staffpass123' } });
+  const s1 = await ctx.newPage(); s1.on('pageerror', (e) => errs.push(e.message));
+  await s1.goto('http://localhost:' + PORT + '/?login=1', { waitUntil: 'networkidle' });
+  await s1.fill('#liUser', 'payel+' + R + '@acme.in'); await s1.fill('#liPass', 'staffpass123'); await s1.click('#btnLogin'); await s1.waitForTimeout(1800);
+  await s1.click('#btnAccount'); await s1.waitForTimeout(400);
+  ok('a staff member sees "Refer a company — earn 10%" under their name', await s1.locator('button:has-text("Refer a company")').count() === 1);
+  await s1.click('button:has-text("Refer a company")'); await s1.waitForTimeout(1500);
+  const rl = await s1.inputValue('#mrLink');
+  ok('and gets their own link', /\/\?ref=R[A-Z0-9]{5}$/.test(rl), rl);
+  ok('which says 10% for as long as the company pays', /10%[\s\S]*for as long as it stays a paying customer/.test(await s1.locator('#mrBody').textContent()));
+  ok('and asks for a UPI ID', /Add your UPI ID/.test(await s1.locator('#mrBody').textContent()));
+  ok('and says the minimum payout', /Paid out once your balance reaches ₹2,500/.test(await s1.locator('#mrBody').textContent()));
+  await s1.fill('#poVal', 'payel@okicici'); await s1.click('#poSave'); await s1.waitForTimeout(1200);
+  ok('saving it shows it back, masked', /Saved: pay…cici/.test(await s1.getAttribute('#poVal', 'placeholder')), await s1.getAttribute('#poVal', 'placeholder'));
+  if (SHOTS) await s1.screenshot({ path: SHOTS + '/refer-in-app.png' });
+  await s1.close();
+
+  console.log('\n=== Refer & earn: anyone, from the website ===');
+  const pub = await ctx.newPage(); pub.on('pageerror', (e) => errs.push(e.message));
+  await pub.goto('http://localhost:' + PORT + '/?refer=1', { waitUntil: 'networkidle' });
+  ok('?refer=1 opens a sign-up form for a referral link, without an account', await pub.locator('#fJoin').isVisible() && /earn 10%/i.test(await pub.locator('#referView h1').textContent()));
+  await pub.fill('#rjName', 'Sourav Das'); await pub.fill('#rjEmail', 'sourav+' + R + '@gmail.com'); await pub.fill('#rjPay', 'sourav@okaxis');
+  await pub.click('#fJoin button[type=submit]'); await pub.waitForTimeout(1800);
+  ok('it says the link has been emailed', await pub.locator('#rjDone').isVisible() && /emailed your referral link/.test(await pub.locator('#rjDone').textContent()));
+  await pub.close();
+  const ph = await b.newPage({ viewport: { width: 390, height: 844 } }); ph.on('pageerror', (e) => errs.push(e.message));
+  await ph.goto('http://localhost:' + PORT + '/?refer=1', { waitUntil: 'networkidle' });
+  ok('the referral form fits a phone', await ph.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  await ph.close();
+
   ok('no script errors', errs.length === 0, errs.join(' | '));
   await b.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

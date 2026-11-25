@@ -92,7 +92,8 @@ function json_(o) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo','getPublicInfo','getPartnerDashboard'];
+var PUBLIC_ACTIONS = ['register','login','forgotPassword','resetPassword','contactSales','ping','openDemo','getPublicInfo','getPartnerDashboard',
+  'joinReferral','saveReferralPayoutByKey'];
 
 /* The only routes a view-only (demo) session may call. An allow-list, not a
    block-list: a write route added later is closed to demo visitors by default. */
@@ -103,7 +104,8 @@ var VIEW_ONLY_ACTIONS = ['getDashboard','getArchive','getTasks','getUsers','getP
 
 /* In Domebox Lite there is nothing to buy and nothing to demo. */
 var LITE_REFUSED = ['contactSales','openDemo','initiateRazorpay','paymentSuccess','getBilling',
-                    'saveBilling','getInvoices','getReferrals','getPartnerDashboard'];
+                    'saveBilling','getInvoices','getReferrals','getPartnerDashboard',
+                    'joinReferral','saveReferralPayoutByKey','getMyReferral','saveReferralPayout'];
 
 function route_(p) {
   var action = String(p.action || '');
@@ -146,6 +148,13 @@ function route_(p) {
         throttle_('partner', String(p.key || '').slice(0, 40), PUBLIC_LIMITS.partner);
         try { return getPartnerDashboard_(p.key); }
         catch (e) { throttle_('partnerbad', 'global', PUBLIC_LIMITS.partnerBad); throw e; }
+      case 'joinReferral':
+        throttle_('rj', (p.form && p.form.email) || '', PUBLIC_LIMITS.referJoin);
+        throttle_('rjall', 'global', PUBLIC_LIMITS.referJoinGlobal);
+        return joinReferral_(p.form);
+      case 'saveReferralPayoutByKey':
+        throttle_('rpk', String(p.key || '').slice(0, 40), PUBLIC_LIMITS.referPayout);
+        return saveReferralPayout_(null, p.key, p.payout);
       case 'openDemo':
         throttle_('demo', 'global', PUBLIC_LIMITS.demo);
         return openDemo_(p.as);
@@ -212,6 +221,8 @@ function route_(p) {
     case 'importUsers':         return importUsers_(ctx, p.rows, p.password);
     case 'emailOwnerReport':    return emailOwnerReport_(ctx);
     case 'getReferrals':        return getReferrals_(ctx);
+    case 'getMyReferral':       return getMyReferral_(ctx);
+    case 'saveReferralPayout':  return saveReferralPayout_(ctx, null, p.payout);
     case 'updateUser':          return updateUser_(ctx, p.form);
     case 'deleteUser':          return deleteUser_(ctx, p.username, p.reassignTo);
     case 'updateCategories':    return updateCategories_(ctx, p.categories, p.renames);

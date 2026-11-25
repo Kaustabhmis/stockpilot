@@ -794,6 +794,23 @@ never more than the value of what they paid, in days of your own plan. On the
 Free plan the days are saved and added the next time you choose a plan. The
 same window lists everyone who has signed up with your link.
 
+### Refer a company, earn 10% — anyone
+
+Every user, of any role, has their own personal link: click **your name →
+Refer a company — earn 10%**. Anyone who is not a customer can get one too, at
+**www.domebox.in/?refer=1** (name and email; the link and a private dashboard
+are emailed at once).
+
+When a company signs up through the link and pays, the person earns **10% of
+the package it pays for, before GST, on every payment, for as long as it stays
+a paying customer**. Commission is paid by UPI or bank once their unpaid balance
+reaches **₹2,500**; below that it carries over. Nobody earns on their own
+company. The same window shows who signed up, what has been earned and what is
+due, and takes the UPI ID for payouts.
+
+An Admin's company link (above) earns free days instead; the personal link
+earns money. CA firms and consultants can be partners at 20% (see PARTNERS.md).
+
 ---
 
 ## For managers

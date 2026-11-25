@@ -190,6 +190,8 @@ setInterval(function () {
   if (params.get('demo')) { openDemo(params.get('demo')); return; }
   /* ?partner=KEY — a partner's private dashboard; nobody signs in for it. */
   if (!LITE && params.get('partner')) { openPartnerDashboard(params.get('partner')); return; }
+  /* ?refer=1 — anybody can ask for their own referral link, no account needed. */
+  if (!LITE && params.get('refer')) { openReferJoin(); return; }
   if (restoreSession()) {
     enterApp();
     return;

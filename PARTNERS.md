@@ -4,11 +4,11 @@ For you, the owner of Domebox (BISCS India). Customers never see this.
 
 ## How it works
 
-| | Referral (any customer) | Partner (consultant, CA firm, advisor) |
-|---|---|---|
-| Link | `www.domebox.in/?ref=C…` — under **Plans → Invite a business** | `www.domebox.in/?ref=P…` — emailed to them |
-| Reward | **Up to 30 days free** on their plan when the company they invited first pays (never more than the value of that payment, in days of their own plan) | **20% of every payment** (before GST) from each company they brought in, for as long as it pays |
-| Paid how | Automatically, added to their plan | By you, by bank or UPI |
+| | Company invite (Admin) | Refer & earn (anyone) | Partner (consultant, CA firm, advisor) |
+|---|---|---|---|
+| Link | `www.domebox.in/?ref=C…` — under **Plans → Invite a business** | `www.domebox.in/?ref=R…` — any user: **their name → Refer a company**; anyone else: **www.domebox.in/?refer=1** | `www.domebox.in/?ref=P…` — emailed to them |
+| Reward | **Up to 30 days free** on their plan when the company they invited first pays (never more than the value of that payment, in days of their own plan) | **10% of the package** the company pays for (before GST), every payment, for as long as it stays a paying customer | **20% of every payment** (before GST) from each company they brought in, for as long as it pays |
+| Paid how | Automatically, added to their plan | By you, by UPI or bank, once their balance reaches ₹2,500 | By you, by bank or UPI, once their balance reaches ₹2,500 |
 
 A visitor who arrives on a link is remembered for 30 days in their browser, so
 they can sign up later and still count.
@@ -43,10 +43,19 @@ Status changes to **Active**.
   sign-ups and they earn no commission while paused. Companies they already
   brought in stay theirs, and earn again if you set them back to `Active`.
 
-## Paying partners (once a month)
+## Refer & earn: nothing to set up
 
-1. In Apps Script, run **partnerPayoutReport**. The log shows each partner's
-   total earned and what is due now.
+Referrers add themselves: a user clicks **their name → Refer a company**, or
+anyone fills in **www.domebox.in/?refer=1**. Each gets a row in the
+**Partners** tab with Kind `referrer`, a code starting with **R**, 10%, and the
+UPI ID they typed (column Payout details). To stop one, set Status to `Paused`.
+Nobody can earn on a company signed up with their own email.
+
+## Paying partners and referrers (once a month)
+
+1. In Apps Script, run **partnerPayoutReport**. The log shows everyone who has
+   earned: **due now** (balance of ₹2,500 or more — pay these, to the UPI or
+   bank shown) or **below the minimum** (carries over — don't pay yet).
 2. Pay them by bank transfer or UPI.
 3. In the **PartnerEarnings** tab, write the date and reference (e.g.
    `2026-12-05 UPI 412345`) in the **Paid out** column of each row you paid.
@@ -60,6 +69,9 @@ In Apps Script → Project Settings → Script Properties:
 |---|---|---|
 | `REFERRAL_REWARD_DAYS` | The most days a customer gets for each company they invite that pays | 30 |
 | `PARTNER_COMMISSION_PCT` | Commission for new partners (a partner's own row overrides it) | 20 |
+| `REFERRER_COMMISSION_PCT` | Commission for new referrers (a row's own Commission % overrides it) | 10 |
+| `REFERRER_MONTHS` | Limit referrer commission to the first N months after the company first paid | blank = for as long as it pays |
+| `PAYOUT_MINIMUM_RS` | Smallest balance you pay out; below it, it carries over | 2500 |
 
 If you change `REFERRAL_REWARD_DAYS`, the button in the app still says "up to 30
 days free". Ask for it to be changed to match.

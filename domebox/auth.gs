@@ -220,6 +220,9 @@ var PUBLIC_LIMITS = {
   partner:        { max: 120, windowMin: 60 },   // one partner's own dashboard
   partnerBad:     { max: 500, windowMin: 60 },   // wrong partner keys, all together (a key is 40 hex: guessing is hopeless anyway)
   contactSalesGlobal: { max: 60, windowMin: 60 },   // our own inbox, protected from a flood
+  referJoin:       { max: 3,  windowMin: 60 },   // referral links asked for one email address
+  referJoinGlobal: { max: 60, windowMin: 60 },   // every one sends an email: protect the daily quota
+  referPayout:    { max: 10, windowMin: 60 },
 };
 
 function throttle_(bucket, key, limit) {

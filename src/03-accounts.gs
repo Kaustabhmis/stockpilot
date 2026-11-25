@@ -82,7 +82,7 @@ function registerCompany_locked_(form) {
 
   try { sendWelcome_(email, form.name || company, company, lite ? '' : ymd(expiry)); } catch (e) {}
   /* Who brought them, if they came through a referral or partner link. */
-  if (!lite && form.ref) recordReferral_(form.ref, newId, company);
+  if (!lite && form.ref) recordReferral_(form.ref, newId, company, email);
 
   return {
     status: 'success',

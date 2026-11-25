@@ -422,6 +422,9 @@ function openAccount() {
       (LITE ? '' : '<div class="flex gap-3 mb-3">' +
       '<button class="btn btn-g flex-1" onclick="closeModal();openCalendar()">Working days</button>' +
       '<button class="btn btn-g flex-1" onclick="closeModal();openReminders()">Reminders</button></div>') : '') +
+    /* Everyone, any role: their own referral link. Not in Lite, not in the demo. */
+    (LITE || STATE.demo ? '' : '<button class="btn w-full mb-3 font-black text-white" style="background:#0b8a5f" onclick="closeModal();openMyReferral()">' +
+      '<span class="material-icons text-base align-middle">card_giftcard</span> Refer a company — earn 10%</button>') +
     '<div class="flex gap-3 border-t border-gray-100 pt-5">' +
       (canBill() ? '<button class="btn btn-g flex-1" onclick="closeModal();openBilling()">Plan &amp; billing</button>' : '') +
       /* The ? button in the top bar is hidden on a phone to save room, so this
