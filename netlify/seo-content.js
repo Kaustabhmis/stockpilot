@@ -524,7 +524,7 @@ ${cta('Fourteen days of the full product is enough to compare it properly.')}`,
     title: 'Partner programme and Refer & earn',
     h1: 'Refer a company to Domebox and earn',
     description: 'Anyone can earn 10% of what a company they refer pays for Domebox, for as long as it stays a customer. CA firms and consultants earn 20% as partners.',
-    answer: 'Anyone can get their own Domebox referral link, free, without being a customer: when a company signs up through it and pays, you earn 10% of the package it pays for, before GST, every time it pays, for as long as it stays a paying customer. CA firms, ISO and IATF consultants and business advisors can join the partner programme instead, which pays 20%. Both come with a private dashboard showing every company, what it has earned you, and what has been paid.',
+    answer: 'Anyone can get a free Domebox referral link, customer or not. When a company signs up through it and pays, you earn 10% of the package it pays for, before GST, every time it pays, for as long as it stays a customer. CA firms and consultants can join the partner programme instead, at 20%. Both come with a private dashboard of companies, earnings and payouts.',
     changefreq: 'monthly', priority: '0.6',
     faq: [
       ['How do I get a referral link?', 'Open www.domebox.in/?refer=1, enter your name and email, and your link and private dashboard are emailed to you at once. If you already use Domebox, it is under your name, Refer a company.'],
