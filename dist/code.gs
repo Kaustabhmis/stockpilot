@@ -4037,7 +4037,8 @@ function sendWelcomeStaff_(email, name, company, username) {
 /**
  * What the days left on the current plan are worth on the new one.
  * Null when nothing needs converting: no days left, still on the trial, the
- * same plan bought again, or either plan has no list price (Free, Enterprise).
+ * same plan bought again (monthly or yearly), or either plan has no list
+ * price (Free, Enterprise).
  */
 function planSwitchCredit_(fromPlan, status, toPlan, until, now) {
   if (status === 'Trial' || !(until instanceof Date) || isNaN(until) || until <= now) return null;
@@ -4045,6 +4046,9 @@ function planSwitchCredit_(fromPlan, status, toPlan, until, now) {
   if (!fromKey || fromKey === toKey) return null;
   var a = PLANS[fromKey], b = PLANS[toKey];
   if (!a || !b || !(a.price > 0) || !(b.price > 0)) return null;
+  /* Growth yearly to Growth monthly (or back) is the same plan: its days are
+     Growth days already paid for, and carry over as they are. */
+  if (a.name === b.name) return null;
   var leftDays = (until - now) / 86400000;
   var value = leftDays * a.price / (a.termDays || 30);
   var days = Math.floor(value / (b.price / (b.termDays || 30)));

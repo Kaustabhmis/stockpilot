@@ -58,8 +58,12 @@ set('Starter', 'Active', -5);
 until = buy('Growth', 5999);
 ok('an expired plan starts from today', Math.abs(daysTo(until) - 30) <= 1, daysTo(until));
 ok('Enterprise (no list price) is never converted', X.planSwitchCredit_('Enterprise', 'Active', 'Growth', new Date(Date.now() + 50 * 864e5), new Date()) === null);
-ok('monthly to yearly of the same plan is converted by value too',
-   (() => { const c = X.planSwitchCredit_('Team', 'Active', 'Team Yearly', new Date(Date.now() + 20 * 864e5), new Date()); return c && c.days === 24; })());
+ok('monthly and yearly of the same plan are the same plan: days carry over as they are',
+   X.planSwitchCredit_('Team', 'Active', 'Team Yearly', new Date(Date.now() + 20 * 864e5), new Date()) === null &&
+   X.planSwitchCredit_('Growth Yearly', 'Active', 'Growth', new Date(Date.now() + 200 * 864e5), new Date()) === null);
+set('Growth Yearly', 'Active', 200);
+until = buy('Growth', 5999);
+ok('so a yearly Growth customer paying a Growth month keeps all 200 days and adds 30', Math.abs(daysTo(until) - 230) <= 1, daysTo(until));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

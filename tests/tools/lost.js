@@ -10,6 +10,7 @@ const now = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const RETIRED = {
   planForPaise_: 'guessed the plan from the amount paid; a payment now buys what its server-made order says',
   blkId: 'the blocker drop-down; Add blocker is now one box (blkText) that matches a task or adds a custom blocker',
+  'hc-invite-a-business--30-days-free': 'renamed: the help heading now says "up to 30 days free" (hc-invite-a-business--up-to-30-days-free)',
 };
 const diff = (label, a, b) => { const lost = [...a].filter((x) => !b.has(x) && !RETIRED[x]), added = [...b].filter((x) => !a.has(x));
   console.log((lost.length ? 'LOST ' : 'ok   ') + label + ': ' + a.size + ' before, ' + b.size + ' now' +
