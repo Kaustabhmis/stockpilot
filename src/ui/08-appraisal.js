@@ -179,7 +179,6 @@ var PLAN_CARDS = [
     bullets:['Unlimited users and tasks','Custom integrations','Dedicated support'] },
 ];
 
-var EXTRA_SEAT_PRICE = 149;
 
 /** ₹1,29,990 — grouped the way an Indian reader expects, not 129,990. */
 function inr(n) {
@@ -242,9 +241,7 @@ function openBilling() {
       '<button class="btn btn-g flex items-center gap-1" id="btnInvite" onclick="closeModal();openInvite()"><span class="material-icons text-base">card_giftcard</span> Invite a business — up to 30 days free</button></div>' +
     '<p class="text-xs text-gray-400 font-semibold mt-4">' + gstSentence() + ' ' +
     'An invoice is emailed the moment a payment goes through. ' +
-      'Need a few more seats than a band allows? Extra seats are ' + inr(EXTRA_SEAT_PRICE) +
-      ' per user a month — ' +
-      '<button class="text-blue-600 font-black" onclick="openSupport(\'Extra seats\')">ask us</button>. ' +
+      'More people than your plan allows? Move up to the next plan. ' +
       'Enterprise: unlimited users, custom integrations, dedicated support — ' +
       '<button class="text-blue-600 font-black" onclick="openSupport(\'Enterprise enquiry\')">talk to us</button>.</p>' +
     '</div>', 'max-w-4xl');

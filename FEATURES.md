@@ -344,8 +344,8 @@ state sees one short form, once.
 Every paid band carries the whole product. A plan that withholds the scoring and
 the appraisals is selling a worse board, and it gives a buyer a reason to stay
 small rather than a reason to grow. From Starter up, price per user falls as the band rises. Team (10 users, ₹999)
-is the low entry point for a small office. Extra seats beyond a
-band are ₹149 per user a month, arranged by hand.
+is the low entry point for a small office. There are no extra seats: a company
+that outgrows its band moves up a plan.
 
 Prices exclude 18% GST, which is added at checkout and shown before the payment
 sheet opens — while BISCS India is unregistered the rate is zero and the

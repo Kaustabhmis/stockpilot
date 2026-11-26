@@ -207,7 +207,7 @@ Answer buyer enquiries within the same day: IndiaMART ranks fast responders high
 | Scale | 150 | ₹12,999 | ₹1,29,990 |
 | Enterprise | 150+ | Custom | Custom |
 
-Extra seats beyond a plan: ₹149 per user a month. Every paid plan includes the whole product. 14-day free trial of Growth, no card.
+No extra seats: a company that outgrows its plan moves up one. Every paid plan includes the whole product. 14-day free trial of Growth, no card.
 
 ---
 

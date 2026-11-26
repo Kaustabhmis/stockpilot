@@ -48,8 +48,8 @@ size of your team — from ₹999 a month for 10 people.</p>
 </tbody></table>
 
 <p>Prices are in INR. Any GST that applies is added at checkout and shown before you pay. Yearly is exactly ten times monthly,
-so paying for the year gives you two months free. Need a handful more seats than
-a band allows? Extra seats are ₹149 per user a month — ask us.</p>
+so paying for the year gives you two months free. More people than your plan
+allows? Move up to the next plan.</p>
 
 <h2>Why every plan has the whole product</h2>
 <p>A plan that withholds the scoring and the appraisals is selling a worse task

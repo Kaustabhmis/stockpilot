@@ -9820,8 +9820,7 @@ var PLANS = {
   'Team Yearly':    { name:'Team',    price:9990,   termDays:365, users:10,  tasksPerMonth:null,
                       analytics:true, whatsapp:false, email:true, kraForms:true, offered:true },
 
-  /* Twenty, not fifteen: at fifteen it cost more per person than every other
-     band, and Team plus five extra seats came to less. */
+  /* Twenty, not fifteen: at fifteen it cost more per person than every other band. */
   'Starter':        { name:'Starter', price:2499,   termDays:30,  users:20,  tasksPerMonth:null,
                       analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
   'Starter Yearly': { name:'Starter', price:24990,  termDays:365, users:20,  tasksPerMonth:null,
@@ -9847,10 +9846,9 @@ var PLANS = {
                   analytics:true, whatsapp:true, email:true, kraForms:true, offered:true },
 };
 
-/* What a seat costs beyond a plan's band, for a company that needs a few more
-   rather than the next tier. Handled by hand on request — there is no
-   self-serve flow for it, so nothing here pretends otherwise. */
-var EXTRA_SEAT_PRICE = 149;
+/* No extra seats: a company that outgrows its band moves up a plan. Selling
+   seats on top of a band undercut the bands themselves (Team plus fifteen
+   seats came to about half of Growth for 25 people). */
 
 /* Both vocabularies resolve: what the sheet stores, and what the pricing page
    calls them. An unrecognised name is treated as Free, never as the most

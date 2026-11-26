@@ -122,11 +122,8 @@ ok('every paid plan carries the whole product',
 ok('WhatsApp reminders start at Starter: not on Team, on every plan above it',
    !P.PLANS['Team'].whatsapp && !P.PLANS['Team Yearly'].whatsapp &&
    ['Starter','Starter Yearly','Growth','Growth Yearly','Scale','Scale Yearly','Enterprise'].every(k=>P.PLANS[k].whatsapp));
-/* At fifteen users Starter cost more than Team plus five extra seats, so
-   nobody who did the sum would buy it. At twenty it costs about the same as
-   Team plus ten seats — and carries WhatsApp reminders as well. */
-ok('Starter costs about what Team plus extra seats would for the same people',
-   Math.abs(P.PLANS['Starter'].price - (P.PLANS['Team'].price + (P.PLANS['Starter'].users - P.PLANS['Team'].users) * 149)) <= 50);
+/* Extra seats were removed: sold on top of a band they undercut the bands. */
+ok('no extra seats are sold on top of a plan', P.EXTRA_SEAT_PRICE === undefined);
 ok('price per user falls as the band grows',
    P.PLANS['Scale'].price/P.PLANS['Scale'].users < P.PLANS['Growth'].price/P.PLANS['Growth'].users &&
    P.PLANS['Growth'].price/P.PLANS['Growth'].users < P.PLANS['Starter'].price/P.PLANS['Starter'].users);
