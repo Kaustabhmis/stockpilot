@@ -166,7 +166,7 @@ var PLAN_CARDS = [
     users:50, tag:'Most popular',
     blurb:'For a company running several departments.',
     bullets:['Up to 50 users','Unlimited tasks','Everything in Starter',
-             'Multi-level approvals across departments','Org chart and cookie points'] },
+             'Room for several departments and their heads'] },
 
   { key:'Scale', yearKey:'Scale Yearly', name:'Scale', price:12999, yearPrice:129990,
     users:150, tag:'Best value per user',
@@ -181,6 +181,11 @@ var PLAN_CARDS = [
 
 
 /** ₹1,29,990 — grouped the way an Indian reader expects, not 129,990. */
+/** Rupees and paise, exactly as Razorpay will charge: ₹1,178.82. */
+function inrP(n) {
+  var v = Math.round(Number(n || 0) * 100) / 100;
+  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+}
 function inr(n) {
   var x = String(Math.round(n));
   if (x.length <= 3) return '₹' + x;
@@ -229,7 +234,7 @@ function openBilling() {
     '<button onclick="closeModal()" class="text-gray-400"><span class="material-icons">close</span></button></div>' +
     '<p class="text-sm text-gray-400 font-semibold mb-4">You are on <strong>' + esc(u.planName) + '</strong>' +
       (u.daysLeft !== null ? ', ' + (u.daysLeft >= 0 ? u.daysLeft + ' day(s) left' : 'expired') : '') + '. ' +
-      'Every paid plan carries the whole product, with WhatsApp reminders from Starter up — you pay for the size of your team.</p>' +
+      'Every paid plan carries the whole product — you pay for the size of your team. WhatsApp reminders (coming soon) will be on Starter and up.</p>' +
     '<div class="mb-5">' + cycleToggle('billingCycle') + '</div>' +
     '<div id="billingPlans" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>' +
     '<div class="mt-5 flex gap-2 items-end">' +
@@ -320,8 +325,8 @@ function payNow(planName, promo) {
       /* The site prices exclude GST, so the figure on the card is larger than
          the figure on the plan card. Saying so before the payment sheet opens
          is the difference between a sale and a chargeback. */
-      if (ch.tax) toast(inr(ch.net) + ' + ' + ch.rate + '% GST ' + inr(ch.tax) +
-                        ' = ' + inr(ch.total) + ' payable', 'info');
+      if (ch.tax) toast(inrP(ch.net) + ' + ' + ch.rate + '% GST ' + inrP(ch.tax) +
+                        ' = ' + inrP(ch.total) + ' payable', 'info');
       var rz = new Razorpay({
         key: o.key, order_id: o.order_id, amount: o.amount, currency: o.currency,
         name: o.name, description: o.description, prefill: o.prefill, theme: { color: '#1e4fbf' },

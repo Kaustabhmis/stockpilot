@@ -723,7 +723,7 @@ performance score — **a new joiner is not a poor performer**.
 | **Accountability** | Rework by person — and **who is holding work up** |
 | **Review history** | Every stored appraisal |
 
-**Executive insight** (Pro and up) answers questions about last month's
+**Executive insight** (every paid plan) answers questions about last month's
 delivery. Only summary figures are sent to the model — never staff records.
 
 ### The monthly email
@@ -780,12 +780,21 @@ input credit.
 An invoice is emailed from `info@biscsindia.com` the moment a payment goes
 through. **Plans → Invoices** lists them all.
 
+### Changing plans
+
+Plans are paid in advance and do not renew by themselves. **Renewing the same
+plan early** adds to the time you have. **Moving to a different plan** credits
+the days left on the current one by their value: they are turned into days of
+the new plan and added on top of the term you buy. For example, 300 days left on
+Team Yearly (about ₹8,200 of value) become about 41 days of Growth. The receipt
+says exactly what was credited.
+
 ### When a plan lapses
 
 A paid plan keeps working for a week past expiry, then drops to read-only.
 Nobody loses access to their own history.
 
-### Invite a business — 30 days free
+### Invite a business — up to 30 days free
 
 **Plans → Invite a business** shows your own link, with buttons to share it on
 WhatsApp, email or LinkedIn. When a company that signed up through your link

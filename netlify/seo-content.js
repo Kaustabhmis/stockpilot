@@ -27,7 +27,7 @@ module.exports = (C) => {
     faq: [
       ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
       ['Is there a free plan?', 'Yes. Up to 5 users and 100 tasks a month, with no card and no time limit. It includes the board, approvals and reminders. A trial that ends without a plan moves here — nothing is deleted.'],
-      ['What is not included in the paid plans?', 'Every paid plan carries the whole product — scoring, reports, KRA/KPI, appraisals, projects and email reminders. WhatsApp reminders come with Starter and above, and are being switched on now. You pay for the size of your team, not for features.'],
+      ['What is not included in the paid plans?', 'Every paid plan carries the whole product — scoring, reports, KRA/KPI, appraisals, projects and email reminders. WhatsApp reminders are coming soon, on Starter and above. You pay for the size of your team, not for features.'],
       ['Is GST extra?', 'If GST applies, it is added at checkout and shown before you pay, and the invoice shows it so a registered business can claim input credit. Every payment gets an invoice.'],
       ['What happens when my plan expires?', 'Your workspace stays fully usable for a week. After that it becomes read-only — nothing is ever deleted, and everything comes back the moment you renew.'],
       ['Can I pay monthly?', 'Yes. Yearly is ten times the monthly price, so two months are free if you pay for the year.'],
@@ -76,7 +76,7 @@ ${cta('Try the full product free for 14 days, then pick the size that fits.')}`,
       ['Does Domebox need installing?', 'No. It runs in any web browser, on a computer or a phone. There is nothing to install and no server to look after.'],
       ['Can tasks repeat automatically?', 'Yes: daily, weekly, monthly, quarterly or yearly. The next occurrence is created on a schedule, so one that is forgotten does not quietly end the series.'],
       ['Does Domebox send reminders?', 'Yes, by email, at up to four times a day that each company sets (by default 9 am, 3 pm and 5 pm), on its own working days and skipping its holidays.'],
-      ['Who is Domebox for?', 'Indian MSMEs of 5 to 300 people: factories, trading houses and service firms that want work tracked and people measured in one place.'],
+      ['Who is Domebox for?', 'Indian MSMEs of 5 to 150 people (and larger, on Enterprise): factories, trading houses and service firms that want work tracked and people measured in one place.'],
     ],
     changefreq: 'monthly', priority: '0.8',
     body: `
@@ -314,7 +314,7 @@ ${cta('Set up your first KRA sheet in ten minutes.')}`,
     title: 'Employee performance management in India',
     h1: 'Employee performance management for a small Indian company',
     description: 'A practical performance system for a 10 to 300 person Indian business: what to measure, how to keep it fair, and why the yearly appraisal fails.',
-    answer: 'For a 10 to 300 person Indian company, performance management works best when people are scored every month from their actual work record, reviewed formally once or twice a year, and shown the working behind every number. Measure delivery, KRAs and behaviour, leave approved leave and holidays out, and measure managers on how quickly they approve work.',
+    answer: 'For a 10 to 150 person Indian company, performance management works best when people are scored every month from their actual work record, reviewed formally once or twice a year, and shown the working behind every number. Measure delivery, KRAs and behaviour, leave approved leave and holidays out, and measure managers on how quickly they approve work.',
     changefreq: 'yearly', priority: '0.8',
     faq: [
       ['How often should we appraise people?', 'Score monthly, review formally once or twice a year. A yearly appraisal built from memory mostly reflects the last six weeks, which is why the quiet performer loses.'],
@@ -455,7 +455,7 @@ ${cta('Run one line or one department for a month.')}`,
     description: 'An honest comparison with Monday.com, Trello, Asana and a spreadsheet for an Indian SME — including where one of the others is the better buy.',
     answer: 'Trello is the better free board for a few people, Monday.com suits deep customisation, and Asana or Jira suit software teams. Domebox fits an Indian SME that wants work tracked and people measured in one place, priced in INR: ₹5,999 a month covers 50 people, with KRAs, appraisals and scoring included.',
     faq: [
-      ['Is Domebox cheaper than Monday.com or Asana for an Indian team?', 'Usually, for a team of any size. Domebox is priced in INR by team size (₹5,999 a month for 50 people) with every feature included, while those tools charge per seat in US dollars.'],
+      ['Is Domebox cheaper than Monday.com or Asana for an Indian team?', 'Usually, for a team of any size. Domebox is priced in INR by team size (₹5,999 a month for 50 people) with every feature included, while those tools mostly charge per seat in US dollars.'],
       ['Can Domebox replace an HRMS?', 'No. An HRMS handles payroll, attendance and compliance. Domebox handles the work and the performance record, and many companies run both.'],
       ['Is there a free option?', 'Yes. Domebox is free for up to 5 users with no time limit, and any company can try the full Growth plan free for 14 days with no card.'],
     ],
@@ -483,20 +483,24 @@ and when. If your sheet has a "Status" column that is three weeks stale, you hav
 already found the limit.</p>
 
 <h2>Against Trello</h2>
-<p>Trello is a better pure board than ours and it is free. What it does not have
-is a sign-off step, recurring work that generates itself reliably, or any notion
-of performance. If all you need is to see who has what, Trello is the cheaper
-answer and we would rather you knew that.</p>
+<p>Trello is a better pure board than ours, and its free plan is enough for a
+small team. What it is not built for is a sign-off step before work counts as
+done, or any notion of performance: recurring cards and automation exist, but
+there is no score, no KRAs and no appraisal. If all you need is to see who has
+what, Trello is the cheaper answer and we would rather you knew that.</p>
 
 <h2>Against Monday.com and Asana</h2>
 <p>Both are more configurable than Domebox and both have far bigger ecosystems.
 Two practical differences for an Indian SME:</p>
 <ul>
-<li><strong>Price.</strong> Per-seat pricing in dollars at a 50-person company
-runs to several lakh a year. Domebox Growth covers 50 people at ₹59,990.</li>
-<li><strong>Appraisals.</strong> Neither produces a defensible performance score
-or holds KRAs and KPIs. You would still buy a second tool for that, or do it in a
-spreadsheet.</li>
+<li><strong>Price.</strong> Both are priced per seat, mostly in US dollars; for a
+50-person company on their business tiers that typically comes to a few lakh rupees
+a year (check their current price pages). Domebox Growth covers 50 people at ₹59,990
+a year.</li>
+<li><strong>Appraisals.</strong> Asana has goals, and both can track OKR-style
+targets, but neither produces a performance score built from each person's work
+record, or holds KRAs and appraisals. You would still need a second tool for that,
+or a spreadsheet.</li>
 </ul>
 <p>If your constraint is workflow complexity rather than cost, buy Monday. If your
 constraint is "I cannot tell who is actually delivering", that is what we built.</p>
@@ -528,9 +532,9 @@ ${cta('Fourteen days of the full product is enough to compare it properly.')}`,
     changefreq: 'monthly', priority: '0.6',
     faq: [
       ['How do I get a referral link?', 'Open www.domebox.in/?refer=1, enter your name and email, and your link and private dashboard are emailed to you at once. If you already use Domebox, it is under your name, Refer a company.'],
-      ['How much does a referrer earn?', '10% of the package the company pays for, before GST, on every payment, for as long as it stays a paying customer. A company on Team at Rs 999 a month earns you about Rs 100 every month; one on Growth at Rs 5,999, about Rs 600.'],
-      ['How much does a partner earn?', '20% of every payment a company you brought in makes, before GST, for as long as it stays a customer. A 50-person company on Growth at Rs 5,999 a month earns you about Rs 1,200 every month.'],
-      ['How are partners paid?', 'By bank transfer or UPI, once your unpaid commission reaches Rs 2,500; below that it carries over to the next payout. It is shown as due on your dashboard. Every payment and every payout is listed there, so there is nothing to reconcile by hand.'],
+      ['How much does a referrer earn?', '10% of the package the company pays for, before GST, on every payment, for as long as it stays a paying customer. A company on Team at ₹999 a month earns you about ₹100 every month; one on Growth at ₹5,999, about ₹600.'],
+      ['How much does a partner earn?', '20% of every payment a company you brought in makes, before GST, for as long as it stays a customer. A 50-person company on Growth at ₹5,999 a month earns you about ₹1,200 every month.'],
+      ['How are partners paid?', 'By bank transfer or UPI, once your unpaid commission reaches ₹2,500; below that it carries over to the next payout. It is shown as due on your dashboard. Every payment and every payout is listed there, so there is nothing to reconcile by hand.'],
       ['Who can become a partner?', 'Anyone who advises small Indian businesses: chartered accountants, ISO, IATF and quality consultants, HR and management advisors, software resellers. There is no fee and no target.'],
       ['Does my client pay more because I referred them?', 'No. They pay the same published price, get the same 14-day free trial, and you can help them set up if you like.'],
     ],

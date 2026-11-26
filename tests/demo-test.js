@@ -109,7 +109,10 @@ ok('and the scores are not all identical — that is the whole argument',
 /* Whatever day it is built — the 1st included — the month's view is full:
    a task counts in the month it was verified. */
 const now = new Date(), first = new Date(now.getFullYear(), now.getMonth(), 1);
-const verified = tasks.filter((t) => t.status === 'Verified');
+/* Verified work leaves the board after 7 days for the Archive, so late in the
+   month some of this month's verified work is there: count both. */
+const archived = (call({ action: 'getArchive', token: A.token, pageSize: 100 }).tasks || []);
+const verified = tasks.concat(archived).filter((t) => t.status === 'Verified');
 const vDate = (t) => new Date(t.history[t.history.length - 1].date);
 ok('work was verified this month, whatever the day', verified.filter((t) => vDate(t) >= first).length >= 10,
    verified.filter((t) => vDate(t) >= first).length);

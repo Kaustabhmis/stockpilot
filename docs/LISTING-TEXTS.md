@@ -26,7 +26,7 @@ Rules that apply everywhere:
 | Address | 289 A Kalighat Road, Kolkata 700026, West Bengal, India |
 | Founder | Kaustabh Maitra |
 | Deployment | Cloud / SaaS, web-based, works in any browser on computer and phone. Nothing to install. |
-| Customers | Small and mid-size businesses, 5 to 300 employees |
+| Customers | Small and mid-size businesses, 5 to 150 employees |
 | Industries | Manufacturing, auto components, engineering, trading and distribution, services |
 | Price | Free for 5 users. Paid from ₹999 a month for 10 users. 14-day free trial, no card. |
 
@@ -41,10 +41,10 @@ Task, team and performance management for Indian MSMEs
 Assign every job with an owner and a due date, close it only when verified, track department goals, and score every person from their real work record.
 
 ### Medium (≤ 750 characters — Google Business Profile, Bing Places, Justdial)
-Domebox is task, team and performance management software for Indian MSMEs — factories, trading houses and service firms of 5 to 300 people. Every job gets one owner and a due date and is closed only when the person who asked for it verifies it. Recurring jobs like calibration and maintenance create themselves. Heads of department set goals for their team with target figures, and Domebox tells the owner which goals are on track and which are slipping. Each person gets a monthly performance score built from their own task record, which they can check task by task. Runs in any browser, nothing to install. Free for 5 users; paid plans from ₹999 a month. Try the live demo at www.domebox.in.
+Domebox is task, team and performance management software for Indian MSMEs — factories, trading houses and service firms of 5 to 150 people. Every job gets one owner and a due date and is closed only when the person who asked for it verifies it. Recurring jobs like calibration and maintenance create themselves. Heads of department set goals for their team with target figures, and Domebox tells the owner which goals are on track and which are slipping. Each person gets a monthly performance score built from their own task record, which they can check task by task. Runs in any browser, nothing to install. Free for 5 users; paid plans from ₹999 a month. Try the live demo at www.domebox.in.
 
 ### Long (about 300 words — SoftwareSuggest, Techjockey, G2, Capterra, SaaSworthy, SourceForge)
-Domebox is task, team and performance management software built for Indian MSMEs: factories, trading houses and service firms of 5 to 300 people.
+Domebox is task, team and performance management software built for Indian MSMEs: factories, trading houses and service firms of 5 to 150 people.
 
 **Every job has an owner.** Each task gets one owner, a due date and a priority, and it is closed only when the person who asked for it verifies it, with an optional photo as proof. Work moves across a shared board (To do, In progress, For review, Verified). Approvals follow the reporting line. Blocked work shows what it is waiting for. Recurring jobs such as calibration, maintenance and audits create themselves on schedule, and multi-stage projects give each stage its own owner.
 
@@ -150,7 +150,7 @@ List it as a product.
 | Price | ₹999 per month |
 | Unit | Per month (10 users) |
 | Minimum order | 1 |
-| Specifications | Deployment: Cloud · Users: 5 to 300 · Platform: any browser · Free trial: 14 days · Free plan: 5 users · Language: English |
+| Specifications | Deployment: Cloud · Users: 5 to 150 · Platform: any browser · Free trial: 14 days · Free plan: 5 users · Language: English |
 
 **Product description:**
 > Domebox helps factories and SMEs track every job until it is really done. Assign tasks with an owner and due date, approvals by reporting line, recurring jobs like calibration and maintenance, department goals with weekly figures, and a monthly performance score for every employee built from their real work record. Works on computer and phone browser — no installation. Free for 5 users, paid plans from ₹999 per month. Free demo at www.domebox.in.

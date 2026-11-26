@@ -250,7 +250,7 @@ function setupDomeBox() {
     out.push('  note    SELLER_GSTIN is not set. Invoices will be issued with NO tax and');
     out.push('          the checkout will charge exactly the listed price. Correct while');
     out.push('          BISCS India is unregistered; set the GSTIN the day that changes,');
-    out.push('          because the site tells customers prices exclude 18% GST.');
+    out.push('          because from then on 18% GST must be added and shown at checkout.');
   }
   out.push('  series  next number ' + s.prefix + '/' + financialYear_(new Date()) + '/0001 onward');
   }

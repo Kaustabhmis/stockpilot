@@ -16,7 +16,7 @@
  * address and GSTIN where they have one; the SAC for the service; the taxable
  * value; the rate and amount of tax split the right way; and the place of
  * supply. Miss the GSTIN and the customer cannot claim input credit, which for
- * a ₹60,000 yearly plan is about ₹9,000 of their money.
+ * a ₹59,990 yearly plan is about ₹10,800 of their money.
  *
  * TWO DOCUMENTS, AND THE RULE THAT PICKS ONE
  *
@@ -303,7 +303,10 @@ function issueInvoice_locked_(sheetId, planName, paid, company, until) {
       placeOfSupply: bill.state || stateNameFor_(buyerCode) || '',
       stateCode: buyerCode, interState: interState,
       plan: plan.name || planName, planKey: planName,
-      period: ymd(now) + ' to ' + (until || ''),
+      /* What THIS payment bought: one term of the plan. The plan's end date can be
+         later (days left on a trial or an earlier plan, or referral days), and the
+         invoice must not look as though those were paid for. */
+      period: ((plan.termDays || 30) >= 365 ? '12 months' : '1 month') + (until ? ' · plan valid until ' + until : ''),
       paymentId: paymentId, orderId: String((paid && paid.order_id) || ''),
       seller: seller, split: split, status: status, to: to,
       words: amountInWords_(split.gross),
@@ -404,7 +407,9 @@ function invoiceHtml_(inv) {
       '<th style="' + th + 'right">Total (₹)</th></tr>' +
     '<tr><td style="' + td + 'left">1</td>' +
       '<td style="' + td + 'left">Domebox — ' + esc_(inv.plan) + ' plan, software subscription<br>' +
-        '<span style="color:#6b7280;font-size:12px">Period ' + esc_(String(inv.period || '').split(' to ').map(invDate_).join(' to ')) + '</span></td>' +
+        '<span style="color:#6b7280;font-size:12px">' + esc_(/ to /.test(String(inv.period || ''))
+          ? 'Period ' + String(inv.period).split(' to ').map(invDate_).join(' to ')
+          : 'Term ' + String(inv.period || '').replace(/(\d{4}-\d{2}-\d{2})/g, function (d) { return invDate_(d); })) + '</span></td>' +
       '<td style="' + td + 'left">' + esc_(s.sac) + '</td>' +
       '<td style="' + td + 'right">1</td>' +
       '<td style="' + td + 'right">' + rupees_(sp.taxable) + '</td>' + taxCells +

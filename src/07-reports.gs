@@ -180,7 +180,7 @@ function buildNotifications_(digest, me) {
 function getAnalytics_(ctx, period, offset, span, person) {
   if (!ctx.plan.analytics) {
     return { status: 'error', upgrade: true,
-      message: 'Reports are included from the Pro plan up.' };
+      message: 'Reports come with every paid plan. Choose one under Plans.' };
   }
   var tasks = readAllTasks_(ctx);
   /* Scores are per person: an Admin sees the company, a manager their line,
@@ -229,7 +229,7 @@ function getAnalytics_(ctx, period, offset, span, person) {
 
 function getAccountability_(ctx) {
   if (!ctx.plan.analytics) return { status: 'error', upgrade: true,
-    message: 'Reports are included from the Pro plan up.' };
+    message: 'Reports come with every paid plan. Choose one under Plans.' };
   var tasks = readAllTasks_(ctx);
   var byUser = {};
   tasks.forEach(function (t) {

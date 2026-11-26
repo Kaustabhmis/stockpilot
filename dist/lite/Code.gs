@@ -252,7 +252,7 @@ function setupDomeBox() {
     out.push('  note    SELLER_GSTIN is not set. Invoices will be issued with NO tax and');
     out.push('          the checkout will charge exactly the listed price. Correct while');
     out.push('          BISCS India is unregistered; set the GSTIN the day that changes,');
-    out.push('          because the site tells customers prices exclude 18% GST.');
+    out.push('          because from then on 18% GST must be added and shown at checkout.');
   }
   out.push('  series  next number ' + s.prefix + '/' + financialYear_(new Date()) + '/0001 onward');
   }
@@ -3244,7 +3244,7 @@ function buildNotifications_(digest, me) {
 function getAnalytics_(ctx, period, offset, span, person) {
   if (!ctx.plan.analytics) {
     return { status: 'error', upgrade: true,
-      message: 'Reports are included from the Pro plan up.' };
+      message: 'Reports come with every paid plan. Choose one under Plans.' };
   }
   var tasks = readAllTasks_(ctx);
   /* Scores are per person: an Admin sees the company, a manager their line,
@@ -3293,7 +3293,7 @@ function getAnalytics_(ctx, period, offset, span, person) {
 
 function getAccountability_(ctx) {
   if (!ctx.plan.analytics) return { status: 'error', upgrade: true,
-    message: 'Reports are included from the Pro plan up.' };
+    message: 'Reports come with every paid plan. Choose one under Plans.' };
   var tasks = readAllTasks_(ctx);
   var byUser = {};
   tasks.forEach(function (t) {
@@ -3631,8 +3631,16 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
       logPayment_('ALREADY_GRANTED', sheetId, paid.id);
       return had;
     }
-    var cur = new Date(d[i][4]);
-    var base = (!isNaN(cur) && cur > new Date()) ? cur : new Date();
+    var cur = new Date(d[i][4]), now = new Date();
+    var base = (!isNaN(cur) && cur > now) ? cur : now;
+    /* Days left on a DIFFERENT paid plan are worth what they cost, not one day
+       of the new plan each: 300 days of Team are not 300 days of Growth.
+       They are turned into days of the new plan by their rupee value. Trial
+       days carry over as they are (the site promises that), renewing the same
+       plan early just adds time, and nothing is carried from Free. */
+    var credit = planSwitchCredit_(d[i][3], String(d[i][6] || ''), planName, cur, now);
+    if (credit) base = new Date(now.getTime() + credit.days * 86400000);
+    else if (normalizePlan(d[i][3]) === 'Free' && String(d[i][6] || '') !== 'Trial') base = now;
     /* The term comes from the plan, not from its name. Keying it off the word
        "Yearly" worked only while there was exactly one annual plan. */
     base.setDate(base.getDate() + planTermDays(planName));
@@ -3646,7 +3654,8 @@ function grantPlan_locked_(sheetId, planName, paid, company) {
     dir.getRange(i + 1, 5).setValue(until);
     dir.getRange(i + 1, 7).setValue('Active');
     try { sendEmail_(d[i][1], 'Domebox — payment receipt',
-      receiptHtml_(company || d[i][0], planName, paid, until)); } catch (e) {}
+      receiptHtml_(company || d[i][0], planName, paid, until, credit)); } catch (e) {}
+    if (credit) logPayment_('SWITCH_CREDIT', sheetId, credit.fromPlan + ' ' + credit.leftDays + 'd worth Rs ' + credit.value + ' -> ' + credit.days + 'd of ' + planName);
     /* The invoice follows the receipt, from inside the same lock, so the
        serial number cannot collide with another payment landing at the same
        moment. It is idempotent on the payment id: the browser handler and the
@@ -3707,7 +3716,7 @@ function logPayment_(kind, sheetId, message) {
 function aiInsight_(ctx, question) {
   requireManager_(ctx);
   if (!ctx.plan.analytics) return { status: 'error', upgrade: true,
-    message: 'AI insights are included from the Pro plan up.' };
+    message: 'AI insights come with every paid plan. Choose one under Plans.' };
 
   var key = PropertiesService.getScriptProperties().getProperty('GEMINI_KEY');
   if (!key) throw new Error('AI insights are not configured yet.');
@@ -4025,15 +4034,36 @@ function sendWelcomeStaff_(email, name, company, username) {
     btn_('Sign in', CFG().siteUrl)));
 }
 
-function receiptHtml_(company, planName, paid, until) {
+/**
+ * What the days left on the current plan are worth on the new one.
+ * Null when nothing needs converting: no days left, still on the trial, the
+ * same plan bought again, or either plan has no list price (Free, Enterprise).
+ */
+function planSwitchCredit_(fromPlan, status, toPlan, until, now) {
+  if (status === 'Trial' || !(until instanceof Date) || isNaN(until) || until <= now) return null;
+  var fromKey = String(fromPlan || '').trim(), toKey = String(toPlan || '').trim();
+  if (!fromKey || fromKey === toKey) return null;
+  var a = PLANS[fromKey], b = PLANS[toKey];
+  if (!a || !b || !(a.price > 0) || !(b.price > 0)) return null;
+  var leftDays = (until - now) / 86400000;
+  var value = leftDays * a.price / (a.termDays || 30);
+  var days = Math.floor(value / (b.price / (b.termDays || 30)));
+  return { fromPlan: a.name + ((a.termDays || 30) >= 365 ? ' (yearly)' : ' (monthly)'), leftDays: Math.floor(leftDays),
+           value: Math.round(value), days: Math.max(0, days) };
+}
+
+function receiptHtml_(company, planName, paid, until, credit) {
   var plan = PLANS[planName] || { name: planName };
   return mailShell_('Payment receipt',
-    '<p>Hi <strong>' + esc_(company) + '</strong>,</p><p>Your workspace has been upgraded.</p>' +
-    infoTable_([['Plan', plan.name],
-      ['Amount paid', '₹' + (Number(paid.amount) / 100).toLocaleString('en-IN')],
+    '<p>Hi <strong>' + esc_(company) + '</strong>,</p><p>Thank you — your payment has been received and your plan is active.</p>' +
+    infoTable_([['Plan', plan.name + ((plan.termDays || 30) >= 365 ? ' (yearly)' : ' (monthly)')],
+      ['Amount paid', '₹' + (Number(paid.amount) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })],
       ['Payment ID', paid.id], ['Valid until', until]]) +
-    '<p style="font-size:12px;color:#6b7280">Your invoice is on its way in a separate ' +
-    'email — it carries the GST details your accountant needs.</p>');
+    (credit ? '<p style="font-size:13px">The ' + credit.leftDays + ' days left on your ' + esc_(credit.fromPlan) + ' plan were worth about ₹' +
+      Number(credit.value).toLocaleString('en-IN') + '. We have added them as <b>' + credit.days + ' days of ' + esc_(plan.name) +
+      '</b>, on top of the time you just paid for.</p>' : '') +
+    '<p style="font-size:12px;color:#6b7280">Your invoice is on its way in a separate email, ' +
+    'for your accounts.</p>');
 }
 
 function contactSales_(form) {
@@ -4918,7 +4948,7 @@ function getOrgChart_(ctx) {
  * address and GSTIN where they have one; the SAC for the service; the taxable
  * value; the rate and amount of tax split the right way; and the place of
  * supply. Miss the GSTIN and the customer cannot claim input credit, which for
- * a ₹60,000 yearly plan is about ₹9,000 of their money.
+ * a ₹59,990 yearly plan is about ₹10,800 of their money.
  *
  * TWO DOCUMENTS, AND THE RULE THAT PICKS ONE
  *
@@ -5205,7 +5235,10 @@ function issueInvoice_locked_(sheetId, planName, paid, company, until) {
       placeOfSupply: bill.state || stateNameFor_(buyerCode) || '',
       stateCode: buyerCode, interState: interState,
       plan: plan.name || planName, planKey: planName,
-      period: ymd(now) + ' to ' + (until || ''),
+      /* What THIS payment bought: one term of the plan. The plan's end date can be
+         later (days left on a trial or an earlier plan, or referral days), and the
+         invoice must not look as though those were paid for. */
+      period: ((plan.termDays || 30) >= 365 ? '12 months' : '1 month') + (until ? ' · plan valid until ' + until : ''),
       paymentId: paymentId, orderId: String((paid && paid.order_id) || ''),
       seller: seller, split: split, status: status, to: to,
       words: amountInWords_(split.gross),
@@ -5306,7 +5339,9 @@ function invoiceHtml_(inv) {
       '<th style="' + th + 'right">Total (₹)</th></tr>' +
     '<tr><td style="' + td + 'left">1</td>' +
       '<td style="' + td + 'left">Domebox — ' + esc_(inv.plan) + ' plan, software subscription<br>' +
-        '<span style="color:#6b7280;font-size:12px">Period ' + esc_(String(inv.period || '').split(' to ').map(invDate_).join(' to ')) + '</span></td>' +
+        '<span style="color:#6b7280;font-size:12px">' + esc_(/ to /.test(String(inv.period || ''))
+          ? 'Period ' + String(inv.period).split(' to ').map(invDate_).join(' to ')
+          : 'Term ' + String(inv.period || '').replace(/(\d{4}-\d{2}-\d{2})/g, function (d) { return invDate_(d); })) + '</span></td>' +
       '<td style="' + td + 'left">' + esc_(s.sac) + '</td>' +
       '<td style="' + td + 'right">1</td>' +
       '<td style="' + td + 'right">' + rupees_(sp.taxable) + '</td>' + taxCells +
@@ -9796,8 +9831,8 @@ function countUnmigratedPasswords() {
    PRICING SHAPE — charge for team size, not for features.
    Every paid plan carries the whole product. A plan that withholds the scoring
    and the appraisals is selling a worse board, and it gives a buyer a reason to
-   stay small rather than a reason to grow. The price per user falls as a
-   company grows, so growing with us is rewarded and the bill still rises.
+   stay small rather than a reason to grow. From Starter up, the price per user
+   falls as a company grows (Team is the small-office entry point).
 
    Yearly is ten times monthly — two months free — which also keeps the ladder
    honest: the old Standard at 2,499/mo was 29,988 a year against a Pro at

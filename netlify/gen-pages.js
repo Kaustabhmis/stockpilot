@@ -272,21 +272,22 @@ refund of the unused period.</p>
 
 <h2>4. Plans, limits and payment</h2>
 <p>Current plans, prices and limits are shown at
-<a href="https://${C.domain}/#pricing-landing">${C.domain}</a>. All prices are in Indian
-Rupees and exclusive of GST unless stated otherwise. A GST invoice is issued for every
-paid subscription.</p>
+<a href="https://${C.domain}/#pricing">${C.domain}</a>. All prices are in Indian
+Rupees. Where GST applies it is added at checkout and shown before you pay, and a GST
+tax invoice is issued; otherwise an ordinary invoice is issued for every payment.</p>
 <ul>
   <li><strong>User and task limits are enforced.</strong> Reaching a limit does not
   delete anything; it prevents adding more until you upgrade or the monthly count
   resets on the 1st.</li>
   <li>Recurring occurrences generated automatically by the system do not count against
   a monthly task allowance.</li>
-  <li><strong>Monthly plans</strong> renew monthly until cancelled.
-  <strong>Annual plans</strong> are paid upfront for twelve months.</li>
-  <li>If a renewal payment fails, your access continues for
-  <strong>${C.refundWindowDays} days</strong> while you fix it. After that the account
-  reverts to the Free tier. <strong>Your data is not deleted</strong> — only access to
-  paid features stops.</li>
+  <li><strong>Plans are paid in advance</strong>, for one month or for twelve months, and
+  do <strong>not renew automatically</strong>: you renew by paying again, and we remind you
+  by email before the plan ends.</li>
+  <li>If a plan ends without being renewed, your access continues for
+  <strong>7 days</strong>. After that the workspace becomes read-only: everyone can
+  still sign in and see everything, <strong>nothing is deleted</strong>, and renewing restores
+  full access at once.</li>
   <li>We may change prices with 30 days' notice by email. An existing annual term is
   honoured at the price you paid.</li>
 </ul>
@@ -400,11 +401,10 @@ bank or card issuer then typically takes <strong>5 to 7 working days</strong> to
 it, and that part is outside our control. Any GST paid is refunded with the
 principal.</p>
 
-<h2>Failed renewals</h2>
-<p>If a renewal payment fails we do not cut you off. You keep full access for
-<strong>${C.refundWindowDays} days</strong> while you sort it out. After that the
-account moves to the Free tier and stays there — nothing is deleted, and paying
-restores access immediately.</p>
+<h2>Plans that are not renewed</h2>
+<p>Plans do not renew automatically. If yours ends without a new payment, you keep
+full access for <strong>7 days</strong>. After that the workspace becomes read-only —
+nothing is deleted, and paying restores full access immediately.</p>
 
 <h2>Disputes</h2>
 <p>If you are unhappy with a refund decision, escalate to the Grievance Officer below.

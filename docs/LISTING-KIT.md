@@ -54,7 +54,7 @@ If a link has moved, look for **"Get listed"**, **"List your product"** or
 
 **Deployment:** Cloud, SaaS, web-based (any browser, desktop and mobile). Nothing to install.
 
-**Customer size:** Small businesses (5 to 300 employees)
+**Customer size:** Small businesses (5 to 150 employees)
 
 **Main market:** India (prices in INR)
 
@@ -68,7 +68,7 @@ Assign every job with an owner and a due date, close it only when verified, and 
 
 ### Long description (about 250 words)
 Domebox is task, team and performance management software for Indian MSMEs:
-factories, trading houses and service firms of 5 to 300 people.
+factories, trading houses and service firms of 5 to 150 people.
 
 Every job gets one owner and a due date, and it is closed only when the person
 who asked for it verifies it. Work moves across a shared board (To do, In

@@ -526,7 +526,7 @@ function rmTrialHtml_(t, days, until) {
 function rmRenewalHtml_(t, days, until) {
   var when = Utilities.formatDate(until, Session.getScriptTimeZone(), 'd MMMM yyyy');
   var head = days > 0
-      ? 'Your ' + rmEsc_(t.plan) + ' plan renews on ' + when + '.'
+      ? 'Your ' + rmEsc_(t.plan) + ' plan ends on ' + when + '. Renew it to keep going.'
     : days === 0
       ? 'Your ' + rmEsc_(t.plan) + ' plan expires today.'
       : 'Your ' + rmEsc_(t.plan) + ' plan expired on ' + when + '.';

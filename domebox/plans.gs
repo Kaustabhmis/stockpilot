@@ -19,8 +19,8 @@
    PRICING SHAPE — charge for team size, not for features.
    Every paid plan carries the whole product. A plan that withholds the scoring
    and the appraisals is selling a worse board, and it gives a buyer a reason to
-   stay small rather than a reason to grow. The price per user falls as a
-   company grows, so growing with us is rewarded and the bill still rises.
+   stay small rather than a reason to grow. From Starter up, the price per user
+   falls as a company grows (Team is the small-office entry point).
 
    Yearly is ten times monthly — two months free — which also keeps the ladder
    honest: the old Standard at 2,499/mo was 29,988 a year against a Pro at

@@ -546,11 +546,11 @@ function renderBanner() {
       'Choose a plan to keep scoring, reports and appraisals.' });
   }
   if (!u.trial && u.daysLeft !== null && u.daysLeft <= 7 && u.daysLeft >= 0 && STATE.plan !== 'Free') {
-    msgs.push({ tone: 'warn', text: 'Your plan renews in ' + u.daysLeft + ' day(s).' });
+    msgs.push({ tone: 'warn', text: 'Your plan ends in ' + u.daysLeft + ' day(s). Renew it under Plans to keep going.' });
   }
   if (!u.trial && u.daysLeft !== null && u.daysLeft < 0 && STATE.plan !== 'Free') {
-    msgs.push({ tone: 'bad', text: 'Payment is overdue. Access stops ' +
-      Math.max(0, 7 + u.daysLeft) + ' day(s) from now.' });
+    msgs.push({ tone: 'bad', text: 'Your plan has ended. The workspace becomes read-only ' +
+      Math.max(0, 7 + u.daysLeft) + ' day(s) from now unless you renew.' });
   }
   (u.warnings || []).forEach(function (w) {
     msgs.push({ tone: w.atLimit ? 'bad' : 'warn', text: w.text });
