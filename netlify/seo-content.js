@@ -1,0 +1,656 @@
+/**
+ * The content behind the SEO pages.
+ *
+ * Kept separate from the page machinery so the writing can be read and argued
+ * with on its own. Every page here exists because somebody searches for it and
+ * a real answer is worth reading — not to hold a keyword. Google's helpful
+ * content system demotes pages built the other way round, and so do buyers.
+ */
+module.exports = (C) => {
+  const app = 'https://' + C.domain + '/?signup=1';
+  const demo = 'https://' + C.domain + '/?demo=owner';
+  const cta = (line) =>
+    `<div class="cta"><p><strong>${line}</strong></p>
+     <a class="btn" href="${app}">Start your free 14-day trial</a>
+     <a class="btn btn-ghost" href="${demo}">See the live demo</a>
+     <p class="fine">The full Growth plan for 14 days. No card, nothing to install.</p></div>`;
+
+  return [
+  /* ---------------------------------------------------------------- pricing */
+  {
+    slug: 'pricing',
+    title: 'Pricing',
+    h1: 'Pricing',
+    description: 'Domebox pricing in INR: 14-day free trial, free for 5 users, then ₹999/month for 10, ₹2,499 for 20, ₹5,999 for 50, ₹12,999 for 150. The whole product on every paid plan.',
+    answer: 'Domebox is free for up to 5 users. Paid plans are ₹999 a month for 10 users (Team), ₹2,499 for 20 (Starter), ₹5,999 for 50 (Growth) and ₹12,999 for 150 (Scale); a year costs ten times the monthly price. Every paid plan includes the whole product, and the 14-day free trial needs no card.',
+    changefreq: 'monthly', priority: '0.9',
+    faq: [
+      ['Is there a free trial?', 'Yes. Every new workspace gets the full Growth plan — up to 50 people, scoring, reports and appraisals — free for 14 days, with no card. Upgrade during the trial and the days left are added on.'],
+      ['Is there a free plan?', 'Yes. Up to 5 users and 100 tasks a month, with no card and no time limit. It includes the board, approvals and reminders. A trial that ends without a plan moves here — nothing is deleted.'],
+      ['What is not included in the paid plans?', 'Every paid plan carries the whole product — scoring, reports, KRA/KPI, appraisals, projects and email reminders. WhatsApp reminders are coming soon, on Starter and above. You pay for the size of your team, not for features.'],
+      ['Is GST extra?', 'If GST applies, it is added at checkout and shown before you pay, and the invoice shows it so a registered business can claim input credit. Every payment gets an invoice.'],
+      ['What happens when my plan expires?', 'Your workspace stays fully usable for a week. After that it becomes read-only — nothing is ever deleted, and everything comes back the moment you renew.'],
+      ['Can I pay monthly?', 'Yes. Yearly is ten times the monthly price, so two months are free if you pay for the year.'],
+    ],
+    body: `
+<p class="lede">Every paid plan carries the whole product. What you pay for is the
+size of your team — from ₹999 a month for 10 people.</p>
+
+<table>
+<thead><tr><th>Plan</th><th>Users</th><th>Monthly</th><th>Yearly</th><th>Per user / month</th></tr></thead>
+<tbody>
+<tr><td><strong>Free</strong></td><td>5</td><td>₹0</td><td>—</td><td>—</td></tr>
+<tr><td><strong>Team</strong></td><td>10</td><td>₹999</td><td>₹9,990</td><td>₹100</td></tr>
+<tr><td><strong>Starter</strong></td><td>20</td><td>₹2,499</td><td>₹24,990</td><td>₹125</td></tr>
+<tr><td><strong>Growth</strong></td><td>50</td><td>₹5,999</td><td>₹59,990</td><td>₹120</td></tr>
+<tr><td><strong>Scale</strong></td><td>150</td><td>₹12,999</td><td>₹1,29,990</td><td>₹87</td></tr>
+<tr><td><strong>Enterprise</strong></td><td>150+</td><td colspan="3">Custom — write to us</td></tr>
+</tbody></table>
+
+<p>Prices are in INR. Any GST that applies is added at checkout and shown before you pay. Yearly is exactly ten times monthly,
+so paying for the year gives you two months free. More people than your plan
+allows? Move up to the next plan.</p>
+
+<h2>Why every plan has the whole product</h2>
+<p>A plan that withholds the scoring and the appraisals is selling a worse task
+board, and it gives a buyer a reason to stay small rather than a reason to grow.
+It also makes the decision harder than it needs to be: "which plan do I need?"
+becomes "how many people?", which you can answer in a second.</p>
+
+<h2>What happens if you stop paying</h2>
+<p>Your workspace keeps working for a week after expiry. After that it turns
+read-only. <strong>Nothing is deleted</strong> — your tasks, history, scores and
+appraisals are all still there, and they come straight back when you renew. You
+can export your data at any time, on any plan.</p>
+${cta('Try the full product free for 14 days, then pick the size that fits.')}`,
+  },
+
+  /* --------------------------------------------------------------- features */
+  {
+    slug: 'features',
+    title: 'Features',
+    h1: 'What Domebox does',
+    description: 'Task board, multi-stage projects, recurring jobs, multi-level approvals, KRA/KPI tracking, appraisals, delegation scoring and an org chart — built for Indian MSMEs.',
+    answer: 'Domebox is task, team and performance management software for Indian MSMEs. Every job gets one owner and a due date and is closed only when the person who asked for it verifies it. It runs recurring jobs and staged projects, holds KRAs, KPIs and appraisals, and builds each person’s monthly score from their own task record.',
+    faq: [
+      ['Does Domebox need installing?', 'No. It runs in any web browser, on a computer or a phone. There is nothing to install and no server to look after.'],
+      ['Can tasks repeat automatically?', 'Yes: daily, weekly, monthly, quarterly or yearly. The next occurrence is created on a schedule, so one that is forgotten does not quietly end the series.'],
+      ['Does Domebox send reminders?', 'Yes, by email, at up to four times a day that each company sets (by default 9 am, 3 pm and 5 pm), on its own working days and skipping its holidays.'],
+      ['Who is Domebox for?', 'Indian MSMEs of 5 to 150 people (and larger, on Enterprise): factories, trading houses and service firms that want work tracked and people measured in one place.'],
+    ],
+    changefreq: 'monthly', priority: '0.8',
+    body: `
+<p class="lede">Everything below is in the product today. Not a roadmap.</p>
+
+<h2>Work</h2>
+<h3>A board the whole company shares</h3>
+<p>Drag work across To Do, In Progress, For Review and Verified. Priority,
+category, checklist, blockers and WIP limits. Nothing is "done" until the person
+who asked for it says so.</p>
+
+<h3>Projects that run in stages</h3>
+<p>Design, then fabricate, then train — each stage with its own owner and its own
+deadline. A stage opens only when the one before it is signed off, and its owner
+is told the moment it lands. If the stage before yours overruns, your deadline
+moves with it, so nobody wears somebody else's slip.</p>
+
+<h3>Recurring jobs that do not die quietly</h3>
+<p>Daily, weekly, monthly, quarterly or yearly. The next occurrence is created on
+a schedule rather than only when somebody closes the last one — so one forgotten
+calibration does not silently end the series.</p>
+
+<h3>Approvals that follow your hierarchy</h3>
+<p>Any head of department can raise work for anyone; it goes to that person's own
+manager first. A rejection needs a reason, and whoever raised it sees it.</p>
+
+<h3>A priority list that answers "what do I do first?"</h3>
+<p>Today, this week, this month, this quarter, this year. Ranked by the level, the
+date and who is held up — and every row says which of those put it where it is.</p>
+
+<h2>People</h2>
+<h3>KRA and KPI per person</h3>
+<p>A target, its unit, which direction is good and how it is measured, so two
+managers rating the same person reach the same conclusion. A job profile holds
+the standard for the next hire. The KPI target is optional, because plenty of
+real responsibilities are judged rather than counted.</p>
+
+<h3>Appraisals you can defend</h3>
+<p>KRA ratings, behaviour and the measured delivery record in one review, with the
+working shown for every number.</p>
+
+<h3>Cookie points</h3>
+<p>Recognition on the day it happens, not six months later. A manager awards 1–5
+with a stated reason; the person sees it, and it is on the record at their review.</p>
+
+<h3>An org chart that builds itself</h3>
+<p>From who reports to whom. It cannot drift out of date the way a drawn one does.</p>
+
+<h2>Measurement</h2>
+<p>A monthly score built from the task record rather than from memory, with every
+figure traceable to a named task and a date. <a href="/delegation-score">How the
+score works →</a></p>
+
+<h2>Reminders</h2>
+<p>An email to each person with their overdue work, what is due today and
+tomorrow, and what is waiting on them to approve, at up to four times a day that
+each company sets (by default 9 am, 3 pm and 5 pm), only on its working days.
+Plus renewal reminders before a plan lapses.</p>
+${cta('See it with your own team this week.')}`,
+  },
+
+  /* -------------------------------------------------------- the score method */
+  {
+    slug: 'delegation-score',
+    title: 'How the delegation score works',
+    h1: 'A performance score your team will believe',
+    description: 'The method behind the Domebox score: how well you delivered multiplied by how much you delivered, with managers measured on the approvals they hold.',
+    answer: 'The Domebox score is how well a person delivered multiplied by how much they delivered. How well is on time (45%), right first time (30%) and nothing left late (25%), with each task weighted by its priority. Managers are also scored on the approvals they hold, and every number can be traced to the task behind it.',
+    changefreq: 'monthly', priority: '0.7',
+    faq: [
+      ['Does one easy task score the same as ten hard ones?', 'No. The rate is credited against the load actually carried, weighted by priority, so ten jobs with seven delivered on time outscores one easy job delivered.'],
+      ['Are managers measured too?', 'Yes. Sitting on an approval or a review costs score, counted in working days from the moment it reached that person.'],
+      ['Does approved leave count as lateness?', 'Never. Weekends, company holidays and that person’s own approved leave are excluded everywhere a day is counted.'],
+      ['Can the score go above 100?', 'No. Everybody starts at zero and earns it, and nothing — recognition included — takes anyone past 100.'],
+    ],
+    body: `
+<p class="lede">Most performance software produces a number nobody can argue with,
+because nobody can see where it came from. Every figure here traces back to a
+named task, a date and a person.</p>
+
+<h2>The formula</h2>
+<p class="formula">Score = how well you delivered × how much you delivered</p>
+<p>A rate on its own is blind to volume. Somebody who closed a single trivial task
+on time was scoring 100, while somebody who carried ten and delivered seven on
+time scored 70 — the system was quietly telling the hardest workers in the
+company that they were the worst performers.</p>
+<p>So the rate is credited against the load actually carried, counted in priority
+weights: a High task is worth three Low ones. Load counts three things — work
+closed, work in hand at half weight, and the approvals and reviews cleared for
+other people. A manager who spends the month unblocking their team is not idle.</p>
+<p>The expectation is set per person from their WIP limit, so a part-time or
+deliberately low-volume role is measured against its own bar rather than against
+the busiest desk in the building. Credit is capped at a full load, so carrying
+double does not make 200 — and cutting work into more pieces cannot carry anybody
+past a complete score.</p>
+
+<h2>What the rate is made of</h2>
+<table>
+<thead><tr><th>Component</th><th>Weight</th><th>What it measures</th></tr></thead>
+<tbody>
+<tr><td>On-time delivery</td><td>35–45%</td><td>Handed in by the date, weighted by priority</td></tr>
+<tr><td>First-pass quality</td><td>25–30%</td><td>How often work was sent back for rework</td></tr>
+<tr><td>Queue health</td><td>20–25%</td><td>Open work that is running late</td></tr>
+<tr><td>Project milestones</td><td>20%</td><td>Stage deadlines met (only if you run projects)</td></tr>
+</tbody></table>
+
+<h2>Managers are measured too</h2>
+<p>A team marked down for lateness their own manager caused is the fastest way to
+make a workforce stop believing any number you show them. Holding an approval or
+a review costs score, counted in working days from the moment it landed on that
+person's desk — not from the task's deadline, so work handed in early that then
+waits a fortnight is counted properly. Two working days is the expected
+turnaround; beyond that it is two points a day, capped at ten per item and twenty
+overall, because one oversight should not destroy a record.</p>
+
+<h2>Four rules that make it fair</h2>
+<ul>
+<li><strong>Leave is never lateness.</strong> Weekends, company holidays and that
+person's own approved leave are excluded everywhere a day is counted.</li>
+<li><strong>Nobody wears somebody else's slip.</strong> If the stage before yours
+overran, you get back the window the plan gave you, counted from the day you were
+actually released.</li>
+<li><strong>The doer is not punished for a slow review.</strong> Delivery is
+measured from when work was handed in, not when it was signed off.</li>
+<li><strong>0 to 100, always.</strong> Everybody starts at zero and earns it.</li>
+</ul>
+
+<h2>Why the working is shown</h2>
+<p>Every deduction and every gain appears with the item that caused it, the days
+involved and the points. A score nobody can see the derivation of is a score
+people quietly ignore — and they are right to.</p>
+${cta('Measure a month of real work and see what it says.')}`,
+  },
+
+  /* ------------------------------------------------------------ KRA and KPI */
+  {
+    slug: 'kra-kpi-format',
+    title: 'KRA and KPI format for employees, with examples',
+    h1: 'KRA and KPI format for employees (with real examples)',
+    description: 'What a KRA is, how it differs from a KPI, and a format you can use — with worked examples for production, quality, purchase, sales, accounts and HR roles in an Indian SME.',
+    answer: 'A KRA (Key Result Area) is the part of the job a person is answerable for, such as inventory accuracy. A KPI (Key Performance Indicator) is the number that shows whether they met it, such as count variance under 2%. A workable format gives each person 3 to 5 KRAs, weights that add up to 100, and for each a target, a unit and how it is measured.',
+    changefreq: 'yearly', priority: '0.8',
+    faq: [
+      ['What is the difference between a KRA and a KPI?', 'A KRA is the area somebody is answerable for — "Inventory Accuracy". A KPI is the number that settles whether they met it — "count variance under 2%". One is the responsibility, the other is the measurement.'],
+      ['How many KRAs should one person have?', 'Three to five. Beyond that the weights get so small that nothing moves the score, and the appraisal becomes a form-filling exercise.'],
+      ['Should KRA weights add up to 100?', 'Yes. If they add to less, part of the person’s job is unmeasured; if they add to more, the arithmetic is wrong and the score will be disputed.'],
+      ['Does every KRA need a numeric target?', 'No. Plenty of real responsibilities — keeping the plant audit-ready, holding a team together — are judged rather than counted. Say so explicitly instead of inventing a number to fill the box.'],
+    ],
+    body: `
+<p class="lede">A KRA is the area somebody is answerable for. A KPI is the number
+that settles whether they met it. Most appraisal arguments in a small company come
+from having the first without the second.</p>
+
+<h2>The format</h2>
+<p>Six columns. Nothing else is needed, and anything more gets left blank.</p>
+<table>
+<thead><tr><th>Column</th><th>What goes in it</th></tr></thead>
+<tbody>
+<tr><td>KRA</td><td>The area of responsibility. "Vendor Quality", not "do vendor work"</td></tr>
+<tr><td>Weight</td><td>Its share of this person's job, as a percentage. All KRAs add to 100</td></tr>
+<tr><td>KPI target</td><td>The number that settles it. Leave blank where the result is judged</td></tr>
+<tr><td>Unit</td><td>%, days, count, ₹, ratio</td></tr>
+<tr><td>Direction</td><td>Higher is better / lower is better / on target</td></tr>
+<tr><td>How measured</td><td>The report or record the number comes from</td></tr>
+</tbody></table>
+<p>That last column is the one people skip and the one that prevents the argument.
+If nobody can say where the number comes from, the rating is an opinion.</p>
+
+<h2>Worked examples</h2>
+
+<h3>Production supervisor</h3>
+<table>
+<thead><tr><th>KRA</th><th>Weight</th><th>Target</th><th>Direction</th><th>How measured</th></tr></thead>
+<tbody>
+<tr><td>Plan adherence</td><td>35%</td><td>95%</td><td>Higher is better</td><td>Daily production plan vs actual</td></tr>
+<tr><td>Rejection control</td><td>30%</td><td>2%</td><td>Lower is better</td><td>Monthly rejection report</td></tr>
+<tr><td>Downtime</td><td>20%</td><td>4 hours</td><td>Lower is better</td><td>Machine log</td></tr>
+<tr><td>Housekeeping and safety</td><td>15%</td><td>—</td><td>On target</td><td>Weekly 5S audit, judged</td></tr>
+</tbody></table>
+
+<h3>Quality engineer</h3>
+<table>
+<thead><tr><th>KRA</th><th>Weight</th><th>Target</th><th>Direction</th><th>How measured</th></tr></thead>
+<tbody>
+<tr><td>Customer complaints closed within SLA</td><td>35%</td><td>90%</td><td>Higher is better</td><td>CRM closure report</td></tr>
+<tr><td>Supplier CAPA closure</td><td>25%</td><td>15 days</td><td>Lower is better</td><td>CAPA register</td></tr>
+<tr><td>Audit findings closed</td><td>25%</td><td>100%</td><td>Higher is better</td><td>Internal audit tracker</td></tr>
+<tr><td>Calibration compliance</td><td>15%</td><td>100%</td><td>Higher is better</td><td>Calibration schedule</td></tr>
+</tbody></table>
+
+<h3>Purchase executive</h3>
+<table>
+<thead><tr><th>KRA</th><th>Weight</th><th>Target</th><th>Direction</th><th>How measured</th></tr></thead>
+<tbody>
+<tr><td>Cost savings</td><td>30%</td><td>₹5,00,000</td><td>Higher is better</td><td>Negotiated vs last rate</td></tr>
+<tr><td>On-time material availability</td><td>30%</td><td>98%</td><td>Higher is better</td><td>Stock-out register</td></tr>
+<tr><td>Vendor rating</td><td>20%</td><td>85</td><td>Higher is better</td><td>Quarterly vendor scorecard</td></tr>
+<tr><td>PO cycle time</td><td>20%</td><td>3 days</td><td>Lower is better</td><td>Indent to PO date</td></tr>
+</tbody></table>
+
+<h3>Accounts executive</h3>
+<table>
+<thead><tr><th>KRA</th><th>Weight</th><th>Target</th><th>Direction</th><th>How measured</th></tr></thead>
+<tbody>
+<tr><td>Receivables over 60 days</td><td>35%</td><td>5%</td><td>Lower is better</td><td>Ageing report</td></tr>
+<tr><td>GST and TDS filed on time</td><td>30%</td><td>100%</td><td>Higher is better</td><td>Portal acknowledgements</td></tr>
+<tr><td>Month-end close</td><td>20%</td><td>5 days</td><td>Lower is better</td><td>Books closed date</td></tr>
+<tr><td>Audit queries resolved</td><td>15%</td><td>—</td><td>On target</td><td>Auditor's list, judged</td></tr>
+</tbody></table>
+
+<h2>Five mistakes that make a KRA sheet useless</h2>
+<ul>
+<li><strong>Weights that do not add to 100.</strong> Part of the job goes
+unmeasured, and the person notices.</li>
+<li><strong>Ten KRAs.</strong> At 10% each, nothing moves the score. Three to five.</li>
+<li><strong>A target with no source.</strong> "Improve quality" is not a target.
+"Rejection under 2%, from the monthly rejection report" is.</li>
+<li><strong>Inventing a number for something that is judged.</strong> Leave the
+target blank and say it is rated on judgement. Pretending otherwise is worse.</li>
+<li><strong>Writing them once and never looking again.</strong> A KRA sheet that
+only appears at appraisal time is a form, not a management tool.</li>
+</ul>
+
+<h2>Doing it without a spreadsheet</h2>
+<p>Domebox holds a KRA set per person with the target, the unit, the direction
+and the measurement source, and a job profile keeps the standard for the next
+hire. The appraisal form then shows each target next to the rating, so the
+conversation is about evidence rather than recollection.</p>
+${cta('Set up your first KRA sheet in ten minutes.')}`,
+  },
+
+  /* ------------------------------------------------------- performance mgmt */
+  {
+    slug: 'employee-performance-management',
+    title: 'Employee performance management in India',
+    h1: 'Employee performance management for a small Indian company',
+    description: 'A practical performance system for a 10 to 300 person Indian business: what to measure, how to keep it fair, and why the yearly appraisal fails.',
+    answer: 'For a 10 to 150 person Indian company, performance management works best when people are scored every month from their actual work record, reviewed formally once or twice a year, and shown the working behind every number. Measure delivery, KRAs and behaviour, leave approved leave and holidays out, and measure managers on how quickly they approve work.',
+    changefreq: 'yearly', priority: '0.8',
+    faq: [
+      ['How often should we appraise people?', 'Score monthly, review formally once or twice a year. A yearly appraisal built from memory mostly reflects the last six weeks, which is why the quiet performer loses.'],
+      ['Should performance be tied to attendance?', 'Only as a small behavioural component. Attendance measures presence, not output, and a system that leans on it rewards the person who sits at their desk over the person who finishes the work.'],
+      ['How do we stop managers rating everyone the same?', 'Make the measured half of the score come from the work record rather than from an opinion, and show the working. A manager who has to rate against a stated target and a visible delivery history has much less room to flatten everybody to "good".'],
+    ],
+    body: `
+<p class="lede">Most small Indian companies measure performance once a year, from
+memory, mostly about the last six weeks. The quiet performer loses, everybody
+knows it, and the exercise slowly loses its meaning.</p>
+
+<h2>What actually needs measuring</h2>
+<p>Three things, and they answer different questions:</p>
+<ul>
+<li><strong>Delivery</strong> — did the work get done, on time, without being sent
+back? This comes from the record, not from an opinion.</li>
+<li><strong>Responsibility</strong> — were the things this person is accountable
+for actually moved? This is the KRA half, and it needs targets.</li>
+<li><strong>Behaviour</strong> — how they work with everybody else. Judged, and
+honest about being judged.</li>
+</ul>
+
+<h2>Why a yearly appraisal fails</h2>
+<p>Not because managers are lazy. Because human memory is recency-weighted, and
+twelve months of work does not fit in it. By the time the form is filled in, the
+only evidence available is what happened recently and what was unusually good or
+bad. Everything steady and reliable in between is invisible — which is precisely
+the behaviour you most want to reward.</p>
+<p>The fix is not more forms. It is recording the work as it happens, so the
+appraisal has something to read.</p>
+
+<h2>Keeping it fair enough to survive contact with the team</h2>
+<p>A performance system fails the first time somebody can point at it and say
+"that is not right". Four rules do most of the work:</p>
+<ul>
+<li><strong>Measure the manager too.</strong> If a manager sits on an approval for
+two weeks, the delay is theirs, not the doer's. A system that only measures
+downwards gets read as a stick.</li>
+<li><strong>Never count approved leave as lateness.</strong> One sanctioned
+fortnight off should not wreck somebody's year.</li>
+<li><strong>Account for volume.</strong> Somebody who finished one easy job should
+not outrank somebody who carried ten and finished seven on time.</li>
+<li><strong>Show the working.</strong> Every number should trace to a named task
+and a date. If it cannot, do not show the number.</li>
+</ul>
+
+<h2>A workable month</h2>
+<ol>
+<li>Work is assigned with an owner, a date and a priority. Nothing lives in a
+WhatsApp thread that scrolls away.</li>
+<li>Completion is claimed by the doer and <em>confirmed</em> by whoever asked for
+it. "Done" is not self-certified.</li>
+<li>Rework is recorded when work is sent back — this is your quality signal and
+it costs nothing extra to collect.</li>
+<li>At month end the delivery half of the score already exists. The manager only
+has to rate the KRAs and the behaviours.</li>
+<li>Recognition happens on the day, not at the review. A thank-you six months
+late is not recognition, it is paperwork.</li>
+</ol>
+
+<h2>What to do first</h2>
+<p>Do not start by writing KRAs for everyone — you will spend three weeks on it
+and the sheets will be out of date by the time you finish. Start by getting the
+work itself written down for one department for one month. The KRAs will write
+themselves once you can see what people actually do.</p>
+${cta('Start with one department and one month of real work.')}`,
+  },
+
+  /* ----------------------------------------------------------- manufacturing */
+  {
+    slug: 'task-management-for-manufacturing',
+    title: 'Task management for manufacturing',
+    h1: 'Task management for a manufacturing company',
+    description: 'Why generic project tools do not fit a factory: recurring calibration and maintenance, staged handovers, visible blockers and a record that stands up at audit.',
+    answer: 'A manufacturing company needs four things most task tools lack: recurring jobs such as calibration and maintenance that create themselves on schedule, sign-off by the person who asked for the work, multi-stage jobs with an owner and a deadline per stage, and a record of every change, with a name and a time, that stands up at an audit.',
+    faq: [
+      ['Can Domebox run calibration and preventive maintenance schedules?', 'Yes. Set a job to repeat daily, weekly, monthly, quarterly or yearly and each occurrence is created on schedule with its owner and due date, whether or not the last one was closed.'],
+      ['Who can mark a factory task as done?', 'The person who did it hands it in, and it is closed only when the person who asked for it verifies it. A rejection needs a reason, and the record keeps both.'],
+      ['Does it help at a quality audit?', 'It gives you the evidence: when each job was raised, who closed it, who verified it and every date change, with a name and a time. It does not certify anything; it keeps the record an auditor asks to see.'],
+    ],
+    changefreq: 'yearly', priority: '0.7',
+    body: `
+<p class="lede">A factory does not run on projects. It runs on a few hundred
+recurring obligations, a handful of things that pass through several hands, and a
+constant stream of problems that have to be closed and evidenced.</p>
+
+<h2>What generic tools get wrong</h2>
+<ul>
+<li><strong>They assume work is one-off.</strong> Most factory work is not.
+Calibration, preventive maintenance, PDI checks, internal audits, stock
+reconciliation — these repeat forever, and a tool where somebody has to remember
+to create next month's is a tool that fails in month three.</li>
+<li><strong>They have no concept of sign-off.</strong> "Done" ticked by the person
+who did it is not how a quality system works. Somebody has to verify.</li>
+<li><strong>They cannot express a handover.</strong> Design, then fabricate, then
+trial, then train — four owners, four dates, each one unable to start until the
+one before finishes.</li>
+<li><strong>They produce no evidence.</strong> At audit time you need to show when
+something was raised, who closed it and when. A board of coloured cards does not.</li>
+</ul>
+
+<h2>What a factory actually needs</h2>
+
+<h3>Recurring work that survives being forgotten</h3>
+<p>Daily, weekly, monthly, quarterly, yearly. The next occurrence should be
+created on a schedule, not only when somebody closes the last one — otherwise one
+missed calibration quietly ends the series, and nobody notices until the auditor
+does.</p>
+
+<h3>Multi-stage jobs with a deadline per stage</h3>
+<p>A fixture upgrade is design (5 days) → fabricate and trial (15 days) → train
+the operators (10 days), with three different owners. Each stage opens when the
+one before it is signed off, and the person it lands on is told. If fabrication
+overruns, training's deadline moves with it — the trainer should not be marked
+down for a delay upstream of them.</p>
+
+<h3>Blockers that are visible</h3>
+<p>Rejection analysis cannot start until the vendor audit is finished. Saying so
+in the system means the rejection task is not sitting in somebody's to-do list
+accusing them of being slow.</p>
+
+<h3>A record that stands up at audit</h3>
+<p>Every status change, approval, rejection reason and date change kept with a
+timestamp and a name against it.</p>
+
+<h2>Categories that match a plant</h2>
+<p>NPD, PQC, PDI, IQC, maintenance, production plan, purchase, supplier, SCM,
+inventory plan, systems — out of the box, and editable, because every plant names
+these slightly differently.</p>
+${cta('Run one line or one department for a month.')}`,
+  },
+
+  /* ------------------------------------------------------------ alternatives */
+  {
+    slug: 'alternatives',
+    title: 'Compared with Monday, Trello and Asana',
+    h1: 'How Domebox compares',
+    description: 'An honest comparison with Monday.com, Trello, Asana and a spreadsheet for an Indian SME — including where one of the others is the better buy.',
+    answer: 'Trello is the better free board for a few people, Monday.com suits deep customisation, and Asana or Jira suit software teams. Domebox fits an Indian SME that wants work tracked and people measured in one place, priced in INR: ₹5,999 a month covers 50 people, with KRAs, appraisals and scoring included.',
+    faq: [
+      ['Is Domebox cheaper than Monday.com or Asana for an Indian team?', 'Usually, for a team of any size. Domebox is priced in INR by team size (₹5,999 a month for 50 people) with every feature included, while those tools mostly charge per seat in US dollars.'],
+      ['Can Domebox replace an HRMS?', 'No. An HRMS handles payroll, attendance and compliance. Domebox handles the work and the performance record, and many companies run both.'],
+      ['Is there a free option?', 'Yes. Domebox is free for up to 5 users with no time limit, and any company can try the full Growth plan free for 14 days with no card.'],
+    ],
+    changefreq: 'yearly', priority: '0.7',
+    body: `
+<p class="lede">Written to be useful rather than flattering. There are places on
+this page where the answer is "use the other one".</p>
+
+<h2>The short version</h2>
+<table>
+<thead><tr><th>If you want…</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td>A free board for a handful of people, nothing more</td><td>Trello</td></tr>
+<tr><td>Deep customisation and you have someone to maintain it</td><td>Monday.com</td></tr>
+<tr><td>Software-team workflows, sprints and dependencies</td><td>Asana or Jira</td></tr>
+<tr><td>Work tracked <em>and</em> people measured, priced in INR</td><td>Domebox</td></tr>
+<tr><td>Fewer than 5 people and no process yet</td><td>A spreadsheet, honestly</td></tr>
+</tbody></table>
+
+<h2>Against a spreadsheet</h2>
+<p>A spreadsheet is free, everybody can already use it, and for a team of four it
+is genuinely fine. It stops working when you need two things it cannot do:
+somebody other than the owner updating it reliably, and a history of what changed
+and when. If your sheet has a "Status" column that is three weeks stale, you have
+already found the limit.</p>
+
+<h2>Against Trello</h2>
+<p>Trello is a better pure board than ours, and its free plan is enough for a
+small team. What it is not built for is a sign-off step before work counts as
+done, or any notion of performance: recurring cards and automation exist, but
+there is no score, no KRAs and no appraisal. If all you need is to see who has
+what, Trello is the cheaper answer and we would rather you knew that.</p>
+
+<h2>Against Monday.com and Asana</h2>
+<p>Both are more configurable than Domebox and both have far bigger ecosystems.
+Two practical differences for an Indian SME:</p>
+<ul>
+<li><strong>Price.</strong> Both are priced per seat, mostly in US dollars; for a
+50-person company on their business tiers that typically comes to a few lakh rupees
+a year (check their current price pages). Domebox Growth covers 50 people at ₹59,990
+a year.</li>
+<li><strong>Appraisals.</strong> Asana has goals, and both can track OKR-style
+targets, but neither produces a performance score built from each person's work
+record, or holds KRAs and appraisals. You would still need a second tool for that,
+or a spreadsheet.</li>
+</ul>
+<p>If your constraint is workflow complexity rather than cost, buy Monday. If your
+constraint is "I cannot tell who is actually delivering", that is what we built.</p>
+
+<h2>Against a full HRMS</h2>
+<p>An HRMS handles payroll, attendance, leave and compliance, and does it far
+better than we ever will. It usually treats performance as a form to fill in once
+a year. Domebox is the opposite: it is weak on payroll and strong on what
+actually happened week to week. Many customers run both.</p>
+
+<h2>Where Domebox is genuinely different</h2>
+<ul>
+<li>A performance score built from the task record rather than from memory, with
+the working shown for every number.</li>
+<li>Managers are measured on the approvals they hold, not just doers on delivery.</li>
+<li>KRA, KPI and appraisal in the same place as the work they are measuring.</li>
+<li>Priced in INR, for team size, with the whole product in every paid plan.</li>
+</ul>
+${cta('Fourteen days of the full product is enough to compare it properly.')}`,
+  },
+
+  /* -------------------------------------------------------------- partners */
+  {
+    slug: 'partners',
+    title: 'Partner programme and Refer & earn',
+    h1: 'Refer a company to Domebox and earn',
+    description: 'Anyone can earn 10% of what a company they refer pays for Domebox, for as long as it stays a customer. CA firms and consultants earn 20% as partners.',
+    answer: 'Anyone can get a free Domebox referral link, customer or not. When a company signs up through it and pays, you earn 10% of the package it pays for, before GST, every time it pays, for as long as it stays a customer. CA firms and consultants can join the partner programme instead, at 20%. Both come with a private dashboard of companies, earnings and payouts.',
+    changefreq: 'monthly', priority: '0.6',
+    faq: [
+      ['How do I get a referral link?', 'Open www.domebox.in/?refer=1, enter your name and email, and your link and private dashboard are emailed to you at once. If you already use Domebox, it is under your name, Refer a company.'],
+      ['How much does a referrer earn?', '10% of the package the company pays for, before GST, on every payment, for as long as it stays a paying customer. A company on Team at ₹999 a month earns you about ₹100 every month; one on Growth at ₹5,999, about ₹600.'],
+      ['How much does a partner earn?', '20% of every payment a company you brought in makes, before GST, for as long as it stays a customer. A 50-person company on Growth at ₹5,999 a month earns you about ₹1,200 every month.'],
+      ['How are partners paid?', 'By bank transfer or UPI, once your unpaid commission reaches ₹2,500; below that it carries over to the next payout. It is shown as due on your dashboard. Every payment and every payout is listed there, so there is nothing to reconcile by hand.'],
+      ['Who can become a partner?', 'Anyone who advises small Indian businesses: chartered accountants, ISO, IATF and quality consultants, HR and management advisors, software resellers. There is no fee and no target.'],
+      ['Does my client pay more because I referred them?', 'No. They pay the same published price, get the same 14-day free trial, and you can help them set up if you like.'],
+    ],
+    body: `
+<h2>Refer & earn: anyone, 10%</h2>
+<p>You do not need to be a customer or a consultant. Get your own link, share it
+with any business that would run better on Domebox, and earn <strong>10% of the
+package it pays for</strong> (before GST), every time it pays, <strong>for as long
+as it stays a paying customer</strong>. Paid to your UPI or bank once your
+balance reaches ₹2,500 (until then it carries over).</p>
+<div class="cta"><p><strong>Get your referral link — free, takes a minute.</strong></p>
+     <a class="btn" href="https://www.domebox.in/?refer=1">Get my referral link</a>
+     <p class="fine">Already using Domebox? Click your name, then Refer a company.</p></div>
+
+<h2>Partner programme: CA firms and consultants, 20%</h2>
+<p class="lede">You already advise the businesses Domebox is built for. When one of
+them starts running its work on Domebox because you suggested it, you share in
+what it pays — every month, not once.</p>
+
+<h2>How it works</h2>
+<ol>
+<li><strong>Write to us</strong> at <a href="mailto:${C.supportEmail}?subject=Partner%20programme">${C.supportEmail}</a>
+with your name, firm and phone number, and we send you your links.</li>
+<li><strong>You get your own link</strong> to share, and a private dashboard.</li>
+<li><strong>Your client signs up through the link</strong> and gets the full 14-day free trial, as anyone does.</li>
+<li><strong>Every time they pay, 20% of it is yours</strong> (before GST), shown on your dashboard, paid to your bank or UPI.</li>
+</ol>
+
+<h2>Who it is for</h2>
+<ul>
+<li><strong>CA and accounting firms</strong> whose clients ask how to get their teams to deliver on time.</li>
+<li><strong>ISO, IATF and quality consultants</strong>: Domebox keeps the record an auditor asks for — who did what, when, and who verified it.</li>
+<li><strong>HR and management advisors</strong> setting up KRAs, KPIs and appraisals that are backed by real work.</li>
+</ul>
+
+<h2>What your clients get</h2>
+<p>Task, team and performance management built for Indian MSMEs: one owner and a
+due date for every job, closed only when it is verified, recurring jobs that do
+not get forgotten, and a monthly score each person can check task by task.
+<a href="/features">See the features</a> or <a href="/pricing">the prices</a>.</p>
+${cta('Try it yourself first: the full product for 14 days, free.')}`,
+  },
+
+  /* ------------------------------------------------------------- guide index */
+  {
+    slug: 'guides',
+    title: 'Guides',
+    h1: 'Guides',
+    description: 'Practical guides on KRAs and KPIs, employee performance management, and running task management in an Indian manufacturing or services business.',
+    answer: 'Start with the work, not the paperwork: put one department’s jobs on a board with an owner and a due date for a month, write KRAs from what people actually do, then use that record at appraisal time. These guides cover the KRA and KPI format, employee performance management, and task management in a factory.',
+    changefreq: 'monthly', priority: '0.6',
+    faq: [
+      ['Where should I start?', 'With the work itself, for one department, for one month. Writing KRAs for everybody first takes three weeks and the sheets are stale before you finish — once you can see what people actually do, the KRAs write themselves.'],
+      ['Do I need all of this to begin?', 'No. A board with owners and dates is useful on day one. Scoring needs about a month of real data before it says anything you should act on, and the appraisal piece only matters at review time.'],
+    ],
+    body: `
+<p class="lede">Written for the person who has to make this work on Monday
+morning, not for a conference talk.</p>
+
+<h2>The order that actually works</h2>
+<p>Most attempts to put a system around work in a small company fail in the same
+way: somebody starts by designing the measurement. Three weeks go into KRA
+sheets, weights and rating scales, and by the time it is finished nobody has
+changed how a single task gets assigned — so there is nothing to measure, and the
+sheets quietly go in a drawer.</p>
+<p>The order that survives is the other way round:</p>
+<ol>
+<li><strong>Get the work written down.</strong> One department, one month. Every
+job has an owner, a date and a priority, and "done" is confirmed by whoever asked
+for it rather than by whoever did it. Nothing else matters until this is
+habitual.</li>
+<li><strong>Let the record accumulate.</strong> After a few weeks you have
+something no spreadsheet gives you: what was actually promised, what arrived on
+time, and what came back for rework. That is most of a performance picture, and
+it cost nobody any extra effort to collect.</li>
+<li><strong>Write the KRAs from what you can now see.</strong> They will be
+shorter, more concrete and far easier to agree, because you are describing
+observed work rather than imagining it.</li>
+<li><strong>Only then, appraise.</strong> With the delivery half already measured,
+the conversation is about the judged half — which is the part a manager is
+genuinely needed for.</li>
+</ol>
+<p>The guides below follow that sequence. If you read one, read the first.</p>
+
+<div class="cards">
+  <a class="card" href="/kra-kpi-format"><strong>KRA and KPI format, with examples</strong>
+  <span>What goes in each column, worked examples for production, quality,
+  purchase and accounts, and the five mistakes that make a KRA sheet useless.</span></a>
+
+  <a class="card" href="/employee-performance-management"><strong>Performance management for a small Indian company</strong>
+  <span>What to measure, why the yearly appraisal fails, and the four rules that
+  keep a system fair enough to survive contact with the team.</span></a>
+
+  <a class="card" href="/delegation-score"><strong>How the delegation score works</strong>
+  <span>Why a rate on its own is misleading, how load is credited, and how
+  managers are held to the approvals they sit on.</span></a>
+
+  <a class="card" href="/task-management-for-manufacturing"><strong>Task management for a manufacturing company</strong>
+  <span>Why generic project tools do not fit a factory, and what recurring work,
+  staged handovers and audit evidence actually need.</span></a>
+
+  <a class="card" href="/alternatives"><strong>Compared with Monday, Trello, Asana and a spreadsheet</strong>
+  <span>An honest comparison, including the cases where one of the others is the
+  better buy.</span></a>
+</div>
+
+<h2>A note on measuring people</h2>
+<p>Every system on this page can be used badly. The failure mode is always the
+same: a number appears, somebody cannot see where it came from, and within two
+months the whole exercise is being quietly worked around rather than used.</p>
+<p>Three things prevent it, and none of them are technical. Measure the managers
+as well as the doers, so the system is not read as a stick pointing one way.
+Never count sanctioned leave against anybody. And show the working behind every
+figure, every time — if you cannot explain how a number was reached, do not put
+it in front of the person it describes.</p>
+${cta('Start with one department and a month of real work.')}`,
+  },
+  ];
+};

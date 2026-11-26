@@ -39,7 +39,10 @@ next-env.d.ts
 
 .genkit/*
 .env*
+!.env.example
 
 # firebase
 firebase-debug.log
 firestore-debug.log
+# Built by netlify/package-static.js for drag-and-drop upload
+dist/netlify-upload/
