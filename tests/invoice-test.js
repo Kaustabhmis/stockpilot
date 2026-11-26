@@ -86,6 +86,20 @@ ok('the supplier address is on it', /12 Park Street/.test(doc[0].html));
 ok('the SAC is on it', /998314/.test(doc[0].html));
 ok('the amount in words is on it', /Rupees .*Only/.test(doc[0].html), (doc[0].html.match(/Rupees [^<]*/) || [])[0]);
 ok('the payment reference is on it', doc[0].html.indexOf('pay_' + R + '_1') > -1);
+console.log('\n=== every particular GST Rule 46 asks for ===');
+const H = doc[0].html, plain = H.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+const num = (plain.match(/Invoice no\. (\S+)/) || [])[1] || '';
+ok('serial number of at most 16 characters, unique in the financial year', num.length > 0 && num.length <= 16 && /^[A-Z0-9-]+\/\d\d-\d\d\/\d{4}$/.test(num), num);
+ok('marked Original for Recipient', /ORIGINAL FOR RECIPIENT/.test(plain));
+ok('date of issue, Indian style', /Invoice date \d\d-\d\d-\d{4}/.test(plain));
+ok('supplier name, address, state and code, GSTIN', /Supplier/.test(plain) && /State code 19/.test(plain) && /GSTIN: 19AABCB1234C1ZQ/.test(plain));
+ok('recipient name and address, and "Unregistered" when they have no GSTIN', /Recipient \(billed to\)/.test(plain) && /GSTIN: Unregistered/.test(plain), plain.slice(0, 600));
+ok('place of supply shown, even when it still has to be confirmed', /Place of supply: (to be confirmed|.+State code)/.test(plain));
+ok('whether tax is payable on reverse charge', /Reverse charge: No/.test(plain));
+ok('description, SAC, quantity, taxable value, each tax rate and amount', /Description of service/.test(plain) && /SAC/.test(plain) && /Qty/.test(plain) &&
+   /Taxable value/.test(plain) && /(CGST 9%[\s\S]*SGST 9%|IGST 18%)/.test(plain));
+ok('total and total tax', /Total tax ₹/.test(plain) && /Invoice total ₹/.test(plain));
+ok('signed for the supplier, by an authorised signatory', /For BISCS India[^]*Authorised signatory/.test(plain) && /does not require a physical signature/.test(plain));
 ok('a receipt went out as well as the invoice',
    sent.some((m) => /payment receipt/i.test(m.subject)));
 
@@ -181,6 +195,17 @@ ok('the taxable value is the whole amount', i4.taxable === i4.total, i4.taxable 
 const d4 = env.mails.slice(before).filter((m) => /invoice/i.test(m.subject) && m.to === email)[0];
 ok('it is not called a tax invoice', !/Tax invoice/.test(d4.subject), d4.subject);
 ok('and it says plainly why no tax was charged', /not registered under GST/.test(d4.html));
+ok('and shows no reverse-charge or tax columns', !/Reverse charge/.test(d4.html) && !/CGST/.test(d4.html) && /GSTIN: Not registered/.test(d4.html));
+env.props.SELLER_LEGAL_NAME = 'BISCS India LLP'; env.props.SELLER_REG_NO = 'ACB-1234';
+pay(sheetId, 'Starter', 'Acme Engineering', 249900, 'pay_' + R + '_4b');
+const d5 = env.mails.filter((m) => /invoice/i.test(m.subject) && m.to === email).pop();
+ok('an LLP shows its LLPIN and says it is a limited liability partnership', /LLPIN: ACB-1234/.test(d5.html) && /is a limited liability partnership/.test(d5.html));
+delete env.props.SELLER_REG_NO; delete env.props.SELLER_LEGAL_NAME;
+env.props.INVOICE_PREFIX = 'BISCSINDIA/DOMEBOX';
+pay(sheetId, 'Starter', 'Acme Engineering', 249900, 'pay_' + R + '_4c');
+const n6 = (call({ action: 'getInvoices', token: A }).invoices[0] || {}).number || '';
+ok('a long prefix is cut so the number never passes 16 characters', n6.length <= 16 && /^BISCS\//.test(n6), n6);
+delete env.props.INVOICE_PREFIX;
 env.props.SELLER_GSTIN = '19AABCB1234C1ZQ';
 
 console.log('\n=== the checkout charges what the invoice will show ===');

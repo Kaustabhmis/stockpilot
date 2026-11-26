@@ -56,7 +56,11 @@ function sellerIdentity_() {
     stateCode: gstin ? gstin.slice(0, 2) : String(p.getProperty('SELLER_STATE_CODE') || '').trim(),
     email:     CFG().mailFrom,
     phone:     p.getProperty('SELLER_PHONE') || '',
-    prefix:    p.getProperty('INVOICE_PREFIX') || 'BISCS',
+    /* Rule 46(b): the serial is at most 16 characters. PREFIX/YY-YY/NNNN leaves 5 for the prefix. */
+    prefix:    String(p.getProperty('INVOICE_PREFIX') || 'BISCS').replace(/[^A-Za-z0-9-]/g, '').slice(0, 5) || 'BISCS',
+    /* The LLP Act (s.21) wants the LLPIN and the words "limited liability partnership" on invoices. */
+    regNo:     String(p.getProperty('SELLER_REG_NO') || '').trim(),
+    regLabel:  p.getProperty('SELLER_REG_LABEL') || (/\bLLP\b/i.test(p.getProperty('SELLER_LEGAL_NAME') || '') ? 'LLPIN' : 'Registration no.'),
     sac:       p.getProperty('SAC_CODE') || SAC_SOFTWARE,
     /* No GSTIN means not registered, which means charging GST would be an
        offence rather than an oversight. The rate follows the registration. */
@@ -337,58 +341,99 @@ function invRow_(label, value, strong) {
     (strong ? ';font-weight:800;font-size:15px' : '') + '">' + esc_(value) + '</td></tr>';
 }
 
+/** 2026-11-26 -> 26-11-2026, the way Indian invoices write dates. */
+function invDate_(ymdStr) {
+  var m = String(ymdStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3] + '-' + m[2] + '-' + m[1] : String(ymdStr || '');
+}
+
+/**
+ * The invoice, laid out with every particular Rule 46 of the CGST Rules asks
+ * for: supplier name, address and GSTIN; a serial of at most 16 characters,
+ * unique in the financial year; the date; the recipient's name, address and
+ * GSTIN (or "Unregistered"), with state name and code; the SAC, description,
+ * quantity, taxable value, the rate and amount of each tax; place of supply
+ * with state name and code; whether tax is payable on reverse charge; the
+ * total in words; and the supplier's authorised signatory. Marked "Original
+ * for Recipient". Until the seller is registered it is an ordinary invoice
+ * with no tax, saying so.
+ */
 function invoiceHtml_(inv) {
-  var s = inv.seller, sp = inv.split;
-  var title = s.registered ? 'Tax Invoice' : 'Invoice';
+  var s = inv.seller, sp = inv.split, reg = s.registered;
+  var title = reg ? 'Tax Invoice' : 'Invoice';
+  var th = 'padding:7px 8px;font-size:11px;color:#374151;text-transform:uppercase;letter-spacing:.04em;background:#f3f4f6;border:1px solid #e5e7eb;text-align:';
+  var td = 'padding:7px 8px;font-size:13px;border:1px solid #e5e7eb;vertical-align:top;text-align:';
+  var lab = '<div style="color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px">';
+  var stateLine = function (name, code) { return name ? esc_(name) + (code ? ' (State code ' + esc_(code) + ')' : '') : ''; };
 
-  var taxLines = '';
-  if (sp.rate) {
-    taxLines = sp.igst
-      ? invRow_('IGST @ ' + sp.rate + '%', '₹' + rupees_(sp.igst))
-      : invRow_('CGST @ ' + (sp.rate / 2) + '%', '₹' + rupees_(sp.cgst)) +
-        invRow_('SGST @ ' + (sp.rate / 2) + '%', '₹' + rupees_(sp.sgst));
-  }
+  var head = '<table style="width:100%;font-size:13px;border-collapse:collapse;margin:6px 0 14px"><tr style="vertical-align:top">' +
+    '<td style="padding-right:12px">' +
+      '<div style="font-size:18px;font-weight:900">' + esc_(title) + '</div>' +
+      '<div style="font-size:11px;font-weight:800;color:#6b7280;letter-spacing:.06em">ORIGINAL FOR RECIPIENT</div></td>' +
+    '<td style="text-align:right">' +
+      '<div>Invoice no. <b>' + esc_(inv.number) + '</b></div>' +
+      '<div>Invoice date <b>' + esc_(invDate_(inv.date)) + '</b></div>' +
+      (reg ? '<div>Reverse charge: <b>No</b></div>' : '') + '</td></tr></table>';
 
-  var party = '<table style="width:100%;font-size:13px;margin:18px 0"><tr style="vertical-align:top">' +
-    '<td style="width:50%;padding-right:12px">' +
-      '<div style="color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:800">From</div>' +
-      '<div style="font-weight:800;margin-top:4px">' + esc_(s.legalName) + '</div>' +
+  var party = '<table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:14px"><tr style="vertical-align:top">' +
+    '<td style="width:50%;padding:10px;border:1px solid #e5e7eb">' + lab + 'Supplier</div>' +
+      '<div style="font-weight:800">' + esc_(s.legalName) + '</div>' +
       (s.address ? '<div>' + esc_(s.address) + '</div>' : '') +
-      (s.gstin ? '<div>GSTIN: <strong>' + esc_(s.gstin) + '</strong></div>' : '') +
+      (s.state ? '<div>' + stateLine(s.state, s.stateCode) + '</div>' : '') +
+      (s.gstin ? '<div>GSTIN: <b>' + esc_(s.gstin) + '</b></div>' : '<div>GSTIN: Not registered</div>') +
       (s.pan ? '<div>PAN: ' + esc_(s.pan) + '</div>' : '') +
-      (s.state ? '<div>State: ' + esc_(s.state) + (s.stateCode ? ' (' + esc_(s.stateCode) + ')' : '') + '</div>' : '') +
-      '<div>' + esc_(s.email) + '</div></td>' +
-    '<td style="width:50%">' +
-      '<div style="color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:800">Billed to</div>' +
-      '<div style="font-weight:800;margin-top:4px">' + esc_(inv.legalName) + '</div>' +
+      (s.regNo ? '<div>' + esc_(s.regLabel) + ': ' + esc_(s.regNo) + '</div>' : '') +
+      '<div>' + esc_(s.email) + (s.phone ? ' · ' + esc_(s.phone) : '') + '</div></td>' +
+    '<td style="width:50%;padding:10px;border:1px solid #e5e7eb">' + lab + 'Recipient (billed to)</div>' +
+      '<div style="font-weight:800">' + esc_(inv.legalName) + '</div>' +
       (inv.address ? '<div>' + esc_(inv.address) + '</div>' : '') +
-      (inv.buyerGstin ? '<div>GSTIN: <strong>' + esc_(inv.buyerGstin) + '</strong></div>' : '') +
-      (inv.placeOfSupply ? '<div>Place of supply: ' + esc_(inv.placeOfSupply) +
-        (inv.stateCode ? ' (' + esc_(inv.stateCode) + ')' : '') + '</div>' : '') +
+      (inv.placeOfSupply ? '<div>' + stateLine(inv.placeOfSupply, inv.stateCode) + '</div>' : '') +
+      '<div>GSTIN: ' + (inv.buyerGstin ? '<b>' + esc_(inv.buyerGstin) + '</b>' : 'Unregistered') + '</div>' +
+      (reg ? '<div style="margin-top:6px">Place of supply: <b>' + (inv.placeOfSupply ? stateLine(inv.placeOfSupply, inv.stateCode) : 'to be confirmed') + '</b></div>' : '') +
     '</td></tr></table>';
 
-  return mailShell_(title + ' ' + inv.number,
-    '<p>Thank you — your payment has been received. This is your ' +
-      (s.registered ? 'GST invoice' : 'invoice') + ', and it is also saved against your account.</p>' +
-    party +
-    '<table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #eee;border-radius:8px">' +
-      '<tr><td style="padding:7px 12px;color:#6b7280;border-bottom:1px solid #eee">Invoice number</td>' +
-        '<td style="padding:7px 12px;text-align:right;border-bottom:1px solid #eee;font-weight:800">' + esc_(inv.number) + '</td></tr>' +
-      invRow_('Invoice date', inv.date) +
-      invRow_('Description', 'Domebox — ' + inv.plan + ' subscription') +
-      invRow_('SAC', s.sac) +
-      invRow_('Subscription period', inv.period) +
-      invRow_(s.registered ? 'Taxable value' : 'Amount', '₹' + rupees_(sp.taxable)) +
-      taxLines +
-      invRow_('Total paid', '₹' + rupees_(sp.gross), true) +
-      invRow_('Amount in words', inv.words) +
-      invRow_('Payment reference', inv.paymentId) +
-    '</table>' +
-    (s.registered ? '' :
+  var taxCols = !reg ? '' : sp.igst
+    ? '<th style="' + th + 'right">IGST ' + sp.rate + '%</th>'
+    : '<th style="' + th + 'right">CGST ' + (sp.rate / 2) + '%</th><th style="' + th + 'right">SGST ' + (sp.rate / 2) + '%</th>';
+  var taxCells = !reg ? '' : sp.igst
+    ? '<td style="' + td + 'right">' + rupees_(sp.igst) + '</td>'
+    : '<td style="' + td + 'right">' + rupees_(sp.cgst) + '</td><td style="' + td + 'right">' + rupees_(sp.sgst) + '</td>';
+  var items = '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">' +
+    '<tr><th style="' + th + 'left">#</th><th style="' + th + 'left">Description of service</th><th style="' + th + 'left">SAC</th>' +
+      '<th style="' + th + 'right">Qty</th><th style="' + th + 'right">' + (reg ? 'Taxable value (₹)' : 'Amount (₹)') + '</th>' + taxCols +
+      '<th style="' + th + 'right">Total (₹)</th></tr>' +
+    '<tr><td style="' + td + 'left">1</td>' +
+      '<td style="' + td + 'left">Domebox — ' + esc_(inv.plan) + ' plan, software subscription<br>' +
+        '<span style="color:#6b7280;font-size:12px">Period ' + esc_(String(inv.period || '').split(' to ').map(invDate_).join(' to ')) + '</span></td>' +
+      '<td style="' + td + 'left">' + esc_(s.sac) + '</td>' +
+      '<td style="' + td + 'right">1</td>' +
+      '<td style="' + td + 'right">' + rupees_(sp.taxable) + '</td>' + taxCells +
+      '<td style="' + td + 'right"><b>' + rupees_(sp.gross) + '</b></td></tr></table>';
+
+  var totals = '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">' +
+    invRow_(reg ? 'Total taxable value' : 'Total value', '₹' + rupees_(sp.taxable)) +
+    (reg ? (sp.igst ? invRow_('IGST @ ' + sp.rate + '%', '₹' + rupees_(sp.igst))
+                    : invRow_('CGST @ ' + (sp.rate / 2) + '%', '₹' + rupees_(sp.cgst)) + invRow_('SGST @ ' + (sp.rate / 2) + '%', '₹' + rupees_(sp.sgst))) +
+           invRow_('Total tax', '₹' + rupees_(sp.tax)) : '') +
+    invRow_('Invoice total', '₹' + rupees_(sp.gross), true) +
+    invRow_('Amount in words', inv.words) +
+    invRow_('Payment', 'Received in full online · ref ' + inv.paymentId) +
+    '</table>';
+
+  var notes = (reg ? '' :
       '<p style="font-size:12px;color:#6b7280">' + esc_(s.legalName) +
-      ' is not registered under GST, so no tax has been charged and none may be claimed on this invoice.</p>') +
-    '<p style="font-size:12px;color:#6b7280">Computer generated — valid without a signature. ' +
-      'Something wrong on it? Reply to this email and we will reissue it.</p>');
+      ' is not registered under GST, so no GST has been charged and no input tax credit may be claimed on this invoice.</p>') +
+    (s.regNo && /LLPIN/.test(s.regLabel) ? '<p style="font-size:12px;color:#6b7280">' + esc_(s.legalName) +
+      ' is a limited liability partnership, ' + esc_(s.regLabel) + ' ' + esc_(s.regNo) + '.</p>' : '') +
+    '<table style="width:100%;font-size:12px;margin-top:6px"><tr style="vertical-align:bottom">' +
+      '<td style="color:#6b7280">This is a computer-generated invoice issued electronically and does not require a physical signature. ' +
+        'Something wrong on it? Reply to this email and we will reissue it.</td>' +
+      '<td style="text-align:right;white-space:nowrap;padding-left:12px">For <b>' + esc_(s.legalName) + '</b><br><br>' +
+        '<span style="color:#6b7280">Authorised signatory</span></td></tr></table>';
+
+  return mailShell_(title + ' ' + inv.number,
+    '<p>Thank you — your payment has been received. This is your ' + (reg ? 'GST tax invoice' : 'invoice') +
+      ', and it is also saved against your account.</p>' + head + party + items + totals + notes);
 }
 
 /** Every invoice this company has been issued, newest first. Admin only: it
@@ -483,7 +528,8 @@ function previewInvoice() {
   out.push('  State       ' + (s.state || 'MISSING') + (s.stateCode ? ' (' + s.stateCode + ')' : ''));
   out.push('  SAC         ' + s.sac);
   out.push('  Tax rate    ' + s.rate + '%');
-  out.push('  Next number ' + nextInvoiceNo_(financialYear_(new Date())));
+  out.push('  ' + (s.regLabel + '           ').slice(0, 11) + ' ' + (s.regNo || (s.regLabel === 'LLPIN' ? 'MISSING — the LLP Act asks for it on invoices (SELLER_REG_NO)' : 'not set')));
+  out.push('  Next number ' + nextInvoiceNo_(financialYear_(new Date())) + '  (at most 16 characters, as GST Rule 46 requires)');
   if (s.registered && !s.stateCode) out.push('  WARNING no seller state code — every invoice will be CGST+SGST.');
   if (!s.address) out.push('  WARNING an invoice without the supplier address is not a valid one.');
   Logger.log(out.join('\n'));
