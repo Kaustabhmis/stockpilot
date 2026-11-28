@@ -845,7 +845,10 @@ label.field{display:flex;flex-direction:column;gap:5px;font-size:.7rem;font-weig
           <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
             <div style="flex:1;min-width:240px"><h3>Leave balances</h3>
               <div class="card-sub" id="leave-balance-sub">Approved days against the annual quota set in Settings</div></div>
-            <button class="ghost sm" id="op-open" onclick="openOpeningBalances()">Set opening balances</button>
+            <button class="sm" id="bal-edit" onclick="startBalanceEdit()">Edit balances</button>
+            <button class="ok sm" id="bal-save" style="display:none" onclick="saveBalanceEdit()">Save changes</button>
+            <button class="ghost sm" id="bal-cancel" style="display:none" onclick="cancelBalanceEdit()">Cancel</button>
+            <button class="ghost sm" id="op-open" onclick="openOpeningBalances()">Paste from sheet</button>
           </div>
           <div class="table-wrap"><table id="leave-balance"></table></div>
         </div>
@@ -4984,7 +4987,9 @@ function openingFor(code, type, year) {
 /* is this leave already counted inside the opening balance? */
 function coveredByOpening(l, op) {
   if (!op) return false;
-  var when = String(l.applied_at || l.from_date || '').slice(0, 10);
+  /* inside the balance if it was already approved on that date - a leave
+     still pending then comes off the balance when it is approved */
+  var when = String(l.decided_at || l.applied_at || l.from_date || '').slice(0, 10);
   return !!when && when <= String(op.as_on).slice(0, 10);
 }
 /* Days of a leave type used in the year. With an opening balance this is
@@ -5075,13 +5080,24 @@ function renderLeaveBalance(year) {
     var cells = types.map(function (t) {
       var taken = takenDays(e.emp_code, t, year);
       total += taken;
-      var q = quotaFor(t), bal = q ? q - taken : null;
+      var q = quotaFor(t), bal = q ? Math.round((q - taken) * 100) / 100 : null;
+      if (S.balEdit && bal !== null) {
+        return '<td class="num-col" style="white-space:nowrap"><div class="sub-line">' + taken + ' taken</div><div style="margin-top:4px;white-space:nowrap">' +
+          '<input type="number" step="0.5" class="bal-edit" style="width:64px;text-align:right;padding:4px 6px;display:inline-block" ' +
+          'data-code="' + esc(e.emp_code) + '" data-type="' + esc(t) + '" data-was="' + bal + '" value="' + bal + '"' +
+          ' oninput="this.style.background=(this.value!==this.dataset.was?\'#fef3c7\':\'\')"> left</div></td>';
+      }
       return '<td class="num-col">' + taken + (bal !== null ?
-        ' <span class="badge ' + (bal < 0 ? 'b-red' : 'b-blue') + '">' + bal + ' left</span>' : '') + '</td>';
+        ' <span class="badge ' + (bal < 0 ? 'b-red' : 'b-blue') + '"' +
+        (isAdmin() ? ' style="cursor:pointer" title="Click to change" onclick="editOneBalance(\'' +
+          esc(e.emp_code) + '\',\'' + esc(t) + '\',' + bal + ')"' : '') + '>' + bal + ' left</span>' : '') + '</td>';
     }).join('');
     return '<tr><td>' + esc(e.name) + '</td>' + cells + '<td class="num-col"><b>' + total + '</b></td></tr>';
   }).join('');
-  if (el('op-open')) el('op-open').style.display = isAdmin() ? '' : 'none';
+  if (el('op-open')) el('op-open').style.display = isAdmin() && !S.balEdit ? '' : 'none';
+  if (el('bal-edit')) el('bal-edit').style.display = isAdmin() && !S.balEdit ? '' : 'none';
+  if (el('bal-save')) el('bal-save').style.display = S.balEdit ? '' : 'none';
+  if (el('bal-cancel')) el('bal-cancel').style.display = S.balEdit ? '' : 'none';
   var ops = (S.leaveOpening || []).filter(function (o) { return String(o.year) === String(year); });
   if (el('leave-balance-sub')) {
     var dates = {};
@@ -5094,6 +5110,66 @@ function renderLeaveBalance(year) {
   }
   el('leave-balance').innerHTML = head + '<tbody>' + (body ||
     '<tr><td colspan="6" class="empty">No active employees.</td></tr>') + '</tbody>';
+}
+
+/* ---- editing the balance chart -------------------------------------
+   HR types what is LEFT for a person and a leave type. It is kept as an
+   opening balance as on today: leave already approved is inside it, leave
+   approved from now on comes off it. */
+function startBalanceEdit() {
+  if (!isAdmin()) return;
+  S.balEdit = true;
+  renderLeaveBalance(String(el('leave-year').value || new Date().getFullYear()));
+}
+function cancelBalanceEdit() {
+  S.balEdit = false;
+  renderLeaveBalance(String(el('leave-year').value || new Date().getFullYear()));
+}
+function balanceRow(code, type, left, year) {
+  var e = empByCode(code);
+  return { id: (e ? e.emp_code : code) + '_' + year + '_' + type, emp_code: e ? e.emp_code : code, year: +year,
+           type: type, balance: left, as_on: today(),
+           note: 'set by ' + (S.user && (S.user.name || S.user.email) || 'HR') + ' on ' + today() };
+}
+function saveBalanceRows(out, done) {
+  if (!out.length) { toast('Nothing was changed', 'bad'); return; }
+  api('saveMany', { sheet: 'LeaveOpening', rows: out }).then(function () {
+    S.leaveOpening = (S.leaveOpening || []).filter(function (o) {
+      return !out.some(function (n) { return n.id === o.id; });
+    }).concat(out);
+    S.leaveVersion++;
+    if (done) done();
+    toast('Leave balance saved for ' + out.length + ' entr' + (out.length === 1 ? 'y' : 'ies'), 'good');
+    renderLeave();
+  }).catch(function (e) { toast(e.message, 'bad'); });
+}
+function saveBalanceEdit() {
+  var year = String(el('leave-year').value || new Date().getFullYear());
+  var out = [], bad = '';
+  document.querySelectorAll('#leave-balance .bal-edit').forEach(function (inp) {
+    if (inp.value === inp.dataset.was) return;
+    var v = Number(inp.value);
+    if (inp.value === '' || isNaN(v)) { bad = 'Fill a number for ' + empName(inp.dataset.code) + ' - ' + inp.dataset.type; return; }
+    out.push(balanceRow(inp.dataset.code, inp.dataset.type, Math.round(v * 100) / 100, year));
+  });
+  if (bad) return toast(bad, 'bad');
+  if (!out.length) { cancelBalanceEdit(); return toast('Nothing was changed', 'bad'); }
+  saveBalanceRows(out, function () { S.balEdit = false; });
+}
+function editOneBalance(code, type, left) {
+  if (!isAdmin()) return;
+  var year = String(el('leave-year').value || new Date().getFullYear());
+  showModal('Change leave balance',
+    '<p style="line-height:1.6;margin-bottom:10px"><b>' + esc(empName(code)) + '</b> (' + esc(code) + ') - ' +
+    esc(type) + ' leave, ' + esc(year) + '</p>' +
+    '<label class="field">Days left as on today<input type="number" step="0.5" id="bal-one" value="' + left + '"></label>' +
+    '<div class="sub-line">Leave approved from now on comes off this number.</div>',
+    [{ label: 'Cancel', cls: 'ghost', onClick: closeModal },
+     { label: 'Save', cls: 'ok', onClick: function () {
+        var v = Number(el('bal-one').value);
+        if (el('bal-one').value === '' || isNaN(v)) return toast('Fill a number', 'bad');
+        saveBalanceRows([balanceRow(code, type, Math.round(v * 100) / 100, year)], closeModal);
+      } }]);
 }
 
 /* ---- setting opening balances --------------------------------------

@@ -421,7 +421,13 @@ function esc(v) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
-function today() { return new Date().toISOString().slice(0, 10); }
+/* the date on this phone's own clock - not UTC, which in India is still
+   "yesterday" until 5:30 in the morning */
+function isoOf(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+function today() { return isoOf(new Date()); }
 function thisMonth() { return today().slice(0, 7); }
 function pad(n) { return ('0' + n).slice(-2); }
 function daysInMonth(ym) { return new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate(); }
@@ -757,10 +763,38 @@ function holidayOn(iso) {
   S.holidays.forEach(function (x) { if (String(x.date) === iso) h = x; });
   return h;
 }
-function isWeeklyOff(iso) {
-  var off = String(S.settings.weekly_off || 'Sun').slice(0, 3).toLowerCase();
-  var d = ['sun','mon','tue','wed','thu','fri','sat'][new Date(iso + 'T00:00:00').getDay()];
-  return d === off;
+/* A rest day by the person's OWN shift - its weekly off(s) and its Saturday
+   rule - the same way the server and HR's register decide it. */
+function weeklyOffSet(value) {
+  var raw = (value === undefined || value === null || String(value) === '') ? 'Sun' : String(value);
+  var names = ['sun','mon','tue','wed','thu','fri','sat'], out = {};
+  raw.split(',').forEach(function (part) {
+    var t = String(part || '').trim().toLowerCase();
+    if (!t) return;
+    if (/^[0-7]$/.test(t)) { out[Number(t) === 7 ? 0 : Number(t)] = 1; return; }
+    for (var i = 0; i < 7; i++) if (t.slice(0, 3) === names[i]) out[i] = 1;
+  });
+  return out;
+}
+function saturdayIsOff(dayOfMonth, policy) {
+  var nth = Math.floor((dayOfMonth - 1) / 7) + 1;
+  switch (String(policy || 'working')) {
+    case 'all_off': return true;
+    case '2_4': return nth === 2 || nth === 4;
+    case '1_3': return nth === 1 || nth === 3;
+    case 'alt': return nth % 2 === 0;
+    default: return false;
+  }
+}
+function isWeeklyOff(iso, shift) {
+  var p = String(iso).split('-');
+  var dow = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay();
+  var sh = shift || myShift();
+  var wo = sh && sh.weekly_off !== undefined && sh.weekly_off !== null && String(sh.weekly_off) !== ''
+    ? sh.weekly_off : (S.settings.weekly_off || 'Sun');
+  if (weeklyOffSet(wo)[dow]) return true;
+  if (dow === 6 && sh) return saturdayIsOff(+p[2], sh.saturday_policy);
+  return false;
 }
 function coNeedHours(holiday) {
   var blank = function (v) { return v === undefined || v === null || String(v).trim() === ''; };
@@ -775,7 +809,7 @@ function statusOfRec(rec, iso, doj, loaded, shift) {
   /* CO+ : a weekly off or a holiday that was worked - out duty, or enough
      hours - earns a comp-off. Fewer hours than that is still just the day off. */
   var hol = holidayOn(iso);
-  if (rec && rec.status && { P: 1, HD: 1, A: 1, OD: 1 }[rec.status] && (hol || isWeeklyOff(iso))) {
+  if (rec && rec.status && { P: 1, HD: 1, A: 1, OD: 1 }[rec.status] && (hol || isWeeklyOff(iso, shift))) {
     /* the grace at each end of the shift is allowed, as on any other day */
     var need = coNeedHours(!!hol), mins = workedMinutes(rec);
     var sh = shift || myShift(), g = sh && sh.grace_minutes !== undefined && sh.grace_minutes !== null && sh.grace_minutes !== ''
@@ -785,7 +819,7 @@ function statusOfRec(rec, iso, doj, loaded, shift) {
   }
   if (rec && rec.status) return String(rec.status);
   if (hol) return 'H';
-  if (isWeeklyOff(iso)) return 'WO';
+  if (isWeeklyOff(iso, shift)) return 'WO';
   /* a past working day with no punch and nothing marked is absent - but only
      in a month this phone has actually loaded: a month not fetched yet is
      "not known", not "absent" */
@@ -1452,19 +1486,26 @@ function leaveLeft(typeName) {
   var taken = S.leave.reduce(function (n, l) {
     if (String(l.status) !== 'Approved' || String(l.type) !== String(typeName) ||
         String(l.from_date).slice(0, 4) !== year) return n;
-    if (op && String(l.applied_at || l.from_date).slice(0, 10) <= asOn) return n;   /* already inside the opening */
+    if (op && String(l.decided_at || l.applied_at || l.from_date).slice(0, 10) <= asOn) return n;   /* already inside the opening */
     return n + num(l.days);
   }, 0);
   return Math.max(0, (op ? num(op.balance) : num(t.quota)) - taken);
 }
 
+/* Days a leave is charged. Dates are walked in UTC so that a Monday stays a
+   Monday on an Indian phone (local midnight is still the day before in UTC,
+   which used to turn every Monday into a Sunday and refuse the leave). An
+   optional holiday is not a day off unless the person takes it. */
 function workingDaysBetween(from, to) {
-  var n = 0, cur = new Date(from + 'T00:00:00'), end = new Date(to + 'T00:00:00'), guard = 0;
+  var n = 0, guard = 0;
+  var cur = new Date(from + 'T00:00:00Z'), end = new Date(to + 'T00:00:00Z');
+  if (isNaN(cur) || isNaN(end)) return 0;
   var sandwich = String(S.settings.sandwich_rule || 'no').toLowerCase() === 'yes';
   while (cur <= end && guard++ < 400) {
-    var iso = cur.toISOString().slice(0, 10);
-    if (sandwich || (!isWeeklyOff(iso) && !holidayOn(iso))) n++;
-    cur.setDate(cur.getDate() + 1);
+    var iso = cur.toISOString().slice(0, 10), h = holidayOn(iso);
+    var off = isWeeklyOff(iso) || (h && !/^(true|yes|y|1)$/i.test(String(h.optional || '')));
+    if (sandwich || !off) n++;
+    cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return n;
 }

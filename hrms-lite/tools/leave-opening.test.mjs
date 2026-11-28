@@ -97,6 +97,49 @@ ok(ui.left.s3 === -1 && /LO-03_2026-11-27/.test(ui.unpaid) && !/LO-03_2026-11-26
 ok(/as on 2026-11-18/.test(ui.sub), 'the balance screen says what the balances are as on', ui.sub.slice(0, 70));
 ok(ui.table.some(t => /Opening One/.test(t) && /11 left/.test(t)), 'the balance table shows it', ui.table.join(' | ').slice(0, 120));
 
+console.log('\nediting the balance chart');
+const ed = await p.evaluate(async () => {
+  const wait = ms => new Promise(z => setTimeout(z, ms));
+  const o = {};
+  o.editBtn = el('bal-edit') && el('bal-edit').style.display !== 'none';
+  startBalanceEdit();
+  const inputs = [...document.querySelectorAll('#leave-balance .bal-edit')];
+  o.inputs = inputs.length;
+  o.saveShown = el('bal-save').style.display !== 'none';
+  const box = inputs.find(i => i.dataset.code === 'LO-02' && i.dataset.type === 'Earned');
+  o.was = box && box.value;
+  box.value = '10';
+  saveBalanceEdit(); await wait(1500);
+  const left = (c, t) => Math.round((quotaFor(t) - takenDays(c, t, '2026')) * 100) / 100;
+  o.e2 = left('LO-02', 'Earned');
+  o.closed = !S.balEdit && el('bal-edit').style.display !== 'none';
+  o.row = (S.leaveOpening || []).find(x => x.id === 'LO-02_2026_Earned');
+  editOneBalance('LO-03', 'Casual', left('LO-03', 'Casual'));
+  el('bal-one').value = '3';
+  [...document.querySelectorAll('#modal-foot button')].find(b => /Save/.test(b.textContent)).click();
+  await wait(1500);
+  o.c3 = left('LO-03', 'Casual');
+  /* a leave approved after the edit comes off it; one approved before is inside it */
+  const t = today();
+  S.leave.push({ id: 'x1', emp_code: 'LO-02', type: 'Earned', from_date: '2026-12-01', to_date: '2026-12-01', days: 1,
+    status: 'Approved', applied_at: '2026-11-01', decided_at: '2099-01-01' });
+  S.leave.push({ id: 'x2', emp_code: 'LO-02', type: 'Earned', from_date: '2026-11-02', to_date: '2026-11-02', days: 1,
+    status: 'Approved', applied_at: '2026-11-01', decided_at: t });
+  o.after = left('LO-02', 'Earned');
+  S.leave = S.leave.filter(l => l.id !== 'x1' && l.id !== 'x2');
+  return o;
+});
+ok(ed.editBtn, 'the admin sees "Edit balances"');
+ok(ed.inputs > 0 && ed.saveShown, 'edit mode turns every balance into a box', ed.inputs + ' boxes');
+ok(ed.was === '14', 'the box starts at what is left now', 'got ' + ed.was);
+ok(ed.e2 === 10 && ed.closed, 'typing 10 and saving makes it 10 left', 'got ' + ed.e2);
+ok(ed.row && Number(ed.row.balance) === 10 && /^\d{4}-\d{2}-\d{2}$/.test(String(ed.row.as_on)), 'kept as a balance as on today', JSON.stringify(ed.row || {}).slice(0, 90));
+ok(ed.c3 === 3, 'clicking one balance and changing it to 3 works', 'got ' + ed.c3);
+ok(ed.after === 9, 'leave pending at the edit and approved later comes off it; leave already approved does not', 'got ' + ed.after);
+const saved = (await call('list', { sheet: 'LeaveOpening' }, admin)).filter(r => r.id === 'LO-02_2026_Earned' || r.id === 'LO-03_2026_Casual');
+ok(saved.length === 2 && saved.every(r => Number(r.balance) === (r.id.startsWith('LO-02') ? 10 : 3)), 'both edits are stored on the server',
+   saved.map(r => r.id + '=' + Number(r.balance)).join(','));
+
 console.log('\nthe phone');
 const tok = (await call('login', { email: 'lo-01', password: 'lo-test-1' })).token;
 const boot = await call('bootstrap', {}, tok);
