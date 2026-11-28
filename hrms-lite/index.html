@@ -1285,13 +1285,19 @@ function weeklyOffDays(value) {
 function shiftFor(code) {
   var e = code ? empByCode(code) : null;
   var want = String((e && e.shift) || S.settings.default_shift || 'General').trim().toLowerCase();
-  var found = null, firstActive = null;
+  /* a shift name that no longer exists (e.g. "General") falls back to the
+     company's default shift, as on the phone and the server - not to
+     whichever shift happens to be listed first */
+  var def = String(S.settings.default_shift || '').trim().toLowerCase();
+  var found = null, byDefault = null, firstActive = null;
   (S.shifts || []).forEach(function (sh) {
     if (String(sh.active || 'yes').toLowerCase() === 'no') return;
     if (!firstActive) firstActive = sh;
-    if (String(sh.name || '').trim().toLowerCase() === want) found = sh;
+    var n = String(sh.name || '').trim().toLowerCase();
+    if (n === want) found = sh;
+    if (def && n === def) byDefault = sh;
   });
-  var sh = found || firstActive;
+  var sh = found || byDefault || firstActive;
   if (sh) return sh;
   return {
     name: 'General',

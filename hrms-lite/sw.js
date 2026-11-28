@@ -6,7 +6,7 @@
  * never be answered out of a cache, and a stale payslip would be worse than
  * no payslip.
  */
-var CACHE = 'biscs-os-v5';
+var CACHE = 'biscs-os-v6';
 var SHELL = ['./index.html', './manifest.webmanifest',
              './app/icons/icon-192.png', './app/icons/icon-512.png'];
 

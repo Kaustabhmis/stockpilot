@@ -83,7 +83,10 @@ export function createActions(api, db, deps) {
     const want = String(name || st.default_shift || 'General').trim().toLowerCase();
     const rows = table || await shiftTable();
     const hit = rows.find(s => String(s.name || '').trim().toLowerCase() === want);
-    const use = hit || rows[0] || {};
+    /* a name that no longer exists falls back to the default shift, the same
+       as the register and the phone - never to whichever row comes first */
+    const def = String(st.default_shift || '').trim().toLowerCase();
+    const use = hit || (def && rows.find(s => String(s.name || '').trim().toLowerCase() === def)) || rows[0] || {};
     const grace = use.grace_minutes === undefined || use.grace_minutes === null || use.grace_minutes === ''
       ? Number(st.grace_minutes || 15) : Number(use.grace_minutes);
     return {
